@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+/* ---------------- Fonts (next/font CSS vars) ---------------- */
+@theme inline {
+  --font-display: var(--font-oswald), "Oswald", "Arial Narrow", sans-serif;
+  --font-serif: var(--font-newsreader), "Newsreader", Georgia, "Times New Roman", serif;
+}
+
+/* ---------------- Color tokens (SPENT gritty editorial) ---------------- */
+@theme {
+  --color-bg: #14110e;
+  --color-bg2: #1e1a15;
+  --color-bg3: #2a241d;
+  --color-ink: #e9e1cf;
+  --color-ink-dim: #a89f8c;
+  --color-accent: #d4541e;
+  --color-accent-2: #e9692f;
+  --color-paper: #e7dfc9;
+  --color-paper-2: #efe8d4;
+  --color-paper-ink: #211c16;
+  --color-paper-dim: #6f6657;
+
+  --color-olive: #7f8b52;
+  --color-brick: #a33218;
+  --color-ochre: #c8861e;
+  --color-brass: #c9a24a;
+  --color-steel: #5f7480;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-bg3) transparent;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------------- Typography helpers ---------------- */
+.font-display {
+  font-family: var(--font-display);
+}
+.font-serif {
+  font-family: var(--font-serif);
+}
+.display-caps {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  line-height: 0.95;
+  font-weight: 600;
+}
+.eyebrow {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-weight: 500;
+  font-size: 0.72rem;
+}
+.num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+/* ---------------- Film grain + vignette atmosphere ---------------- */
+.grain-overlay {
+  position: fixed;
+  inset: -120%;
+  z-index: 60;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.05;
+  mix-blend-mode: overlay;
+  animation: grain 0.6s steps(3) infinite;
+}
+@keyframes grain {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-3%, 2%); }
+  66% { transform: translate(2%, -3%); }
+  100% { transform: translate(-2%, -2%); }
+}
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* ---------------- Paper card (SPENT job document) ---------------- */
+.paper {
+  background-color: var(--color-paper);
+  color: var(--color-paper-ink);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(33, 28, 22, 0.025) 0 1px, transparent 1px 4px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 22px 40px -28px rgba(0, 0, 0, 0.85);
+}
+.paper-rule {
+  border-color: var(--color-paper-ink);
+}
+
+/* hairline rule used across editorial sections */
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-ink-dim), transparent);
+  opacity: 0.4;
+}
+
+/* ---------------- Focus ring ---------------- */
+:where(button, a, [tabindex], input, select):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* ---------------- Detour scrollbars ---------------- */
+.thin-scroll::-webkit-scrollbar { width: 7px; }
+.thin-scroll::-webkit-scrollbar-thumb { background: var(--color-bg3); border-radius: 999px; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------------- Reduced motion ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  .grain-overlay { animation: none; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
