@@ -6,7 +6,7 @@ import { Mascot } from "@/components/brand/Mascot";
 import { ArrowDown } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 
-export function Intro({ onBegin }: { onBegin: () => void }) {
+export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const heroY = useTransform(scrollYProgress, [0, 1], [0, -120]);
@@ -104,10 +104,13 @@ export function Intro({ onBegin }: { onBegin: () => void }) {
               animate={{ opacity: 1, y: 0 }}
               viewport={{ once: true, amount: 0.2 }}
               transition={{ delay: 0.32 }}
-              className="mt-8"
+              className="mt-8 flex flex-wrap items-center gap-3"
             >
               <NeonButton variant="primary" size="lg" onClick={onBegin}>
                 Choose your run →
+              </NeonButton>
+              <NeonButton variant="secondary" size="lg" onClick={onAlmanac}>
+                Open the Almanac
               </NeonButton>
             </motion.div>
           </div>

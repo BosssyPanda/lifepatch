@@ -7,13 +7,14 @@ import { LIFE_EVENTS } from "@/lib/lifeEvents";
 import { canRetire } from "@/lib/runEngine";
 import { AdvanceBar } from "./AdvanceBar";
 import { LifeEventCard } from "./LifeEventCard";
+import { MarketResults } from "./MarketResults";
 import { MarketTicker } from "./MarketTicker";
 import { PortfolioPanel } from "./PortfolioPanel";
 import { YearHud } from "./YearHud";
 
 type Run = ReturnType<typeof useRun>;
 
-export function YearLoop({ run }: { run: Run }) {
+export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () => void }) {
   useLenis(true);
   const s = run.run;
   if (!s) return null;
@@ -24,15 +25,16 @@ export function YearLoop({ run }: { run: Run }) {
 
   return (
     <div className="min-h-[100svh] w-full pb-4">
-      <YearHud run={s} saving={run.saving} />
+      <YearHud run={s} saving={run.saving} onOpenAlmanac={onOpenAlmanac} />
 
       <MarketTicker run={s} />
+      <MarketResults run={s} />
 
       {events.length > 0 && (
         <div className="space-y-4 py-2">
           {events.map((e) => (
             <Reveal key={e.id}>
-              <LifeEventCard event={e} chosenId={s.yearChoices[e.id]} onChoose={run.choose} />
+              <LifeEventCard event={e} chosen={s.yearChoices[e.id]} onChoose={run.choose} />
             </Reveal>
           ))}
         </div>

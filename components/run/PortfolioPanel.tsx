@@ -3,7 +3,7 @@
 import { assetsForYear, type AssetDef } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import type { AssetId } from "@/lib/markets";
-import { portfolioValue, type RunState } from "@/lib/runEngine";
+import { lastAssetReturn, portfolioValue, priceSeries, type RunState } from "@/lib/runEngine";
 import { AssetRow } from "./AssetRow";
 
 export function PortfolioPanel({
@@ -73,5 +73,15 @@ function AssetRowWrapper({
 }) {
   const value = run.holdings[assetId] ?? 0;
   const pct = port > 0 ? (value / port) * 100 : 0;
-  return <AssetRow asset={def} value={value} pct={pct} cash={run.cash} onTrade={onTrade} />;
+  return (
+    <AssetRow
+      asset={def}
+      value={value}
+      pct={pct}
+      cash={run.cash}
+      series={priceSeries(run, assetId)}
+      lastReturn={lastAssetReturn(run, assetId)}
+      onTrade={onTrade}
+    />
+  );
 }

@@ -6,6 +6,7 @@ import {
   advanceYear,
   applyLifeChoice,
   initRun,
+  isCompatibleSave,
   payDebt,
   quitRun,
   retire,
@@ -83,6 +84,10 @@ export function useRun(userId: string | null) {
 
     resume: useCallback((r: RunState) => {
       setMode(r.mode);
+      if (!isCompatibleSave(r)) {
+        setPhase("setup"); // stale pre-v4 save — start fresh for this mode
+        return;
+      }
       setRun(r);
       setPhase(r.status === "ended" ? "report" : "run");
     }, []),

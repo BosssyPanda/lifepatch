@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CheckIcon } from "@/components/icons";
+import { CheckIcon, LockIcon } from "@/components/icons";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEffect, LifeEvent } from "@/lib/lifeEvents";
 
@@ -11,6 +11,7 @@ function chips(e: LifeEffect): { text: string; positive: boolean }[] {
   const out: { text: string; positive: boolean }[] = [];
   if (e.cash) out.push({ text: `${e.cash > 0 ? "+" : "−"}${currency(Math.abs(e.cash))}`, positive: e.cash > 0 });
   if (e.debt) out.push({ text: `${e.debt > 0 ? "+" : "−"}${currency(Math.abs(e.debt))} debt`, positive: e.debt < 0 });
+  if (e.salaryTo !== undefined) out.push({ text: `salary → ${currency(e.salaryTo)}`, positive: e.salaryTo > 0 });
   if (e.salaryPct) out.push({ text: `${e.salaryPct > 0 ? "+" : ""}${e.salaryPct}% pay`, positive: e.salaryPct > 0 });
   if (e.health) out.push({ text: `${e.health > 0 ? "+" : "−"}${Math.abs(e.health)} health`, positive: e.health > 0 });
   if (e.happiness) out.push({ text: `${e.happiness > 0 ? "+" : "−"}${Math.abs(e.happiness)} mood`, positive: e.happiness > 0 });
@@ -19,15 +20,17 @@ function chips(e: LifeEffect): { text: string; positive: boolean }[] {
 
 export function LifeEventCard({
   event,
-  chosenId,
+  chosen,
   onChoose,
 }: {
-  event: LifeEvent;
-  chosenId?: string;
+  event: LifeEvent & { choices: LifeChoice[] };
+  chosen?: string; // "choiceId|outcomeIdx"
   onChoose: (eventId: string, choice: LifeChoice) => void;
 }) {
+  const [chosenId, idxStr] = chosen ? chosen.split("|") : [undefined, undefined];
   const answered = Boolean(chosenId);
-  const chosen = event.choices.find((c) => c.id === chosenId);
+  const chosenChoice = event.choices.find((c) => c.id === chosenId);
+  const outcome = chosenChoice?.outcomes[Number(idxStr)] ?? chosenChoice?.outcomes[0];
 
   return (
     <motion.div
@@ -64,13 +67,6 @@ export function LifeEventCard({
                 <span className="min-w-0 flex-1">
                   <span className="font-display text-sm font-semibold uppercase tracking-wide text-paper-ink">{c.label}</span>
                   <span className="mt-0.5 block font-serif text-sm leading-snug text-paper-ink/60">{c.blurb}</span>
-                  <span className="mt-1 flex flex-wrap gap-1.5">
-                    {chips(c.effect).map((ch, i) => (
-                      <span key={i} className="num rounded-[2px] px-1.5 py-0.5 text-[0.64rem]" style={{ color: ch.positive ? "#5d6a37" : "#8c2c14", background: ch.positive ? "#7f8b5222" : "#a3321822" }}>
-                        {ch.text}
-                      </span>
-                    ))}
-                  </span>
                 </span>
               </button>
             </li>
@@ -78,16 +74,35 @@ export function LifeEventCard({
         })}
       </ul>
 
-      {answered && chosen && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 rounded-[4px] border-l-2 px-4 py-3" style={{ borderColor: TONE_HEX[chosen.tone], background: "#00000010" }}>
-          <p className="font-serif text-[0.97rem] leading-relaxed text-paper-ink/85">{chosen.consequence}</p>
-          {chosen.lesson && (
-            <div className="mt-3 border-t border-paper-ink/15 pt-2.5">
-              <p className="eyebrow text-paper-dim">The lesson</p>
-              <p className="mt-0.5 font-serif text-[0.95rem] italic leading-snug text-paper-ink/80">{chosen.lesson}</p>
+      {!answered ? (
+        <p className="mt-4 flex items-center justify-center gap-2 text-paper-dim">
+          <LockIcon size={14} />
+          <span className="eyebrow">Outcome hidden — choose to find out</span>
+        </p>
+      ) : (
+        outcome && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 rounded-[4px] border-l-2 px-4 py-3" style={{ borderColor: TONE_HEX[outcome.tone], background: "#00000010" }}>
+            {outcome.note && (
+              <p className="display-caps text-base" style={{ color: TONE_HEX[outcome.tone] === "#c8861e" ? "#9a6512" : TONE_HEX[outcome.tone] }}>
+                {outcome.note}
+              </p>
+            )}
+            <p className="mt-1 font-serif text-[0.97rem] leading-relaxed text-paper-ink/85">{outcome.consequence}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {chips(outcome.effect).map((ch, i) => (
+                <span key={i} className="num rounded-[2px] px-1.5 py-0.5 text-[0.66rem]" style={{ color: ch.positive ? "#5d6a37" : "#8c2c14", background: ch.positive ? "#7f8b5222" : "#a3321822" }}>
+                  {ch.text}
+                </span>
+              ))}
             </div>
-          )}
-        </motion.div>
+            {outcome.lesson && (
+              <div className="mt-3 border-t border-paper-ink/15 pt-2.5">
+                <p className="eyebrow text-paper-dim">The lesson</p>
+                <p className="mt-0.5 font-serif text-[0.95rem] italic leading-snug text-paper-ink/80">{outcome.lesson}</p>
+              </div>
+            )}
+          </motion.div>
+        )
       )}
     </motion.div>
   );

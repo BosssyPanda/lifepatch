@@ -1,6 +1,8 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
+import { Almanac } from "@/components/screens/Almanac";
 import { AuthGate } from "@/components/screens/AuthGate";
 import { Intro } from "@/components/screens/Intro";
 import { LifeReport } from "@/components/screens/LifeReport";
@@ -21,13 +23,15 @@ export function AppShell() {
   const auth = useAuth();
   const run = useRun(auth.user?.id ?? null);
   const { phase, mode } = run;
+  const [almanacOpen, setAlmanacOpen] = useState(false);
+  const openAlmanac = () => setAlmanacOpen(true);
 
   return (
     <main className="relative min-h-[100svh] w-full">
       <AnimatePresence mode="wait">
         {phase === "intro" && (
           <motion.div key="intro" {...wipe}>
-            <Intro onBegin={run.goMode} />
+            <Intro onBegin={run.goMode} onAlmanac={openAlmanac} />
           </motion.div>
         )}
 
@@ -39,29 +43,19 @@ export function AppShell() {
 
         {phase === "auth" && mode && (
           <motion.div key="auth" {...wipe}>
-            <AuthGate
-              auth={auth}
-              mode={mode}
-              onResume={run.resume}
-              onNew={run.toSetup}
-              onBack={run.goMode}
-            />
+            <AuthGate auth={auth} mode={mode} onResume={run.resume} onNew={run.toSetup} onBack={run.goMode} />
           </motion.div>
         )}
 
         {phase === "setup" && mode && (
           <motion.div key="setup" {...wipe}>
-            <Setup
-              mode={mode}
-              onStart={(bg, name) => run.start(mode, bg, name)}
-              onBack={() => run.setPhase("auth")}
-            />
+            <Setup mode={mode} onStart={(bg, name) => run.start(mode, bg, name)} onBack={() => run.setPhase("auth")} />
           </motion.div>
         )}
 
         {phase === "run" && run.run && (
           <motion.div key="run" {...wipe}>
-            <YearLoop run={run} />
+            <YearLoop run={run} onOpenAlmanac={openAlmanac} />
           </motion.div>
         )}
 
@@ -71,10 +65,13 @@ export function AppShell() {
               run={run.run}
               onReplay={() => run.start(run.run!.mode, run.run!.backgroundId, run.run!.name)}
               onTitle={run.toTitle}
+              onAlmanac={openAlmanac}
             />
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />
     </main>
   );
 }

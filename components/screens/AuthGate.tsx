@@ -7,7 +7,7 @@ import { NeonButton } from "@/components/ui/NeonButton";
 import type { useAuth } from "@/hooks/useAuth";
 import { MODES, type ModeId } from "@/lib/modes";
 import { loadRun } from "@/lib/saves";
-import { yearIndex, type RunState } from "@/lib/runEngine";
+import { isCompatibleSave, yearIndex, type RunState } from "@/lib/runEngine";
 
 export function AuthGate({
   auth,
@@ -31,7 +31,7 @@ export function AuthGate({
     if (!user) return;
     setChecking(true);
     loadRun(user.id, mode)
-      .then((s) => setSave(s))
+      .then((s) => setSave(isCompatibleSave(s) ? s : null))
       .finally(() => setChecking(false));
   }, [user, mode]);
 

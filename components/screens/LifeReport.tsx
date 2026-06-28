@@ -26,7 +26,26 @@ function finalClass(nw: number, happiness: number, died: boolean): { title: stri
   return { title: "Underwater", blurb: "The math caught up. Debt and bad timing won this round. The good news: you get to run it back.", hex: "#a33218" };
 }
 
-export function LifeReport({ run, onReplay, onTitle }: { run: RunState; onReplay: () => void; onTitle: () => void }) {
+function NetWorthArc({ values }: { values: number[] }) {
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, 1);
+  const range = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = (i / (values.length - 1)) * 100;
+    const y = 28 - ((v - min) / range) * 26;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+  const zeroY = 28 - ((0 - min) / range) * 26;
+  const up = values[values.length - 1] >= 0;
+  return (
+    <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="mt-2 h-16 w-full" aria-hidden>
+      <line x1="0" y1={zeroY} x2="100" y2={zeroY} stroke="var(--color-ink-dim)" strokeWidth="0.3" strokeDasharray="1 1" opacity="0.5" />
+      <polyline points={pts.join(" ")} fill="none" stroke={up ? "#7f8b52" : "#a33218"} strokeWidth="0.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+export function LifeReport({ run, onReplay, onTitle, onAlmanac }: { run: RunState; onReplay: () => void; onTitle: () => void; onAlmanac: () => void }) {
   const nw = netWorth(run);
   const reason = REASON[run.endReason ?? "quit"];
   const Icon = reason.Icon;
@@ -74,6 +93,14 @@ export function LifeReport({ run, onReplay, onTitle }: { run: RunState; onReplay
           ))}
         </motion.dl>
 
+        {/* net-worth arc */}
+        {hist.length > 1 && (
+          <motion.div variants={item} className="mt-3 rounded-[4px] border border-ink/12 bg-bg2 p-4">
+            <p className="eyebrow text-ink-dim">Net worth, year by year</p>
+            <NetWorthArc values={hist.map((h) => h.netWorth)} />
+          </motion.div>
+        )}
+
         {/* named-event reveal */}
         {best && worst && (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -94,8 +121,9 @@ export function LifeReport({ run, onReplay, onTitle }: { run: RunState; onReplay
           {run.life.partner ? "Married" : "Single"} · {run.life.kids} kid{run.life.kids === 1 ? "" : "s"} · {run.life.housing === "owned" ? "homeowner" : "renter"} · {run.job}
         </motion.p>
 
-        <motion.div variants={item} className="mt-8 flex justify-center gap-3">
+        <motion.div variants={item} className="mt-8 flex flex-wrap justify-center gap-3">
           <NeonButton variant="ghost" size="md" onClick={onTitle}>Title screen</NeonButton>
+          <NeonButton variant="secondary" size="md" onClick={onAlmanac}>Almanac</NeonButton>
           <NeonButton variant="primary" size="lg" onClick={onReplay}>
             <ReplayIcon size={18} /> Run it back
           </NeonButton>

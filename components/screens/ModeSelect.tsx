@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { TrophyIcon, ReplayIcon } from "@/components/icons";
+import { useState } from "react";
+import { CheckIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { MODES, type ModeId } from "@/lib/modes";
 
@@ -15,6 +16,8 @@ export function ModeSelect({
   onBack: () => void;
 }) {
   const modes: ModeId[] = ["story", "infinite"];
+  const [picked, setPicked] = useState<ModeId | null>(null);
+
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-4xl flex-col justify-center px-5 py-14">
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
@@ -27,32 +30,46 @@ export function ModeSelect({
         {modes.map((id, i) => {
           const m = MODES[id];
           const Icon = ICON[id];
+          const active = picked === id;
           return (
             <motion.button
               key={id}
               type="button"
-              onClick={() => onChoose(id)}
+              onClick={() => setPicked(id)}
               initial={{ opacity: 0, y: 26, rotate: i % 2 ? 1 : -1 }}
-              animate={{ opacity: 1, y: 0, rotate: 0 }}
+              animate={{ opacity: picked && !active ? 0.55 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
               transition={{ type: "spring", stiffness: 220, damping: 20, delay: i * 0.1 }}
               whileHover={{ y: -6 }}
-              className="paper rounded-[5px] p-6 text-left"
+              className={`paper relative overflow-hidden rounded-[5px] p-6 text-left ${active ? "ring-2 ring-accent ring-offset-2 ring-offset-bg" : ""}`}
             >
-              <div className="flex items-center justify-between border-b-2 border-paper-ink pb-2">
-                <span className="eyebrow text-paper-dim">{m.range}</span>
-                <span className="text-paper-ink"><Icon size={22} /></span>
+              {/* darker overlay + check on the chosen card */}
+              {active && (
+                <>
+                  <span className="pointer-events-none absolute inset-0 bg-ink/15" />
+                  <span className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full border-2 border-paper bg-accent text-paper">
+                    <CheckIcon size={15} />
+                  </span>
+                </>
+              )}
+              <div className="relative">
+                <div className="flex items-center justify-between border-b-2 border-paper-ink pb-2">
+                  <span className="eyebrow text-paper-dim">{m.range}</span>
+                  <span className="text-paper-ink"><Icon size={22} /></span>
+                </div>
+                <h2 className="display-caps mt-4 text-4xl text-paper-ink">{m.name}</h2>
+                <p className="mt-1 font-serif text-sm italic text-paper-ink/60">{m.tagline}</p>
+                <p className="mt-3 font-serif text-[0.95rem] leading-relaxed text-paper-ink/80">{m.blurb}</p>
               </div>
-              <h2 className="display-caps mt-4 text-4xl text-paper-ink">{m.name}</h2>
-              <p className="mt-1 font-serif text-sm italic text-paper-ink/60">{m.tagline}</p>
-              <p className="mt-3 font-serif text-[0.95rem] leading-relaxed text-paper-ink/80">{m.blurb}</p>
-              <span className="mt-4 inline-block eyebrow text-accent">Play {m.name} →</span>
             </motion.button>
           );
         })}
       </div>
 
-      <div className="mt-9 text-center">
+      <div className="mt-9 flex items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back to title</NeonButton>
+        <NeonButton variant="primary" size="lg" disabled={!picked} onClick={() => picked && onChoose(picked)}>
+          {picked ? `Start ${MODES[picked].name} →` : "Pick a mode"}
+        </NeonButton>
       </div>
     </div>
   );
