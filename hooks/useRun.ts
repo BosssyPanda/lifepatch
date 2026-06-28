@@ -17,7 +17,7 @@ import { saveRun } from "@/lib/saves";
 import type { AssetId } from "@/lib/markets";
 import type { LifeChoice } from "@/lib/lifeEvents";
 
-export type Phase = "intro" | "mode" | "auth" | "setup" | "run" | "report";
+export type Phase = "intro" | "mode" | "auth" | "setup" | "run" | "recap" | "report";
 
 export function useRun(userId: string | null) {
   const [phase, setPhase] = useState<Phase>("intro");
@@ -49,7 +49,7 @@ export function useRun(userId: string | null) {
       setRun((prev) => {
         if (!prev) return prev;
         const next = fn(prev);
-        if (next.status === "ended") setPhase("report");
+        if (next.status === "ended") setPhase("recap"); // cinematic recap → report
         void persist(next);
         return next;
       });
@@ -102,6 +102,8 @@ export function useRun(userId: string | null) {
     advance: useCallback(() => commit((s) => advanceYear(s)), [commit]),
     retire: useCallback(() => commit((s) => retire(s)), [commit]),
     quit: useCallback(() => commit((s) => quitRun(s)), [commit]),
+
+    toReport: useCallback(() => setPhase("report"), []),
 
     reset: useCallback(() => {
       setRun(null);

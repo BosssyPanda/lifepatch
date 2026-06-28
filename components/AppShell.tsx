@@ -2,9 +2,10 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
+import { Opening } from "@/components/cinematic/Opening";
+import { Outro } from "@/components/cinematic/Outro";
 import { Almanac } from "@/components/screens/Almanac";
 import { AuthGate } from "@/components/screens/AuthGate";
-import { Intro } from "@/components/screens/Intro";
 import { LifeReport } from "@/components/screens/LifeReport";
 import { ModeSelect } from "@/components/screens/ModeSelect";
 import { Setup } from "@/components/screens/Setup";
@@ -31,7 +32,7 @@ export function AppShell() {
       <AnimatePresence mode="wait">
         {phase === "intro" && (
           <motion.div key="intro" {...wipe}>
-            <Intro onBegin={run.goMode} onAlmanac={openAlmanac} />
+            <Opening onStart={run.goMode} onAlmanac={openAlmanac} />
           </motion.div>
         )}
 
@@ -56,6 +57,12 @@ export function AppShell() {
         {phase === "run" && run.run && (
           <motion.div key="run" {...wipe}>
             <YearLoop run={run} onOpenAlmanac={openAlmanac} />
+          </motion.div>
+        )}
+
+        {phase === "recap" && run.run && (
+          <motion.div key="recap" {...wipe}>
+            <Outro run={run.run} onDone={run.toReport} />
           </motion.div>
         )}
 

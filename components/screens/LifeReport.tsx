@@ -7,6 +7,7 @@ import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
 import { netWorth, portfolioValue, type RunState } from "@/lib/runEngine";
+import { deriveVerdict } from "@/lib/verdict";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } } };
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } };
@@ -17,15 +18,6 @@ const REASON: Record<string, { label: string; Icon: typeof TrophyIcon }> = {
   quit: { label: "You walked away", Icon: TrophyIcon },
   died: { label: "Your number came up", Icon: SkullIcon },
 };
-
-function finalClass(nw: number, happiness: number, died: boolean): { title: string; blurb: string; hex: string } {
-  if (died) return { title: "The Estate", blurb: "You can't take it with you — but you can leave it behind. Here's the ledger you left.", hex: "#a89f8c" };
-  if (nw >= 1_000_000) return { title: "Financially Free", blurb: "You won the only game that mattered: options. Work became optional well before the end.", hex: "#7f8b52" };
-  if (nw >= 250_000) return { title: "Comfortable", blurb: "Not a yacht, but a real cushion. Boring, correct choices compounded into a soft landing.", hex: "#c9a24a" };
-  if (nw > 0 && happiness >= 60) return { title: "Rich Enough", blurb: "Modest numbers, high happiness. You optimized for a life, not a spreadsheet. Valid.", hex: "#d4541e" };
-  if (nw > 0) return { title: "Getting By", blurb: "You stayed above water. Next run: kill the debt earlier and let the index do the heavy lifting.", hex: "#c8861e" };
-  return { title: "Underwater", blurb: "The math caught up. Debt and bad timing won this round. The good news: you get to run it back.", hex: "#a33218" };
-}
 
 function NetWorthArc({ values }: { values: number[] }) {
   const min = Math.min(...values, 0);
@@ -84,7 +76,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac }: { run: RunStat
   const nw = netWorth(run);
   const reason = REASON[run.endReason ?? "quit"];
   const Icon = reason.Icon;
-  const klass = finalClass(nw, run.life.happiness, run.endReason === "died");
+  const klass = deriveVerdict(run);
 
   const hist = run.history;
   const firstYear = hist[0]?.year ?? run.startYear;

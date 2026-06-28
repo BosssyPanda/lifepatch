@@ -1,22 +1,16 @@
 "use client";
 
-import { motion, useScroll, useTransform } from "framer-motion";
-import { useRef } from "react";
+import { motion } from "framer-motion";
 import { Mascot } from "@/components/brand/Mascot";
 import { ArrowDown } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 
 export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const heroY = useTransform(scrollYProgress, [0, 1], [0, -120]);
-  const heroFade = useTransform(scrollYProgress, [0, 0.7], [1, 0]);
-
   return (
-    <div ref={ref}>
+    <div className="relative">
       {/* HERO */}
       <section className="relative flex min-h-[100svh] flex-col items-center justify-center px-5 text-center">
-        <motion.div style={{ y: heroY, opacity: heroFade }} className="relative z-10">
+        <motion.div className="relative z-10">
           <motion.p
             initial={{ opacity: 0, letterSpacing: "0.5em" }}
             animate={{ opacity: 1, letterSpacing: "0.28em" }}
