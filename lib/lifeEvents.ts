@@ -420,6 +420,191 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
       { id: "decline", label: "Offer help, not cash", blurb: "Protect both of you.", outcomes: [{ weight: 100, effect: { happiness: -1 }, tone: "neutral", consequence: "You help them job-hunt and budget instead. Awkward now, friendship safer later.", lesson: "Money and friendship mix poorly under pressure. Boundaries protect both." }] },
     ],
   },
+  {
+    id: "pet",
+    tag: "Life",
+    prompt: "There's a scruffy rescue at the shelter making direct eye contact. Adoption is cheap; the next 15 years are not.",
+    minAge: 22,
+    once: true,
+    weight: 1,
+    choices: [
+      {
+        id: "adopt",
+        label: "Adopt the little menace",
+        blurb: "Instant best friend.",
+        outcomes: [
+          { weight: 70, effect: { cash: -800, happiness: 12, health: 3 }, tone: "good", consequence: "Your apartment is louder and your heart is fuller. Worth every chewed shoe.", lesson: "Some of the best 'spending' isn't an investment — it's a life. Just budget for the vet." },
+          { weight: 30, note: "Big vet bill.", effect: { cash: -2800, happiness: 9 }, tone: "warning", consequence: "Love at first sight, then a surprise surgery. You'd pay it twice — but ouch.", lesson: "Pets are a recurring cost with spikes. Factor the vet fund in before you adopt." },
+        ],
+      },
+      { id: "skip", label: "Not the right time", blurb: "Stay flexible.", outcomes: [{ weight: 100, effect: { happiness: -1 }, tone: "neutral", consequence: "You walk out pet-free. Responsible, slightly sad, fully flexible.", lesson: "Timing a big recurring commitment to your actual life is its own kind of love." }] },
+    ],
+  },
+  {
+    id: "houseHack",
+    tag: "Housing",
+    prompt: "Your place has a spare room. You could rent it out — extra income, less privacy.",
+    weight: 1,
+    requires: (c) => c.life.housing === "owned",
+    choices: [
+      {
+        id: "rent",
+        label: "Rent the spare room",
+        blurb: "Let the house pay you back.",
+        outcomes: [
+          { weight: 75, effect: { cash: 7200, happiness: -3 }, tone: "good", consequence: "A tidy tenant covers a big chunk of your mortgage. House-hacking, quietly winning.", lesson: "Making your biggest cost generate income is one of the strongest money moves there is." },
+          { weight: 25, note: "Tenant from hell.", effect: { cash: 3000, happiness: -8, health: -2 }, tone: "warning", consequence: "Loud, late on rent, and allergic to dishes. You get income and a headache.", lesson: "Cash flow is great until the human attached to it isn't. Screen carefully." },
+        ],
+      },
+      { id: "keep", label: "Keep your space", blurb: "Privacy over profit.", outcomes: [{ weight: 100, effect: { happiness: 3 }, tone: "neutral", consequence: "You keep the quiet and the whole place to yourself. Some things aren't for sale.", lesson: "Not every optimization is worth it. Peace has real value too." }] },
+    ],
+  },
+  {
+    id: "studentLoans",
+    tag: "Debt",
+    prompt: "Your student loans sit there compounding. You could throw everything at them or just pay the minimum.",
+    minAge: 22,
+    weight: 1,
+    requires: (c) => c.salary > 0 && c.life.health > 0,
+    choices: [
+      { id: "attack", label: "Attack the debt", blurb: "Kill it fast.", outcomes: [{ weight: 100, effect: { cash: -8000, debt: -8000, happiness: -3 }, tone: "good", consequence: "Lean months, but the balance drops hard. Future-you gets a raise called 'no payment.'", lesson: "Paying off debt is a guaranteed return equal to its interest rate. Often unbeatable." }] },
+      { id: "minimum", label: "Pay the minimum, invest more", blurb: "Bet on the market.", outcomes: [{ weight: 100, effect: { happiness: 1 }, tone: "neutral", consequence: "You keep the cash liquid and invest instead. Works if your returns beat the loan rate.", lesson: "Low-rate debt can coexist with investing. High-rate debt should always die first." }] },
+    ],
+  },
+  {
+    id: "relocate",
+    tag: "Career",
+    prompt: "A much better-paying job is open — in another city. New start, new rent, no friends nearby.",
+    minAge: 24,
+    weight: 1,
+    requires: (c) => c.salary > 0,
+    choices: [
+      {
+        id: "move",
+        label: "Pack up and move",
+        blurb: "Chase the opportunity.",
+        outcomes: [
+          { weight: 60, note: "It clicked.", effect: { salaryPct: 28, cash: -6000, happiness: 4, health: -2 }, tone: "good", consequence: "Bigger paycheck, fresh scene, and you actually settle in. The leap paid off.", lesson: "Geographic flexibility early in a career is one of the biggest income levers you have." },
+          { weight: 40, note: "Homesick.", effect: { salaryPct: 28, cash: -6000, happiness: -10, health: -3 }, tone: "warning", consequence: "The money's great; the loneliness isn't. You're richer and a little adrift.", lesson: "More income doesn't automatically mean more happiness. Price in the human cost." },
+        ],
+      },
+      { id: "stay", label: "Stay put", blurb: "Keep your people.", outcomes: [{ weight: 100, effect: { happiness: 4 }, tone: "neutral", consequence: "You keep your community and pass on the raise. Roots have value money can't buy.", lesson: "Your network and support system are real assets — just ones that don't show on a balance sheet." }] },
+    ],
+  },
+  {
+    id: "vacation",
+    tag: "Life",
+    prompt: "You're fried. A proper vacation is calling — the expensive kind or the cheap kind.",
+    minAge: 23,
+    weight: 1,
+    choices: [
+      {
+        id: "splurge",
+        label: "Book the dream trip",
+        blurb: "Go big.",
+        outcomes: [
+          { weight: 80, effect: { cash: -5000, happiness: 14, health: 5 }, tone: "good", consequence: "Unforgettable. You come back tanned, recharged, and slightly poorer. Memories compound too.", lesson: "Spending on experiences you'll remember beats spending on stuff you'll forget." },
+          { weight: 20, note: "Travel chaos.", effect: { cash: -6500, happiness: 4, health: -3 }, tone: "warning", consequence: "Delayed flights, a lost bag, a dodgy meal. Still beat the office — barely.", lesson: "Travel insurance and a buffer turn a ruined trip into a funny story." },
+        ],
+      },
+      { id: "cheap", label: "Cheap reset instead", blurb: "Rest without the bill.", outcomes: [{ weight: 100, effect: { cash: -600, happiness: 7, health: 4 }, tone: "good", consequence: "A few quiet days close to home. Most of the recharge, none of the debt.", lesson: "Rest doesn't have to be expensive. Burnout recovery is the goal, not the price tag." }] },
+    ],
+  },
+  {
+    id: "fitness",
+    tag: "Health",
+    prompt: "Your knees creak and your smartwatch is judging you. A gym membership beckons.",
+    minAge: 22,
+    once: true,
+    weight: 1,
+    choices: [
+      {
+        id: "commit",
+        label: "Sign up and commit",
+        blurb: "Invest in the body.",
+        outcomes: [
+          { weight: 55, note: "It stuck.", effect: { cash: -1200, health: 14, happiness: 6 }, tone: "good", consequence: "You actually go. Energy up, mood up, doctor pleased. Compounding, but for your body.", lesson: "Health is the one asset that makes every other asset more enjoyable. It compounds too." },
+          { weight: 45, note: "Quit by March.", effect: { cash: -1200, health: 2 }, tone: "warning", consequence: "Three weeks of glory, then the membership becomes a donation to the gym.", lesson: "A habit you don't keep is just a subscription. Start smaller and free if you have to." },
+        ],
+      },
+      { id: "free", label: "Just run outside", blurb: "Free and simple.", outcomes: [{ weight: 100, effect: { health: 6, happiness: 2 }, tone: "good", consequence: "No fees, no excuses, just shoes and a sidewalk. Underrated.", lesson: "The best plan is the one you'll actually do — and cheaper is easier to keep." }] },
+    ],
+  },
+  {
+    id: "parentHelp",
+    tag: "Family",
+    prompt: "A parent hits a rough patch and quietly needs help. They'd never ask outright.",
+    minAge: 30,
+    weight: 1,
+    choices: [
+      { id: "help", label: "Step up and help", blurb: "Family first.", outcomes: [{ weight: 100, effect: { cash: -7000, happiness: 8 }, tone: "good", consequence: "You cover it without making it weird. It costs you — and it's the easiest 'yes' you'll ever give.", lesson: "Some returns aren't financial. Being able to help the people who raised you is the point of the money." }] },
+      { id: "partial", label: "Help what you can", blurb: "Sustainable support.", outcomes: [{ weight: 100, effect: { cash: -2500, happiness: 4 }, tone: "neutral", consequence: "You give what won't sink your own ship, plus a lot of time. Balance, not martyrdom.", lesson: "You can't pour from an empty cup. Help within limits beats help that wrecks you." }] },
+    ],
+  },
+  {
+    id: "lottery",
+    tag: "The Feed",
+    prompt: "The jackpot is enormous this week. Everyone at work is chipping in for tickets.",
+    minAge: 18,
+    weight: 1,
+    choices: [
+      {
+        id: "buy",
+        label: "Buy a stack of tickets",
+        blurb: "Someone has to win.",
+        outcomes: [
+          { weight: 1, note: "JACKPOT.", effect: { cash: 250000, happiness: 20 }, tone: "good", consequence: "Lightning struck. You won. (This basically never happens — but wow.)", lesson: "The lottery is a tax on hope. It paid off this once; it won't again. Invest the winnings, don't blow them." },
+          { weight: 99, effect: { cash: -200, happiness: -1 }, tone: "bad", consequence: "Numbers didn't hit. Shocking absolutely no one but you.", lesson: "Expected value of the lottery is deeply negative. It's entertainment, not a plan." },
+        ],
+      },
+      { id: "pass", label: "Keep your $200", blurb: "Bad odds.", outcomes: [{ weight: 100, effect: { cash: 0, happiness: 1 }, tone: "neutral", consequence: "You skip it and invest the money instead. Boring. Correct.", lesson: "The house always wins. Be the house — own the index, not the ticket." }] },
+    ],
+  },
+  {
+    id: "dataBreach",
+    tag: "Curveball",
+    prompt: "A company you used got hacked. Your details may be floating around the dark web.",
+    minAge: 20,
+    weight: 1,
+    choices: [
+      { id: "protect", label: "Lock everything down", blurb: "Freeze credit, change passwords.", outcomes: [{ weight: 100, effect: { cash: -150, happiness: -1, health: 1 }, tone: "good", consequence: "A boring afternoon of freezing credit and rotating passwords. Cheap insurance.", lesson: "Freezing your credit is free and stops most identity theft cold. Do it before you need it." }] },
+      { id: "ignore", label: "Eh, probably fine", blurb: "Hope for the best.", outcomes: [
+        { weight: 60, effect: { happiness: 1 }, tone: "neutral", consequence: "Nothing happens. You dodged it this time.", lesson: "Doing nothing 'worked' — until the one time it doesn't. Risk isn't the same as outcome." },
+        { weight: 40, note: "Fraud.", effect: { cash: -1200, debt: 1500, happiness: -6, health: -2 }, tone: "bad", consequence: "Someone opened accounts in your name. Months of cleanup and real losses.", lesson: "Identity theft is expensive in money and time. A 10-minute credit freeze beats a six-month nightmare." },
+      ] },
+    ],
+  },
+  {
+    id: "equityVsCash",
+    tag: "Career",
+    prompt: "Your company offers your bonus as cash now — or twice as much in company stock that vests later.",
+    minAge: 25,
+    weight: 1,
+    requires: (c) => c.salary > 0,
+    choices: [
+      { id: "cash", label: "Take the cash", blurb: "A bird in hand.", outcomes: [{ weight: 100, effect: { cash: 6000, happiness: 2 }, tone: "good", consequence: "Guaranteed money in your account today. You decide where it goes.", lesson: "Certain money you control beats uncertain money someone else controls. Diversify away from your employer." }] },
+      {
+        id: "stock",
+        label: "Bet on the stock",
+        blurb: "Double — if it works.",
+        outcomes: [
+          { weight: 45, note: "Stock soared.", effect: { cash: 16000, happiness: 6 }, tone: "good", consequence: "The shares climbed and vested. The gamble doubled your bonus and then some.", lesson: "Concentrated bets can pay big — but your job AND your savings riding on one company is double the risk." },
+          { weight: 55, note: "It sagged.", effect: { cash: 4000, happiness: -3 }, tone: "warning", consequence: "The stock drifted sideways and down. You'd have done better with the cash.", lesson: "Don't tie your net worth to the same company that signs your paycheck. That's two bets, not one." },
+        ],
+      },
+    ],
+  },
+  {
+    id: "charity",
+    tag: "Life",
+    prompt: "A cause you genuinely care about is asking for support. Your budget is tight but real.",
+    minAge: 22,
+    weight: 1,
+    choices: [
+      { id: "give", label: "Give meaningfully", blurb: "Put money where it matters.", outcomes: [{ weight: 100, effect: { cash: -1500, happiness: 9 }, tone: "good", consequence: "It costs you, and it feels better than anything you could've bought. Generosity is a flex.", lesson: "Money is a tool. Using some of it to help others is a perfectly valid line on the budget." }] },
+      { id: "later", label: "Give time, not cash", blurb: "Volunteer instead.", outcomes: [{ weight: 100, effect: { happiness: 5, health: 1 }, tone: "good", consequence: "You show up with your hands instead of your wallet. Sometimes that's worth more.", lesson: "Generosity isn't only financial. Time and skill are valuable currencies too." }] },
+    ],
+  },
 ];
 
 export function eligibleEvents(ctx: EventContext, used: string[]): (LifeEvent & { choices: LifeChoice[] })[] {

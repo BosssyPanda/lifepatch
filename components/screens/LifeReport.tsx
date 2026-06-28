@@ -1,11 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
+import { CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
-import { netWorth, type RunState } from "@/lib/runEngine";
+import { netWorth, portfolioValue, type RunState } from "@/lib/runEngine";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.08, delayChildren: 0.15 } } };
 const item = { hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } };
@@ -42,6 +43,40 @@ function NetWorthArc({ values }: { values: number[] }) {
       <line x1="0" y1={zeroY} x2="100" y2={zeroY} stroke="var(--color-ink-dim)" strokeWidth="0.3" strokeDasharray="1 1" opacity="0.5" />
       <polyline points={pts.join(" ")} fill="none" stroke={up ? "#7f8b52" : "#a33218"} strokeWidth="0.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
+  );
+}
+
+function PortfolioBreakdown({ run }: { run: RunState }) {
+  const total = portfolioValue(run) + run.cash;
+  if (total <= 0) return null;
+  const rows = [
+    ...ASSETS.map((a) => ({ key: a.id, label: a.short, Icon: a.Icon, value: run.holdings[a.id] ?? 0 })),
+    { key: "cash", label: "Cash", Icon: CashIcon, value: run.cash },
+  ]
+    .filter((r) => r.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  return (
+    <div className="rounded-[4px] border border-ink/12 bg-bg2 p-4">
+      <p className="eyebrow text-ink-dim">Where your money ended up</p>
+      <ul className="mt-3 space-y-2">
+        {rows.map((r) => {
+          const pct = (r.value / total) * 100;
+          const Icon = r.Icon;
+          return (
+            <li key={r.key} className="flex items-center gap-2.5">
+              <Icon size={15} className="shrink-0 text-ink-dim" />
+              <span className="w-20 shrink-0 truncate font-display text-[0.72rem] font-semibold uppercase tracking-wide text-ink/85">{r.label}</span>
+              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-black/40">
+                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(2, pct)}%` }} />
+              </div>
+              <span className="num w-20 shrink-0 text-right text-sm text-ink">{currency(r.value)}</span>
+              <span className="num w-9 shrink-0 text-right text-[0.7rem] text-ink-dim">{pct.toFixed(0)}%</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 
@@ -100,6 +135,11 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac }: { run: RunStat
             <NetWorthArc values={hist.map((h) => h.netWorth)} />
           </motion.div>
         )}
+
+        {/* final portfolio — BuildYourStax style */}
+        <motion.div variants={item} className="mt-3">
+          <PortfolioBreakdown run={run} />
+        </motion.div>
 
         {/* named-event reveal */}
         {best && worst && (

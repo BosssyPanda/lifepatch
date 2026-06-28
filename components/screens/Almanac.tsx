@@ -48,7 +48,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
           </div>
 
           {/* content */}
-          <div className="thin-scroll flex-1 overflow-y-auto">
+          <div className="thin-scroll flex-1 overflow-y-auto" data-lenis-prevent>
             <div className="mx-auto max-w-3xl px-5 py-8">
               {section === "wealth" && (
                 <Section title="Ways to build wealth" sub="Every path has a price. Here's the honest trade-off on each.">

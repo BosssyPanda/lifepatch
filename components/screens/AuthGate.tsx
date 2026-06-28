@@ -38,7 +38,7 @@ export function AuthGate({
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-md flex-col justify-center px-5 py-14">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <p className="eyebrow text-center text-accent">{MODES[mode].name} · {MODES[mode].range}</p>
+        <p className="eyebrow text-center text-accent">{MODES[mode].name} · {MODES[mode].meta}</p>
         <h1 className="display-caps mt-3 text-center text-4xl text-ink">Save your life</h1>
         <p className="mx-auto mt-2 max-w-xs text-center font-serif text-sm italic text-ink-dim">
           Sign in with email so your run survives the tab closing.

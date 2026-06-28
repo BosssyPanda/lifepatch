@@ -1,4 +1,4 @@
-import { FIRST_YEAR, LAST_YEAR } from "./markets";
+import { FIRST_YEAR } from "./markets";
 
 export type ModeId = "story" | "infinite";
 
@@ -6,32 +6,34 @@ export type ModeConfig = {
   id: ModeId;
   name: string;
   tagline: string;
+  meta: string; // non-spoiler gameplay distinction (no years)
+  blurb: string;
   startYear: number;
   endYear: number | null; // null = open-ended
-  blurb: string;
-  range: string;
 };
 
+// Note: the real start/end years are intentionally hidden from the player and
+// only revealed in the end report. Never surface startYear/endYear in the UI.
 export const MODES: Record<ModeId, ModeConfig> = {
   story: {
     id: "story",
     name: "Story",
-    tagline: "1990 → 2010",
+    tagline: "A tight run with a reckoning.",
+    meta: "Finite · has an ending",
     startYear: 1990,
     endYear: 2010,
-    range: "1990–2010",
     blurb:
-      "Twenty years across the dot-com boom, the bust, and the 2008 crash. A tight, finite run with a final reckoning.",
+      "A fixed-length life with a definite end and a full final report. Booms, busts, and a crash or two land when you least expect them.",
   },
   infinite: {
     id: "infinite",
     name: "Infinite",
-    tagline: "1957 → today",
+    tagline: "Live a whole lifetime.",
+    meta: "Open-ended · autosaves",
     startYear: FIRST_YEAR,
     endYear: null,
-    range: `${FIRST_YEAR}–${LAST_YEAR}`,
     blurb:
-      "Start at the dawn of the modern S&P 500 and live a whole lifetime — until you retire, quit, or your number comes up. Autosaves every year.",
+      "Open-ended. Live year after year, autosaving as you go, until you retire, quit, or your number finally comes up.",
   },
 };
 

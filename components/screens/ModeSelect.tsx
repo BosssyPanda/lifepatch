@@ -53,7 +53,7 @@ export function ModeSelect({
               )}
               <div className="relative">
                 <div className="flex items-center justify-between border-b-2 border-paper-ink pb-2">
-                  <span className="eyebrow text-paper-dim">{m.range}</span>
+                  <span className="eyebrow text-paper-dim">{m.meta}</span>
                   <span className="text-paper-ink"><Icon size={22} /></span>
                 </div>
                 <h2 className="display-caps mt-4 text-4xl text-paper-ink">{m.name}</h2>
