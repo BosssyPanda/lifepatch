@@ -2,12 +2,12 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { CheckIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
+import { CheckIcon, FreedomIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
 import { MODES, type ModeId } from "@/lib/modes";
 
-const ICON = { story: TrophyIcon, infinite: ReplayIcon };
+const ICON = { story: TrophyIcon, infinite: ReplayIcon, cashflow: FreedomIcon };
 
 export function ModeSelect({
   onChoose,
@@ -17,18 +17,18 @@ export function ModeSelect({
   onBack: () => void;
 }) {
   const audio = useAudio();
-  const modes: ModeId[] = ["story", "infinite"];
+  const modes: ModeId[] = ["story", "infinite", "cashflow"];
   const [picked, setPicked] = useState<ModeId | null>(null);
 
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-4xl flex-col justify-center px-5 py-14">
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
         <p className="eyebrow text-accent">Choose your run</p>
-        <h1 className="display-caps mt-3 text-4xl text-ink sm:text-6xl">Two ways to play</h1>
+        <h1 className="display-caps mt-3 text-4xl text-ink sm:text-6xl">Three ways to play</h1>
         <div className="mx-auto mt-5 h-px w-24 bg-accent" />
       </motion.div>
 
-      <div className="mt-10 grid gap-5 sm:grid-cols-2">
+      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {modes.map((id, i) => {
           const m = MODES[id];
           const Icon = ICON[id];

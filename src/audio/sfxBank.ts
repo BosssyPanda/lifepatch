@@ -18,7 +18,8 @@ import { Howl, Howler } from "howler";
 
 export type SfxName =
   | "paper" | "confirm" | "coins" | "cash" | "stamp"
-  | "page" | "chime" | "soft" | "click" | "hover" | "modal" | "uitick";
+  | "page" | "chime" | "soft" | "click" | "hover" | "modal" | "uitick"
+  | "dice" | "diceLand";
 
 export type StingTone = "good" | "bad" | "warning" | "neutral";
 
@@ -27,7 +28,7 @@ export type AmbienceId =
   | "amb_coins" | "amb_feed" | "amb_unease" | "amb_shimmer" | "amb_hiss";
 
 export const SFX_NAMES: SfxName[] = [
-  "paper", "confirm", "coins", "cash", "stamp", "page", "chime", "soft", "click", "hover", "modal", "uitick",
+  "paper", "confirm", "coins", "cash", "stamp", "page", "chime", "soft", "click", "hover", "modal", "uitick", "dice", "diceLand",
 ];
 export const STING_NAMES: string[] = ["sting_good", "sting_bad", "sting_warning", "sting_neutral"];
 export const AMBIENCE_IDS: AmbienceId[] = [

@@ -1,6 +1,6 @@
 import { FIRST_YEAR } from "./markets";
 
-export type ModeId = "story" | "infinite";
+export type ModeId = "story" | "infinite" | "cashflow";
 
 export type ModeConfig = {
   id: ModeId;
@@ -34,6 +34,16 @@ export const MODES: Record<ModeId, ModeConfig> = {
     endYear: null,
     blurb:
       "Open-ended. Live year after year, autosaving as you go, until you retire, quit, or your number finally comes up.",
+  },
+  cashflow: {
+    id: "cashflow",
+    name: "Rat Race",
+    tagline: "Escape the 9-to-5 with passive income.",
+    meta: "Board game · builds financial IQ",
+    startYear: 0,
+    endYear: null,
+    blurb:
+      "A digital take on the classic cash-flow board game. Pick a profession, buy income-producing assets, and break free the moment your passive income outgrows your expenses — then chase your dream on the Fast Track.",
   },
 };
 

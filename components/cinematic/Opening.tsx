@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Intro } from "@/components/screens/Intro";
 import { useAudio } from "@/hooks/useAudio";
 import { ColdOpen } from "./ColdOpen";
@@ -18,8 +18,14 @@ const wipe = {
 
 export function Opening({ onStart, onAlmanac }: { onStart: () => void; onAlmanac: () => void }) {
   const audio = useAudio();
-  const seen = useRef(typeof window !== "undefined" && sessionStorage.getItem("lp_introSeen") === "1");
-  const [stage, setStage] = useState<Stage>(seen.current ? "title" : "gate");
+  // Always render "gate" on the server AND the first client paint so hydration
+  // matches; promote returning visitors to the title after mount (no SSR mismatch).
+  const [stage, setStage] = useState<Stage>("gate");
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("lp_introSeen") === "1") setStage("title");
+    } catch {}
+  }, []);
 
   const begin = useCallback(() => {
     audio.unlock("intro"); // starts the engine on this gesture, at the intro preset
@@ -42,7 +48,7 @@ export function Opening({ onStart, onAlmanac }: { onStart: () => void; onAlmanac
 
   return (
     <div className="relative">
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {stage === "gate" && (
           <motion.div key="gate" {...wipe}>
             <Gate onBegin={begin} muted={audio.muted} onToggleMute={toggleMute} />

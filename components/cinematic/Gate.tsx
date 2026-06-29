@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from "framer-motion";
+import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
 import type { PointerEvent } from "react";
 import { DataAtlas } from "./DataAtlas";
 import { MuteButton } from "./Controls";
@@ -16,13 +16,11 @@ export function Gate({
 }) {
   const reduce = useReducedMotion();
 
-  // subtle pointer parallax on the illustration
+  // normalized pointer (−0.5..0.5), springed — drives layered parallax in DataAtlas
   const px = useMotionValue(0);
   const py = useMotionValue(0);
   const sx = useSpring(px, { stiffness: 60, damping: 18 });
   const sy = useSpring(py, { stiffness: 60, damping: 18 });
-  const tx = useTransform(sx, [-0.5, 0.5], [-14, 14]);
-  const ty = useTransform(sy, [-0.5, 0.5], [-10, 10]);
 
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
     if (reduce) return;
@@ -41,13 +39,27 @@ export function Gate({
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.5]"
         style={{
-          backgroundImage:
-            "radial-gradient(circle at 1px 1px, rgba(168,159,140,0.16) 1px, transparent 0)",
+          backgroundImage: "radial-gradient(circle at 1px 1px, rgba(168,159,140,0.16) 1px, transparent 0)",
           backgroundSize: "26px 26px",
           maskImage: "radial-gradient(110% 80% at 30% 45%, #000 30%, transparent 78%)",
           WebkitMaskImage: "radial-gradient(110% 80% at 30% 45%, #000 30%, transparent 78%)",
         }}
       />
+
+      {/* ---------------- HUD: corner brackets ---------------- */}
+      <div aria-hidden className="pointer-events-none absolute inset-3 z-20 lg:inset-5">
+        <span className="absolute left-0 top-0 h-7 w-7 border-l-2 border-t-2 border-accent/40 lg:h-10 lg:w-10" />
+        <span className="absolute right-0 top-0 h-7 w-7 border-r-2 border-t-2 border-accent/40 lg:h-10 lg:w-10" />
+        <span className="absolute bottom-0 left-0 h-7 w-7 border-b-2 border-l-2 border-accent/40 lg:h-10 lg:w-10" />
+        <span className="absolute bottom-0 right-0 h-7 w-7 border-b-2 border-r-2 border-accent/40 lg:h-10 lg:w-10" />
+      </div>
+
+      {/* ---------------- HUD: index readout (top-left) ---------------- */}
+      <div aria-hidden className="pointer-events-none absolute left-6 top-6 z-20 hidden items-center gap-2 lg:flex">
+        <span className="num text-[0.7rem] text-accent">001</span>
+        <span className="h-px w-8 bg-ink-dim/50" />
+        <span className="eyebrow text-ink-dim/70" style={{ fontSize: "0.55rem" }}>Survive the Internet Economy</span>
+      </div>
 
       <div className="absolute right-4 top-4 z-20">
         <MuteButton muted={muted} onToggle={onToggleMute} />
@@ -58,10 +70,19 @@ export function Gate({
         initial={reduce ? false : { opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1, ease: [0.2, 0.65, 0.3, 0.9] }}
-        style={{ x: tx, y: ty }}
-        className="relative z-10 flex w-full max-w-[300px] shrink-0 justify-center sm:max-w-[360px] lg:w-[46%] lg:max-w-[560px]"
+        className="relative z-10 flex w-full max-w-[260px] shrink-0 justify-center overflow-hidden sm:max-w-[320px] lg:h-[90svh] lg:max-h-[900px] lg:w-auto lg:max-w-none"
       >
-        <DataAtlas className="h-auto w-full drop-shadow-[0_30px_60px_rgba(0,0,0,0.6)]" />
+        <DataAtlas px={sx} py={sy} className="h-auto w-full lg:h-full lg:w-auto drop-shadow-[0_30px_60px_rgba(0,0,0,0.6)]" />
+        {/* slow accent scanline sweep over the panel */}
+        {!reduce && (
+          <motion.span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent"
+            initial={{ top: "8%" }}
+            animate={{ top: ["8%", "92%", "8%"] }}
+            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          />
+        )}
       </motion.div>
 
       {/* ---------------- title block ---------------- */}
@@ -115,6 +136,30 @@ export function Gate({
         >
           Best with sound on. Headphones recommended.
         </motion.p>
+      </div>
+
+      {/* ---------------- HUD: footer status ticker ---------------- */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-6 bottom-5 z-20 hidden items-center justify-between lg:flex">
+        <div className="flex items-center gap-3 text-ink-dim/55">
+          <span className="eyebrow" style={{ fontSize: "0.55rem" }}>System · Active</span>
+          <span className="flex items-end gap-0.5">
+            {[5, 9, 4, 11, 7, 10, 6, 8].map((h, i) => (
+              <span key={i} className="w-0.5 bg-ink-dim/40" style={{ height: `${h}px` }} />
+            ))}
+          </span>
+          <span className="num text-[0.6rem]">V1.0</span>
+        </div>
+        <div className="flex items-center gap-2 text-ink-dim/55">
+          <span className="eyebrow" style={{ fontSize: "0.55rem" }}>Rendering</span>
+          {!reduce && (
+            <span className="flex gap-1">
+              {[0, 0.2, 0.4].map((d, i) => (
+                <motion.span key={i} className="h-1 w-1 rounded-full bg-accent/70"
+                  animate={{ opacity: [0.25, 1, 0.25] }} transition={{ duration: 1.4, repeat: Infinity, delay: d }} />
+              ))}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

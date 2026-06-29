@@ -338,6 +338,22 @@ export class AudioEngine {
       case "chime": [523.25, 659.25, 783.99].forEach((f, i) => this.blip(at + i * 0.015, f, "triangle", 0.9, -14)); break;
       case "soft": this.blip(at, 320, "sine", 0.16, -16, 200); break;
       case "modal": this.blip(at, 220, "sine", 0.26, -14, 520); break;
+      case "dice": {
+        // tumbling rattle: a scatter of small wooden clacks + bandpassed clicks
+        const hits = [0, 0.05, 0.1, 0.155, 0.21, 0.27];
+        hits.forEach((d, i) => {
+          this.thock(at + d + Math.random() * 0.012, i % 2 ? "F2" : "B1", -12 - (i % 3) * 2);
+          this.noiseBurst(at + d, 0.016, 2400 + Math.random() * 1000, "bandpass", -22, 1.6);
+        });
+        break;
+      }
+      case "diceLand": {
+        // firm settle: low knock + crisp top click
+        this.thock(at, "C2", -4);
+        this.noiseBurst(at, 0.03, 1700, "bandpass", -13, 1.1);
+        this.noiseBurst(at + 0.02, 0.018, 3200, "highpass", -20);
+        break;
+      }
     }
   }
 

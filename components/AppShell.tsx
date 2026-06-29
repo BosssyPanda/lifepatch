@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { CashflowShell } from "@/components/cashflow/CashflowShell";
 import { Opening } from "@/components/cinematic/Opening";
 import { Outro } from "@/components/cinematic/Outro";
 import { Almanac } from "@/components/screens/Almanac";
@@ -37,6 +38,10 @@ function AppShellInner() {
   const [almanacOpen, setAlmanacOpen] = useState(false);
   const openAlmanac = () => { audio.sfx("modal"); setAlmanacOpen(true); };
 
+  // The Rat Race mode is a fully self-contained board game with its own internal
+  // phase machine — hand off to it as soon as it's chosen (skip LifePatch auth).
+  const inCashflow = mode === "cashflow" && phase !== "intro" && phase !== "mode";
+
   // Phase → music preset. intro & recap are owned by Opening/Outro (so they can
   // sync the escalation/verdict), everything else crossfades to a steady bed.
   useEffect(() => {
@@ -45,9 +50,18 @@ function AppShellInner() {
     else if (phase === "report") audio.setPhase("menu");
   }, [phase, audio]);
 
+  if (inCashflow) {
+    return (
+      <main className="relative min-h-[100svh] w-full">
+        <CashflowShell onExit={run.toTitle} onOpenAlmanac={openAlmanac} />
+        <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />
+      </main>
+    );
+  }
+
   return (
     <main className="relative min-h-[100svh] w-full">
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {phase === "intro" && (
           <motion.div key="intro" {...wipe}>
             <Opening onStart={run.goMode} onAlmanac={openAlmanac} />

@@ -1,0 +1,6 @@
+atlas-engraving.png
+Derived from: "Hercules or Atlas Supporting the Globe" (bronze), The Metropolitan
+Museum of Art, image ref MET DP278210. License: CC0 (public domain dedication).
+Source file: Wikimedia Commons — File:Hercules or Atlas Supporting the Globe MET DP278210.jpg
+Processing: background isolated (flood-fill), duotone-tinted to the LifePatch
+palette + halftone, alpha PNG. No rights reserved on the original (CC0).
