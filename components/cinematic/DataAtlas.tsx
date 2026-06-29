@@ -48,6 +48,33 @@ const CANDLES = MIDS.map((mid, i) => {
   return { x, top: mid - HALF[i], bot: mid + HALF[i], high: mid - WICK[i], low: mid + WICK[i], up: UP[i], accent: ACCENT.has(i) };
 });
 
+// orange trend as a 3D helix hugging the sphere surface (front bright, back dim)
+function buildHelix() {
+  const turns = 1.85, N = 220, amp = 0.95;
+  const pts = Array.from({ length: N + 1 }, (_, i) => {
+    const t = i / N;
+    const y = G.cy + G.r * 0.74 * (1 - 2 * t); // bottom -> top
+    const dy = y - G.cy;
+    const rLat = Math.sqrt(Math.max(0, G.r * G.r - dy * dy)) * amp;
+    const phase = t * Math.PI * 2 * turns + 0.5;
+    return { x: G.cx + rLat * Math.sin(phase), y, front: Math.cos(phase) > 0 };
+  });
+  const front: string[] = [], back: string[] = [];
+  let cur: typeof pts = [], curFront = pts[0].front;
+  const flush = () => {
+    if (cur.length >= 2) (curFront ? front : back).push("M" + cur.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L "));
+    cur = [];
+  };
+  for (const p of pts) {
+    if (p.front !== curFront) { const last = cur[cur.length - 1]; flush(); if (last) cur.push(last); curFront = p.front; }
+    cur.push(p);
+  }
+  flush();
+  const start = pts[0], end = pts[pts.length - 1];
+  return { front, back, start, end };
+}
+const HELIX = buildHelix();
+
 const LABELS: { t: string; x: number; y: number; a: "start" | "end" }[] = [
   { t: "MARKETS", x: 150, y: 118, a: "start" },
   { t: "RISK", x: 370, y: 118, a: "start" },
@@ -86,8 +113,8 @@ export function DataAtlas({ className = "" }: { className?: string }) {
         <pattern id="da-dots" width="6.5" height="6.5" patternUnits="userSpaceOnUse">
           <circle cx="1.9" cy="1.9" r="1.25" fill="var(--color-paper)" />
         </pattern>
-        <pattern id="da-grid" width="8.5" height="8.5" patternUnits="userSpaceOnUse">
-          <rect x="1.4" y="1.4" width="1.9" height="1.9" fill="var(--color-brass)" />
+        <pattern id="da-grid" width="6.4" height="6.4" patternUnits="userSpaceOnUse">
+          <rect x="1.2" y="1.2" width="1.7" height="1.7" fill="var(--color-brass)" />
         </pattern>
         <radialGradient id="da-sphereFade" cx="42%" cy="34%" r="70%">
           <stop offset="0%" stopColor="white" stopOpacity="0.85" />
@@ -160,12 +187,12 @@ export function DataAtlas({ className = "" }: { className?: string }) {
           style={{ transformBox: "view-box", transformOrigin: `${G.cx}px ${G.cy}px` }}
           animate={reduce ? undefined : { rotate: 360 }} transition={{ duration: 80, repeat: Infinity, ease: "linear" }}
         >
-          {[0.3, 0.58, 0.82, 1].map((k, i) => <ellipse key={i} cx={G.cx} cy={G.cy} rx={G.r * k} ry={G.r} />)}
+          {[0.22, 0.45, 0.66, 0.85, 1].map((k, i) => <ellipse key={i} cx={G.cx} cy={G.cy} rx={G.r * k} ry={G.r} />)}
           <line x1={G.cx} y1={G.cy - G.r} x2={G.cx} y2={G.cy + G.r} />
         </motion.g>
         {/* latitudes */}
         <g clipPath="url(#da-globeClip)" stroke="var(--color-ink-dim)" strokeWidth="1" fill="none" opacity="0.5">
-          {[-0.62, -0.32, 0, 0.32, 0.62].map((k, i) => <ellipse key={i} cx={G.cx} cy={G.cy + G.r * k} rx={G.r} ry={G.r * 0.34} />)}
+          {[-0.78, -0.55, -0.3, -0.05, 0.2, 0.45, 0.7].map((k, i) => <ellipse key={i} cx={G.cx} cy={G.cy + G.r * k} rx={G.r * Math.sqrt(Math.max(0.02, 1 - k * k))} ry={G.r * 0.3} />)}
         </g>
         {/* accent meridian pulse */}
         <motion.ellipse
@@ -191,14 +218,25 @@ export function DataAtlas({ className = "" }: { className?: string }) {
           })}
         </motion.g>
 
-        {/* trend line + inflation wave */}
-        <motion.path d="M138 382 C 210 366, 244 322, 300 300 S 404 244, 458 168"
-          fill="none" stroke="var(--color-accent)" strokeWidth="3" strokeLinecap="round" {...draw(0.7, 1.8)} />
-        <motion.path d="M150 352 q 26 -15 52 0 t 52 0 t 52 0 t 52 0 t 52 0"
-          fill="none" stroke="var(--color-ochre)" strokeWidth="1.7" opacity="0.75" {...draw(1.1, 1.6)} />
-        <g fill="var(--color-accent)">
-          <circle cx="138" cy="382" r="3.4" /><circle cx="300" cy="300" r="3.4" /><circle cx="458" cy="168" r="3.8" />
+        {/* helical trend wrapping the globe + inflation wave */}
+        <g clipPath="url(#da-globeClip)">
+          {/* back half (occluded) */}
+          {HELIX.back.map((d, i) => (
+            <path key={`hb${i}`} d={d} fill="none" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" opacity="0.2" />
+          ))}
+          {/* inflation wave behind */}
+          <motion.path d="M150 352 q 26 -15 52 0 t 52 0 t 52 0 t 52 0 t 52 0"
+            fill="none" stroke="var(--color-ochre)" strokeWidth="1.7" opacity="0.7" {...draw(1.1, 1.6)} />
+          {/* front half (bright, with glow) */}
+          {HELIX.front.map((d, i) => (
+            <g key={`hf${i}`}>
+              <path d={d} fill="none" stroke="var(--color-accent-2)" strokeWidth="7" strokeLinecap="round" opacity="0.12" />
+              <motion.path d={d} fill="none" stroke="var(--color-accent)" strokeWidth="3" strokeLinecap="round" {...draw(0.6 + i * 0.12, 1.3)} />
+            </g>
+          ))}
         </g>
+        <circle cx={HELIX.start.x} cy={HELIX.start.y} r="3.6" fill="var(--color-accent)" />
+        <circle cx={HELIX.end.x} cy={HELIX.end.y} r="4" fill="var(--color-accent)" />
       </motion.g>
 
       {/* orbital nodes + labels */}
