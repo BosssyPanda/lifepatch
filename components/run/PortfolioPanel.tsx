@@ -1,5 +1,6 @@
 "use client";
 
+import { useAudio } from "@/hooks/useAudio";
 import { assetsForYear, type AssetDef } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import type { AssetId } from "@/lib/markets";
@@ -15,8 +16,18 @@ export function PortfolioPanel({
   onTrade: (id: AssetId, dollars: number) => void;
   onPayDebt: (dollars: number) => void;
 }) {
+  const audio = useAudio();
   const assets = assetsForYear(run.year);
   const port = portfolioValue(run);
+
+  const handleTrade = (id: AssetId, dollars: number) => {
+    audio.sfx(dollars >= 0 ? "coins" : "cash");
+    onTrade(id, dollars);
+  };
+  const handlePayDebt = (dollars: number) => {
+    audio.sfx("stamp");
+    onPayDebt(dollars);
+  };
 
   return (
     <section aria-label="Portfolio" className="mx-auto max-w-3xl px-5 py-4">
@@ -36,8 +47,8 @@ export function PortfolioPanel({
             <p className="eyebrow text-brick">Debt</p>
             {run.debt > 0 && (
               <div className="flex gap-1">
-                <button type="button" disabled={run.cash < 1000} onClick={() => onPayDebt(1000)} className="num rounded-[2px] border border-brick/60 px-1.5 py-0.5 text-[0.6rem] text-brick disabled:opacity-25 hover:bg-brick hover:text-bg">−$1k</button>
-                <button type="button" disabled={run.cash <= 0} onClick={() => onPayDebt(Math.min(run.cash, run.debt))} className="num rounded-[2px] border border-brick/60 px-1.5 py-0.5 text-[0.6rem] text-brick disabled:opacity-25 hover:bg-brick hover:text-bg">MAX</button>
+                <button type="button" disabled={run.cash < 1000} onClick={() => handlePayDebt(1000)} className="num rounded-[2px] border border-brick/60 px-1.5 py-0.5 text-[0.6rem] text-brick disabled:opacity-25 hover:bg-brick hover:text-bg">−$1k</button>
+                <button type="button" disabled={run.cash <= 0} onClick={() => handlePayDebt(Math.min(run.cash, run.debt))} className="num rounded-[2px] border border-brick/60 px-1.5 py-0.5 text-[0.6rem] text-brick disabled:opacity-25 hover:bg-brick hover:text-bg">MAX</button>
               </div>
             )}
           </div>
@@ -51,7 +62,7 @@ export function PortfolioPanel({
 
       <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
         {assets.map((a) => (
-          <AssetRowWrapper key={a.id} run={run} assetId={a.id} port={port} onTrade={onTrade} def={a} />
+          <AssetRowWrapper key={a.id} run={run} assetId={a.id} port={port} onTrade={handleTrade} def={a} />
         ))}
       </div>
     </section>

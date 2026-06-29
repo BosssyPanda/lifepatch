@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Opening } from "@/components/cinematic/Opening";
 import { Outro } from "@/components/cinematic/Outro";
 import { Almanac } from "@/components/screens/Almanac";
@@ -11,6 +11,7 @@ import { ModeSelect } from "@/components/screens/ModeSelect";
 import { Setup } from "@/components/screens/Setup";
 import { YearLoop } from "@/components/run/YearLoop";
 import { useAuth } from "@/hooks/useAuth";
+import { AudioProvider, useAudio } from "@/hooks/useAudio";
 import { useRun } from "@/hooks/useRun";
 
 const wipe = {
@@ -21,11 +22,28 @@ const wipe = {
 };
 
 export function AppShell() {
+  return (
+    <AudioProvider>
+      <AppShellInner />
+    </AudioProvider>
+  );
+}
+
+function AppShellInner() {
   const auth = useAuth();
   const run = useRun(auth.user?.id ?? null);
+  const audio = useAudio();
   const { phase, mode } = run;
   const [almanacOpen, setAlmanacOpen] = useState(false);
-  const openAlmanac = () => setAlmanacOpen(true);
+  const openAlmanac = () => { audio.sfx("modal"); setAlmanacOpen(true); };
+
+  // Phase → music preset. intro & recap are owned by Opening/Outro (so they can
+  // sync the escalation/verdict), everything else crossfades to a steady bed.
+  useEffect(() => {
+    if (phase === "mode" || phase === "auth" || phase === "setup") audio.setPhase("menu");
+    else if (phase === "run") audio.setPhase("gameplay");
+    else if (phase === "report") audio.setPhase("menu");
+  }, [phase, audio]);
 
   return (
     <main className="relative min-h-[100svh] w-full">

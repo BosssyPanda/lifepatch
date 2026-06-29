@@ -5,21 +5,22 @@ import { useEffect, useRef, useState } from "react";
 import { Mascot } from "@/components/brand/Mascot";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { NeonButton } from "@/components/ui/NeonButton";
-import { useScore } from "@/hooks/useScore";
+import { useAudio } from "@/hooks/useAudio";
 import { RECAP_BEATS, type RecapKind } from "@/lib/cinematic";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
 import { netWorth, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
+import type { AccentKind } from "@/src/audio/AudioEngine";
 import { MuteButton, SkipButton } from "./Controls";
 import { VerdictStamp } from "./VerdictStamp";
 
-const SOUND: Record<RecapKind, "thump" | "rise" | "ping" | "thud" | "stab"> = {
+const SOUND: Record<RecapKind, AccentKind> = {
   open: "thump", years: "rise", networth: "rise", win: "ping", loss: "thud", mascot: "stab", verdict: "thump",
 };
 
 export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
-  const score = useScore();
+  const audio = useAudio();
   const [i, setI] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doneRef = useRef(false);
@@ -33,28 +34,32 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
   const best = [...hist].sort((a, b) => b.portfolioDelta - a.portfolioDelta)[0];
   const worst = [...hist].sort((a, b) => a.portfolioDelta - b.portfolioDelta)[0];
 
-  // start bed once
+  // crossfade the running score into the verdict-keyed recap preset (no restart)
   useEffect(() => {
     if (startedRef.current) return;
     startedRef.current = true;
-    score.unlock();
-    score.startBed(verdict.good ? "outroGood" : "outroBad");
-  }, [score, verdict.good]);
+    const preset = verdict.good ? "recapGood" : "recapBad";
+    audio.unlock(preset); // idempotent: starts the engine here only if it never started
+    audio.setPhase(preset);
+    audio.ambience(null); // drop any lingering scenario ambience
+  }, [audio, verdict.good]);
 
   useEffect(() => {
     const beat = RECAP_BEATS[i];
     if (!beat) {
-      if (!doneRef.current) { doneRef.current = true; score.stopAll(); onDone(); }
+      if (!doneRef.current) { doneRef.current = true; onDone(); }
       return;
     }
-    try { score.play(beat.kind === "verdict" ? (verdict.good ? "stampGood" : "stampBad") : SOUND[beat.kind]); } catch {}
+    try { audio.accent(beat.kind === "verdict" ? (verdict.good ? "stampGood" : "stampBad") : SOUND[beat.kind]); } catch {}
+    if (beat.kind === "verdict" && verdict.good) audio.swellWarmth();
     timerRef.current = setTimeout(() => setI((n) => n + 1), beat.ms);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [i, score, onDone, verdict.good]);
+  }, [i, audio, onDone, verdict.good]);
 
   const finish = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (!doneRef.current) { doneRef.current = true; score.stopAll(); onDone(); }
+    // no stopAll — music keeps playing and AppShell crossfades it to the report bed
+    if (!doneRef.current) { doneRef.current = true; onDone(); }
   };
 
   const kind = RECAP_BEATS[i]?.kind;
@@ -128,7 +133,7 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
         </motion.div>
       </AnimatePresence>
 
-      <div className="absolute right-4 top-4 z-20"><MuteButton muted={score.muted} onToggle={() => score.setMuted(!score.muted)} /></div>
+      <div className="absolute right-4 top-4 z-20"><MuteButton muted={audio.muted} onToggle={() => audio.setMuted(!audio.muted)} /></div>
       <div className="absolute bottom-6 right-4 z-20"><SkipButton onSkip={finish} /></div>
     </div>
   );

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "ai-music-generation": {
+      "source": "inference-sh/skills",
+      "sourceType": "github",
+      "skillPath": "tools/audio/ai-music-generation/SKILL.md",
+      "computedHash": "cfc1335e1c04fce85059a28d44a27873c9144bfdfcea10da703eca80605d7615"
+    }
+  }
+}

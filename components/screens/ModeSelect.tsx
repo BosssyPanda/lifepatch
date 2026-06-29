@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { CheckIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { useAudio } from "@/hooks/useAudio";
 import { MODES, type ModeId } from "@/lib/modes";
 
 const ICON = { story: TrophyIcon, infinite: ReplayIcon };
@@ -15,6 +16,7 @@ export function ModeSelect({
   onChoose: (mode: ModeId) => void;
   onBack: () => void;
 }) {
+  const audio = useAudio();
   const modes: ModeId[] = ["story", "infinite"];
   const [picked, setPicked] = useState<ModeId | null>(null);
 
@@ -35,7 +37,7 @@ export function ModeSelect({
             <motion.button
               key={id}
               type="button"
-              onClick={() => setPicked(id)}
+              onClick={() => { audio.sfx("click"); setPicked(id); }}
               initial={{ opacity: 0, y: 26, rotate: i % 2 ? 1 : -1 }}
               animate={{ opacity: picked && !active ? 0.55 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
               transition={{ type: "spring", stiffness: 220, damping: 20, delay: i * 0.1 }}
@@ -67,7 +69,7 @@ export function ModeSelect({
 
       <div className="mt-9 flex items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back to title</NeonButton>
-        <NeonButton variant="primary" size="lg" disabled={!picked} onClick={() => picked && onChoose(picked)}>
+        <NeonButton variant="primary" size="lg" disabled={!picked} onClick={() => { if (picked) { audio.sfx("confirm"); onChoose(picked); } }}>
           {picked ? `Start ${MODES[picked].name} →` : "Pick a mode"}
         </NeonButton>
       </div>

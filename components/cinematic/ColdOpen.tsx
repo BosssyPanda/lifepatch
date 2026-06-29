@@ -2,22 +2,21 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import type { useScore } from "@/hooks/useScore";
+import { useAudio } from "@/hooks/useAudio";
 import { COLD_OPEN } from "@/lib/cinematic";
 import { Beat } from "./Beat";
 import { MuteButton, SkipButton } from "./Controls";
 
 export function ColdOpen({
-  score,
   muted,
   onToggleMute,
   onDone,
 }: {
-  score: ReturnType<typeof useScore>;
   muted: boolean;
   onToggleMute: () => void;
   onDone: () => void;
 }) {
+  const audio = useAudio();
   const [i, setI] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doneRef = useRef(false);
@@ -28,10 +27,12 @@ export function ColdOpen({
       if (!doneRef.current) { doneRef.current = true; onDone(); }
       return;
     }
-    try { score.play(beat.accent); } catch {}
+    // escalate the bed phrase-by-phrase, accent the slam-in
+    audio.setIntensity(Math.min(1, 0.3 + (i / Math.max(1, COLD_OPEN.length - 1)) * 0.7));
+    try { audio.accent(beat.accent); } catch {}
     timerRef.current = setTimeout(() => setI((n) => n + 1), beat.ms);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [i, score, onDone]);
+  }, [i, audio, onDone]);
 
   const skip = () => {
     if (timerRef.current) clearTimeout(timerRef.current);

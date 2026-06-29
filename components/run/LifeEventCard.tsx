@@ -1,7 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useEffect, useRef } from "react";
 import { CheckIcon, LockIcon } from "@/components/icons";
+import { useAudio } from "@/hooks/useAudio";
+import { stingForTone } from "@/lib/audioMap";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEffect, LifeEvent } from "@/lib/lifeEvents";
 
@@ -27,10 +30,20 @@ export function LifeEventCard({
   chosen?: string; // "choiceId|outcomeIdx"
   onChoose: (eventId: string, choice: LifeChoice) => void;
 }) {
+  const audio = useAudio();
   const [chosenId, idxStr] = chosen ? chosen.split("|") : [undefined, undefined];
   const answered = Boolean(chosenId);
   const chosenChoice = event.choices.find((c) => c.id === chosenId);
   const outcome = chosenChoice?.outcomes[Number(idxStr)] ?? chosenChoice?.outcomes[0];
+
+  // reveal sting once, keyed to the outcome's tone
+  const stungRef = useRef(false);
+  useEffect(() => {
+    if (answered && outcome && !stungRef.current) {
+      stungRef.current = true;
+      audio.sting(stingForTone(outcome.tone));
+    }
+  }, [answered, outcome, audio]);
 
   return (
     <motion.div
@@ -56,7 +69,7 @@ export function LifeEventCard({
               <button
                 type="button"
                 disabled={answered}
-                onClick={() => onChoose(event.id, c)}
+                onClick={() => { audio.sfx("paper"); onChoose(event.id, c); }}
                 className={`group flex w-full items-start gap-2.5 rounded-[3px] border px-3.5 py-2.5 text-left transition-all ${
                   isChosen ? "border-accent bg-accent/10" : dim ? "border-paper-ink/10 opacity-45" : "border-paper-ink/25 hover:border-paper-ink hover:bg-paper-ink/[0.04]"
                 } ${answered ? "cursor-default" : "cursor-pointer"}`}

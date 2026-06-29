@@ -1,0 +1,41 @@
+{
+  "id": "example-track",
+  "title": "Example Cue (placeholder)",
+  "bpm": 120,
+  "key": "A minor",
+  "timeSignature": "4/4",
+  "bars": 16,
+  "loopStartBar": 5,
+  "loopEndBar": 13,
+  "loopStartSec": 8.0,
+  "loopEndSec": 24.0,
+  "sections": [
+    { "name": "intro", "startBar": 1, "endBar": 4, "startSec": 0.0, "endSec": 8.0 },
+    { "name": "loop", "startBar": 5, "endBar": 12, "startSec": 8.0, "endSec": 24.0 },
+    { "name": "outro", "startBar": 13, "endBar": 16, "startSec": 24.0, "endSec": 32.0 }
+  ],
+  "cuePoints": [
+    { "name": "downbeat", "bar": 1, "sec": 0.0 },
+    { "name": "loopIn", "bar": 5, "sec": 8.0 },
+    { "name": "loopOut", "bar": 13, "sec": 24.0 }
+  ],
+  "stems": [
+    { "id": "pulse", "file": "../stems/example-track.pulse.ogg", "role": "ambience", "defaultGain": 0.8 },
+    { "id": "bass", "file": "../stems/example-track.bass.ogg", "role": "bass", "defaultGain": 0.0 },
+    { "id": "harmony", "file": "../stems/example-track.harmony.ogg", "role": "harmony", "defaultGain": 0.0 },
+    { "id": "melody", "file": "../stems/example-track.melody.ogg", "role": "melody", "defaultGain": 0.0 }
+  ],
+  "intensityLayers": [
+    { "level": 0, "activeStems": ["pulse"] },
+    { "level": 1, "activeStems": ["pulse", "bass"] },
+    { "level": 2, "activeStems": ["pulse", "bass", "harmony"] },
+    { "level": 3, "activeStems": ["pulse", "bass", "harmony", "melody"] }
+  ],
+  "transitions": [
+    { "from": "*", "to": "*", "quantize": "bar", "type": "crossfade", "fadeBars": 1 }
+  ],
+  "licenseNotes": "Original placeholder. No third-party samples or copyrighted material.",
+  "sourceNotes": "Hand-authored example metadata for schema reference only. Not a real audio asset.",
+  "generatedBy": "manual-template",
+  "humanReviewRequired": true
+}

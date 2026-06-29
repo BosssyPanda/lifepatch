@@ -1,0 +1,44 @@
+{
+  "id": "score-gameplay",
+  "title": "LifePatch — Gameplay Bed (adaptive)",
+  "bpm": 76,
+  "key": "A minor",
+  "timeSignature": "4/4",
+  "bars": 8,
+  "loopStartBar": 1,
+  "loopEndBar": 9,
+  "loopStartSec": 0,
+  "loopEndSec": 25.263158,
+  "sections": [
+    { "name": "Am(add9)", "startBar": 1, "endBar": 3, "startSec": 0, "endSec": 6.315789 },
+    { "name": "Fmaj7", "startBar": 3, "endBar": 5, "startSec": 6.315789, "endSec": 12.631579 },
+    { "name": "Cmaj7", "startBar": 5, "endBar": 7, "startSec": 12.631579, "endSec": 18.947368 },
+    { "name": "G6/B", "startBar": 7, "endBar": 9, "startSec": 18.947368, "endSec": 25.263158 }
+  ],
+  "cuePoints": [
+    { "name": "downbeat", "bar": 1, "sec": 0 }
+  ],
+  "stems": [
+    { "id": "sub", "file": "procedural:Tone.Synth(sine)", "role": "bass", "defaultGain": 0.4 },
+    { "id": "pad", "file": "procedural:Tone.PolySynth(fatsawtooth)", "role": "harmony", "defaultGain": 0.4 },
+    { "id": "rhodes", "file": "procedural:Tone.FMSynth", "role": "melody", "defaultGain": 0.25 },
+    { "id": "tick", "file": "procedural:Tone.Membrane+Noise", "role": "rhythm", "defaultGain": 0.3 },
+    { "id": "crackle", "file": "procedural:Tone.Noise(pink)", "role": "ambience", "defaultGain": 0.06 },
+    { "id": "tension", "file": "procedural:detuned-saw-cluster", "role": "tension", "defaultGain": 0.0 },
+    { "id": "warmth", "file": "procedural:major6-shimmer", "role": "harmony", "defaultGain": 0.0 }
+  ],
+  "intensityLayers": [
+    { "level": 0, "activeStems": ["crackle", "pad", "rhodes", "sub"] },
+    { "level": 1, "activeStems": ["crackle", "pad", "rhodes", "sub", "tick"] },
+    { "level": 2, "activeStems": ["crackle", "pad", "sub", "tick", "tension"] }
+  ],
+  "transitions": [
+    { "from": "*", "to": "menu", "quantize": "bar", "type": "crossfade", "fadeBars": 1 },
+    { "from": "*", "to": "recapGood", "quantize": "bar", "type": "crossfade", "fadeBars": 1 },
+    { "from": "*", "to": "recapBad", "quantize": "bar", "type": "crossfade", "fadeBars": 1 }
+  ],
+  "licenseNotes": "Original. Generic tonal voicings (i-VI-III-VII in A minor); no sampled or transcribed third-party material.",
+  "sourceNotes": "Procedural Tone.js engine (src/audio/AudioEngine.ts). Intensity driven by debt/health/mood/macro-tone. See .claude/audio/qc/cue-plan.md.",
+  "generatedBy": "AudioEngine.ts (Tone.js)",
+  "humanReviewRequired": true
+}

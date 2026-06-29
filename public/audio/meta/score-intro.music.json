@@ -1,0 +1,37 @@
+{
+  "id": "score-intro",
+  "title": "LifePatch — Cold Open (escalating)",
+  "bpm": 76,
+  "key": "A minor",
+  "timeSignature": "4/4",
+  "bars": 8,
+  "loopStartBar": 1,
+  "loopEndBar": 9,
+  "loopStartSec": 0,
+  "loopEndSec": 25.263158,
+  "sections": [
+    { "name": "tension-build", "startBar": 1, "endBar": 7, "startSec": 0, "endSec": 18.947368 },
+    { "name": "title-resolve", "startBar": 7, "endBar": 9, "startSec": 18.947368, "endSec": 25.263158 }
+  ],
+  "cuePoints": [
+    { "name": "title-detonation", "bar": 7, "sec": 18.947368 }
+  ],
+  "stems": [
+    { "id": "sub", "file": "procedural:Tone.Synth(sine)", "role": "bass", "defaultGain": 0.5 },
+    { "id": "pad", "file": "procedural:Tone.PolySynth(fatsawtooth)", "role": "harmony", "defaultGain": 0.5 },
+    { "id": "tick", "file": "procedural:Tone.Membrane+Noise", "role": "rhythm", "defaultGain": 0.4 },
+    { "id": "tension", "file": "procedural:detuned-saw-cluster", "role": "tension", "defaultGain": 0.5 },
+    { "id": "crackle", "file": "procedural:Tone.Noise(pink)", "role": "ambience", "defaultGain": 0.06 }
+  ],
+  "intensityLayers": [
+    { "level": 0, "activeStems": ["crackle", "pad", "sub"] },
+    { "level": 1, "activeStems": ["crackle", "pad", "sub", "tick", "tension"] }
+  ],
+  "transitions": [
+    { "from": "title-resolve", "to": "menu", "quantize": "bar", "type": "crossfade", "fadeBars": 1, "stingerId": "title" }
+  ],
+  "licenseNotes": "Original. Per-phrase accents (thump/hit/stab/riser/title) over an A-minor tension bed; no third-party material.",
+  "sourceNotes": "Procedural; cold-open beats in lib/cinematic.ts each fire AudioEngine.accent(). Reading-time-floored pacing.",
+  "generatedBy": "AudioEngine.ts (Tone.js)",
+  "humanReviewRequired": true
+}

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { CheckIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { useAudio } from "@/hooks/useAudio";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { currency } from "@/lib/format";
 import { MODES, type ModeId } from "@/lib/modes";
@@ -18,6 +19,7 @@ export function Setup({
   onStart: (backgroundId: string, name: string) => void;
   onBack: () => void;
 }) {
+  const audio = useAudio();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string>(BACKGROUNDS[0].id);
 
@@ -81,7 +83,7 @@ export function Setup({
 
       <div className="mt-9 flex items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back</NeonButton>
-        <NeonButton variant="primary" size="lg" onClick={() => onStart(picked, name)}>
+        <NeonButton variant="primary" size="lg" onClick={() => { audio.sfx("confirm"); onStart(picked, name); }}>
           Start your life →
         </NeonButton>
       </div>

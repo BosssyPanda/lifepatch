@@ -1,0 +1,38 @@
+{
+  "id": "score-recap",
+  "title": "LifePatch — Outro Recap (verdict-keyed)",
+  "bpm": 76,
+  "key": "A minor (warm/major on a good verdict)",
+  "timeSignature": "4/4",
+  "bars": 8,
+  "loopStartBar": 1,
+  "loopEndBar": 9,
+  "loopStartSec": 0,
+  "loopEndSec": 25.263158,
+  "sections": [
+    { "name": "recap", "startBar": 1, "endBar": 7, "startSec": 0, "endSec": 18.947368 },
+    { "name": "verdict-stamp", "startBar": 7, "endBar": 9, "startSec": 18.947368, "endSec": 25.263158 }
+  ],
+  "cuePoints": [
+    { "name": "verdict", "bar": 7, "sec": 18.947368 }
+  ],
+  "stems": [
+    { "id": "sub", "file": "procedural:Tone.Synth(sine)", "role": "bass", "defaultGain": 0.45 },
+    { "id": "pad", "file": "procedural:Tone.PolySynth(fatsawtooth)", "role": "harmony", "defaultGain": 0.5 },
+    { "id": "rhodes", "file": "procedural:Tone.FMSynth", "role": "melody", "defaultGain": 0.6 },
+    { "id": "warmth", "file": "procedural:major6-shimmer", "role": "harmony", "defaultGain": 0.6 },
+    { "id": "tension", "file": "procedural:detuned-saw-cluster", "role": "tension", "defaultGain": 0.55 },
+    { "id": "crackle", "file": "procedural:Tone.Noise(pink)", "role": "ambience", "defaultGain": 0.06 }
+  ],
+  "intensityLayers": [
+    { "level": 0, "activeStems": ["crackle", "pad", "rhodes", "sub", "warmth"] },
+    { "level": 1, "activeStems": ["crackle", "pad", "sub", "tension"] }
+  ],
+  "transitions": [
+    { "from": "verdict-stamp", "to": "menu", "quantize": "bar", "type": "crossfade", "fadeBars": 1 }
+  ],
+  "licenseNotes": "Original. Warm major-6 extension (good) or minor tension (bad) over the shared A-minor cycle; no third-party material.",
+  "sourceNotes": "Procedural; recap beats in lib/cinematic.ts fire AudioEngine.accent() + swellWarmth on a good verdict.",
+  "generatedBy": "AudioEngine.ts (Tone.js)",
+  "humanReviewRequired": true
+}

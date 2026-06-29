@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useRef, useState } from "react";
 import { Intro } from "@/components/screens/Intro";
-import { useScore } from "@/hooks/useScore";
+import { useAudio } from "@/hooks/useAudio";
 import { ColdOpen } from "./ColdOpen";
 import { Gate } from "./Gate";
 
@@ -17,41 +17,40 @@ const wipe = {
 };
 
 export function Opening({ onStart, onAlmanac }: { onStart: () => void; onAlmanac: () => void }) {
-  const score = useScore();
+  const audio = useAudio();
   const seen = useRef(typeof window !== "undefined" && sessionStorage.getItem("lp_introSeen") === "1");
   const [stage, setStage] = useState<Stage>(seen.current ? "title" : "gate");
 
   const begin = useCallback(() => {
-    score.unlock();
-    score.startBed("intro");
+    audio.unlock("intro"); // starts the engine on this gesture, at the intro preset
     setStage("cold");
-  }, [score]);
+  }, [audio]);
 
   const finishCold = useCallback(() => {
-    score.stopAll();
+    audio.setPhase("menu"); // crossfade — music keeps playing into the title screen
     try { sessionStorage.setItem("lp_introSeen", "1"); } catch {}
     setStage("title");
-  }, [score]);
+  }, [audio]);
 
   const replay = useCallback(() => {
-    score.unlock();
-    score.startBed("intro");
+    audio.unlock("intro");
+    audio.setPhase("intro");
     setStage("cold");
-  }, [score]);
+  }, [audio]);
 
-  const toggleMute = useCallback(() => score.setMuted(!score.muted), [score]);
+  const toggleMute = useCallback(() => audio.setMuted(!audio.muted), [audio]);
 
   return (
     <div className="relative">
       <AnimatePresence mode="wait">
         {stage === "gate" && (
           <motion.div key="gate" {...wipe}>
-            <Gate onBegin={begin} muted={score.muted} onToggleMute={toggleMute} />
+            <Gate onBegin={begin} muted={audio.muted} onToggleMute={toggleMute} />
           </motion.div>
         )}
         {stage === "cold" && (
           <motion.div key="cold" {...wipe}>
-            <ColdOpen score={score} muted={score.muted} onToggleMute={toggleMute} onDone={finishCold} />
+            <ColdOpen muted={audio.muted} onToggleMute={toggleMute} onDone={finishCold} />
           </motion.div>
         )}
         {stage === "title" && (

@@ -4,8 +4,10 @@ import { motion } from "framer-motion";
 import { Mascot } from "@/components/brand/Mascot";
 import { ArrowDown } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { useAudio } from "@/hooks/useAudio";
 
 export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: () => void }) {
+  const audio = useAudio();
   return (
     <div className="relative">
       {/* HERO */}
@@ -100,7 +102,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
               transition={{ delay: 0.32 }}
               className="mt-8 flex flex-wrap items-center gap-3"
             >
-              <NeonButton variant="primary" size="lg" onClick={onBegin}>
+              <NeonButton variant="primary" size="lg" onClick={() => { audio.sfx("confirm"); onBegin(); }}>
                 Choose your run →
               </NeonButton>
               <NeonButton variant="secondary" size="lg" onClick={onAlmanac}>
