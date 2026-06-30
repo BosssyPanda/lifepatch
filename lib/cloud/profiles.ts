@@ -74,8 +74,15 @@ export async function ensureProfile(userId: string): Promise<Profile> {
   return profile;
 }
 
+/** Username bounds — also enforced by a CHECK constraint in supabase/schema.sql. */
+export const USERNAME_MIN = 3;
+export const USERNAME_MAX = 24;
+
 export async function updateUsername(userId: string, username: string): Promise<Profile> {
-  const clean = username.trim();
+  const clean = username.trim().slice(0, USERNAME_MAX);
+  if (clean.length < USERNAME_MIN) {
+    throw new Error(`Username must be at least ${USERNAME_MIN} characters.`);
+  }
   if (isCloud && supabase) {
     const { data, error } = await supabase
       .from("profiles")
@@ -112,8 +119,12 @@ export async function getByFriendCode(code: string): Promise<Profile | null> {
       if (!key || !key.startsWith(PROFILE_PREFIX)) continue;
       const raw = localStorage.getItem(key);
       if (!raw) continue;
-      const p = JSON.parse(raw) as Profile;
-      if (p.friendCode === clean) return p;
+      const p = JSON.parse(raw) as Partial<Profile>;
+      // Shape-guard: a stale/corrupted key must not yield a phantom Profile whose
+      // fields are undefined (which would create an edge with friend_id "undefined").
+      if (p && typeof p.id === "string" && typeof p.friendCode === "string" && p.friendCode === clean) {
+        return p as Profile;
+      }
     }
   } catch {}
   return null;

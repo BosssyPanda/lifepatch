@@ -32,7 +32,7 @@ create policy "own saves - delete" on public.saves
 -- Public-facing player identity. Username + avatar are pseudonymous.
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
-  username text not null unique,
+  username text not null unique check (char_length(username) between 3 and 24),
   avatar_seed text not null,
   friend_code text not null unique,
   created_at timestamptz not null default now()
@@ -114,7 +114,7 @@ create policy "friends - delete own" on public.friends
 -- Concept mastery progress (the "Money Brain" map). One row per concept.
 create table if not exists public.mastery (
   user_id uuid not null references auth.users (id) on delete cascade,
-  concept_id text not null,
+  concept_id text not null check (char_length(concept_id) <= 64),
   level int not null default 0,
   updated_at timestamptz not null default now(),
   primary key (user_id, concept_id)

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useAudio } from "@/hooks/useAudio";
 import { useCashflow } from "@/hooks/useCashflow";
 import { CashflowGame } from "@/components/cashflow/CashflowGame";
@@ -10,11 +10,9 @@ import { CashflowReport } from "@/components/cashflow/recap/CashflowReport";
 import { CashflowSetup } from "@/components/cashflow/setup/CashflowSetup";
 import { enterFastTrack } from "@/lib/cashflow/engine";
 import { hasCashflowSave } from "@/lib/cashflow/persist";
+import { useAuth } from "@/hooks/useAuth";
 import { resolvePlayerId } from "@/lib/cloud/identity";
-import { resultFromCashflow } from "@/lib/cloud/buildResult";
-import { ensureProfile } from "@/lib/cloud/profiles";
-import { submitResult } from "@/lib/cloud/results";
-import { bumpStreak } from "@/lib/cloud/streaks";
+import { resultFromCashflow, submitRunOnce } from "@/lib/cloud/buildResult";
 
 const EASE = [0.2, 0.65, 0.3, 0.9] as const;
 
@@ -66,6 +64,7 @@ export function CashflowShell({
   onOpenAlmanac?: () => void;
 }) {
   const cf = useCashflow();
+  const auth = useAuth();
   const audio = useAudio();
   const reduce = !!useReducedMotion();
   const s = cf.state;
@@ -92,22 +91,13 @@ export function CashflowShell({
   }, [view, reduce, audio]);
 
   // Post a Rat Race result + bump the streak when the run reaches its report.
-  const submittedRef = useRef<string | null>(null);
+  // Keyed on the per-game seed so replays (same name/turn) each post once, and
+  // resolved against the signed-in user so cloud submission works for them too.
   useEffect(() => {
     if (view !== "report" || !s) return;
-    const key = `cf-${s.playerName}-${s.turn}`;
-    if (submittedRef.current === key) return;
-    submittedRef.current = key;
-    const id = resolvePlayerId(null);
-    if (!id) return;
-    void (async () => {
-      try {
-        await ensureProfile(id);
-        await submitResult(id, resultFromCashflow(s));
-        await bumpStreak(id);
-      } catch {}
-    })();
-  }, [view, s]);
+    const id = resolvePlayerId(auth.user?.id ?? null);
+    void submitRunOnce(`cf-${s.seed}`, id, resultFromCashflow(s));
+  }, [view, s, auth.user]);
 
   const scene = (key: string, children: ReactNode) => (
     <motion.div

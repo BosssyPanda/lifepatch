@@ -146,3 +146,29 @@ export async function getResult(id: string): Promise<ResultRow | null> {
   }
   return readLocal().find((r) => r.id === id) ?? null;
 }
+
+// ── Durable submit dedupe ────────────────────────────────────────────────────
+// A finished run must post exactly once — even across page reloads or re-viewing
+// the report after a resume. A per-mount ref can't guarantee that; this persists
+// the set of submitted run keys so the guard survives reloads.
+const SUBMITTED_KEY = "lifepatch.submittedRuns";
+
+function readSubmitted(): Set<string> {
+  try {
+    return new Set<string>(JSON.parse(localStorage.getItem(SUBMITTED_KEY) ?? "[]"));
+  } catch {
+    return new Set<string>();
+  }
+}
+
+export function alreadySubmitted(runKey: string): boolean {
+  return readSubmitted().has(runKey);
+}
+
+export function markSubmitted(runKey: string): void {
+  try {
+    const set = readSubmitted();
+    set.add(runKey);
+    localStorage.setItem(SUBMITTED_KEY, JSON.stringify([...set]));
+  } catch {}
+}

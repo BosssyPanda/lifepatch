@@ -7,6 +7,9 @@ import {
   totalExpenses,
 } from "../cashflow/selectors";
 import type { CashflowState } from "../cashflow/types";
+import { ensureProfile } from "./profiles";
+import { alreadySubmitted, markSubmitted, submitResult } from "./results";
+import { bumpStreak } from "./streaks";
 import type { GameMode, NewResult } from "./types";
 
 /**
@@ -47,4 +50,24 @@ export function resultFromCashflow(s: CashflowState): NewResult {
       escaped: hasEscaped(s) ? 1 : 0,
     },
   };
+}
+
+/**
+ * Post a finished run exactly once and bump the daily streak. `runKey` must be
+ * stable+unique per run (e.g. the run seed). Durable across reloads, so this is
+ * the single submit path for every mode — no per-mount ref needed. Best-effort:
+ * if the player id is unresolved (anon in cloud) nothing posts.
+ */
+export async function submitRunOnce(
+  runKey: string,
+  playerId: string | null,
+  result: NewResult,
+): Promise<void> {
+  if (!playerId || alreadySubmitted(runKey)) return;
+  markSubmitted(runKey); // optimistic: synchronous, so re-fires within a mount no-op
+  try {
+    await ensureProfile(playerId);
+    await submitResult(playerId, result);
+    await bumpStreak(playerId);
+  } catch {}
 }

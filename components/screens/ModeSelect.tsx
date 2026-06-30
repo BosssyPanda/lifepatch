@@ -73,7 +73,7 @@ export function ModeSelect({
 
       <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back to title</NeonButton>
-        <NeonButton variant="ghost" size="sm" onClick={() => { audio.sfx("modal"); onLeaderboard(); }}>🏆 Leaderboards</NeonButton>
+        <NeonButton variant="ghost" size="sm" onClick={onLeaderboard}>🏆 Leaderboards</NeonButton>
         <NeonButton variant="primary" size="lg" disabled={!picked} onClick={() => { if (picked) { audio.sfx("confirm"); onChoose(picked); } }}>
           {picked ? `Start ${MODES[picked].name} →` : "Pick a mode"}
         </NeonButton>

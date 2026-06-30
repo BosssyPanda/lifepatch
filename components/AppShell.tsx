@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { CashflowShell } from "@/components/cashflow/CashflowShell";
 import { Opening } from "@/components/cinematic/Opening";
 import { Outro } from "@/components/cinematic/Outro";
@@ -16,10 +16,7 @@ import { AudioProvider, useAudio } from "@/hooks/useAudio";
 import { useRun } from "@/hooks/useRun";
 import { Leaderboard } from "@/components/social/Leaderboard";
 import { resolvePlayerId } from "@/lib/cloud/identity";
-import { resultFromRun } from "@/lib/cloud/buildResult";
-import { ensureProfile } from "@/lib/cloud/profiles";
-import { submitResult } from "@/lib/cloud/results";
-import { bumpStreak } from "@/lib/cloud/streaks";
+import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
 
 const wipe = {
@@ -47,7 +44,6 @@ function AppShellInner() {
   const [socialOpen, setSocialOpen] = useState(false);
   const [socialMode, setSocialMode] = useState<GameMode>("story");
   const openLeaderboard = (m: GameMode) => { audio.sfx("modal"); setSocialMode(m); setSocialOpen(true); };
-  const submittedRef = useRef<string | null>(null);
 
   // The Rat Race mode is a fully self-contained board game with its own internal
   // phase machine — hand off to it as soon as it's chosen (skip LifePatch auth).
@@ -62,22 +58,13 @@ function AppShellInner() {
   }, [phase, audio]);
 
   // Post a leaderboard result + bump the daily streak when a life run finishes.
-  // Guarded by run identity so re-renders of the report don't double-submit.
+  // submitRunOnce dedupes durably (per run seed), so re-renders, resumes, and
+  // reloads all post exactly once.
   useEffect(() => {
     if (phase !== "report" || !run.run || run.run.status !== "ended") return;
     const r = run.run;
-    const key = `${r.mode}-${r.seed}-${r.endYear ?? r.year}`;
-    if (submittedRef.current === key) return;
-    submittedRef.current = key;
     const id = resolvePlayerId(auth.user?.id ?? null);
-    if (!id) return;
-    void (async () => {
-      try {
-        await ensureProfile(id);
-        await submitResult(id, resultFromRun(r));
-        await bumpStreak(id);
-      } catch {}
-    })();
+    void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r));
   }, [phase, run.run, auth.user]);
 
   if (inCashflow) {

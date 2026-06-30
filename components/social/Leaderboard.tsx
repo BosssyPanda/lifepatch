@@ -49,24 +49,29 @@ export function Leaderboard({
     if (open) setMode(initialMode);
   }, [open, initialMode]);
 
+  const profileId = profile?.id ?? null;
+
   useEffect(() => {
     if (!open) return;
     let active = true;
     setLoading(true);
     void (async () => {
-      const friendIds =
-        scope === "friends" && profile ? await listFriendIds(profile.id) : [];
-      const top = await topResults(mode, { scope, friendIds });
-      const profs = await getProfiles(top.map((r) => r.userId));
-      if (!active) return;
-      setRows(top);
-      setProfiles(profs);
-      setLoading(false);
+      try {
+        const friendIds =
+          scope === "friends" && profileId ? await listFriendIds(profileId) : [];
+        const top = await topResults(mode, { scope, friendIds });
+        const profs = await getProfiles(top.map((r) => r.userId));
+        if (!active) return;
+        setRows(top);
+        setProfiles(profs);
+      } finally {
+        if (active) setLoading(false);
+      }
     })();
     return () => {
       active = false;
     };
-  }, [open, mode, scope, profile]);
+  }, [open, mode, scope, profileId]);
 
   const metric = MODE_TABS.find((t) => t.id === mode)?.metric ?? "score";
 
