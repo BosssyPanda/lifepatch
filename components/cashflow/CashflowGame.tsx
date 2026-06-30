@@ -1,12 +1,19 @@
 "use client";
 
 import { AnimatePresence, useReducedMotion } from "framer-motion";
+import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
 import { BankIcon, FreedomIcon, InfoIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
-import { Board } from "@/components/cashflow/board/Board";
 import { Dice } from "@/components/cashflow/board/Dice";
+
+// WebGL board is loaded only inside the cashflow shell (never the landing bundle).
+// It self-falls-back to the flat 2D <Board> when WebGL is unavailable.
+const Board3D = dynamic(() => import("@/components/cashflow/board/Board3D").then((m) => m.Board3D), {
+  ssr: false,
+  loading: () => <div className="mx-auto aspect-square w-full max-w-[560px]" />,
+});
 import { DealCard, DealChooser } from "@/components/cashflow/cards/DealCard";
 import { BabyCard, CharityCard, DoodadCard, DownsizedCard, MarketCardView } from "@/components/cashflow/cards/EventCards";
 import { CoachCard, GlossaryModal, QuizCard, Tutorial } from "@/components/cashflow/learn/Learn";
@@ -117,6 +124,37 @@ export function CashflowGame({
   const lastRoll = useRef(0);
   const lastLanded = useRef("");
   const quizState = useRef<CashflowState | null>(null);
+
+  // ── per-tile landing accent (fires the instant the 3D token settles) ──
+  function landingSfx(type: string) {
+    switch (type) {
+      case "payday":
+      case "cashflowday":
+        audio.sfx("cash");
+        audio.sting("good");
+        break;
+      case "deal":
+      case "ftdeal":
+        audio.sfx("uitick");
+        break;
+      case "charity":
+        audio.sfx("coins");
+        break;
+      case "market":
+        audio.sfx("page");
+        break;
+      case "dream":
+        audio.sting("good");
+        break;
+      case "doodad":
+      case "downsized":
+      case "ftloss":
+        audio.sting("bad");
+        break;
+      default:
+        audio.sfx("uitick");
+    }
+  }
 
   const dream = getDream(s.dreamId);
   const prof = getProfession(s.professionId);
@@ -320,13 +358,15 @@ export function CashflowGame({
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         {/* board column */}
         <div className="order-2 lg:order-1">
-          <Board
+          <Board3D
             squares={isFast ? FAST_BOARD : RAT_BOARD}
             position={s.position}
             colorFor={isFast ? fastColor : ratColor}
             labelFor={(t) => (isFast ? FAST_SQUARE_META[t as keyof typeof FAST_SQUARE_META] : RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META])?.short ?? "?"}
             tokenLabel={s.playerName.charAt(0).toUpperCase()}
             title={isFast ? `Dream: ${dream.title}` : "Escape the Rat Race"}
+            onLand={landingSfx}
+            onTileHover={() => audio.sfx("hover")}
           >
             <div className="mt-2 flex flex-col items-center gap-2">
               <Dice values={dice} rolling={turnPhase === "rolling"} />
@@ -347,7 +387,7 @@ export function CashflowGame({
                 </p>
               )}
             </div>
-          </Board>
+          </Board3D>
 
           {/* freedom + goal hint under board */}
           <div className="mt-4">
