@@ -50,13 +50,13 @@ export function LifeEventCard({
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 200, damping: 22 }}
-      className="paper mx-auto max-w-3xl rounded-[5px] p-5 sm:p-6"
+      className="paper mx-auto max-w-3xl rounded-[5px] px-5 py-5 sm:px-6"
     >
-      <div className="flex items-center justify-between border-b-2 border-paper-ink pb-2">
+      <div className="flex items-center justify-between border-b border-paper-ink/30 pb-2">
         <span className="eyebrow text-paper-dim">{event.tag}</span>
         <span className="eyebrow text-paper-dim">Life event</span>
       </div>
-      <p className="mt-3 font-serif text-[1.05rem] leading-relaxed text-paper-ink/85">{event.prompt}</p>
+      <p className="mt-3 font-serif text-[1.02rem] leading-relaxed text-paper-ink/85">{event.prompt}</p>
 
       <div className="my-3 h-px bg-paper-ink/15" />
 
