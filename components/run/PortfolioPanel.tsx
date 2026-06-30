@@ -6,6 +6,7 @@ import { currency } from "@/lib/format";
 import type { AssetId } from "@/lib/markets";
 import { lastAssetReturn, portfolioValue, priceSeries, type RunState } from "@/lib/runEngine";
 import { AssetRow } from "./AssetRow";
+import { PortfolioPresets } from "./PortfolioPresets";
 
 export function PortfolioPanel({
   run,
@@ -28,6 +29,14 @@ export function PortfolioPanel({
     audio.sfx("stamp");
     onPayDebt(dollars);
   };
+  const handleApplyPreset = (orders: Array<[AssetId, number]>) => {
+    audio.sfx("confirm");
+    for (const [id, dollars] of orders) onTrade(id, dollars);
+  };
+
+  // share of total money (cash + invested) still sitting idle as cash
+  const total = run.cash + port;
+  const cashPct = total > 0 ? (run.cash / total) * 100 : 0;
 
   return (
     <section aria-label="Portfolio" className="mx-auto max-w-3xl px-5 py-4">
@@ -36,11 +45,14 @@ export function PortfolioPanel({
         <span className="num text-sm text-ink-dim">invested {currency(port)}</span>
       </div>
 
-      {/* cash + debt */}
+      {/* cash-left readout + debt tile */}
       <div className="mt-3 grid grid-cols-2 gap-2.5">
         <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">
-          <p className="eyebrow text-olive">Cash to invest</p>
+          <p className="eyebrow text-olive">Cash left to invest</p>
           <p className="num text-xl text-ink">{currency(run.cash)}</p>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink/12" aria-hidden>
+            <div className="h-full rounded-full bg-olive transition-[width] duration-300" style={{ width: `${cashPct}%` }} />
+          </div>
         </div>
         <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">
           <div className="flex items-center justify-between">
@@ -56,8 +68,13 @@ export function PortfolioPanel({
         </div>
       </div>
 
+      {/* one-tap starter mixes — the risk ladder is the lesson */}
+      <div className="mt-4">
+        <PortfolioPresets availableAssets={assets} cash={run.cash} onApply={handleApplyPreset} />
+      </div>
+
       <p className="mt-4 font-serif text-sm italic text-ink-dim">
-        Spread it how you like. No tickers tell you what&apos;s next — only risk does.
+        Drag each slider to set how much you hold. No ticker tells you what&apos;s next — only risk does.
       </p>
 
       <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
