@@ -1,7 +1,7 @@
 "use client";
 
 import { useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, Environment } from "@react-three/drei";
+import { ContactShadows, Environment, Lightformer } from "@react-three/drei";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { RING, TILE_H, ringPoints } from "./geometry";
@@ -67,7 +67,31 @@ export function Scene({
         shadow-bias={-0.0006}
       />
       <directionalLight position={[-7, 5, -6]} intensity={0.5} color={pal.accent} />
-      <Environment preset="night" />
+
+      {/* Baked once from inline lightformers — gives the tile materials warm
+          speculars/reflections without any network HDR fetch (the `preset`
+          form streams from a CDN and suspends forever when offline). */}
+      <Environment frames={1} resolution={256}>
+        <color attach="background" args={[pal.bg]} />
+        <Lightformer
+          intensity={1.4}
+          color={pal.accent2}
+          position={[0, 6, 4]}
+          scale={[9, 9, 1]}
+        />
+        <Lightformer
+          intensity={0.7}
+          color={pal.accent}
+          position={[-6, 3, -5]}
+          scale={[6, 6, 1]}
+        />
+        <Lightformer
+          intensity={0.5}
+          color={pal.paper}
+          position={[6, 2, -3]}
+          scale={[4, 4, 1]}
+        />
+      </Environment>
 
       {/* board base plate (slightly recessed under the tiles) */}
       <mesh position={[0, -TILE_H / 2 - 0.14, 0]} receiveShadow>
