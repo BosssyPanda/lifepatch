@@ -10,7 +10,7 @@
 import * as THREE from "three";
 import type { Glyph } from "./palette";
 
-const SIZE = 256; // texture resolution per tile face
+const SIZE = 512; // texture resolution per tile face (high so glyph/label stay crisp at the oblique camera angle)
 const cache = new Map<string, THREE.CanvasTexture>();
 
 /** Mix a hex color toward white/black by `amt` (-1 dark … +1 light). */
@@ -45,13 +45,25 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-/** Draw a compact vector glyph centered in a box at (cx, cy) of half-size hs. */
-function drawGlyph(ctx: CanvasRenderingContext2D, glyph: Glyph, cx: number, cy: number, hs: number, ink: string) {
+/**
+ * Draw a compact vector glyph centered in a box at (cx, cy) of half-size hs.
+ * `weight` scales the stroke (a darker "shadow" pass uses a heavier weight so the
+ * bright ink pass reads as a haloed engraving from the camera angle).
+ */
+function drawGlyph(
+  ctx: CanvasRenderingContext2D,
+  glyph: Glyph,
+  cx: number,
+  cy: number,
+  hs: number,
+  ink: string,
+  weight = 0.22,
+) {
   ctx.save();
   ctx.translate(cx, cy);
   ctx.strokeStyle = ink;
   ctx.fillStyle = ink;
-  ctx.lineWidth = hs * 0.16;
+  ctx.lineWidth = hs * weight;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
@@ -189,42 +201,84 @@ export function tileFaceTexture(color: string, glyph: Glyph, label: string): THR
   canvas.width = SIZE;
   canvas.height = SIZE;
   const ctx = canvas.getContext("2d")!;
+  const S = (n: number) => n * (SIZE / 256); // scale helper: tuned at 256, rendered at SIZE
 
   // plate base — vertical gradient gives the face a lit, raised feel
   const grad = ctx.createLinearGradient(0, 0, 0, SIZE);
-  grad.addColorStop(0, shade(color, 0.28));
-  grad.addColorStop(0.55, shade(color, 0.02));
-  grad.addColorStop(1, shade(color, -0.32));
+  grad.addColorStop(0, shade(color, 0.3));
+  grad.addColorStop(0.55, shade(color, 0.04));
+  grad.addColorStop(1, shade(color, -0.34));
   ctx.fillStyle = grad;
-  roundRect(ctx, 6, 6, SIZE - 12, SIZE - 12, 26);
+  roundRect(ctx, S(6), S(6), SIZE - S(12), SIZE - S(12), S(26));
   ctx.fill();
 
   // engraved inner keyline
   ctx.strokeStyle = withAlpha("#000000", 0.32);
-  ctx.lineWidth = 3;
-  roundRect(ctx, 22, 22, SIZE - 44, SIZE - 44, 18);
+  ctx.lineWidth = S(3);
+  roundRect(ctx, S(22), S(22), SIZE - S(44), SIZE - S(44), S(18));
   ctx.stroke();
-  ctx.strokeStyle = shade(color, 0.45);
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, 24, 24, SIZE - 48, SIZE - 48, 17);
+  ctx.strokeStyle = shade(color, 0.5);
+  ctx.lineWidth = S(1.5);
+  roundRect(ctx, S(24), S(24), SIZE - S(48), SIZE - S(48), S(17));
   ctx.stroke();
 
-  // glyph — light ink for legibility on the tinted plate
-  const ink = shade(color, 0.6);
-  drawGlyph(ctx, glyph, SIZE / 2, SIZE * 0.42, SIZE * 0.16, ink);
+  // ── recessed contrast plate ──────────────────────────────────────────────
+  // A semi-opaque dark panel behind the glyph + label so bright ink reads at
+  // the 3/4 camera regardless of how light/saturated the tile tint is. This is
+  // the fix for "tiles read as plain colored blocks" — the legend now sits on
+  // its own surface with depth instead of floating on the tint.
+  const plateX = S(34);
+  const plateY = S(70);
+  const plateW = SIZE - S(68);
+  const plateH = SIZE - S(104);
+  // soft drop under the plate for a raised-legend feel
+  ctx.fillStyle = withAlpha("#000000", 0.34);
+  roundRect(ctx, plateX, plateY + S(4), plateW, plateH, S(20));
+  ctx.fill();
+  // the plate itself — dark, slightly warm so it sits in the palette
+  const plateGrad = ctx.createLinearGradient(0, plateY, 0, plateY + plateH);
+  plateGrad.addColorStop(0, withAlpha("#161109", 0.78));
+  plateGrad.addColorStop(1, withAlpha("#0c0906", 0.86));
+  ctx.fillStyle = plateGrad;
+  roundRect(ctx, plateX, plateY, plateW, plateH, S(20));
+  ctx.fill();
+  // bright tint keyline frames the plate and ties it back to the tile color
+  ctx.strokeStyle = shade(color, 0.6);
+  ctx.lineWidth = S(2);
+  roundRect(ctx, plateX + S(1), plateY + S(1), plateW - S(2), plateH - S(2), S(19));
+  ctx.stroke();
 
-  // label in the display caps style with a soft drop for depth
-  ctx.font = `600 ${SIZE * 0.13}px "Arial Narrow", Oswald, sans-serif`;
+  // ── glyph — large, bright, with a dark halo pass for separation ──────────
+  const glyphCx = SIZE / 2;
+  const glyphCy = SIZE * 0.4;
+  const glyphHs = SIZE * 0.2; // up from 0.16 → noticeably larger at the camera
+  // dark halo first (heavier weight)
+  drawGlyph(ctx, glyph, glyphCx, glyphCy, glyphHs, withAlpha("#000000", 0.9), 0.34);
+  // bright ink on top — near-paper so it pops off the dark plate
+  const ink = shade(color, 0.86);
+  drawGlyph(ctx, glyph, glyphCx, glyphCy, glyphHs, ink, 0.2);
+
+  // ── label — big, high-contrast, real outline (not just a soft drop) ──────
+  const labelY = SIZE * 0.78;
+  ctx.font = `700 ${SIZE * 0.16}px "Arial Narrow", Oswald, sans-serif`; // up from 0.13
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = withAlpha("#000000", 0.4);
-  ctx.fillText(label, SIZE / 2 + 1.5, SIZE * 0.78 + 1.5);
-  ctx.fillStyle = shade(color, 0.72);
-  ctx.fillText(label, SIZE / 2, SIZE * 0.78);
+  // dark stroke outline behind the fill for legibility on any tint
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.strokeStyle = withAlpha("#000000", 0.92);
+  ctx.lineWidth = S(6);
+  ctx.strokeText(label, glyphCx, labelY);
+  // near-white fill
+  ctx.fillStyle = "#f3ecd9";
+  ctx.fillText(label, glyphCx, labelY);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.anisotropy = 16; // oblique angle → max anisotropic filtering keeps text crisp
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   cache.set(key, tex);
   return tex;
 }

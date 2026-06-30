@@ -31,8 +31,10 @@ export function Tile({ point, type, label, active, reduce, onHover }: TileProps)
   const faceTex = useMemo(() => tileFaceTexture(color, glyph, label), [color, glyph, label]);
 
   // Top face carries the texture; the rest of the box uses the solid tint.
+  // Lower roughness on the face lets the bright legend catch the warm key light,
+  // so the glyph/label read cleanly at the oblique camera instead of going matte.
   const topMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.52, metalness: 0.14 }),
+    () => new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.42, metalness: 0.1 }),
     [faceTex],
   );
   const sideMat = useMemo(
