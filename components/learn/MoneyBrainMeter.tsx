@@ -29,13 +29,17 @@ export function MoneyBrainMeter({
       )}
       {/* currentColor track → works on both the paper map and the dark reports. */}
       <div
-        className="h-2 w-full overflow-hidden rounded-full"
+        className="relative h-2.5 w-full overflow-hidden rounded-full"
         style={{ background: "color-mix(in srgb, currentColor 14%, transparent)" }}
       >
         <div
           className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
-          style={{ width: `${pct}%` }}
+          style={{ width: `${pct}%`, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28)" }}
         />
+        {/* faint quarter-marks so progress reads against milestones */}
+        {[25, 50, 75].map((t) => (
+          <span key={t} className="absolute top-0 h-full w-px opacity-20" style={{ left: `${t}%`, background: "currentColor" }} />
+        ))}
       </div>
     </div>
   );

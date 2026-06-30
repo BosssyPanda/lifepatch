@@ -1,9 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useEffect } from "react";
 import { CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
-import { MoneyBrainMeter } from "@/components/learn/MoneyBrainMeter";
+import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
+import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { conceptTitle } from "@/lib/concepts";
@@ -79,7 +81,13 @@ function PortfolioBreakdown({ run }: { run: RunState }) {
 export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: { run: RunState; onReplay: () => void; onTitle: () => void; onAlmanac: () => void; onMasteryMap: () => void }) {
   const { mastery } = useProfile();
   const { runGains } = useConceptLearn();
+  const { setBrainGlow } = useAudio();
   const nw = netWorth(run);
+
+  // warm the calm report bed by how rich the Money Brain has become
+  useEffect(() => {
+    setBrainGlow(moneyBrainPct(mastery) / 100);
+  }, [mastery, setBrainGlow]);
   const reason = REASON[run.endReason ?? "quit"];
   const Icon = reason.Icon;
   const klass = deriveVerdict(run);

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { Toast } from "@/components/cashflow/shared";
+import { useAudio } from "@/hooks/useAudio";
 import { useAuth } from "@/hooks/useAuth";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { recordConcepts } from "@/lib/cloud/mastery";
@@ -31,6 +32,7 @@ const TOAST_MS = 2600;
 
 export function ConceptLearnProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { accent } = useAudio();
   const [queue, setQueue] = useState<string[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
   const [runGains, setRunGains] = useState<string[]>([]);
@@ -58,8 +60,12 @@ export function ConceptLearnProvider({ children }: { children: ReactNode }) {
         if (id) {
           void recordConcepts(id, ids)
             .then((gains) => {
-              const leveled = gains.map((g) => g.conceptId);
-              if (leveled.length) setRunGains((r) => Array.from(new Set([...r, ...leveled])));
+              // only concepts whose level actually rose (drop cap re-hits)
+              const rose = gains.filter((g) => g.level > g.prevLevel);
+              if (rose.length === 0) return;
+              setRunGains((r) => Array.from(new Set([...r, ...rose.map((g) => g.conceptId)])));
+              // newly mastered is the bigger moment; otherwise a level-up flourish
+              accent(rose.some((g) => g.isFirst) ? "mastered" : "levelup");
             })
             .catch(() => {});
         } else {
@@ -67,7 +73,7 @@ export function ConceptLearnProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [user],
+    [user, accent],
   );
 
   const resetRun = useCallback(() => setRunGains([]), []);

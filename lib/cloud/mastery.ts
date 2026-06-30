@@ -45,7 +45,7 @@ export async function getMastery(userId: string): Promise<MasteryRow[]> {
   return readLocal(userId);
 }
 
-export type MasteryGain = { conceptId: string; level: number; isFirst: boolean };
+export type MasteryGain = { conceptId: string; level: number; prevLevel: number; isFirst: boolean };
 
 /** Raise mastery for each concept by one level (capped). Returns new levels. */
 export async function recordConcepts(userId: string, conceptIds: string[]): Promise<MasteryGain[]> {
@@ -60,8 +60,9 @@ export async function recordConcepts(userId: string, conceptIds: string[]): Prom
 
   for (const conceptId of unique) {
     const prev = byId.get(conceptId);
-    const level = Math.min((prev?.level ?? 0) + 1, MAX_MASTERY_LEVEL);
-    gains.push({ conceptId, level, isFirst: !prev });
+    const prevLevel = prev?.level ?? 0;
+    const level = Math.min(prevLevel + 1, MAX_MASTERY_LEVEL);
+    gains.push({ conceptId, level, prevLevel, isFirst: !prev });
     updatedRows.push({ conceptId, level, updatedAt: now });
   }
 

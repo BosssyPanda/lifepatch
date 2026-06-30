@@ -1,9 +1,11 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/social/Avatar";
+import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
 import { listFriendIds } from "@/lib/cloud/friends";
 import { getProfiles } from "@/lib/cloud/profiles";
@@ -12,6 +14,13 @@ import type { GameMode, Profile, ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
 
 const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+
+// staggered row reveal (re-runs per tab via a keyed list)
+const listContainer = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
+const listItem = { hidden: { opacity: 0, x: -10 }, show: { opacity: 1, x: 0 } };
+
+// gold / silver / bronze discs for the top three (from the warm token palette)
+const MEDALS = ["#c9a24a", "#aab0b4", "#b9763f"];
 
 const MODE_TABS: { id: GameMode; label: string; metric: string }[] = [
   { id: "story", label: "Story", metric: "net worth" },
@@ -39,14 +48,19 @@ export function Leaderboard({
   initialMode?: GameMode;
 }) {
   const { profile } = useProfile();
+  const { sfx } = useAudio();
   const [mode, setMode] = useState<GameMode>(initialMode);
   const [scope, setScope] = useState<LeaderboardScope>("all");
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
+  const rankCelebrated = useRef(false);
 
   useEffect(() => {
-    if (open) setMode(initialMode);
+    if (open) {
+      setMode(initialMode);
+      rankCelebrated.current = false; // re-arm the "you placed" cue per open
+    }
   }, [open, initialMode]);
 
   const profileId = profile?.id ?? null;
@@ -64,6 +78,11 @@ export function Leaderboard({
         if (!active) return;
         setRows(top);
         setProfiles(profs);
+        // confident flourish the first time you see your own row on a board
+        if (!rankCelebrated.current && profileId && top.some((r) => r.userId === profileId)) {
+          rankCelebrated.current = true;
+          sfx("rankUp");
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -71,7 +90,7 @@ export function Leaderboard({
     return () => {
       active = false;
     };
-  }, [open, mode, scope, profileId]);
+  }, [open, mode, scope, profileId, sfx]);
 
   const metric = MODE_TABS.find((t) => t.id === mode)?.metric ?? "score";
 
@@ -152,25 +171,30 @@ export function Leaderboard({
               ) : rows.length === 0 ? (
                 <EmptyState scope={scope} />
               ) : (
-                <ol className="flex flex-col gap-1.5">
+                <motion.ol
+                  key={`${mode}-${scope}`}
+                  className="flex flex-col gap-1.5"
+                  variants={listContainer}
+                  initial="hidden"
+                  animate="show"
+                >
                   {rows.map((r, i) => {
                     const p = profiles[r.userId];
                     const isMe = profile?.id === r.userId;
                     const name = p?.username ?? "anonymous";
                     return (
-                      <li
+                      <motion.li
                         key={r.id}
-                        className={`flex items-center gap-3 rounded-[4px] px-3 py-2 ${
+                        variants={listItem}
+                        className={`flex items-center gap-3 rounded-[4px] px-3 py-2 transition-colors ${
                           isMe
-                            ? "bg-accent/15 ring-1 ring-accent/40"
+                            ? "bg-accent/15 shadow-[inset_0_0_0_1px_rgba(212,84,30,0.4)]"
                             : i % 2
-                              ? "bg-paper-ink/[0.03]"
-                              : ""
+                              ? "bg-paper-ink/[0.03] hover:bg-paper-ink/[0.06]"
+                              : "hover:bg-paper-ink/[0.04]"
                         }`}
                       >
-                        <span className="w-6 text-right font-serif text-sm tabular-nums text-paper-dim">
-                          {i + 1}
-                        </span>
+                        <RankBadge rank={i + 1} />
                         <Avatar seed={p?.avatarSeed ?? r.userId} username={name} size={34} />
                         <span className="min-w-0 flex-1 truncate font-serif text-paper-ink">
                           {name}
@@ -178,16 +202,16 @@ export function Leaderboard({
                         </span>
                         <span className="text-right">
                           <span className="display-caps block text-sm text-paper-ink">
-                            {formatScore(mode, r.score)}
+                            <AnimatedNumber value={r.score} format={(n) => formatScore(mode, n)} />
                           </span>
                           <span className="block text-[0.65rem] uppercase tracking-wide text-paper-dim">
                             {r.verdict}
                           </span>
                         </span>
-                      </li>
+                      </motion.li>
                     );
                   })}
-                </ol>
+                </motion.ol>
               )}
             </div>
 
@@ -201,6 +225,20 @@ export function Leaderboard({
       )}
     </AnimatePresence>
   );
+}
+
+function RankBadge({ rank }: { rank: number }) {
+  if (rank <= 3) {
+    return (
+      <span
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[0.72rem] font-bold tabular-nums text-bg shadow-[0_2px_6px_-2px_rgba(0,0,0,0.6)]"
+        style={{ background: MEDALS[rank - 1] }}
+      >
+        {rank}
+      </span>
+    );
+  }
+  return <span className="w-6 shrink-0 text-right font-serif text-sm tabular-nums text-paper-dim">{rank}</span>;
 }
 
 function EmptyState({ scope }: { scope: LeaderboardScope }) {

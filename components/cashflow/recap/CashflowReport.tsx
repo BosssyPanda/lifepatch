@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { ReplayIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
-import { MoneyBrainMeter } from "@/components/learn/MoneyBrainMeter";
+import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { useProfile } from "@/hooks/useProfile";
@@ -49,6 +49,11 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
     audio.accent("stampGood");
     audio.swellWarmth();
   }, [audio]);
+
+  // warm the recap bed by how rich the Money Brain has become
+  useEffect(() => {
+    audio.setBrainGlow(moneyBrainPct(mastery) / 100);
+  }, [mastery, audio]);
 
   return (
     <div className="mx-auto min-h-[100svh] w-full max-w-3xl px-5 py-12">
