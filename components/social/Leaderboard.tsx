@@ -12,8 +12,7 @@ import { getProfiles } from "@/lib/cloud/profiles";
 import { topResults, type LeaderboardScope } from "@/lib/cloud/results";
 import type { GameMode, Profile, ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
-
-const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+import { EASE } from "@/lib/motion";
 
 // staggered row reveal (re-runs per tab via a keyed list)
 const listContainer = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };

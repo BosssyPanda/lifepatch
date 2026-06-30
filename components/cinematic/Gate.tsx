@@ -1,17 +1,10 @@
 "use client";
 
 import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
-import dynamic from "next/dynamic";
 import type { PointerEvent } from "react";
 import { DataAtlas } from "./DataAtlas";
 import { MuteButton } from "./Controls";
-
-// 3D economy hero — lazy + client-only so three/drei stay out of the base bundle.
-// Returns null when WebGL is unavailable, leaving the 2D DataAtlas as the fallback.
-const EconomyCanvas = dynamic(
-  () => import("@/components/cinematic/economy3d/EconomyCanvas").then((m) => m.EconomyCanvas),
-  { ssr: false },
-);
+import { EASE } from "@/lib/motion";
 
 export function Gate({
   onBegin,
@@ -42,9 +35,6 @@ export function Gate({
       onPointerMove={onMove}
       className="relative flex min-h-[100svh] w-full flex-col items-center justify-center gap-6 overflow-hidden px-6 py-16 lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-16"
     >
-      {/* 3D internet-economy world, behind everything (paints after the 2D atlas) */}
-      <EconomyCanvas variant="gate" />
-
       {/* faint blueprint grid wash */}
       <div
         aria-hidden
@@ -80,7 +70,7 @@ export function Gate({
       <motion.div
         initial={reduce ? false : { opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 1, ease: [0.2, 0.65, 0.3, 0.9] }}
+        transition={{ duration: 1, ease: EASE }}
         className="relative z-10 flex w-full max-w-[260px] shrink-0 justify-center overflow-hidden sm:max-w-[320px] lg:h-[90svh] lg:max-h-[900px] lg:w-auto lg:max-w-none"
       >
         <DataAtlas px={sx} py={sy} className="h-auto w-full lg:h-full lg:w-auto drop-shadow-[0_30px_60px_rgba(0,0,0,0.6)]" />

@@ -20,11 +20,6 @@ export const VERDICTS = {
   estate: { title: "The Estate", blurb: "You can't take it with you — but you can leave it behind. Here's the ledger you left.", hex: "#a89f8c", good: false },
 } satisfies Record<string, Verdict>;
 
-/** Display order for the landing gallery — lead aspirational, descend to the ledger. */
-export const VERDICT_GALLERY: Verdict[] = [
-  VERDICTS.free, VERDICTS.comfortable, VERDICTS.richEnough, VERDICTS.gettingBy, VERDICTS.underwater, VERDICTS.estate,
-];
-
 /** The final class for a run — shared by the outro recap and the report. */
 export function deriveVerdict(run: RunState): Verdict {
   const nw = netWorth(run);

@@ -1,7 +1,6 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { NeonButton } from "@/components/ui/NeonButton";
@@ -10,14 +9,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { MAX_MASTERY_LEVEL } from "@/lib/cloud/mastery";
 import { getSeen } from "@/lib/cloud/seen";
 import { CATEGORY_META, CONCEPTS, type Concept, type ConceptCategory } from "@/lib/concepts";
-import type { BrainCluster } from "@/components/learn/brain/BrainScene";
-
-// three/drei only load once the map opens — keeps them out of the base bundle.
-const BrainCanvas = dynamic(() => import("@/components/learn/brain/BrainCanvas").then((m) => m.BrainCanvas), {
-  ssr: false,
-});
-
-const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+import { EASE } from "@/lib/motion";
 const ORDER: ConceptCategory[] = ["earn", "grow", "protect", "borrow", "spend"];
 
 type NodeState = "locked" | "introduced" | "mastering";
@@ -58,20 +50,6 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
   useEffect(() => {
     if (open) setBrainGlow(pct / 100);
   }, [open, pct, setBrainGlow]);
-
-  // concept nodes grouped by category for the 3D constellation hero
-  const clusters = useMemo<BrainCluster[]>(
-    () =>
-      ORDER.map((cat) => ({
-        hex: CATEGORY_META[cat].hex,
-        nodes: CONCEPTS.filter((c) => c.category === cat).map((c) => ({
-          id: c.id,
-          level: levelOf(c.id),
-          seen: seenSet.has(c.id),
-        })),
-      })),
-    [levelOf, seenSet],
-  );
 
   return (
     <AnimatePresence>
@@ -114,9 +92,6 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                 </p>
               </div>
             </header>
-
-            {/* 3D constellation hero — collapses to the list below when WebGL is off */}
-            <BrainCanvas clusters={clusters} maxLevel={MAX_MASTERY_LEVEL} pct={pct} />
 
             <div className="thin-scroll flex-1 overflow-y-auto px-5 py-4">
               {ORDER.map((cat) => {
