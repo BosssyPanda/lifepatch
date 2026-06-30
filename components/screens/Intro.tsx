@@ -1,17 +1,41 @@
 "use client";
 
 import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
+import { useEffect, useRef } from "react";
 import { Mascot } from "@/components/brand/Mascot";
 import { ArrowDown } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { VerdictGallery } from "@/components/social/VerdictGallery";
 import { useAudio } from "@/hooks/useAudio";
+
+// 3D economy hero — lazy + client-only so three/drei stay out of the base bundle.
+// Returns null without WebGL, leaving the flat text hero as the fallback.
+const EconomyCanvas = dynamic(
+  () => import("@/components/cinematic/economy3d/EconomyCanvas").then((m) => m.EconomyCanvas),
+  { ssr: false },
+);
 
 export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: () => void }) {
   const audio = useAudio();
+
+  // Arrival: open the signature title theme + fire the reveal swell once as the
+  // economy resolves behind the logo. No-ops cleanly when muted / not started.
+  const revealed = useRef(false);
+  useEffect(() => {
+    if (revealed.current) return;
+    revealed.current = true;
+    audio.setPhase("title");
+    audio.accent("title");
+  }, [audio]);
+
   return (
     <div className="relative">
       {/* HERO */}
-      <section className="relative flex min-h-[100svh] flex-col items-center justify-center px-5 text-center">
+      <section className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-5 text-center">
+        {/* 3D internet-economy world behind the wordmark (paints after the text) */}
+        <EconomyCanvas variant="title" />
+
         <motion.div className="relative z-10">
           <motion.p
             initial={{ opacity: 0, letterSpacing: "0.5em" }}
@@ -123,6 +147,36 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
               &ldquo;Welcome. I&apos;m the house.&rdquo;
             </p>
           </motion.div>
+        </div>
+      </section>
+
+      {/* SOCIAL PROOF — every run ends in a verdict */}
+      <section className="relative px-5 pb-24">
+        <div className="mx-auto max-w-4xl text-center">
+          <motion.p
+            initial={{ opacity: 0, y: 14 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4 }}
+            className="eyebrow text-accent"
+          >
+            Every run gets graded
+          </motion.p>
+          <motion.h2
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.4 }}
+            transition={{ delay: 0.08 }}
+            className="display-caps mt-3 text-3xl text-ink sm:text-5xl"
+          >
+            How will you be remembered?
+          </motion.h2>
+          <p className="mx-auto mt-3 max-w-md font-serif text-ink-dim">
+            Nine months of choices compound into one verdict. Financially free, or
+            underwater — the ledger doesn&apos;t lie.
+          </p>
+        </div>
+        <div className="mt-8">
+          <VerdictGallery />
         </div>
       </section>
     </div>

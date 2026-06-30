@@ -14,14 +14,14 @@ import type { AmbienceId, SfxName, StingTone } from "./sfxBank";
  *  - All material is original (generic tonal voicings, no transcribed works).
  */
 
-export type ScorePhase = "intro" | "menu" | "gameplay" | "recapGood" | "recapBad";
+export type ScorePhase = "intro" | "title" | "menu" | "gameplay" | "recapGood" | "recapBad";
 export type AccentKind =
   | "thump" | "hit" | "stab" | "riser" | "title"
   | "rise" | "ping" | "thud" | "stampGood" | "stampBad"
   // v2 learning/social milestones (celebratory, grid-quantized)
   | "mastered" | "levelup" | "streak";
 
-type StemId = "sub" | "pad" | "rhodes" | "tick" | "crackle" | "tension" | "warmth";
+type StemId = "sub" | "pad" | "rhodes" | "tick" | "crackle" | "tension" | "warmth" | "lead";
 
 // --- musical material (A minor, 76 BPM, 8-bar / 4-segment cycle) ---
 const BPM = 76;
@@ -36,13 +36,24 @@ const ROOTS = ["A1", "F1", "C2", "B1"]; // sub follows the bass root per segment
 // 4-note Rhodes leitmotif (1 b3 5 4) placed over the 2-bar segment, sparse.
 const MOTIF: (string | null)[] = ["A4", null, "C5", null, "E5", null, "D5", null];
 
+// The signature "LifePatch theme" — an original 4-bar A-minor hook carried by
+// the lead voice, restated over the harmony cycle. Only audible in the `title`
+// phase (its stem is silent everywhere else). Spacious, hopeful-tense.
+const TITLE_MOTIF: (string | null)[] = [
+  "A4", null, "C5", null, "E5", null, null, null, // bar 1 — Am, rising
+  "D5", null, "C5", null, "A4", null, null, null, // bar 2 — settle back
+  "C5", null, "F5", null, "E5", null, null, null, // bar 3 — lift over F
+  "D5", null, null, "B4", null, "A4", null, null, // bar 4 — resolve home
+];
+
 // phase → target gain per stem (intensity adjusts gameplay further)
 const PRESETS: Record<ScorePhase, Record<StemId, number>> = {
-  intro:     { sub: 0.5,  pad: 0.5,  rhodes: 0.18, tick: 0.4,  crackle: 0.06, tension: 0.5,  warmth: 0.0 },
-  menu:      { sub: 0.35, pad: 0.45, rhodes: 0.5,  tick: 0.15, crackle: 0.06, tension: 0.0,  warmth: 0.1 },
-  gameplay:  { sub: 0.4,  pad: 0.4,  rhodes: 0.25, tick: 0.3,  crackle: 0.06, tension: 0.0,  warmth: 0.0 },
-  recapGood: { sub: 0.45, pad: 0.5,  rhodes: 0.6,  tick: 0.25, crackle: 0.06, tension: 0.0,  warmth: 0.6 },
-  recapBad:  { sub: 0.5,  pad: 0.4,  rhodes: 0.2,  tick: 0.2,  crackle: 0.06, tension: 0.55, warmth: 0.0 },
+  intro:     { sub: 0.5,  pad: 0.5,  rhodes: 0.18, tick: 0.4,  crackle: 0.06, tension: 0.5,  warmth: 0.0, lead: 0.0  },
+  title:     { sub: 0.4,  pad: 0.5,  rhodes: 0.32, tick: 0.18, crackle: 0.06, tension: 0.0,  warmth: 0.28, lead: 0.72 },
+  menu:      { sub: 0.35, pad: 0.45, rhodes: 0.5,  tick: 0.15, crackle: 0.06, tension: 0.0,  warmth: 0.1, lead: 0.0  },
+  gameplay:  { sub: 0.4,  pad: 0.4,  rhodes: 0.25, tick: 0.3,  crackle: 0.06, tension: 0.0,  warmth: 0.0, lead: 0.0  },
+  recapGood: { sub: 0.45, pad: 0.5,  rhodes: 0.6,  tick: 0.25, crackle: 0.06, tension: 0.0,  warmth: 0.6, lead: 0.0  },
+  recapBad:  { sub: 0.5,  pad: 0.4,  rhodes: 0.2,  tick: 0.2,  crackle: 0.06, tension: 0.55, warmth: 0.0, lead: 0.0  },
 };
 
 export class AudioEngine {
@@ -64,6 +75,7 @@ export class AudioEngine {
   private pad!: Tone.PolySynth;
   private sub!: Tone.Synth;
   private rhodes!: Tone.FMSynth;
+  private lead!: Tone.Synth;
   private kick!: Tone.MembraneSynth;
   private hat!: Tone.NoiseSynth;
   private crackleNoise!: Tone.Noise;
@@ -102,6 +114,7 @@ export class AudioEngine {
       crackle: new Tone.Gain(0).connect(this.musicBus),
       tension: new Tone.Gain(0).connect(this.musicBus),
       warmth: new Tone.Gain(0).connect(this.musicBus),
+      lead: new Tone.Gain(0).connect(this.musicBus),
     };
 
     // --- harmony pad: warm detuned saws, soft low-pass ---
@@ -162,6 +175,17 @@ export class AudioEngine {
     this.warmthOsc.volume.value = -22;
     this.warmthOsc.start();
 
+    // --- title lead: a bright bell-pluck carrying the signature theme. Routed
+    //     through a tempo-synced delay for shimmer; silent until the `title`
+    //     phase ramps its stem up (the sequence always runs underneath). ---
+    const leadDelay = new Tone.FeedbackDelay("8n.", 0.26).connect(this.stems.lead);
+    leadDelay.wet.value = 0.26;
+    this.lead = new Tone.Synth({
+      oscillator: { type: "triangle" },
+      envelope: { attack: 0.005, decay: 0.45, sustain: 0.12, release: 1.2 },
+      volume: -11,
+    }).connect(leadDelay);
+
     // --- scheduled musical loops (route to stem gains, so muting = ramp gain) ---
     // chords + sub: advance segment every 2 measures
     const harmonyLoop = new Tone.Loop((time) => {
@@ -190,7 +214,15 @@ export class AudioEngine {
       this.kick.triggerAttackRelease("A1", "8n", time);
     }, "1m").start(0);
 
-    this.loops = [harmonyLoop, motifSeq, pulseLoop, kickLoop];
+    // title theme: the signature leitmotif, restated every 4 bars. Always
+    // scheduled but inaudible until the `title` phase opens the lead stem.
+    const titleSeq = new Tone.Sequence(
+      (time, note) => { if (note) this.lead.triggerAttackRelease(note, "8n", time, 0.9); },
+      TITLE_MOTIF, "8n",
+    ).start(0);
+    titleSeq.loop = true;
+
+    this.loops = [harmonyLoop, motifSeq, pulseLoop, kickLoop, titleSeq];
 
     t.start();
     this.started = true;
@@ -240,7 +272,7 @@ export class AudioEngine {
       base.tick = 0.22 + i * 0.22;
       base.rhodes = 0.3 - i * 0.12; // motif recedes as it gets tense
       base.sub = 0.36 + i * 0.18;
-    } else if (this.phase === "menu" || this.phase === "recapGood") {
+    } else if (this.phase === "menu" || this.phase === "recapGood" || this.phase === "title") {
       // a richer Money Brain glows the calm bed warmer (one gentle layer, no churn)
       base.warmth += this.brainGlow * 0.22;
       base.pad += this.brainGlow * 0.08;
@@ -545,7 +577,7 @@ export class AudioEngine {
       this.loops.forEach((l) => { try { l.dispose(); } catch {} });
       try { this.currentAmb?.dispose(); } catch {}
       this.currentAmb = null;
-      [this.pad, this.sub, this.rhodes, this.kick, this.hat, this.crackleNoise, this.tensionA, this.tensionB, this.warmthOsc].forEach((n) => { try { n.dispose(); } catch {} });
+      [this.pad, this.sub, this.rhodes, this.lead, this.kick, this.hat, this.crackleNoise, this.tensionA, this.tensionB, this.warmthOsc].forEach((n) => { try { n.dispose(); } catch {} });
       Object.values(this.stems).forEach((g) => { try { g.dispose(); } catch {} });
       this.musicBus.dispose(); this.accentBus.dispose(); this.sfxBus.dispose(); this.ambBus.dispose(); this.master.dispose();
     } catch {}
