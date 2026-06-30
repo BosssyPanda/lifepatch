@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useAudio } from "@/hooks/useAudio";
 import { useCashflow } from "@/hooks/useCashflow";
 import { CashflowGame } from "@/components/cashflow/CashflowGame";
@@ -10,6 +10,11 @@ import { CashflowReport } from "@/components/cashflow/recap/CashflowReport";
 import { CashflowSetup } from "@/components/cashflow/setup/CashflowSetup";
 import { enterFastTrack } from "@/lib/cashflow/engine";
 import { hasCashflowSave } from "@/lib/cashflow/persist";
+import { resolvePlayerId } from "@/lib/cloud/identity";
+import { resultFromCashflow } from "@/lib/cloud/buildResult";
+import { ensureProfile } from "@/lib/cloud/profiles";
+import { submitResult } from "@/lib/cloud/results";
+import { bumpStreak } from "@/lib/cloud/streaks";
 
 const EASE = [0.2, 0.65, 0.3, 0.9] as const;
 
@@ -85,6 +90,24 @@ export function CashflowShell({
     if (view === "escape") audio.accent("riser");
     else if (view === "report") audio.accent("title");
   }, [view, reduce, audio]);
+
+  // Post a Rat Race result + bump the streak when the run reaches its report.
+  const submittedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (view !== "report" || !s) return;
+    const key = `cf-${s.playerName}-${s.turn}`;
+    if (submittedRef.current === key) return;
+    submittedRef.current = key;
+    const id = resolvePlayerId(null);
+    if (!id) return;
+    void (async () => {
+      try {
+        await ensureProfile(id);
+        await submitResult(id, resultFromCashflow(s));
+        await bumpStreak(id);
+      } catch {}
+    })();
+  }, [view, s]);
 
   const scene = (key: string, children: ReactNode) => (
     <motion.div

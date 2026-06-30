@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { CheckIcon, FreedomIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { StreakChip } from "@/components/social/StreakChip";
 import { useAudio } from "@/hooks/useAudio";
 import { MODES, type ModeId } from "@/lib/modes";
 
@@ -12,9 +13,11 @@ const ICON = { story: TrophyIcon, infinite: ReplayIcon, cashflow: FreedomIcon };
 export function ModeSelect({
   onChoose,
   onBack,
+  onLeaderboard,
 }: {
   onChoose: (mode: ModeId) => void;
   onBack: () => void;
+  onLeaderboard: () => void;
 }) {
   const audio = useAudio();
   const modes: ModeId[] = ["story", "infinite", "cashflow"];
@@ -22,6 +25,7 @@ export function ModeSelect({
 
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-4xl flex-col justify-center px-5 py-14">
+      <div className="mb-4 flex justify-end"><StreakChip /></div>
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
         <p className="eyebrow text-accent">Choose your run</p>
         <h1 className="display-caps mt-3 text-4xl text-ink sm:text-6xl">Three ways to play</h1>
@@ -67,8 +71,9 @@ export function ModeSelect({
         })}
       </div>
 
-      <div className="mt-9 flex items-center justify-center gap-3">
+      <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back to title</NeonButton>
+        <NeonButton variant="ghost" size="sm" onClick={() => { audio.sfx("modal"); onLeaderboard(); }}>🏆 Leaderboards</NeonButton>
         <NeonButton variant="primary" size="lg" disabled={!picked} onClick={() => { if (picked) { audio.sfx("confirm"); onChoose(picked); } }}>
           {picked ? `Start ${MODES[picked].name} →` : "Pick a mode"}
         </NeonButton>
