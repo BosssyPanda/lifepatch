@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { BankIcon, FreedomIcon, InfoIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
+import { useConceptLearn } from "@/hooks/useConceptLearn";
+import { conceptsForText } from "@/lib/concepts";
 import { Dice } from "@/components/cashflow/board/Dice";
 
 // WebGL board is loaded only inside the cashflow shell (never the landing bundle).
@@ -129,6 +131,7 @@ export function CashflowGame({
   onExit: () => void;
 }) {
   const audio = useAudio();
+  const { learn } = useConceptLearn();
   const reduce = useReducedMotion();
   const isFast = s.track === "fast";
 
@@ -499,10 +502,10 @@ export function CashflowGame({
               <DealChooser onPick={pickDeal} onPass={() => { audio.sfx("page"); endTurn(s); }} />
             )}
             {pending.kind === "deal" && (
-              <DealCard deal={pending.deal} cash={s.cash} onBuy={(shares) => buyDeal(pending.deal, shares)} onPass={() => { audio.sfx("page"); endTurn(s); }} />
+              <DealCard deal={pending.deal} cash={s.cash} onBuy={(shares) => { learn(conceptsForText(pending.deal.lesson), { applied: true }); buyDeal(pending.deal, shares); }} onPass={() => { audio.sfx("page"); endTurn(s); }} />
             )}
             {pending.kind === "doodad" && (
-              <DoodadCard card={pending.card} cash={s.cash} onPay={() => { audio.sting("bad"); finishResolve(payDoodad(s, pending.card.cost)); }} />
+              <DoodadCard card={pending.card} cash={s.cash} onPay={() => { audio.sting("bad"); learn(conceptsForText(pending.card.lesson), { applied: false }); finishResolve(payDoodad(s, pending.card.cost)); }} />
             )}
             {pending.kind === "charity" && (
               <CharityCard s={s} onDonate={() => { audio.sfx("coins"); finishResolve(donateCharity(s)); }} onSkip={() => endTurn(s)} />
@@ -530,6 +533,7 @@ export function CashflowGame({
                 q={pending.q}
                 onDone={(correct) => {
                   audio.sfx(correct ? "chime" : "uitick");
+                  learn(conceptsForText(pending.q.concept, pending.q.explain), { applied: correct });
                   const base = quizState.current ?? s;
                   quizState.current = null;
                   endTurn({ ...base, quizzesPassed: base.quizzesPassed + (correct ? 1 : 0) });

@@ -5,7 +5,11 @@ import { useEffect } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { ReplayIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { MoneyBrainMeter } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
+import { useConceptLearn } from "@/hooks/useConceptLearn";
+import { useProfile } from "@/hooks/useProfile";
+import { conceptTitle } from "@/lib/concepts";
 import { getDream } from "@/lib/cashflow/dreams";
 import { getProfession } from "@/lib/cashflow/professions";
 import { netWorth, passiveIncome } from "@/lib/cashflow/selectors";
@@ -31,12 +35,14 @@ function Stat({ label, value, format = (n: number) => currency(n), tone }: { lab
   );
 }
 
-export function CashflowReport({ s, onReplay, onExit }: { s: CashflowState; onReplay: () => void; onExit: () => void }) {
+export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: CashflowState; onReplay: () => void; onExit: () => void; onMasteryMap?: () => void }) {
   const audio = useAudio();
   const reduce = useReducedMotion();
   const dream = getDream(s.dreamId);
   const prof = getProfession(s.professionId);
   const arch = archetype(s);
+  const { mastery } = useProfile();
+  const { runGains } = useConceptLearn();
 
   useEffect(() => {
     audio.setPhase("recapGood", 1.4);
@@ -95,6 +101,20 @@ export function CashflowReport({ s, onReplay, onExit }: { s: CashflowState; onRe
         <p className="mt-1 font-serif text-[0.95rem] leading-relaxed text-ink">
           Freedom never came from a bigger paycheck — it came from buying assets that pay you whether you work or not. That&apos;s real financial IQ, and it works exactly the same in real life.
         </p>
+      </div>
+
+      <div className="mt-8 rounded-[6px] border border-ink/12 bg-bg2 px-4 py-4 text-ink">
+        <MoneyBrainMeter mastery={mastery} />
+        {runGains.length > 0 && (
+          <p className="mt-2 font-serif text-[0.9rem] text-ink-dim">
+            This run sharpened: <span className="text-ink">{runGains.map(conceptTitle).join(", ")}</span>.
+          </p>
+        )}
+        {onMasteryMap && (
+          <button type="button" onClick={onMasteryMap} className="eyebrow mt-3 text-accent transition-opacity hover:opacity-70">
+            🧠 View your Money Brain →
+          </button>
+        )}
       </div>
 
       <div className="mt-8 flex items-center justify-center gap-3">

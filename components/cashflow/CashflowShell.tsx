@@ -59,9 +59,11 @@ const sceneVariants: Variants = {
 
 export function CashflowShell({
   onExit,
+  onMasteryMap,
 }: {
   onExit: () => void;
   onOpenAlmanac?: () => void;
+  onMasteryMap?: () => void;
 }) {
   const cf = useCashflow();
   const auth = useAuth();
@@ -135,6 +137,7 @@ export function CashflowShell({
                     cf.reset();
                     onExit();
                   }}
+                  onMasteryMap={onMasteryMap}
                 />,
               )
             : scene(

@@ -15,6 +15,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { AudioProvider, useAudio } from "@/hooks/useAudio";
 import { useRun } from "@/hooks/useRun";
 import { Leaderboard } from "@/components/social/Leaderboard";
+import { MasteryMap } from "@/components/learn/MasteryMap";
+import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
@@ -29,7 +31,9 @@ const wipe = {
 export function AppShell() {
   return (
     <AudioProvider>
-      <AppShellInner />
+      <ConceptLearnProvider>
+        <AppShellInner />
+      </ConceptLearnProvider>
     </AudioProvider>
   );
 }
@@ -44,6 +48,9 @@ function AppShellInner() {
   const [socialOpen, setSocialOpen] = useState(false);
   const [socialMode, setSocialMode] = useState<GameMode>("story");
   const openLeaderboard = (m: GameMode) => { audio.sfx("modal"); setSocialMode(m); setSocialOpen(true); };
+  const [masteryOpen, setMasteryOpen] = useState(false);
+  const openMasteryMap = () => { audio.sfx("modal"); setMasteryOpen(true); };
+  const { resetRun } = useConceptLearn();
 
   // The Rat Race mode is a fully self-contained board game with its own internal
   // phase machine — hand off to it as soon as it's chosen (skip LifePatch auth).
@@ -67,11 +74,18 @@ function AppShellInner() {
     void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r));
   }, [phase, run.run, auth.user]);
 
+  // Fresh run → clear the "this run sharpened" concept summary.
+  const runSeed = run.run?.seed ?? null;
+  useEffect(() => {
+    if (phase === "run") resetRun();
+  }, [phase, runSeed, resetRun]);
+
   if (inCashflow) {
     return (
       <main className="relative min-h-[100svh] w-full">
-        <CashflowShell onExit={run.toTitle} onOpenAlmanac={openAlmanac} />
+        <CashflowShell onExit={run.toTitle} onOpenAlmanac={openAlmanac} onMasteryMap={openMasteryMap} />
         <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />
+        <MasteryMap open={masteryOpen} onClose={() => setMasteryOpen(false)} />
       </main>
     );
   }
@@ -87,7 +101,7 @@ function AppShellInner() {
 
         {phase === "mode" && (
           <motion.div key="mode" {...wipe}>
-            <ModeSelect onChoose={run.chooseMode} onBack={run.toTitle} onLeaderboard={() => openLeaderboard("story")} />
+            <ModeSelect onChoose={run.chooseMode} onBack={run.toTitle} onLeaderboard={() => openLeaderboard("story")} onMasteryMap={openMasteryMap} />
           </motion.div>
         )}
 
@@ -122,6 +136,7 @@ function AppShellInner() {
               onReplay={() => run.start(run.run!.mode, run.run!.backgroundId, run.run!.name)}
               onTitle={run.toTitle}
               onAlmanac={openAlmanac}
+              onMasteryMap={openMasteryMap}
             />
           </motion.div>
         )}
@@ -129,6 +144,7 @@ function AppShellInner() {
 
       <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />
       <Leaderboard open={socialOpen} onClose={() => setSocialOpen(false)} initialMode={socialMode} />
+      <MasteryMap open={masteryOpen} onClose={() => setMasteryOpen(false)} />
     </main>
   );
 }

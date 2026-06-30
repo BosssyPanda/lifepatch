@@ -3,6 +3,10 @@
 import { motion } from "framer-motion";
 import { CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { MoneyBrainMeter } from "@/components/learn/MoneyBrainMeter";
+import { useProfile } from "@/hooks/useProfile";
+import { useConceptLearn } from "@/hooks/useConceptLearn";
+import { conceptTitle } from "@/lib/concepts";
 import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
@@ -72,7 +76,9 @@ function PortfolioBreakdown({ run }: { run: RunState }) {
   );
 }
 
-export function LifeReport({ run, onReplay, onTitle, onAlmanac }: { run: RunState; onReplay: () => void; onTitle: () => void; onAlmanac: () => void }) {
+export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: { run: RunState; onReplay: () => void; onTitle: () => void; onAlmanac: () => void; onMasteryMap: () => void }) {
+  const { mastery } = useProfile();
+  const { runGains } = useConceptLearn();
   const nw = netWorth(run);
   const reason = REASON[run.endReason ?? "quit"];
   const Icon = reason.Icon;
@@ -152,6 +158,18 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac }: { run: RunStat
         <motion.p variants={item} className="mt-5 text-center font-serif text-sm text-ink-dim">
           {run.life.partner ? "Married" : "Single"} · {run.life.kids} kid{run.life.kids === 1 ? "" : "s"} · {run.life.housing === "owned" ? "homeowner" : "renter"} · {run.job}
         </motion.p>
+
+        <motion.div variants={item} className="mt-6 rounded-[4px] border border-ink/12 bg-bg2 px-4 py-4 text-ink">
+          <MoneyBrainMeter mastery={mastery} />
+          {runGains.length > 0 && (
+            <p className="mt-2 font-serif text-[0.9rem] text-ink-dim">
+              This run sharpened: <span className="text-ink">{runGains.map(conceptTitle).join(", ")}</span>.
+            </p>
+          )}
+          <button type="button" onClick={onMasteryMap} className="eyebrow mt-3 text-accent transition-opacity hover:opacity-70">
+            🧠 View your Money Brain →
+          </button>
+        </motion.div>
 
         <motion.div variants={item} className="mt-8 flex flex-wrap justify-center gap-3">
           <NeonButton variant="ghost" size="md" onClick={onTitle}>Title screen</NeonButton>

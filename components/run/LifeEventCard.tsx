@@ -4,7 +4,9 @@ import { motion } from "framer-motion";
 import { useEffect, useRef } from "react";
 import { CheckIcon, LockIcon } from "@/components/icons";
 import { useAudio } from "@/hooks/useAudio";
+import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { stingForTone } from "@/lib/audioMap";
+import { conceptsForText } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEffect, LifeEvent } from "@/lib/lifeEvents";
 
@@ -31,6 +33,7 @@ export function LifeEventCard({
   onChoose: (eventId: string, choice: LifeChoice) => void;
 }) {
   const audio = useAudio();
+  const { learn } = useConceptLearn();
   const [chosenId, idxStr] = chosen ? chosen.split("|") : [undefined, undefined];
   const answered = Boolean(chosenId);
   const chosenChoice = event.choices.find((c) => c.id === chosenId);
@@ -42,8 +45,13 @@ export function LifeEventCard({
     if (answered && outcome && !stungRef.current) {
       stungRef.current = true;
       audio.sting(stingForTone(outcome.tone));
+      // The teaching moment: derive concepts from the lesson; a "good" outcome
+      // is a correct application that raises mastery, others are seen-only.
+      learn(conceptsForText(outcome.lesson, outcome.consequence), {
+        applied: outcome.tone === "good",
+      });
     }
-  }, [answered, outcome, audio]);
+  }, [answered, outcome, audio, learn]);
 
   return (
     <motion.div
