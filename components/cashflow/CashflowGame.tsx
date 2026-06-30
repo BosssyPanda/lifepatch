@@ -2,7 +2,7 @@
 
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BankIcon, FreedomIcon, InfoIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
@@ -98,6 +98,25 @@ const fastColor = (t: string) =>
     ftloss: "border-brick/50 bg-brick/20 text-brick",
   })[t] ?? "border-ink/20 bg-bg3 text-ink";
 
+/** Map a pending modal to its emotional tone, driving the Modal's aura color. */
+function modalTone(kind: Pending["kind"]): "accent" | "brick" | "neutral" {
+  switch (kind) {
+    case "deal-choose":
+    case "deal":
+    case "ftdeal":
+    case "cashflowday":
+    case "charity":
+    case "dream":
+      return "accent"; // opportunity
+    case "doodad":
+    case "downsized":
+    case "ftloss":
+      return "brick"; // loss / penalty
+    default:
+      return "neutral"; // coach, market, baby, quiz
+  }
+}
+
 export function CashflowGame({
   s,
   apply,
@@ -124,6 +143,9 @@ export function CashflowGame({
   const lastRoll = useRef(0);
   const lastLanded = useRef("");
   const quizState = useRef<CashflowState | null>(null);
+  // highest freedom milestone already celebrated (0=none, 1=half, 2=free) so each
+  // threshold stings exactly once on the way up — never on every recompute.
+  const freedomTier = useRef(0);
 
   // ── per-tile landing accent (fires the instant the 3D token settles) ──
   function landingSfx(type: string) {
@@ -160,11 +182,25 @@ export function CashflowGame({
   const prof = getProfession(s.professionId);
   const busy = turnPhase !== "idle" || pending !== null || tutorialOpen;
 
-  // ── intensity feeds the adaptive score ──
+  // ── intensity feeds the adaptive score + freedom-milestone stings ──
   function pushIntensity(state: CashflowState) {
     const fr = clamp(freedomRatio(state), 0, 1);
     const loan = state.liabilities.bankLoan > 0 ? 0.2 : 0;
     audio.setIntensity(clamp(0.32 + (1 - fr) * 0.32 + loan, 0, 1));
+
+    // celebrate the first time the player crosses each freedom milestone (rat track
+    // only — the fast track has its own win flow). Fires once per threshold.
+    if (state.track === "rat") {
+      const tier = fr >= 1 ? 2 : fr >= 0.5 ? 1 : 0;
+      if (tier > freedomTier.current) {
+        audio.sting("good");
+        if (tier === 2) audio.swellWarmth();
+        freedomTier.current = tier;
+      } else if (tier < freedomTier.current) {
+        // slipped back below a milestone — let it be re-earned later
+        freedomTier.current = tier;
+      }
+    }
   }
 
   // ── end of turn: log + escape/win check ──
@@ -326,6 +362,14 @@ export function CashflowGame({
     finishResolve(next);
   }
 
+  // ── soft "card slides up" cue whenever a resolution modal opens ──
+  const pendingKind = pending?.kind ?? null;
+  useEffect(() => {
+    if (pendingKind) audio.sfx("modal");
+    // audio.sfx is a stable useCallback; depend only on the kind transition.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingKind]);
+
   const rollLabel = s.skipTurns > 0 ? `Skip turn · downsized ×${s.skipTurns}` : turnPhase === "idle" ? "Roll" : "…";
 
   return (
@@ -447,7 +491,7 @@ export function CashflowGame({
         )}
 
         {pending && (
-          <Modal key={`p-${pending.kind}`}>
+          <Modal key={`p-${pending.kind}`} tone={modalTone(pending.kind)}>
             {pending.kind === "coach" && (
               <CoachCard title={pending.title} body={pending.body} onOk={() => { audio.sfx("confirm"); const then = pending.then; setPending(null); then(); }} />
             )}
