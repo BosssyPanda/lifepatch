@@ -62,26 +62,26 @@ export function Emblem({ size = 240, className }: { size?: number; className?: s
       aria-label="LifePatch seal"
     >
       {/* concentric rules */}
-      <circle cx={C} cy={C} r="92" stroke="currentColor" strokeWidth="0.8" opacity="0.5" />
-      <circle cx={C} cy={C} r="88" stroke="currentColor" strokeWidth="1.6" opacity="0.85" />
-      <circle cx={C} cy={C} r="80" stroke="currentColor" strokeWidth="0.8" opacity="0.5" />
-      <circle cx={C} cy={C} r="70" stroke="currentColor" strokeWidth="0.6" opacity="0.35" />
-      <circle cx={C} cy={C} r="33" stroke="currentColor" strokeWidth="0.8" opacity="0.5" />
-      <circle cx={C} cy={C} r="30" stroke="currentColor" strokeWidth="1.4" opacity="0.8" />
+      <circle cx={C} cy={C} r="93" stroke="currentColor" strokeWidth="1" opacity="0.6" />
+      <circle cx={C} cy={C} r="88" stroke="currentColor" strokeWidth="2.6" opacity="1" />
+      <circle cx={C} cy={C} r="80" stroke="currentColor" strokeWidth="1.1" opacity="0.7" />
+      <circle cx={C} cy={C} r="70" stroke="currentColor" strokeWidth="0.8" opacity="0.5" />
+      <circle cx={C} cy={C} r="34" stroke="currentColor" strokeWidth="1.1" opacity="0.7" />
+      <circle cx={C} cy={C} r="30" stroke="var(--color-accent)" strokeWidth="2.2" opacity="1" />
 
       {/* engraved tick bezel */}
-      <path d={bezelFine} stroke="currentColor" strokeWidth="0.4" opacity="0.3" />
-      <path d={bezel} stroke="currentColor" strokeWidth="0.7" opacity="0.55" />
+      <path d={bezelFine} stroke="currentColor" strokeWidth="0.55" opacity="0.45" />
+      <path d={bezel} stroke="currentColor" strokeWidth="1.1" opacity="0.8" />
 
       {/* guilloché bands */}
-      <path d={outer} stroke="currentColor" strokeWidth="0.55" opacity="0.55" />
-      <path d={mid} stroke="var(--color-accent)" strokeWidth="0.6" opacity="0.7" />
-      <path d={core} stroke="currentColor" strokeWidth="0.6" opacity="0.85" />
+      <path d={outer} stroke="currentColor" strokeWidth="0.8" opacity="0.8" />
+      <path d={mid} stroke="var(--color-accent)" strokeWidth="1" opacity="0.95" />
+      <path d={core} stroke="currentColor" strokeWidth="0.9" opacity="1" />
 
       {/* center mark: an upward intaglio rule (the "rising" motif) */}
-      <g stroke="currentColor" opacity="0.9">
-        <path d="M88 110 L97 99 L103 104 L112 90" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M112 90 l-6 0 m6 0 l0 6" strokeWidth="1.6" strokeLinecap="round" />
+      <g stroke="currentColor" opacity="1">
+        <path d="M86 111 L97 98 L104 104 L114 88" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M114 88 l-7 0 m7 0 l0 7" strokeWidth="2.2" strokeLinecap="round" />
       </g>
     </svg>
   );

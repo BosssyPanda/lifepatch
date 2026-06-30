@@ -47,7 +47,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             transition={{ type: "spring", stiffness: 120, damping: 16 }}
             className="text-ink"
           >
-            <Emblem className="h-[30vw] max-h-[156px] w-[30vw] max-w-[156px]" />
+            <Emblem className="h-[42vw] max-h-[228px] w-[42vw] max-w-[228px]" />
           </motion.div>
 
           <motion.h1
