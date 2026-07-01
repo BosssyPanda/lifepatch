@@ -6,15 +6,16 @@ import { TileIcon } from "./TileIcon";
 
 export type BoardSquareView = { index: number; type: string };
 
-// premium tabletop palette — dark slate board, ivory chips, brass edging
-const IVORY = "#e9e1cd";
-const INK = "#2a241d";
-const BRASS = "#c9a24a";
+// warm editorial palette — the game's newspaper-almanac world (paper, ink, ochre).
+// A warm-dark board lit from center, cream paper chips, ochre/ink accents.
+const PAPER = "#e7dfc9";
+const INK = "#211c16";
+const OCHRE = "#c8861e";
 
-// per-type accent (top edge + glyph tint) for each square
+// per-type accent (top edge + glyph tint) — the game's muted semantic set
 const TILE_TINT: Record<string, string> = {
   deal: "#c8861e",
-  ftdeal: "#c9a24a",
+  ftdeal: "#b8801f",
   doodad: "#a33218",
   charity: "#5f7480",
   payday: "#7f8b52",
@@ -22,10 +23,19 @@ const TILE_TINT: Record<string, string> = {
   market: "#a33218",
   baby: "#b07d2a",
   downsized: "#8a2a12",
-  dream: "#d4541e",
+  dream: "#bf6a22",
   ftloss: "#8a2a12",
 };
 const tintOf = (t: string) => TILE_TINT[t] ?? "#8a7f66";
+
+// four L-shaped crop-ticks at the board frame corners (editorial print marks)
+type CropTick = { top?: string; left?: string; right?: string; bottom?: string; v: "top" | "bottom"; h: "left" | "right" };
+const CROP_TICKS: CropTick[] = [
+  { top: "4.6%", left: "4.6%", v: "top", h: "left" },
+  { top: "4.6%", right: "4.6%", v: "top", h: "right" },
+  { bottom: "4.6%", left: "4.6%", v: "bottom", h: "left" },
+  { bottom: "4.6%", right: "4.6%", v: "bottom", h: "right" },
+];
 
 /** Evenly space `n` points around a rounded-rectangle perimeter, in % coords. */
 function perimeterPoints(n: number, pad: number) {
@@ -107,34 +117,61 @@ export function Board({
 
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[560px]">
-      {/* slate board + brass frame */}
+      {/* warm-dark board — a lit nighttime newspaper spread */}
       <div
         className="absolute inset-[2%] rounded-[18px]"
         style={{
           background:
-            "radial-gradient(120% 120% at 50% 30%, #262d35 0%, #1b2027 55%, #12161b 100%)",
+            "radial-gradient(120% 120% at 50% 28%, #241d15 0%, #14110e 55%, #0d0a07 100%)",
           boxShadow:
-            "0 24px 60px -20px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.05)",
-          border: `1px solid ${BRASS}55`,
+            "0 24px 60px -20px rgba(0,0,0,0.9), inset 0 0 90px 22px rgba(0,0,0,0.5), inset 0 1px 0 rgba(233,225,207,0.05)",
+          border: `1px solid ${OCHRE}3d`,
         }}
       />
+      {/* engraved double-rule frame + ledger inset */}
       <div
         aria-hidden
         className="absolute inset-[3.6%] rounded-[13px]"
-        style={{ border: `1px solid ${BRASS}33`, boxShadow: "inset 0 2px 10px rgba(0,0,0,0.55)" }}
+        style={{ border: `1px solid ${OCHRE}26`, boxShadow: "inset 0 2px 12px rgba(0,0,0,0.55)" }}
+      />
+      {/* newspaper corner crop-ticks */}
+      {CROP_TICKS.map((c, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="absolute h-3 w-3"
+          style={{
+            top: c.top,
+            left: c.left,
+            right: c.right,
+            bottom: c.bottom,
+            borderTop: c.v === "top" ? `1px solid ${OCHRE}66` : undefined,
+            borderBottom: c.v === "bottom" ? `1px solid ${OCHRE}66` : undefined,
+            borderLeft: c.h === "left" ? `1px solid ${OCHRE}66` : undefined,
+            borderRight: c.h === "right" ? `1px solid ${OCHRE}66` : undefined,
+          }}
+        />
+      ))}
+
+      {/* warm "table light" pooled behind the hub — atmosphere */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-[10%] rounded-full"
+        style={{ background: "radial-gradient(circle at 50% 42%, rgba(200,134,30,0.16) 0%, rgba(200,134,30,0.05) 40%, transparent 70%)" }}
       />
 
-      {/* center hub — brass-ringed medallion (dice / roll live here via children) */}
+      {/* center hub — an ink ledger medallion (dice / roll live here via children) */}
       <div
         className="absolute inset-[16%] grid place-items-center rounded-[14px] p-3 text-center"
         style={{
-          background: "radial-gradient(120% 120% at 50% 25%, #222932 0%, #171b21 100%)",
-          border: `1.5px solid ${BRASS}66`,
-          boxShadow: "inset 0 2px 14px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04)",
+          background: "radial-gradient(120% 120% at 50% 25%, #211c15 0%, #14100a 100%)",
+          border: `1px solid ${OCHRE}40`,
+          boxShadow:
+            "inset 0 2px 14px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(233,225,207,0.03), 0 0 34px -12px rgba(200,134,30,0.25)",
         }}
       >
         <div className="w-full">
-          <p className="eyebrow" style={{ color: BRASS, fontSize: "0.58rem", letterSpacing: "0.24em" }}>
+          <p className="eyebrow" style={{ color: OCHRE, fontSize: "0.58rem", letterSpacing: "0.24em" }}>
             {title}
           </p>
           {children}
@@ -149,11 +186,11 @@ export function Board({
         const chipStyle: CSSProperties = {
           left: `${p.x}%`,
           top: `${p.y}%`,
-          background: `linear-gradient(180deg, #f3ecd9 0%, ${IVORY} 55%, #d8cfb6 100%)`,
+          background: `linear-gradient(180deg, #efe8d4 0%, ${PAPER} 55%, #d8cfb6 100%)`,
           borderTop: `2px solid ${tint}`,
           boxShadow: active
-            ? `inset 0 1px 0 rgba(255,255,255,0.8), inset 0 -2px 3px rgba(0,0,0,0.22), 0 0 0 1.5px ${BRASS}, 0 8px 16px -4px rgba(0,0,0,0.7)`
-            : "inset 0 1px 0 rgba(255,255,255,0.75), inset 0 -2px 3px rgba(0,0,0,0.22), 0 3px 7px -2px rgba(0,0,0,0.6)",
+            ? `inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -2px 3px rgba(0,0,0,0.2), 0 0 0 1.5px ${OCHRE}, 0 0 14px -1px rgba(200,134,30,0.6), 0 8px 16px -4px rgba(0,0,0,0.7)`
+            : "inset 0 1px 0 rgba(255,255,255,0.75), inset 0 -2px 3px rgba(0,0,0,0.18), 0 0 0 1px rgba(33,28,22,0.14), 0 3px 7px -2px rgba(0,0,0,0.55)",
         };
         return (
           <motion.div
@@ -174,7 +211,7 @@ export function Board({
         );
       })}
 
-      {/* player token — domed brass game piece */}
+      {/* player token — an ink wax-seal stamp piece */}
       <motion.div
         className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
         initial={false}
@@ -185,14 +222,14 @@ export function Board({
         <motion.div
           className="grid h-7 w-7 place-items-center rounded-full"
           style={{
-            background: "radial-gradient(circle at 35% 28%, #f0e2b4 0%, #d4b25a 45%, #a07f2c 78%, #7a5f1e 100%)",
-            border: "1px solid #6b531a",
-            boxShadow: "inset 0 1px 1px rgba(255,255,255,0.6), 0 4px 8px -2px rgba(0,0,0,0.8)",
+            background: "radial-gradient(circle at 35% 30%, #3a322a 0%, #211c16 55%, #17130d 100%)",
+            border: `1.5px solid ${OCHRE}`,
+            boxShadow: `inset 0 1px 1px rgba(233,225,207,0.18), inset 0 -1px 2px rgba(0,0,0,0.6), 0 0 0 1px ${OCHRE}33, 0 5px 10px -3px rgba(0,0,0,0.85)`,
           }}
           animate={moving && !reduce ? { y: [0, -10, 0], scale: [1, 1.12, 1] } : {}}
           transition={{ duration: 0.33, repeat: moving ? Infinity : 0 }}
         >
-          <span className="display-caps" style={{ color: "#3a2c0e", fontSize: "0.7rem" }}>
+          <span className="display-caps" style={{ color: "#e9e1cf", fontSize: "0.7rem" }}>
             {tokenLabel}
           </span>
         </motion.div>
