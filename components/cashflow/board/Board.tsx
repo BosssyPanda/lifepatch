@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { TileIcon } from "./TileIcon";
 
 export type BoardSquareView = { index: number; type: string };
 
@@ -104,12 +105,13 @@ export function Board({
         return (
           <motion.div
             key={sq.index}
-            className={`absolute flex h-[10.5%] w-[10.5%] -translate-x-1/2 -translate-y-1/2 select-none flex-col items-center justify-center rounded-[6px] border text-center ${colorFor(sq.type)}`}
+            className={`absolute flex h-[10.5%] w-[10.5%] -translate-x-1/2 -translate-y-1/2 select-none flex-col items-center justify-center gap-[4%] rounded-[6px] border text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.09),inset_0_-2px_5px_rgba(0,0,0,0.4)] ${colorFor(sq.type)} ${active ? "ring-1 ring-inset ring-current" : ""}`}
             style={{ left: `${p.x}%`, top: `${p.y}%` }}
             animate={active && !reduce ? { scale: [1, 1.16, 1.08] } : { scale: 1 }}
             transition={{ duration: 0.4 }}
           >
-            <span className="num leading-none" style={{ fontSize: "0.5rem", letterSpacing: "0.02em" }}>
+            <TileIcon type={sq.type} className="h-[40%] w-auto opacity-90" />
+            <span className="num leading-none opacity-80" style={{ fontSize: "0.42rem", letterSpacing: "0.03em" }}>
               {labelFor(sq.type)}
             </span>
           </motion.div>
