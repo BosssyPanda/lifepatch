@@ -3,7 +3,7 @@
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { BankIcon, FreedomIcon, InfoIcon } from "@/components/icons";
+import { BankIcon, FreedomIcon, InfoIcon, SoundOffIcon, SoundOnIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
@@ -393,7 +393,7 @@ export function CashflowGame({
             <InfoIcon size={18} />
           </button>
           <button onClick={() => audio.setMuted(!audio.muted)} aria-label="Toggle sound" className="grid h-9 w-9 place-items-center rounded-full border border-ink/15 bg-bg2 text-ink-dim hover:text-ink">
-            {audio.muted ? "🔇" : "🔊"}
+            {audio.muted ? <SoundOffIcon size={17} /> : <SoundOnIcon size={17} />}
           </button>
           <NeonButton variant="ghost" size="sm" onClick={onExit}>
             Exit
@@ -425,7 +425,7 @@ export function CashflowGame({
                   Charity: roll {twoDice ? "2 dice" : "1 die"} ({s.charityRolls} left)
                 </button>
               )}
-              <NeonButton variant="primary" size="md" disabled={busy} onClick={handleRoll}>
+              <NeonButton variant="brass" size="md" disabled={busy} onClick={handleRoll}>
                 {rollLabel}
               </NeonButton>
               {isFast && (

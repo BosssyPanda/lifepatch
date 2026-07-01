@@ -237,3 +237,15 @@ export const FlameIcon = (p: IconProps) => (
     <path d="M12 3c.8 3 3.8 4.5 3.8 8.2A3.8 3.8 0 0 1 8.2 12c0-1.2.5-2.2 1.3-2.9-.1 1.2.7 2 1.5 2.2C10.6 8.7 11.1 6 12 3Z" />
   </Base>
 );
+export const SoundOnIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 9v6h4l5 4V5L8 9z" />
+    <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8 8 0 0 1 0 12" />
+  </Base>
+);
+export const SoundOffIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 9v6h4l5 4V5L8 9z" />
+    <path d="M17 9l5 5M22 9l-5 5" />
+  </Base>
+);
