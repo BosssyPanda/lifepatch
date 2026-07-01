@@ -123,6 +123,8 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
 
       {/* ---------- layer B: globe + data (parallax mid) ---------- */}
       <motion.g style={{ x: globeX, y: globeY }}>
+        {/* lift + shrink the whole data-globe as one unit so it clears Atlas's head */}
+        <g transform={`translate(${G.cx} ${G.cy}) scale(0.84) translate(${-G.cx} ${-G.cy}) translate(0 -74)`}>
         <circle cx={G.cx} cy={G.cy} r={G.r + 34} fill="url(#da-halo)" />
 
         <motion.g
@@ -216,6 +218,7 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
           <rect x="465" y="980" width="34" height="34" />
           <path d="M542 980 a112 112 0 0 0 -112 112 M430 1049 a69 69 0 0 0 69 -69 M499 1014 a34 34 0 0 0 -34 -34" stroke="var(--color-accent)" strokeWidth="1.6" />
         </motion.g>
+        </g>
       </motion.g>
 
       <style>{`

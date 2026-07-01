@@ -1,3 +1,4 @@
+import { BrainIcon } from "@/components/icons";
 import { MAX_MASTERY_LEVEL } from "@/lib/cloud/mastery";
 import type { MasteryRow } from "@/lib/cloud/types";
 import { CONCEPTS } from "@/lib/concepts";
@@ -23,7 +24,7 @@ export function MoneyBrainMeter({
     <div className="w-full">
       {label && (
         <div className="mb-1 flex items-baseline justify-between">
-          <span className="eyebrow opacity-60">🧠 Money Brain</span>
+          <span className="eyebrow inline-flex items-center gap-1.5 opacity-60"><BrainIcon size={12} /> Money Brain</span>
           <span className="display-caps text-sm">{pct}%</span>
         </div>
       )}

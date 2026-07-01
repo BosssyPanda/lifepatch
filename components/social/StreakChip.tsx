@@ -2,6 +2,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { FlameIcon } from "@/components/icons";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
 import { todayStr } from "@/lib/cloud/streaks";
@@ -45,8 +46,9 @@ export function StreakChip() {
         aria-hidden
         animate={pulse && !reduce ? { scale: [1, 1.55, 1], rotate: [0, -12, 10, 0] } : { scale: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
+        className="text-accent"
       >
-        🔥
+        <FlameIcon size={14} />
       </motion.span>
       <span className="display-caps tracking-[0.1em] text-accent">{current}</span>
       <span className="text-ink-dim">day{current === 1 ? "" : "s"}</span>

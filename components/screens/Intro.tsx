@@ -152,20 +152,6 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
               against — and pick who you&apos;ll be.
             </motion.p>
 
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ delay: 0.32 }}
-              className="mt-8 flex flex-wrap items-center gap-3"
-            >
-              <NeonButton variant="primary" size="lg" onClick={() => { audio.sfx("confirm"); onBegin(); }}>
-                Choose your run →
-              </NeonButton>
-              <NeonButton variant="secondary" size="lg" onClick={onAlmanac}>
-                Open the Almanac
-              </NeonButton>
-            </motion.div>
           </div>
 
           <motion.div

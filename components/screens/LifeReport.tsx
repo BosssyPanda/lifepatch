@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useEffect } from "react";
-import { CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
+import { BrainIcon, CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
@@ -174,8 +174,8 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
               This run sharpened: <span className="text-ink">{runGains.map(conceptTitle).join(", ")}</span>.
             </p>
           )}
-          <button type="button" onClick={onMasteryMap} className="eyebrow mt-3 text-accent transition-opacity hover:opacity-70">
-            🧠 View your Money Brain →
+          <button type="button" onClick={onMasteryMap} className="eyebrow mt-3 inline-flex items-center gap-1.5 text-accent transition-opacity hover:opacity-70">
+            <BrainIcon size={13} /> View your Money Brain →
           </button>
         </motion.div>
 

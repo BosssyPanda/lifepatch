@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { CloseIcon } from "@/components/icons";
 import { Avatar } from "@/components/social/Avatar";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { NeonButton } from "@/components/ui/NeonButton";
@@ -122,7 +123,7 @@ export function Leaderboard({
                 aria-label="Close leaderboards"
                 className="grid h-9 w-9 place-items-center rounded-full border-2 border-paper-ink/25 text-paper-ink/70 transition-colors hover:bg-paper-ink/10"
               >
-                ✕
+                <CloseIcon size={16} />
               </button>
             </header>
 

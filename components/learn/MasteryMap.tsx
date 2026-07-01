@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
+import { CloseIcon, LockIcon } from "@/components/icons";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
@@ -81,7 +82,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                   aria-label="Close Money Brain"
                   className="grid h-9 w-9 place-items-center rounded-full border-2 border-paper-ink/25 text-paper-ink/70 transition-colors hover:bg-paper-ink/10"
                 >
-                  ✕
+                  <CloseIcon size={16} />
                 </button>
               </div>
               <div className="mt-3">
@@ -158,8 +159,8 @@ function ConceptNode({
       } ${expanded ? "col-span-2 bg-paper-ink/[0.04] sm:col-span-3" : ""}`}
       style={state === "mastering" ? { borderColor: `${meta.hex}66` } : undefined}
     >
-      <span className="font-display text-[0.82rem] font-semibold leading-tight text-paper-ink">
-        {locked ? "🔒 " : ""}
+      <span className="inline-flex items-center gap-1 font-display text-[0.82rem] font-semibold leading-tight text-paper-ink">
+        {locked && <LockIcon size={11} className="shrink-0 opacity-70" />}
         {concept.title}
       </span>
       {state === "mastering" ? (

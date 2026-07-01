@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { CheckIcon, FreedomIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
+import { BrainIcon, CheckIcon, FreedomIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { StreakChip } from "@/components/social/StreakChip";
 import { useAudio } from "@/hooks/useAudio";
@@ -75,8 +75,8 @@ export function ModeSelect({
 
       <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back to title</NeonButton>
-        <NeonButton variant="ghost" size="sm" onClick={onLeaderboard}>🏆 Leaderboards</NeonButton>
-        <NeonButton variant="ghost" size="sm" onClick={onMasteryMap}>🧠 Money Brain</NeonButton>
+        <NeonButton variant="ghost" size="sm" onClick={onLeaderboard}><TrophyIcon size={14} /> Leaderboards</NeonButton>
+        <NeonButton variant="ghost" size="sm" onClick={onMasteryMap}><BrainIcon size={14} /> Money Brain</NeonButton>
         <NeonButton variant="primary" size="lg" disabled={!picked} onClick={() => { if (picked) { audio.sfx("confirm"); onChoose(picked); } }}>
           {picked ? `Start ${MODES[picked].name} →` : "Pick a mode"}
         </NeonButton>
