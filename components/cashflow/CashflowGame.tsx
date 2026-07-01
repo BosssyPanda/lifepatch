@@ -3,9 +3,11 @@
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { BankIcon, FreedomIcon, InfoIcon } from "@/components/icons";
+import { BankIcon, FreedomIcon, InfoIcon, SoundOffIcon, SoundOnIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
+import { useConceptLearn } from "@/hooks/useConceptLearn";
+import { conceptsForText } from "@/lib/concepts";
 import { Dice } from "@/components/cashflow/board/Dice";
 
 // WebGL board is loaded only inside the cashflow shell (never the landing bundle).
@@ -129,6 +131,7 @@ export function CashflowGame({
   onExit: () => void;
 }) {
   const audio = useAudio();
+  const { learn } = useConceptLearn();
   const reduce = useReducedMotion();
   const isFast = s.track === "fast";
 
@@ -390,7 +393,7 @@ export function CashflowGame({
             <InfoIcon size={18} />
           </button>
           <button onClick={() => audio.setMuted(!audio.muted)} aria-label="Toggle sound" className="grid h-9 w-9 place-items-center rounded-full border border-ink/15 bg-bg2 text-ink-dim hover:text-ink">
-            {audio.muted ? "🔇" : "🔊"}
+            {audio.muted ? <SoundOffIcon size={17} /> : <SoundOnIcon size={17} />}
           </button>
           <NeonButton variant="ghost" size="sm" onClick={onExit}>
             Exit
@@ -422,7 +425,7 @@ export function CashflowGame({
                   Charity: roll {twoDice ? "2 dice" : "1 die"} ({s.charityRolls} left)
                 </button>
               )}
-              <NeonButton variant="primary" size="md" disabled={busy} onClick={handleRoll}>
+              <NeonButton variant="brass" size="md" disabled={busy} onClick={handleRoll}>
                 {rollLabel}
               </NeonButton>
               {isFast && (
@@ -499,10 +502,10 @@ export function CashflowGame({
               <DealChooser onPick={pickDeal} onPass={() => { audio.sfx("page"); endTurn(s); }} />
             )}
             {pending.kind === "deal" && (
-              <DealCard deal={pending.deal} cash={s.cash} onBuy={(shares) => buyDeal(pending.deal, shares)} onPass={() => { audio.sfx("page"); endTurn(s); }} />
+              <DealCard deal={pending.deal} cash={s.cash} onBuy={(shares) => { learn(conceptsForText(pending.deal.lesson), { applied: true }); buyDeal(pending.deal, shares); }} onPass={() => { audio.sfx("page"); endTurn(s); }} />
             )}
             {pending.kind === "doodad" && (
-              <DoodadCard card={pending.card} cash={s.cash} onPay={() => { audio.sting("bad"); finishResolve(payDoodad(s, pending.card.cost)); }} />
+              <DoodadCard card={pending.card} cash={s.cash} onPay={() => { audio.sting("bad"); learn(conceptsForText(pending.card.lesson), { applied: false }); finishResolve(payDoodad(s, pending.card.cost)); }} />
             )}
             {pending.kind === "charity" && (
               <CharityCard s={s} onDonate={() => { audio.sfx("coins"); finishResolve(donateCharity(s)); }} onSkip={() => endTurn(s)} />
@@ -530,6 +533,7 @@ export function CashflowGame({
                 q={pending.q}
                 onDone={(correct) => {
                   audio.sfx(correct ? "chime" : "uitick");
+                  learn(conceptsForText(pending.q.concept, pending.q.explain), { applied: correct });
                   const base = quizState.current ?? s;
                   quizState.current = null;
                   endTurn({ ...base, quizzesPassed: base.quizzesPassed + (correct ? 1 : 0) });

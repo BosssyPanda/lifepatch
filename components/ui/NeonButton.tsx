@@ -3,10 +3,11 @@
 import { motion } from "framer-motion";
 import type { ReactNode } from "react";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline" | "paper";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline" | "paper" | "brass";
 type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
+  brass: "text-[#3a2c0e] border-[#8a6d22] bg-gradient-to-b from-[#e6cb7e] to-[#b8912f] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_9px_-3px_rgba(0,0,0,0.7)] hover:brightness-[1.06] active:brightness-95",
   primary: "bg-accent text-bg border-accent hover:bg-accent-2",
   secondary: "bg-transparent text-ink border-ink/45 hover:bg-ink hover:text-bg",
   danger: "bg-brick text-ink border-brick hover:brightness-110",

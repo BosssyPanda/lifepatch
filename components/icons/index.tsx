@@ -223,3 +223,29 @@ export const MinusIcon = (p: IconProps) => (<Base {...p}><path d="M5 12h14" /></
 export const MailIcon = (p: IconProps) => (
   <Base {...p}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3.5 6.5 8.5 6 8.5-6" /></Base>
 );
+
+/* ---------- Learn / streak (replaces 🧠 / 🔥) ---------- */
+export const BrainIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M12 5.5a3 3 0 0 0-5.4-1.8A2.6 2.6 0 0 0 4.2 6a2.7 2.7 0 0 0-.2 4.4A2.7 2.7 0 0 0 5 15.2a2.6 2.6 0 0 0 3.6 2.4A3 3 0 0 0 12 19.5Z" />
+    <path d="M12 5.5a3 3 0 0 1 5.4-1.8A2.6 2.6 0 0 1 19.8 6a2.7 2.7 0 0 1 .2 4.4A2.7 2.7 0 0 1 19 15.2a2.6 2.6 0 0 1-3.6 2.4A3 3 0 0 1 12 19.5Z" />
+    <path d="M12 5.5v14M8 9c1.2.2 1.8 1 1.8 2.2M16 9c-1.2.2-1.8 1-1.8 2.2" />
+  </Base>
+);
+export const FlameIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M12 3c.8 3 3.8 4.5 3.8 8.2A3.8 3.8 0 0 1 8.2 12c0-1.2.5-2.2 1.3-2.9-.1 1.2.7 2 1.5 2.2C10.6 8.7 11.1 6 12 3Z" />
+  </Base>
+);
+export const SoundOnIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 9v6h4l5 4V5L8 9z" />
+    <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8 8 0 0 1 0 12" />
+  </Base>
+);
+export const SoundOffIcon = (p: IconProps) => (
+  <Base {...p}>
+    <path d="M4 9v6h4l5 4V5L8 9z" />
+    <path d="M17 9l5 5M22 9l-5 5" />
+  </Base>
+);

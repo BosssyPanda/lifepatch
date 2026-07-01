@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { type CSSProperties } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import type { AssetDef } from "@/lib/assets";
 import { currency } from "@/lib/format";
@@ -34,41 +34,19 @@ export function AssetRow({
   const Icon = asset.Icon;
   const riskHex = RISK_HEX[asset.risk];
 
-  // Most this asset could hold = what's already in it + free cash on hand.
+  // This asset's ceiling = what it already holds + the shared free cash on hand.
+  // The slider allocates LIVE: moving it buys/sells against real cash immediately,
+  // so spending here shrinks every other row's ceiling in the same tick — two
+  // assets can never both claim the same dollars (the old bug where $6k could go
+  // into two $6k sliders at once).
   const investable = value + cash;
   const heldPct = investable > 0 ? Math.round((value / investable) * 100) : 0;
 
-  // Slider tracks a *target* allocation; commit the delta only on release.
-  const [draft, setDraft] = useState(heldPct);
-  const [dragging, setDragging] = useState(false);
-
-  // Resync from engine truth whenever holdings/cash change and we're not dragging.
-  useEffect(() => {
-    if (!dragging) setDraft(heldPct);
-  }, [heldPct, dragging]);
-
-  const target = Math.round((draft / 100) * investable);
-  const delta = target - value;
-  const previewValue = dragging ? target : value;
-  const previewPct = dragging
-    ? investable > 0
-      ? draft
-      : 0
-    : pct;
-
-  // Commit from the input's live value so keyboard steps trade the right amount
-  // even if React hasn't re-rendered `draft` yet between keydown and keyup.
-  const commit = (e: { currentTarget: HTMLInputElement }) => {
-    setDragging(false);
-    const livePct = Number(e.currentTarget.value);
-    const liveDelta = Math.round((livePct / 100) * investable) - value;
-    if (liveDelta !== 0) onTrade(asset.id, liveDelta);
+  const allocate = (nextPct: number) => {
+    const target = Math.round((nextPct / 100) * investable);
+    const delta = target - value;
+    if (delta !== 0) onTrade(asset.id, delta);
   };
-
-  const deltaLabel =
-    dragging && Math.abs(delta) >= 1
-      ? `${delta > 0 ? "buy " : "sell "}${currency(Math.abs(delta))}`
-      : null;
 
   return (
     <div className="rounded-[4px] border border-ink/12 bg-bg p-3">
@@ -105,15 +83,15 @@ export function AssetRow({
         </div>
         <div className="shrink-0 text-right">
           <p className="num text-base text-ink">
-            <AnimatedNumber value={previewValue} format={currency} />
+            <AnimatedNumber value={value} format={currency} />
           </p>
           <p className="eyebrow text-ink-dim" style={{ fontSize: "0.56rem" }}>
-            {previewPct.toFixed(0)}% of port
+            {pct.toFixed(0)}% of port
           </p>
         </div>
       </div>
 
-      {/* one control: a target-allocation slider, commits the trade on release */}
+      {/* one control: allocate this asset as a share of your free cash + its holding */}
       <div className="mt-2.5">
         <div className="flex items-center gap-2.5">
           <input
@@ -121,36 +99,26 @@ export function AssetRow({
             min={0}
             max={100}
             step={1}
-            value={draft}
+            value={heldPct}
             disabled={investable <= 0}
-            aria-label={`${asset.short} allocation, ${draft}% of investable cash`}
-            onPointerDown={() => setDragging(true)}
-            onChange={(e) => setDraft(Number(e.target.value))}
-            onPointerUp={commit}
-            onPointerCancel={commit}
-            onKeyDown={() => setDragging(true)}
-            onKeyUp={commit}
+            aria-label={`${asset.short} allocation, ${heldPct}% of available cash`}
+            onChange={(e) => allocate(Number(e.target.value))}
             className="allocator flex-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             style={
               {
                 "--accent": riskHex,
-                "--fill": `${draft}%`,
+                "--fill": `${heldPct}%`,
               } as CSSProperties
             }
           />
-          <span
-            className="num w-9 shrink-0 text-right text-[0.7rem] tabular-nums"
-            style={{ color: deltaLabel ? riskHex : "var(--color-ink-dim)" }}
-          >
-            {draft}%
+          <span className="num w-9 shrink-0 text-right text-[0.7rem] tabular-nums text-ink-dim">
+            {heldPct}%
           </span>
         </div>
         <div className="mt-1 h-3.5">
-          {deltaLabel && (
-            <span className="eyebrow" style={{ color: riskHex, fontSize: "0.55rem" }}>
-              {deltaLabel}
-            </span>
-          )}
+          <span className="eyebrow text-ink-dim/70" style={{ fontSize: "0.55rem" }}>
+            {cash > 0 ? `${currency(cash)} cash free to allocate` : "fully invested"}
+          </span>
         </div>
       </div>
     </div>

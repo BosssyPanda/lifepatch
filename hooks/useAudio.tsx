@@ -12,6 +12,7 @@ export type AudioApi = {
   setPhase: (phase: ScorePhase, fade?: number) => void;
   setIntensity: (level: number) => void;
   swellWarmth: () => void;
+  setBrainGlow: (level: number) => void;
   accent: (kind: AccentKind) => void;
   sfx: (name: SfxName) => void;
   sting: (tone: StingTone) => void;
@@ -22,7 +23,7 @@ export type AudioApi = {
 };
 
 const noop: AudioApi = {
-  unlock: () => {}, setPhase: () => {}, setIntensity: () => {}, swellWarmth: () => {},
+  unlock: () => {}, setPhase: () => {}, setIntensity: () => {}, swellWarmth: () => {}, setBrainGlow: () => {},
   accent: () => {}, sfx: () => {}, sting: () => {}, ambience: () => {}, muted: false, setMuted: () => {}, started: false,
 };
 
@@ -92,6 +93,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
 
   const setIntensity = useCallback((level: number) => engineRef.current?.setIntensity(level), []);
   const swellWarmth = useCallback(() => engineRef.current?.swellWarmth(), []);
+  const setBrainGlow = useCallback((level: number) => engineRef.current?.setBrainGlow(level), []);
   const accent = useCallback((kind: AccentKind) => engineRef.current?.accent(kind), []);
   const sfx = useCallback((name: SfxName) => engineRef.current?.playSfx(name), []);
   const sting = useCallback((tone: StingTone) => engineRef.current?.playSting(tone), []);
@@ -112,7 +114,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const api: AudioApi = {
-    unlock, setPhase, setIntensity, swellWarmth, accent, sfx, sting, ambience, muted, setMuted, started,
+    unlock, setPhase, setIntensity, swellWarmth, setBrainGlow, accent, sfx, sting, ambience, muted, setMuted, started,
   };
 
   return <AudioCtx.Provider value={api}>{children}</AudioCtx.Provider>;

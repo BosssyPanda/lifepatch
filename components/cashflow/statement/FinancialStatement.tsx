@@ -18,6 +18,10 @@ import {
 import { currency } from "@/lib/format";
 import type { CashflowState } from "@/lib/cashflow/types";
 
+// premium tabletop palette — ivory ledger with brass rules (matches Board)
+const BRASS = "#c9a24a";
+const INK = "#2a241d";
+
 function Row({
   label,
   value,
@@ -41,9 +45,8 @@ function Row({
   // the recessed line items above it (scale contrast, not just bold).
   return (
     <div
-      className={`flex items-baseline justify-between gap-3 ${
-        strong ? "mt-0.5 border-t border-paper-ink/25 pt-1" : "py-[1px]"
-      }`}
+      className={`flex items-baseline justify-between gap-3 ${strong ? "mt-0.5 pt-1" : "py-[1px]"}`}
+      style={strong ? { borderTop: `1px solid ${BRASS}66` } : undefined}
     >
       <span
         className={`font-serif ${
@@ -69,10 +72,12 @@ function Row({
 function SectionLabel({ children }: { children: string }) {
   return (
     <div className="mb-1 mt-3 flex items-center gap-2 first:mt-0">
-      <span className="eyebrow text-paper-dim" style={{ fontSize: "0.6rem" }}>
+      {/* brass tick + engraved section label */}
+      <span aria-hidden className="h-2 w-[3px] rounded-sm" style={{ background: BRASS, opacity: 0.75 }} />
+      <span className="eyebrow" style={{ fontSize: "0.6rem", color: "#8a6d22", letterSpacing: "0.2em" }}>
         {children}
       </span>
-      <span className="h-px flex-1 bg-paper-ink/20" />
+      <span className="h-px flex-1" style={{ background: `${BRASS}55` }} />
     </div>
   );
 }
@@ -88,22 +93,26 @@ export function FinancialStatement({ s, className = "" }: { s: CashflowState; cl
 
   return (
     <div
-      className={`paper relative overflow-hidden rounded-[6px] p-4 ${className}`}
+      className={`paper relative overflow-hidden rounded-[7px] p-4 ${className}`}
       style={{
         // layered paper depth: a warm top sheen, a soft inner edge shadow, and a
-        // grounded drop — reads as a physical ledger card, not a flat tint.
+        // grounded drop — reads as a physical ledger card, not a flat tint. Brass
+        // hairline frames it like the tabletop board.
+        border: `1px solid ${BRASS}66`,
         boxShadow:
-          "0 1px 0 rgba(255,255,255,0.45) inset, 0 0 0 1px rgba(33,28,22,0.08) inset, 0 28px 50px -30px rgba(0,0,0,0.9)",
+          "0 1px 0 rgba(255,255,255,0.55) inset, 0 0 0 1px rgba(33,28,22,0.08) inset, 0 28px 50px -30px rgba(0,0,0,0.9)",
       }}
     >
-      {/* torn-edge accent rail down the left margin — editorial ledger feel */}
-      <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-paper-ink/15" />
-      <div className="flex items-center justify-between border-b-2 border-paper-ink pb-2">
+      {/* brass accent rail down the left margin — a ledger's ruled binding edge */}
+      <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: `${BRASS}88` }} />
+      {/* engraved masthead — brass double rule under the title */}
+      <div className="flex items-center justify-between pb-2" style={{ borderBottom: `2px solid ${INK}` }}>
         <h3 className="display-caps text-xl text-paper-ink">Financial Statement</h3>
-        <span className="eyebrow text-paper-dim" style={{ fontSize: "0.58rem" }}>
+        <span className="eyebrow" style={{ fontSize: "0.58rem", color: "#8a6d22", letterSpacing: "0.18em" }}>
           monthly
         </span>
       </div>
+      <span aria-hidden className="mt-[2px] block h-px w-full" style={{ background: `${BRASS}88` }} />
 
       {/* ── INCOME STATEMENT ── */}
       <SectionLabel>Income</SectionLabel>
@@ -157,21 +166,26 @@ export function FinancialStatement({ s, className = "" }: { s: CashflowState; cl
 
       {/* ── PASSIVE INCOME — the freedom number (second anchor) ── */}
       <div
-        className="relative mt-2 flex items-center justify-between overflow-hidden rounded-[5px] border border-accent/45 bg-accent/10 px-3.5 py-2.5"
-        style={{ boxShadow: "0 8px 20px -16px rgba(212,84,30,0.85)" }}
+        className="relative mt-2 flex items-center justify-between overflow-hidden rounded-[5px] px-3.5 py-2.5"
+        style={{
+          // the freedom number wears brass — the prize on the ledger
+          background: "linear-gradient(180deg, rgba(201,162,74,0.18), rgba(201,162,74,0.08))",
+          border: `1px solid ${BRASS}88`,
+          boxShadow: `0 0 0 1px ${BRASS}22 inset, 0 8px 20px -16px rgba(201,162,74,0.9)`,
+        }}
       >
-        <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-accent" />
+        <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: BRASS }} />
         <div>
-          <p className="display-caps text-[0.86rem] text-accent">Passive Income</p>
+          <p className="display-caps text-[0.86rem]" style={{ color: "#8a6d22" }}>Passive Income</p>
           <p className="font-serif text-[0.66rem] text-paper-ink/60">Beat your expenses to win</p>
         </div>
-        <span className="num text-2xl font-bold tabular-nums text-accent">
+        <span className="num text-2xl font-bold tabular-nums" style={{ color: "#8a6d22" }}>
           <AnimatedNumber value={passive} format={(n) => currency(n)} />
         </span>
       </div>
 
       {/* ── BALANCE SHEET ── */}
-      <div className="mt-4 grid grid-cols-2 gap-3 border-t-2 border-paper-ink pt-3">
+      <div className="mt-4 grid grid-cols-2 gap-3 pt-3" style={{ borderTop: `2px solid ${INK}` }}>
         <div>
           <SectionLabel>Assets</SectionLabel>
           <Row label="Cash" value={s.cash} dim />
@@ -187,7 +201,13 @@ export function FinancialStatement({ s, className = "" }: { s: CashflowState; cl
           <Row label="Bank Loan" value={s.liabilities.bankLoan} dim accent="expense" />
         </div>
       </div>
-      <div className="mt-2 flex items-center justify-between rounded-[5px] bg-paper-ink/10 px-3.5 py-2 ring-1 ring-inset ring-paper-ink/10">
+      <div
+        className="mt-2 flex items-center justify-between rounded-[5px] px-3.5 py-2"
+        style={{
+          background: "linear-gradient(180deg, rgba(42,36,29,0.08), rgba(42,36,29,0.03))",
+          boxShadow: `0 0 0 1px ${BRASS}66 inset`,
+        }}
+      >
         <span className="display-caps text-[0.8rem] text-paper-ink">Net Worth</span>
         <span className="num text-[1.15rem] font-bold tabular-nums text-paper-ink">
           <AnimatedNumber value={netWorth(s)} format={(n) => currency(n)} />

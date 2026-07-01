@@ -1,0 +1,52 @@
+{
+  "cueId": "title-theme",
+  "name": "LifePatch Theme (signature title)",
+  "role": "Front-door identity hook — plays on the title hero behind the 3D internet-economy world; the recurring 'sit down and play' moment.",
+  "emotionalTarget": "curious, cinematic, hopeful-tense",
+  "engine": "src/audio/AudioEngine.ts (Tone.js synth — no samples)",
+  "phase": "title",
+  "bpm": 76,
+  "key": "A minor",
+  "timeSignature": "4/4",
+  "bars": 8,
+  "leitmotif": {
+    "lengthBars": 4,
+    "subdivision": "8n",
+    "notes": ["A4","C5","E5","D5","C5","A4","C5","F5","E5","D5","B4","A4"],
+    "shape": "rise over Am → settle → lift over F → resolve home (restated every 4 bars over the 8-bar harmony cycle)"
+  },
+  "harmony": ["Am(add9)", "Fmaj7", "Cmaj7", "G6/B"],
+  "loop": {
+    "type": "continuous",
+    "note": "Transport never stops between screens; the lead sequence runs underneath at all times and is opened only by the `title` phase stem gain. No hard cut, no seam."
+  },
+  "stems": {
+    "lead": 0.72,
+    "pad": 0.5,
+    "rhodes": 0.32,
+    "sub": 0.4,
+    "tick": 0.18,
+    "warmth": 0.28,
+    "crackle": 0.06,
+    "tension": 0.0
+  },
+  "leadVoice": "Tone.Synth (triangle) → tempo-synced FeedbackDelay('8n.', fb 0.26, wet 0.26), volume -11dB. Bright bell-pluck.",
+  "intensityLayers": "Single static arrangement (the title is not a gameplay morph). Money-Brain `brainGlow` warms warmth+pad a touch for returning players.",
+  "cuePoints": {
+    "reveal": "accent('title') fires once on title mount (membrane A1 + Am triad chord + noise swell) as the 3D economy resolves."
+  },
+  "transitions": {
+    "in": "ColdOpen → setPhase('title') crossfade (finishCold).",
+    "out": "Leaving the title (Choose your run) → AppShell sets phase 'menu' on the mode screen — clean stem-gain ramp."
+  },
+  "accessibility": "Respects global mute (master gain ramp) and is silent until a user gesture starts the engine. Reduced-motion does not silence audio; the user's stored mute preference defaults on under prefers-reduced-motion/data.",
+  "originality": "Original generic tonal voicings composed for this engine. No transcribed, sampled, or copied melodies/beats/riffs.",
+  "license": "Original work, in-repo synth. No third-party samples or external sources.",
+  "qc": {
+    "loopClean": true,
+    "beatLocked": true,
+    "noClipping": "buses pre-master at <=0.9; lead -11dB; verify no >0dBFS sum at title",
+    "rampedGains": true,
+    "muteRespected": true
+  }
+}

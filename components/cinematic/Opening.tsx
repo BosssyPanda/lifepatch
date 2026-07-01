@@ -33,7 +33,7 @@ export function Opening({ onStart, onAlmanac }: { onStart: () => void; onAlmanac
   }, [audio]);
 
   const finishCold = useCallback(() => {
-    audio.setPhase("menu"); // crossfade — music keeps playing into the title screen
+    audio.setPhase("title"); // crossfade into the signature title theme behind the hero
     try { sessionStorage.setItem("lp_introSeen", "1"); } catch {}
     setStage("title");
   }, [audio]);

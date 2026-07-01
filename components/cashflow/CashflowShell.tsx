@@ -10,6 +10,9 @@ import { CashflowReport } from "@/components/cashflow/recap/CashflowReport";
 import { CashflowSetup } from "@/components/cashflow/setup/CashflowSetup";
 import { enterFastTrack } from "@/lib/cashflow/engine";
 import { hasCashflowSave } from "@/lib/cashflow/persist";
+import { useAuth } from "@/hooks/useAuth";
+import { resolvePlayerId } from "@/lib/cloud/identity";
+import { resultFromCashflow, submitRunOnce } from "@/lib/cloud/buildResult";
 
 const EASE = [0.2, 0.65, 0.3, 0.9] as const;
 
@@ -56,11 +59,14 @@ const sceneVariants: Variants = {
 
 export function CashflowShell({
   onExit,
+  onMasteryMap,
 }: {
   onExit: () => void;
   onOpenAlmanac?: () => void;
+  onMasteryMap?: () => void;
 }) {
   const cf = useCashflow();
+  const auth = useAuth();
   const audio = useAudio();
   const reduce = !!useReducedMotion();
   const s = cf.state;
@@ -85,6 +91,15 @@ export function CashflowShell({
     if (view === "escape") audio.accent("riser");
     else if (view === "report") audio.accent("title");
   }, [view, reduce, audio]);
+
+  // Post a Rat Race result + bump the streak when the run reaches its report.
+  // Keyed on the per-game seed so replays (same name/turn) each post once, and
+  // resolved against the signed-in user so cloud submission works for them too.
+  useEffect(() => {
+    if (view !== "report" || !s) return;
+    const id = resolvePlayerId(auth.user?.id ?? null);
+    void submitRunOnce(`cf-${s.seed}`, id, resultFromCashflow(s));
+  }, [view, s, auth.user]);
 
   const scene = (key: string, children: ReactNode) => (
     <motion.div
@@ -122,6 +137,7 @@ export function CashflowShell({
                     cf.reset();
                     onExit();
                   }}
+                  onMasteryMap={onMasteryMap}
                 />,
               )
             : scene(
