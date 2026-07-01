@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useRef } from "react";
-import { Emblem } from "@/components/brand/Emblem";
 import { Mascot } from "@/components/brand/Mascot";
 import { ArrowDown } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
@@ -45,9 +44,8 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             initial={{ opacity: 0, scale: 0.86, rotate: -8 }}
             animate={{ opacity: 1, scale: 1, rotate: 0 }}
             transition={{ type: "spring", stiffness: 120, damping: 16 }}
-            className="text-ink"
           >
-            <Emblem className="h-[42vw] max-h-[228px] w-[42vw] max-w-[228px]" />
+            <Mascot mood="smug" className="h-[38vw] max-h-[196px] w-[38vw] max-w-[196px]" />
           </motion.div>
 
           <motion.h1

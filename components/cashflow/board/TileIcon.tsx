@@ -19,8 +19,8 @@ const GLYPHS: Record<string, React.ReactNode> = {
   cashflowday: <><circle cx="12" cy="12" r="8" /><path d="M8.5 13.5l2.5-3 2 2 2.5-3.5" /><path d="M14 9h1.5v1.5" /></>,
   // market — candlesticks
   market: <><path d="M4 20h16" /><rect x="6" y="9" width="2.6" height="7" /><path d="M7.3 6v3M7.3 16v2" /><rect x="14.4" y="6.5" width="2.6" height="8" /><path d="M15.7 4v2.5M15.7 14.5v2.5" /></>,
-  // new child — rattle
-  baby: <><circle cx="10" cy="9" r="4.2" /><path d="M12.8 11.9 19 18" /><path d="M9 8.8h.01M11 8.8h.01" /></>,
+  // new child — stroller / pram
+  baby: <><path d="M4.5 12.5a7.5 7.5 0 0 1 15 0z" /><path d="M12 5v7.5" /><path d="M19.5 12.5v-2.5a2 2 0 0 0-2-2" /><circle cx="8.5" cy="18" r="1.8" /><circle cx="16" cy="18" r="1.8" /></>,
   // job loss — briefcase with a downturn
   downsized: <><rect x="4" y="8" width="16" height="11" rx="1.5" /><path d="M9 8V6.5A2 2 0 0 1 11 4.5h2a2 2 0 0 1 2 2V8" /><path d="M8 12.5l2.5 2.5 5-4" /></>,
   // fast-track dream — star
