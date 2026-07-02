@@ -84,21 +84,21 @@ type Pending =
 
 const ratColor = (t: string) =>
   ({
-    deal: "border-ochre/50 bg-ochre/20 text-ochre",
-    doodad: "border-brick/50 bg-brick/20 text-brick",
-    charity: "border-steel/50 bg-steel/25 text-steel",
-    payday: "border-olive/50 bg-olive/20 text-olive",
-    market: "border-accent/50 bg-accent/20 text-accent",
-    baby: "border-brass/50 bg-brass/20 text-brass",
-    downsized: "border-brick/70 bg-brick/40 text-paper",
+    deal: "border-secondary/50 bg-secondary/20 text-secondary",
+    doodad: "border-loss/50 bg-loss/20 text-loss",
+    charity: "border-tertiary/50 bg-tertiary/25 text-tertiary",
+    payday: "border-gain/50 bg-gain/20 text-gain",
+    market: "border-ink/50 bg-ink/20 text-ink",
+    baby: "border-secondary/50 bg-secondary/20 text-secondary",
+    downsized: "border-loss/70 bg-loss/40 text-bg",
   })[t] ?? "border-ink/20 bg-bg3 text-ink";
 
 const fastColor = (t: string) =>
   ({
-    ftdeal: "border-brass/50 bg-brass/20 text-brass",
-    cashflowday: "border-olive/50 bg-olive/20 text-olive",
-    dream: "border-accent/70 bg-accent/40 text-paper",
-    ftloss: "border-brick/50 bg-brick/20 text-brick",
+    ftdeal: "border-secondary/50 bg-secondary/20 text-secondary",
+    cashflowday: "border-gain/50 bg-gain/20 text-gain",
+    dream: "border-ink/70 bg-ink/40 text-bg",
+    ftloss: "border-loss/50 bg-loss/20 text-loss",
   })[t] ?? "border-ink/20 bg-bg3 text-ink";
 
 /** Map a pending modal to its emotional tone, driving the Modal's aura color. */
@@ -381,14 +381,14 @@ export function CashflowGame({
       {/* HUD */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="eyebrow text-accent" style={{ fontSize: "0.58rem" }}>
+          <p className="eyebrow text-ink" style={{ fontSize: "0.58rem" }}>
             {isFast ? "Fast Track" : "The Rat Race"} · Turn {s.turn}
           </p>
           <h1 className="display-caps truncate text-xl text-ink sm:text-2xl">{prof.title}</h1>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="hidden rounded-full border border-ink/15 bg-bg2 px-3 py-1.5 num text-sm text-ink sm:inline">
-            Cash <Money n={s.cash} className="text-olive" />
+            Cash <Money n={s.cash} className="text-gain" />
           </span>
           <button onClick={() => { audio.sfx("modal"); setGlossaryOpen(true); }} aria-label="Glossary" className="grid h-9 w-9 place-items-center rounded-full border border-ink/15 bg-bg2 text-ink-dim hover:text-ink">
             <InfoIcon size={18} />
@@ -421,7 +421,7 @@ export function CashflowGame({
               {!isFast && s.charityRolls > 0 && (
                 <button
                   onClick={() => setTwoDice((v) => !v)}
-                  className="rounded-full border border-accent/50 bg-accent/10 px-2.5 py-0.5 num text-[0.66rem] text-accent"
+                  className="rounded-full border border-ink/50 bg-ink/10 px-2.5 py-0.5 num text-[0.66rem] text-ink"
                 >
                   Charity: roll {twoDice ? "2 dice" : "1 die"} ({s.charityRolls} left)
                 </button>
@@ -441,16 +441,16 @@ export function CashflowGame({
           <div className="mt-4">
             {isFast ? (
               <div className="rounded-[5px] border border-ink/15 bg-bg2 p-3.5">
-                <div className="flex items-center gap-2 text-accent">
+                <div className="flex items-center gap-2 text-ink">
                   <FreedomIcon size={18} />
                   <span className="eyebrow" style={{ fontSize: "0.6rem" }}>
                     Win the game
                   </span>
                 </div>
-                <p className="mt-1.5 font-serif text-[0.82rem] text-ink-dim">
+                <p className="mt-1.5 font-body text-[0.82rem] text-ink-dim">
                   Reach <strong className="text-ink">{dream.title}</strong> ({currency(dream.cost)}) or build{" "}
                   <strong className="text-ink">+{currency(FAST_TRACK_CASHFLOW_GOAL)}/mo</strong> in cash flow. Monthly cash flow now:{" "}
-                  <span className="num text-olive">{currency(fastTrackMonthly(s))}</span>.
+                  <span className="num text-gain">{currency(fastTrackMonthly(s))}</span>.
                 </p>
               </div>
             ) : (
@@ -467,7 +467,7 @@ export function CashflowGame({
 
       {/* payday toast */}
       <Toast show={paydayToast !== null}>
-        <div className={`rounded-full px-5 py-2 display-caps text-lg shadow-xl ${(paydayToast ?? 0) >= 0 ? "bg-olive text-bg" : "bg-brick text-paper"}`}>
+        <div className={`rounded-full px-5 py-2 display-caps text-lg shadow-xl ${(paydayToast ?? 0) >= 0 ? "bg-gain text-bg" : "bg-loss text-bg"}`}>
           {(paydayToast ?? 0) >= 0 ? "Payday +" : "Payday "}
           {currency(paydayToast ?? 0)}
         </div>
@@ -552,8 +552,8 @@ export function CashflowGame({
 function FtSimpleCard({ title, body, action, tone, onOk }: { title: string; body: string; action: string; tone?: "bad"; onOk: () => void }) {
   return (
     <div className="paper rounded-[6px] p-5">
-      <h3 className={`display-caps text-xl ${tone === "bad" ? "text-brick" : "text-paper-ink"}`}>{title}</h3>
-      <p className="mt-2 font-serif text-[0.9rem] text-paper-ink/80">{body}</p>
+      <h3 className={`display-caps text-xl ${tone === "bad" ? "text-loss" : "text-ink"}`}>{title}</h3>
+      <p className="mt-2 font-body text-[0.9rem] text-ink/80">{body}</p>
       <div className="mt-4 flex justify-end">
         <NeonButton variant="paper" size="md" onClick={onOk}>
           {action}
@@ -568,26 +568,26 @@ function FtDealCard({ deal, cash, onBuy, onPass }: { deal: FastTrackDeal; cash: 
   return (
     <div className="paper rounded-[6px] p-5">
       <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-brass text-bg">
+        <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-secondary text-bg">
           <BankIcon size={22} />
         </span>
         <div>
-          <p className="eyebrow text-paper-dim" style={{ fontSize: "0.58rem" }}>
+          <p className="eyebrow text-secondary" style={{ fontSize: "0.58rem" }}>
             Fast Track investment
           </p>
-          <h3 className="display-caps text-xl text-paper-ink">{deal.label}</h3>
+          <h3 className="display-caps text-xl text-ink">{deal.label}</h3>
         </div>
       </div>
-      <p className="mt-2 font-serif text-[0.86rem] italic text-paper-ink/65">{deal.flavor}</p>
-      <div className="mt-3 flex items-center justify-between rounded-[5px] bg-paper-2 px-3 py-2">
-        <span className="font-serif text-[0.84rem] text-paper-ink/70">Price (cash)</span>
-        <span className="num font-semibold text-paper-ink">{currency(deal.price)}</span>
+      <p className="mt-2 font-body text-[0.86rem] italic text-ink/65">{deal.flavor}</p>
+      <div className="mt-3 flex items-center justify-between rounded-[5px] bg-bg2 px-3 py-2">
+        <span className="font-body text-[0.84rem] text-ink/70">Price (cash)</span>
+        <span className="num font-semibold text-ink">{currency(deal.price)}</span>
       </div>
-      <div className="mt-1 flex items-center justify-between rounded-[5px] bg-olive/15 px-3 py-2">
-        <span className="font-serif text-[0.84rem] text-paper-ink/70">Adds monthly cash flow</span>
-        <span className="num font-bold text-olive">+{currency(deal.cashFlow)}</span>
+      <div className="mt-1 flex items-center justify-between rounded-[5px] bg-gain/15 px-3 py-2">
+        <span className="font-body text-[0.84rem] text-ink/70">Adds monthly cash flow</span>
+        <span className="num font-bold text-gain">+{currency(deal.cashFlow)}</span>
       </div>
-      {!afford && <p className="mt-3 font-serif text-[0.82rem] text-brick">Not enough cash. Land on Cash Flow Days to build up, then return.</p>}
+      {!afford && <p className="mt-3 font-body text-[0.82rem] text-loss">Not enough cash. Land on Cash Flow Days to build up, then return.</p>}
       <div className="mt-4 flex items-center justify-end gap-2">
         <NeonButton variant="outline" size="sm" onClick={onPass}>
           Pass
@@ -605,16 +605,16 @@ function FtDreamCard({ s, onBuy, onPass }: { s: CashflowState; onBuy: () => void
   const afford = s.cash >= dream.cost;
   return (
     <div className="paper rounded-[6px] p-5">
-      <p className="eyebrow text-accent" style={{ fontSize: "0.6rem" }}>
+      <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
         Your Dream
       </p>
-      <h3 className="display-caps mt-1 text-2xl text-paper-ink">{dream.title}</h3>
-      <p className="mt-1 font-serif text-[0.9rem] text-paper-ink/80">{dream.blurb}</p>
-      <div className="mt-3 flex items-center justify-between rounded-[5px] bg-paper-2 px-3 py-2">
-        <span className="font-serif text-[0.84rem] text-paper-ink/70">Cost</span>
-        <span className="num text-lg font-bold text-paper-ink">{currency(dream.cost)}</span>
+      <h3 className="display-caps mt-1 text-2xl text-ink">{dream.title}</h3>
+      <p className="mt-1 font-body text-[0.9rem] text-ink/80">{dream.blurb}</p>
+      <div className="mt-3 flex items-center justify-between rounded-[5px] bg-bg2 px-3 py-2">
+        <span className="font-body text-[0.84rem] text-ink/70">Cost</span>
+        <span className="num text-lg font-bold text-ink">{currency(dream.cost)}</span>
       </div>
-      {!afford && <p className="mt-3 font-serif text-[0.82rem] text-brick">You have {currency(s.cash)}. Keep building cash flow and come back to claim it.</p>}
+      {!afford && <p className="mt-3 font-body text-[0.82rem] text-loss">You have {currency(s.cash)}. Keep building cash flow and come back to claim it.</p>}
       <div className="mt-4 flex items-center justify-end gap-2">
         <NeonButton variant="outline" size="sm" onClick={onPass}>
           Not yet

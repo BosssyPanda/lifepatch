@@ -24,9 +24,9 @@ export function MarketTicker({ run }: { run: RunState }) {
   if (!last) {
     return (
       <div className="mx-auto max-w-3xl px-5 py-6 text-center">
-        <p className="eyebrow text-accent">Year One</p>
+        <p className="eyebrow text-ink">Year One</p>
         <h2 className="display-caps mt-2 text-3xl text-ink sm:text-4xl">The clock hasn&apos;t started</h2>
-        <p className="mx-auto mt-2 max-w-md font-serif text-ink-dim">
+        <p className="mx-auto mt-2 max-w-md font-body text-ink-dim">
           Put your starting cash to work below, handle whatever life throws at you, then advance the year. You won&apos;t know what&apos;s coming. That&apos;s the point.
         </p>
       </div>
@@ -63,7 +63,7 @@ export function MarketTicker({ run }: { run: RunState }) {
 
         {headline && (
           <p
-            className="mt-3 border-t border-ink/10 pt-3 font-display text-sm uppercase tracking-wide"
+            className="mt-3 border-t border-ink/10 pt-3 font-mono text-sm uppercase tracking-wide"
             style={{ color: TONE_HEX[headline.tone] }}
           >
             {headline.text}

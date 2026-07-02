@@ -13,15 +13,15 @@ export function CoachCard({ title, body, onOk }: { title: string; body: string; 
   return (
     <div className={PANEL}>
       <div className="flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-accent text-bg">
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-bg">
           <InfoIcon size={18} />
         </span>
-        <p className="eyebrow text-accent" style={{ fontSize: "0.6rem" }}>
+        <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
           Coach
         </p>
       </div>
-      <h3 className="display-caps mt-2 text-xl text-paper-ink">{title}</h3>
-      <p className="mt-1.5 font-serif text-[0.92rem] leading-relaxed text-paper-ink/85">{body}</p>
+      <h3 className="display-caps mt-2 text-xl text-ink">{title}</h3>
+      <p className="mt-1.5 font-body text-[0.92rem] leading-relaxed text-ink/85">{body}</p>
       <div className="mt-4 flex justify-end">
         <NeonButton variant="paper" size="md" onClick={onOk}>
           Got it
@@ -38,27 +38,27 @@ export function QuizCard({ q, onDone }: { q: QuizQuestion; onDone: (correct: boo
 
   return (
     <div className={PANEL}>
-      <p className="eyebrow text-accent" style={{ fontSize: "0.6rem" }}>
+      <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
         Pop quiz · {q.concept}
       </p>
-      <h3 className="display-caps mt-1 text-lg text-paper-ink">{q.question}</h3>
+      <h3 className="display-caps mt-1 text-lg text-ink">{q.question}</h3>
       <div className="mt-3 space-y-2">
         {q.options.map((o, i) => {
           const show = answered;
           const isPicked = picked === i;
           const tone = show
             ? o.correct
-              ? "border-olive bg-olive/15 text-paper-ink"
+              ? "border-gain bg-gain/15 text-ink"
               : isPicked
-                ? "border-brick bg-brick/15 text-paper-ink"
-                : "border-paper-ink/15 text-paper-ink/50"
-            : "border-paper-ink/25 text-paper-ink hover:border-accent";
+                ? "border-loss bg-loss/15 text-ink"
+                : "border-ink/15 text-ink/50"
+            : "border-ink/25 text-ink hover:border-ink";
           return (
             <button
               key={i}
               disabled={answered}
               onClick={() => setPicked(i)}
-              className={`flex w-full items-center justify-between rounded-[5px] border-2 px-3 py-2.5 text-left font-serif text-[0.86rem] transition-colors ${tone}`}
+              className={`flex w-full items-center justify-between rounded-[5px] border-2 px-3 py-2.5 text-left font-body text-[0.86rem] transition-colors ${tone}`}
             >
               <span>{o.label}</span>
               {show && o.correct && <CheckIcon size={16} />}
@@ -74,7 +74,7 @@ export function QuizCard({ q, onDone }: { q: QuizQuestion; onDone: (correct: boo
             animate={{ opacity: 1, height: "auto" }}
             className="overflow-hidden"
           >
-            <p className={`mt-3 rounded-[4px] px-3 py-2 font-serif text-[0.86rem] ${correct ? "bg-olive/15 text-paper-ink" : "bg-brick/12 text-paper-ink"}`}>
+            <p className={`mt-3 rounded-[4px] px-3 py-2 font-body text-[0.86rem] ${correct ? "bg-gain/15 text-ink" : "bg-loss/12 text-ink"}`}>
               <strong>{correct ? "Correct! " : "Not quite. "}</strong>
               {q.explain}
             </p>
@@ -94,18 +94,18 @@ export function QuizCard({ q, onDone }: { q: QuizQuestion; onDone: (correct: boo
 export function GlossaryModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="paper rounded-[6px]">
-      <div className="sticky top-0 flex items-center justify-between border-b-2 border-paper-ink bg-paper px-5 py-3">
-        <h3 className="display-caps text-xl text-paper-ink">Money Glossary</h3>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-paper-ink/70 hover:bg-paper-ink/10">
+      <div className="sticky top-0 flex items-center justify-between border-b-2 border-ink bg-bg px-5 py-3">
+        <h3 className="display-caps text-xl text-ink">Money Glossary</h3>
+        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-ink/70 hover:bg-ink/10">
           <CloseIcon size={18} />
         </button>
       </div>
       <div className="space-y-3 p-5">
         {GLOSSARY.map((t) => (
-          <div key={t.term} className="border-b border-paper-ink/12 pb-3 last:border-0">
-            <p className="display-caps text-[0.95rem] text-paper-ink">{t.term}</p>
-            <p className="mt-0.5 font-serif text-[0.86rem] leading-relaxed text-paper-ink/80">{t.def}</p>
-            {t.example && <p className="mt-1 font-serif text-[0.8rem] italic text-paper-ink/55">e.g. {t.example}</p>}
+          <div key={t.term} className="border-b border-ink/12 pb-3 last:border-0">
+            <p className="display-caps text-[0.95rem] text-ink">{t.term}</p>
+            <p className="mt-0.5 font-body text-[0.86rem] leading-relaxed text-ink/80">{t.def}</p>
+            {t.example && <p className="mt-1 font-body text-[0.8rem] italic text-ink/55">e.g. {t.example}</p>}
           </div>
         ))}
       </div>
@@ -127,10 +127,10 @@ export function Tutorial({
   return (
     <div className={PANEL}>
       <div className="flex items-center justify-between">
-        <p className="eyebrow text-accent" style={{ fontSize: "0.6rem" }}>
+        <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
           Lesson {i + 1} / {steps.length}
         </p>
-        <button onClick={onDone} className="font-serif text-[0.78rem] text-paper-ink/50 underline">
+        <button onClick={onDone} className="font-body text-[0.78rem] text-ink/50 underline">
           Skip tutorial
         </button>
       </div>
@@ -142,15 +142,15 @@ export function Tutorial({
           exit={{ opacity: 0, x: -18 }}
           transition={{ duration: 0.22 }}
         >
-          <h3 className="display-caps mt-2 text-2xl text-paper-ink">{step.title}</h3>
-          <p className="mt-2 font-serif text-[0.95rem] leading-relaxed text-paper-ink/85">{step.body}</p>
+          <h3 className="display-caps mt-2 text-2xl text-ink">{step.title}</h3>
+          <p className="mt-2 font-body text-[0.95rem] leading-relaxed text-ink/85">{step.body}</p>
         </motion.div>
       </AnimatePresence>
 
       <div className="mt-5 flex items-center justify-between">
         <div className="flex gap-1.5">
           {steps.map((_, idx) => (
-            <span key={idx} className={`h-1.5 rounded-full transition-all ${idx === i ? "w-5 bg-accent" : "w-1.5 bg-paper-ink/25"}`} />
+            <span key={idx} className={`h-1.5 rounded-full transition-all ${idx === i ? "w-5 bg-ink" : "w-1.5 bg-ink/25"}`} />
           ))}
         </div>
         <div className="flex gap-2">

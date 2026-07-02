@@ -56,7 +56,7 @@ export function AssetRow({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <span className="font-display text-sm font-semibold uppercase tracking-wide text-ink">
+            <span className="font-mono text-sm font-semibold uppercase tracking-wide text-ink">
               {asset.short}
             </span>
             <span
@@ -67,7 +67,7 @@ export function AssetRow({
             </span>
           </div>
           {/* the reason to hold it — always visible, no hover required */}
-          <p className="mt-1 font-serif text-[0.78rem] leading-snug text-ink-dim">{asset.blurb}</p>
+          <p className="mt-1 font-body text-[0.78rem] leading-snug text-ink-dim">{asset.blurb}</p>
           <div className="mt-1.5 flex items-center gap-2">
             <Sparkline values={series} width={56} height={18} />
             {lastReturn !== null && (

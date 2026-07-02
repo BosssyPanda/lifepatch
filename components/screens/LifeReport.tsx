@@ -64,9 +64,9 @@ function PortfolioBreakdown({ run }: { run: RunState }) {
           return (
             <li key={r.key} className="flex items-center gap-2.5">
               <Icon size={15} className="shrink-0 text-ink-dim" />
-              <span className="w-20 shrink-0 truncate font-display text-[0.72rem] font-semibold uppercase tracking-wide text-ink/85">{r.label}</span>
+              <span className="w-20 shrink-0 truncate font-mono text-[0.72rem] font-semibold uppercase tracking-wide text-ink/85">{r.label}</span>
               <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-black/40">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(2, pct)}%` }} />
+                <div className="h-full rounded-full bg-ink" style={{ width: `${Math.max(2, pct)}%` }} />
               </div>
               <span className="num w-20 shrink-0 text-right text-sm text-ink">{currency(r.value)}</span>
               <span className="num w-9 shrink-0 text-right text-[0.7rem] text-ink-dim">{pct.toFixed(0)}%</span>
@@ -108,12 +108,12 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-2xl flex-col justify-center px-5 py-16">
       <motion.div variants={container} initial="hidden" animate="show">
-        <motion.p variants={item} className="flex items-center justify-center gap-2 eyebrow text-accent">
+        <motion.p variants={item} className="flex items-center justify-center gap-2 eyebrow text-ink">
           <Icon size={16} /> {reason.label}
         </motion.p>
 
         {/* the reveal: the real years you just lived through */}
-        <motion.p variants={item} className="mt-4 text-center font-serif text-lg italic text-ink-dim">
+        <motion.p variants={item} className="mt-4 text-center font-body text-lg italic text-ink-dim">
           You lived from <span className="text-ink">{firstYear}</span> to <span className="text-ink">{lastYear}</span> — age {run.history[0]?.age ?? run.age} to {run.age}.
         </motion.p>
 
@@ -122,7 +122,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
             <p className="eyebrow" style={{ opacity: 0.7 }}>Final verdict · {run.name}</p>
             <p className="display-caps text-4xl sm:text-5xl">{klass.title}</p>
           </div>
-          <p className="mx-auto mt-4 max-w-md font-serif text-base italic leading-relaxed text-ink/80">{klass.blurb}</p>
+          <p className="mx-auto mt-4 max-w-md font-body text-base italic leading-relaxed text-ink/80">{klass.blurb}</p>
         </motion.div>
 
         <motion.dl variants={item} className="mt-8 grid grid-cols-2 gap-3">
@@ -150,31 +150,31 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
         {/* named-event reveal */}
         {best && worst && (
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <motion.div variants={item} className="rounded-[4px] border-l-2 border-olive bg-bg2 p-4">
-              <p className="eyebrow text-olive">Best year · {best.year}</p>
-              <p className="num text-lg text-olive">+{currency(Math.max(0, best.portfolioDelta))}</p>
-              <p className="mt-1 font-serif text-xs italic text-ink-dim">{macroEvent(best.year)?.title ?? "A quiet, green year."}</p>
+            <motion.div variants={item} className="rounded-[4px] border-l-2 border-gain bg-bg2 p-4">
+              <p className="eyebrow text-gain">Best year · {best.year}</p>
+              <p className="num text-lg text-gain">+{currency(Math.max(0, best.portfolioDelta))}</p>
+              <p className="mt-1 font-body text-xs italic text-ink-dim">{macroEvent(best.year)?.title ?? "A quiet, green year."}</p>
             </motion.div>
-            <motion.div variants={item} className="rounded-[4px] border-l-2 border-brick bg-bg2 p-4">
-              <p className="eyebrow text-brick">Worst year · {worst.year}</p>
-              <p className="num text-lg text-brick">−{currency(Math.abs(Math.min(0, worst.portfolioDelta)))}</p>
-              <p className="mt-1 font-serif text-xs italic text-ink-dim">{macroEvent(worst.year)?.title ?? "The market just shrugged."}</p>
+            <motion.div variants={item} className="rounded-[4px] border-l-2 border-loss bg-bg2 p-4">
+              <p className="eyebrow text-loss">Worst year · {worst.year}</p>
+              <p className="num text-lg text-loss">−{currency(Math.abs(Math.min(0, worst.portfolioDelta)))}</p>
+              <p className="mt-1 font-body text-xs italic text-ink-dim">{macroEvent(worst.year)?.title ?? "The market just shrugged."}</p>
             </motion.div>
           </div>
         )}
 
-        <motion.p variants={item} className="mt-5 text-center font-serif text-sm text-ink-dim">
+        <motion.p variants={item} className="mt-5 text-center font-body text-sm text-ink-dim">
           {run.life.partner ? "Married" : "Single"} · {run.life.kids} kid{run.life.kids === 1 ? "" : "s"} · {run.life.housing === "owned" ? "homeowner" : "renter"} · {run.job}
         </motion.p>
 
         <motion.div variants={item} className="mt-6 rounded-[4px] border border-ink/12 bg-bg2 px-4 py-4 text-ink">
           <MoneyBrainMeter mastery={mastery} />
           {runGains.length > 0 && (
-            <p className="mt-2 font-serif text-[0.9rem] text-ink-dim">
+            <p className="mt-2 font-body text-[0.9rem] text-ink-dim">
               This run sharpened: <span className="text-ink">{runGains.map(conceptTitle).join(", ")}</span>.
             </p>
           )}
-          <button type="button" onClick={onMasteryMap} className="eyebrow mt-3 inline-flex items-center gap-1.5 text-accent transition-opacity hover:opacity-70">
+          <button type="button" onClick={onMasteryMap} className="eyebrow mt-3 inline-flex items-center gap-1.5 text-ink transition-opacity hover:opacity-70">
             <BrainIcon size={13} /> View your Money Brain →
           </button>
         </motion.div>

@@ -57,7 +57,7 @@ export function FreedomMeter({ s, compact = false }: { s: CashflowState; compact
 
       {/* milestone + goal legend under the gauge */}
       <div className="mt-1.5 flex items-center justify-between text-[0.6rem]" style={{ color: "var(--color-secondary)" }}>
-        <span style={pct >= 50 ? { color: "var(--color-paper-ink)" } : undefined}>halfway</span>
+        <span style={pct >= 50 ? { color: "var(--color-ink)" } : undefined}>halfway</span>
         <motion.span
           key={free ? "free" : "goal"}
           initial={reduce ? false : { y: free ? 6 : 0, opacity: free ? 0 : 1 }}
@@ -70,12 +70,12 @@ export function FreedomMeter({ s, compact = false }: { s: CashflowState; compact
         </motion.span>
       </div>
 
-      <div className="mt-2 flex items-center justify-between text-[0.72rem]" style={{ color: "var(--color-paper-ink)" }}>
+      <div className="mt-2 flex items-center justify-between text-[0.72rem]" style={{ color: "var(--color-ink)" }}>
         <span>
           Passive <span className="num font-semibold" style={{ color: "var(--color-gain)" }}>{currency(passive)}</span>
         </span>
         <span>
-          Expenses <span className="num font-semibold" style={{ color: "var(--color-paper-ink)" }}>{currency(expenses)}</span>
+          Expenses <span className="num font-semibold" style={{ color: "var(--color-ink)" }}>{currency(expenses)}</span>
         </span>
       </div>
       {!compact && (

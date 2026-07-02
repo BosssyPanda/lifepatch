@@ -112,16 +112,16 @@ export function Leaderboard({
             transition={{ duration: 0.4, ease: EASE }}
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="flex items-center justify-between border-b-2 border-paper-ink/15 px-5 py-4">
+            <header className="flex items-center justify-between border-b-2 border-ink/15 px-5 py-4">
               <div>
-                <p className="eyebrow text-accent">Compete</p>
-                <h2 className="display-caps text-3xl text-paper-ink">Leaderboards</h2>
+                <p className="eyebrow text-ink">Compete</p>
+                <h2 className="display-caps text-3xl text-ink">Leaderboards</h2>
               </div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label="Close leaderboards"
-                className="grid h-9 w-9 place-items-center rounded-full border-2 border-paper-ink/25 text-paper-ink/70 transition-colors hover:bg-paper-ink/10"
+                className="grid h-9 w-9 place-items-center rounded-full border-2 border-ink/25 text-ink/70 transition-colors hover:bg-ink/10"
               >
                 <CloseIcon size={16} />
               </button>
@@ -135,8 +135,8 @@ export function Leaderboard({
                   onClick={() => setMode(t.id)}
                   className={`display-caps flex-1 rounded-[4px] px-2 py-2 text-sm tracking-[0.08em] transition-colors ${
                     mode === t.id
-                      ? "bg-paper-ink text-paper"
-                      : "text-paper-ink/60 hover:bg-paper-ink/10"
+                      ? "bg-ink text-bg"
+                      : "text-ink/60 hover:bg-ink/10"
                   }`}
                 >
                   {t.label}
@@ -150,10 +150,10 @@ export function Leaderboard({
                   key={t.id}
                   type="button"
                   onClick={() => setScope(t.id)}
-                  className={`border-b-2 pb-1 font-serif transition-colors ${
+                  className={`border-b-2 pb-1 font-body transition-colors ${
                     scope === t.id
-                      ? "border-accent text-paper-ink"
-                      : "border-transparent text-paper-ink/50 hover:text-paper-ink"
+                      ? "border-ink text-ink"
+                      : "border-transparent text-ink/50 hover:text-ink"
                   }`}
                 >
                   {t.label}
@@ -161,13 +161,13 @@ export function Leaderboard({
               ))}
             </div>
 
-            <p className="px-5 pt-3 font-serif text-xs italic text-paper-dim">
+            <p className="px-5 pt-3 font-body text-xs italic text-secondary">
               Best run per player, ranked by {metric}.
             </p>
 
             <div className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3">
               {loading ? (
-                <p className="py-10 text-center font-serif text-paper-dim">Loading…</p>
+                <p className="py-10 text-center font-body text-secondary">Loading…</p>
               ) : rows.length === 0 ? (
                 <EmptyState scope={scope} />
               ) : (
@@ -190,21 +190,21 @@ export function Leaderboard({
                           isMe
                             ? "bg-ink/10 border border-ink"
                             : i % 2
-                              ? "bg-paper-ink/[0.03] hover:bg-paper-ink/[0.06]"
-                              : "hover:bg-paper-ink/[0.04]"
+                              ? "bg-ink/[0.03] hover:bg-ink/[0.06]"
+                              : "hover:bg-ink/[0.04]"
                         }`}
                       >
                         <RankBadge rank={i + 1} />
                         <Avatar seed={p?.avatarSeed ?? r.userId} username={name} size={34} />
-                        <span className="min-w-0 flex-1 truncate font-serif text-paper-ink">
+                        <span className="min-w-0 flex-1 truncate font-body text-ink">
                           {name}
-                          {isMe && <span className="ml-1.5 text-xs text-accent">you</span>}
+                          {isMe && <span className="ml-1.5 text-xs text-ink">you</span>}
                         </span>
                         <span className="text-right">
-                          <span className="display-caps block text-sm text-paper-ink">
+                          <span className="display-caps block text-sm text-ink">
                             <AnimatedNumber value={r.score} format={(n) => formatScore(mode, n)} />
                           </span>
-                          <span className="block text-[0.65rem] uppercase tracking-wide text-paper-dim">
+                          <span className="block text-[0.65rem] uppercase tracking-wide text-secondary">
                             {r.verdict}
                           </span>
                         </span>
@@ -215,7 +215,7 @@ export function Leaderboard({
               )}
             </div>
 
-            <footer className="border-t-2 border-paper-ink/10 px-5 py-3">
+            <footer className="border-t-2 border-ink/10 px-5 py-3">
               <NeonButton variant="ghost" size="sm" onClick={onClose}>
                 Close
               </NeonButton>
@@ -238,7 +238,7 @@ function RankBadge({ rank }: { rank: number }) {
       </span>
     );
   }
-  return <span className="w-6 shrink-0 text-right font-serif text-sm tabular-nums text-paper-dim">{rank}</span>;
+  return <span className="w-6 shrink-0 text-right font-body text-sm tabular-nums text-secondary">{rank}</span>;
 }
 
 function EmptyState({ scope }: { scope: LeaderboardScope }) {
@@ -248,5 +248,5 @@ function EmptyState({ scope }: { scope: LeaderboardScope }) {
       : scope === "week"
         ? "No runs this week. Finish a run to claim the top spot."
         : "No runs yet. Finish a run to be the first on the board.";
-  return <p className="py-10 text-center font-serif text-sm text-paper-dim">{msg}</p>;
+  return <p className="py-10 text-center font-body text-sm text-secondary">{msg}</p>;
 }

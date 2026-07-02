@@ -10,7 +10,7 @@ function Emphasized({ text, word }: { text: string; word?: string }) {
   return (
     <>
       {a}
-      <span className="text-accent">{word}</span>
+      <span className="text-ink">{word}</span>
       {b}
     </>
   );
@@ -26,13 +26,13 @@ export function Beat({ beat }: { beat: ColdBeat }) {
           transition={{ type: "spring", stiffness: 140, damping: 12 }}
           className="display-caps text-[16vw] leading-[0.85] text-ink sm:text-[10rem]"
         >
-          Life<span className="text-accent">patch</span>
+          Life<span className="text-ink">patch</span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="mt-2 font-serif text-xl italic text-ink/70 sm:text-2xl"
+          className="mt-2 font-body text-xl italic text-ink/70 sm:text-2xl"
         >
           Survive the Internet Economy
         </motion.p>
@@ -63,7 +63,7 @@ export function Beat({ beat }: { beat: ColdBeat }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="eyebrow text-accent"
+          className="eyebrow text-ink"
         >
           — The System
         </motion.span>

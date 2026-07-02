@@ -12,10 +12,6 @@
   --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace; /* labels, data, HUD, buttons, chrome */
   --font-voice: var(--font-instrument), "Instrument Serif", Georgia, serif; /* single-line voice insights only */
   --font-body: var(--font-archivo), "Archivo", system-ui, sans-serif; /* body / scenario prose */
-
-  /* legacy aliases so the ~58 not-yet-migrated components keep resolving until Phase 3 */
-  --font-display: var(--font-mono);
-  --font-serif: var(--font-body);
 }
 
 /* ---------------- LEDGER color tokens ---------------- */
@@ -31,19 +27,7 @@
   --color-dotted: #3a3a33;
   --color-loss: #ff3b30; /* flat red — losses */
   --color-gain: #2bd576; /* flat green — gains */
-
-  /* legacy semantic tokens remapped onto LEDGER (per-screen craft lands in Phase 3) */
-  --color-accent: #f2f1ea; /* was terracotta → neutral ink; emphasis via weight/case, not color */
-  --color-accent-2: #ffffff;
-  --color-paper: #0e0e0c; /* was cream → dark panel */
-  --color-paper-2: #131211;
-  --color-paper-ink: #f2f1ea; /* text on a panel → ink */
-  --color-paper-dim: #8f8e85;
-  --color-olive: #2bd576; /* good → gain */
-  --color-brick: #ff3b30; /* bad → loss */
-  --color-ochre: #8f8e85; /* warning → neutral (no amber allowed) */
-  --color-brass: #8f8e85; /* metal → neutral */
-  --color-steel: #5c5b53; /* cool → faint */
+  --color-ink-bright: #ffffff; /* brightest ink — primary/button hover, atlas hairline */
 }
 
 :root {
@@ -85,10 +69,7 @@ body {
 }
 
 /* ---------------- Typography helpers → LEDGER roles ---------------- */
-.font-display {
-  font-family: var(--font-mono);
-}
-.font-serif {
+.font-body {
   font-family: var(--font-body);
 }
 .font-mono {

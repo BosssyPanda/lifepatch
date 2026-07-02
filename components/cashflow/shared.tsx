@@ -85,7 +85,7 @@ export function LessonBox({ children }: { children: ReactNode }) {
       transition={reduce ? { duration: 0 } : { duration: 0.35, ease: EASE, delay: 0.12 }}
       className="mt-4 border-t border-hairline pt-3"
     >
-      <p className="voice text-[1rem] leading-snug text-paper-ink/90">{children}</p>
+      <p className="voice text-[1rem] leading-snug text-ink/90">{children}</p>
     </motion.div>
   );
 }
@@ -96,7 +96,7 @@ export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone
       ? "text-gain border-gain/50"
       : tone === "bad"
         ? "text-loss border-loss/50"
-        : "text-paper-ink/70 border-paper-ink/25";
+        : "text-ink/70 border-ink/25";
   return (
     <span className={`inline-flex items-center gap-1 border px-2 py-0.5 num text-[0.7rem] ${cls}`}>
       {children}

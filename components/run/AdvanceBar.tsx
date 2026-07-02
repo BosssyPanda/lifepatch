@@ -25,18 +25,18 @@ export function AdvanceBar({
     <div className="sticky bottom-0 z-30 border-t border-ink/12 bg-bg">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-5 py-3">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => { audio.sfx("soft"); onQuit(); }} className="eyebrow text-ink-dim transition-colors hover:text-brick">
+          <button type="button" onClick={() => { audio.sfx("soft"); onQuit(); }} className="eyebrow text-ink-dim transition-colors hover:text-loss">
             End run
           </button>
           {canRetire && (
-            <button type="button" onClick={() => { audio.sfx("chime"); onRetire(); }} className="flex items-center gap-1 eyebrow text-ink-dim transition-colors hover:text-accent">
+            <button type="button" onClick={() => { audio.sfx("chime"); onRetire(); }} className="flex items-center gap-1 eyebrow text-ink-dim transition-colors hover:text-ink">
               <TrophyIcon size={14} /> Retire
             </button>
           )}
         </div>
 
         <div className="flex items-center gap-3">
-          {blocked && <span className="hidden font-serif text-xs italic text-ink-dim sm:inline">Make your life choice first</span>}
+          {blocked && <span className="hidden font-body text-xs italic text-ink-dim sm:inline">Make your life choice first</span>}
           <NeonButton variant="primary" size="md" onClick={() => { audio.sfx("page"); onAdvance(); }} disabled={blocked}>
             Advance the year <ArrowDown size={16} />
           </NeonButton>

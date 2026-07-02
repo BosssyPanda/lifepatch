@@ -38,7 +38,7 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
         Array.from({ length: 18 }).map((_, i) => (
           <motion.span
             key={i}
-            className="absolute h-2 w-2 rounded-full bg-accent"
+            className="absolute h-2 w-2 rounded-full bg-ink"
             style={{ left: `${(i * 53) % 100}%`, top: "60%" }}
             initial={{ y: 0, opacity: 0 }}
             animate={{ y: [-20, -260 - (i % 5) * 40], opacity: [0, 1, 0], x: [0, (i % 2 ? 1 : -1) * (30 + i * 4)] }}
@@ -51,7 +51,7 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
           initial={{ scale: 0, rotate: -12 }}
           animate={{ scale: 1, rotate: 0 }}
           transition={{ type: "spring", stiffness: 200, damping: 12, delay: 0.1 }}
-          className="mx-auto grid h-16 w-16 place-items-center rounded-full border-2 border-olive text-olive"
+          className="mx-auto grid h-16 w-16 place-items-center rounded-full border-2 border-gain text-gain"
         >
           <FreedomIcon size={34} />
         </motion.div>
@@ -60,7 +60,7 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.25 }}
-          className="eyebrow mt-5 text-olive"
+          className="eyebrow mt-5 text-gain"
         >
           Passive income beat your expenses
         </motion.p>
@@ -82,7 +82,7 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
         >
           <div className="text-left">
             <p className="eyebrow text-ink-dim" style={{ fontSize: "0.58rem" }}>Passive income</p>
-            <p className="num text-2xl font-bold text-olive">
+            <p className="num text-2xl font-bold text-gain">
               <AnimatedNumber value={passive} format={(n) => currency(n)} />
             </p>
           </div>
@@ -97,7 +97,7 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1 }}
-          className="mt-5 font-serif text-ink-dim"
+          className="mt-5 font-body text-ink-dim"
         >
           You escaped the Rat Race in {s.turn} turns. Your assets now pay for your life — no job required. Time to chase the dream.
         </motion.p>

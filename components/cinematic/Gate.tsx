@@ -49,15 +49,15 @@ export function Gate({
 
       {/* ---------------- HUD: corner brackets ---------------- */}
       <div aria-hidden className="pointer-events-none absolute inset-3 z-20 lg:inset-5">
-        <span className="absolute left-0 top-0 h-7 w-7 border-l-2 border-t-2 border-accent/40 lg:h-10 lg:w-10" />
-        <span className="absolute right-0 top-0 h-7 w-7 border-r-2 border-t-2 border-accent/40 lg:h-10 lg:w-10" />
-        <span className="absolute bottom-0 left-0 h-7 w-7 border-b-2 border-l-2 border-accent/40 lg:h-10 lg:w-10" />
-        <span className="absolute bottom-0 right-0 h-7 w-7 border-b-2 border-r-2 border-accent/40 lg:h-10 lg:w-10" />
+        <span className="absolute left-0 top-0 h-7 w-7 border-l-2 border-t-2 border-ink/40 lg:h-10 lg:w-10" />
+        <span className="absolute right-0 top-0 h-7 w-7 border-r-2 border-t-2 border-ink/40 lg:h-10 lg:w-10" />
+        <span className="absolute bottom-0 left-0 h-7 w-7 border-b-2 border-l-2 border-ink/40 lg:h-10 lg:w-10" />
+        <span className="absolute bottom-0 right-0 h-7 w-7 border-b-2 border-r-2 border-ink/40 lg:h-10 lg:w-10" />
       </div>
 
       {/* ---------------- HUD: index readout (top-left) ---------------- */}
       <div aria-hidden className="pointer-events-none absolute left-6 top-6 z-20 hidden items-center gap-2 lg:flex">
-        <span className="num text-[0.7rem] text-accent">001</span>
+        <span className="num text-[0.7rem] text-ink">001</span>
         <span className="h-px w-8 bg-ink-dim/50" />
         <span className="eyebrow text-ink-dim/70" style={{ fontSize: "0.55rem" }}>Survive the Internet Economy</span>
       </div>
@@ -92,7 +92,7 @@ export function Gate({
           initial={reduce ? false : { opacity: 0, y: 10, letterSpacing: "0.5em" }}
           animate={{ opacity: 1, y: 0, letterSpacing: "0.28em" }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="eyebrow text-accent"
+          className="eyebrow text-ink"
         >
           A Financial Survival Story
         </motion.p>
@@ -104,7 +104,7 @@ export function Gate({
           className="display-caps mt-4 text-[19vw] leading-[0.82] sm:text-[14vw] lg:text-[clamp(4.5rem,8vw,9rem)]"
         >
           <span className="text-ink">Life</span>
-          <span className="text-accent">patch</span>
+          <span className="text-ink">patch</span>
         </motion.h1>
 
         <motion.button
@@ -115,7 +115,7 @@ export function Gate({
           transition={{ delay: 0.55, type: "spring", stiffness: 220, damping: 16 }}
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.97 }}
-          className="group mt-9 flex items-center gap-3 rounded-[4px] border-2 border-accent bg-accent/5 px-9 py-4 text-accent transition-colors hover:bg-accent hover:text-bg"
+          className="group mt-9 flex items-center gap-3 rounded-[4px] border-2 border-ink bg-ink/5 px-9 py-4 text-ink transition-colors hover:bg-ink hover:text-bg"
         >
           <motion.span
             animate={reduce ? undefined : { scale: [1, 1.18, 1] }}
@@ -133,7 +133,7 @@ export function Gate({
           initial={reduce ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.9 }}
-          className="mt-6 font-serif text-sm italic text-ink-dim"
+          className="mt-6 font-body text-sm italic text-ink-dim"
         >
           Best with sound on. Headphones recommended.
         </motion.p>
@@ -155,7 +155,7 @@ export function Gate({
           {!reduce && (
             <span className="flex gap-1">
               {[0, 0.2, 0.4].map((d, i) => (
-                <motion.span key={i} className="h-1 w-1 rounded-full bg-accent/70"
+                <motion.span key={i} className="h-1 w-1 rounded-full bg-ink/70"
                   animate={{ opacity: [0.25, 1, 0.25] }} transition={{ duration: 1.4, repeat: Infinity, delay: d }} />
               ))}
             </span>

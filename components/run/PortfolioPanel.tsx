@@ -48,19 +48,19 @@ export function PortfolioPanel({
       {/* cash-left readout + debt tile */}
       <div className="mt-3 grid grid-cols-2 gap-2.5">
         <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">
-          <p className="eyebrow text-olive">Cash left to invest</p>
+          <p className="eyebrow text-gain">Cash left to invest</p>
           <p className="num text-xl text-ink">{currency(run.cash)}</p>
           <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink/12" aria-hidden>
-            <div className="h-full rounded-full bg-olive transition-[width] duration-300" style={{ width: `${cashPct}%` }} />
+            <div className="h-full rounded-full bg-gain transition-[width] duration-300" style={{ width: `${cashPct}%` }} />
           </div>
         </div>
         <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">
           <div className="flex items-center justify-between">
-            <p className="eyebrow text-brick">Debt</p>
+            <p className="eyebrow text-loss">Debt</p>
             {run.debt > 0 && (
               <div className="flex gap-1">
-                <button type="button" disabled={run.cash < 1000} onClick={() => handlePayDebt(1000)} className="num rounded-[2px] border border-brick/60 px-1.5 py-0.5 text-[0.6rem] text-brick disabled:opacity-25 hover:bg-brick hover:text-bg">−$1k</button>
-                <button type="button" disabled={run.cash <= 0} onClick={() => handlePayDebt(Math.min(run.cash, run.debt))} className="num rounded-[2px] border border-brick/60 px-1.5 py-0.5 text-[0.6rem] text-brick disabled:opacity-25 hover:bg-brick hover:text-bg">MAX</button>
+                <button type="button" disabled={run.cash < 1000} onClick={() => handlePayDebt(1000)} className="num rounded-[2px] border border-loss/60 px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 hover:bg-loss hover:text-bg">−$1k</button>
+                <button type="button" disabled={run.cash <= 0} onClick={() => handlePayDebt(Math.min(run.cash, run.debt))} className="num rounded-[2px] border border-loss/60 px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 hover:bg-loss hover:text-bg">MAX</button>
               </div>
             )}
           </div>
@@ -73,7 +73,7 @@ export function PortfolioPanel({
         <PortfolioPresets availableAssets={assets} cash={run.cash} onApply={handleApplyPreset} />
       </div>
 
-      <p className="mt-4 font-serif text-sm italic text-ink-dim">
+      <p className="mt-4 font-body text-sm italic text-ink-dim">
         Drag each slider to set how much you hold. No ticker tells you what&apos;s next — only risk does.
       </p>
 

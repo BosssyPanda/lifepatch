@@ -145,7 +145,7 @@ export function Board({
         </div>
       </div>
 
-      {/* squares — flat chips: type-accent top bar, inverted when you're on it */}
+      {/* squares — flat chips: type-ink top bar, inverted when you're on it */}
       {squares.map((sq) => {
         const p = pts[sq.index];
         const active = sq.index === position;

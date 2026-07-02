@@ -21,7 +21,7 @@ export function MarketResults({ run }: { run: RunState }) {
               <div key={a.id} className="flex items-center gap-2">
                 <Icon size={16} className="shrink-0 text-ink-dim" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-display text-[0.72rem] font-semibold uppercase tracking-wide text-ink/85">{a.short}</p>
+                  <p className="truncate font-mono text-[0.72rem] font-semibold uppercase tracking-wide text-ink/85">{a.short}</p>
                   <p className="num text-sm" style={{ color: hex }}>
                     {r === null ? "—" : `${r >= 0 ? "+" : ""}${r.toFixed(1)}%`}
                   </p>

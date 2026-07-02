@@ -146,13 +146,13 @@ export function PortfolioPresets({
                 {preset.risk}
               </span>
             </span>
-            <span className="mt-1 block font-serif text-[0.8rem] italic leading-snug text-ink-dim">
+            <span className="mt-1 block font-body text-[0.8rem] italic leading-snug text-ink-dim">
               {preset.tagline}
             </span>
           </motion.button>
         ))}
       </div>
-      <p className="mt-2 font-serif text-xs italic text-ink-dim/80">
+      <p className="mt-2 font-body text-xs italic text-ink-dim/80">
         {canInvest
           ? <>One tap splits your {currency(cash)} across a starter mix. Fine-tune below.</>
           : "Invested. Sell something below to free up cash, or advance the year."}

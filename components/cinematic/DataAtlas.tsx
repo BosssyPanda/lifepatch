@@ -88,7 +88,7 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
     <svg viewBox="0 0 600 1200" className={className} role="img" aria-label="Atlas holding a globe of market data" preserveAspectRatio="xMidYMid meet">
       <defs>
         <pattern id="da-grid" width="6.4" height="6.4" patternUnits="userSpaceOnUse">
-          <rect x="1.2" y="1.2" width="1.7" height="1.7" fill="var(--color-brass)" />
+          <rect x="1.2" y="1.2" width="1.7" height="1.7" fill="var(--color-secondary)" />
         </pattern>
         <radialGradient id="da-sphereFade" cx="42%" cy="34%" r="70%">
           <stop offset="0%" stopColor="white" stopOpacity="0.85" />
@@ -98,12 +98,12 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
         <mask id="da-sphereMask"><circle cx={G.cx} cy={G.cy} r={G.r} fill="url(#da-sphereFade)" /></mask>
         <clipPath id="da-globeClip"><circle cx={G.cx} cy={G.cy} r={G.r} /></clipPath>
         <radialGradient id="da-halo" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.16" />
-          <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--color-ink)" stopOpacity="0.16" />
+          <stop offset="100%" stopColor="var(--color-ink)" stopOpacity="0" />
         </radialGradient>
         <radialGradient id="da-figGlow" cx="50%" cy="60%" r="60%">
-          <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.10" />
-          <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+          <stop offset="0%" stopColor="var(--color-ink)" stopOpacity="0.10" />
+          <stop offset="100%" stopColor="var(--color-ink)" stopOpacity="0" />
         </radialGradient>
         <filter id="da-blur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="34" /></filter>
       </defs>
@@ -114,7 +114,7 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
       {/* ---------- layer A: figure (parallax least) + breathing ---------- */}
       <motion.g style={{ x: figX, y: figY }}>
         {/* cursor-following warm glow */}
-        <motion.ellipse cx={300} cy={660} rx={150} ry={210} fill="var(--color-accent)" opacity="0.12" filter="url(#da-blur)" style={{ x: glowX, y: glowY }} />
+        <motion.ellipse cx={300} cy={660} rx={150} ry={210} fill="var(--color-ink)" opacity="0.12" filter="url(#da-blur)" style={{ x: glowX, y: glowY }} />
         <rect x="120" y="520" width="360" height="560" fill="url(#da-figGlow)" />
         <motion.g animate={reduce ? undefined : { y: [0, -5, 0] }} transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut" }}>
           <image href="/img/atlas-engraving.png" x={-53} y={48} width={569} height={1153} preserveAspectRatio="xMidYMid meet" style={{ filter: "grayscale(1) brightness(1.08) contrast(1.02)" }} />
@@ -150,14 +150,14 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
             {[-0.78, -0.55, -0.3, -0.05, 0.2, 0.45, 0.7].map((k, i) => <ellipse key={i} cx={G.cx} cy={G.cy + G.r * k} rx={G.r * Math.sqrt(Math.max(0.02, 1 - k * k))} ry={G.r * 0.3} />)}
           </g>
           <motion.ellipse
-            cx={G.cx} cy={G.cy} rx={G.r * 0.55} ry={G.r} fill="none" stroke="var(--color-accent)" strokeWidth="1.5" clipPath="url(#da-globeClip)"
+            cx={G.cx} cy={G.cy} rx={G.r * 0.55} ry={G.r} fill="none" stroke="var(--color-ink)" strokeWidth="1.5" clipPath="url(#da-globeClip)"
             animate={reduce ? undefined : { opacity: [0.4, 0.8, 0.4] }} transition={{ duration: 4.5, repeat: Infinity, ease: "easeInOut" }}
           />
 
           <motion.g clipPath="url(#da-globeClip)" initial="hide" animate="show"
             variants={{ show: { transition: { staggerChildren: reduce ? 0 : 0.05, delayChildren: 0.5 } } }}>
             {CANDLES.map((c, i) => {
-              const color = c.accent ? "var(--color-accent)" : c.up ? "var(--color-paper)" : "var(--color-brick)";
+              const color = c.accent ? "var(--color-ink)" : c.up ? "var(--color-bg)" : "var(--color-loss)";
               return (
                 <motion.g key={i}
                   variants={{ hide: { opacity: 0, scaleY: reduce ? 1 : 0 }, show: { opacity: 1, scaleY: 1 } }}
@@ -172,20 +172,20 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
           </motion.g>
 
           <g clipPath="url(#da-globeClip)">
-            {HELIX.back.map((d, i) => <path key={`hb${i}`} d={d} fill="none" stroke="var(--color-accent)" strokeWidth="1.8" strokeLinecap="round" opacity="0.2" />)}
-            <motion.path d="M150 352 q 26 -15 52 0 t 52 0 t 52 0 t 52 0 t 52 0" fill="none" stroke="var(--color-ochre)" strokeWidth="1.7" opacity="0.7" {...draw(1.1, 1.6)} />
+            {HELIX.back.map((d, i) => <path key={`hb${i}`} d={d} fill="none" stroke="var(--color-ink)" strokeWidth="1.8" strokeLinecap="round" opacity="0.2" />)}
+            <motion.path d="M150 352 q 26 -15 52 0 t 52 0 t 52 0 t 52 0 t 52 0" fill="none" stroke="var(--color-secondary)" strokeWidth="1.7" opacity="0.7" {...draw(1.1, 1.6)} />
             {HELIX.front.map((d, i) => (
               <g key={`hf${i}`}>
-                <path d={d} fill="none" stroke="var(--color-accent-2)" strokeWidth="7" strokeLinecap="round" opacity="0.12" />
-                <motion.path d={d} fill="none" stroke="var(--color-accent)" strokeWidth="3" strokeLinecap="round" {...draw(0.6 + i * 0.12, 1.3)} />
+                <path d={d} fill="none" stroke="var(--color-ink-bright)" strokeWidth="7" strokeLinecap="round" opacity="0.12" />
+                <motion.path d={d} fill="none" stroke="var(--color-ink)" strokeWidth="3" strokeLinecap="round" {...draw(0.6 + i * 0.12, 1.3)} />
               </g>
             ))}
           </g>
-          <circle cx={HELIX.start.x} cy={HELIX.start.y} r="3.6" fill="var(--color-accent)" />
-          <circle cx={HELIX.end.x} cy={HELIX.end.y} r="4" fill="var(--color-accent)" />
+          <circle cx={HELIX.start.x} cy={HELIX.start.y} r="3.6" fill="var(--color-ink)" />
+          <circle cx={HELIX.end.x} cy={HELIX.end.y} r="4" fill="var(--color-ink)" />
         </motion.g>
 
-        {NODES.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="2.6" fill="var(--color-brass)" />)}
+        {NODES.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="2.6" fill="var(--color-secondary)" />)}
         {LABELS.map((l) => <text key={l.t} x={l.x} y={l.y} className="da-label" fill="var(--color-ink-dim)">{l.t}</text>)}
 
         <line x1="508" y1="182" x2="508" y2="426" stroke="var(--color-ink-dim)" strokeWidth="1" opacity="0.4" />
@@ -200,7 +200,7 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
           <rect x="-12" y="-17" width="116" height="105" rx="3" fill="var(--color-bg)" opacity="0.6" />
           <rect x="-12" y="-17" width="116" height="105" rx="3" fill="none" stroke="var(--color-ink-dim)" strokeWidth="0.75" opacity="0.3" />
           {stats.map((s, i) => {
-            const col = s.up ? "var(--color-olive)" : "var(--color-brick)";
+            const col = s.up ? "var(--color-gain)" : "var(--color-loss)";
             const y = i * 19;
             return (
               <g key={s.k}>
@@ -212,19 +212,19 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
           })}
         </g>
 
-        <motion.g fill="none" stroke="var(--color-brass)" strokeWidth="1.3" opacity="0.55" {...draw(1.4, 2)}>
+        <motion.g fill="none" stroke="var(--color-secondary)" strokeWidth="1.3" opacity="0.55" {...draw(1.4, 2)}>
           <rect x="430" y="980" width="112" height="112" />
           <rect x="430" y="980" width="69" height="69" />
           <rect x="465" y="980" width="34" height="34" />
-          <path d="M542 980 a112 112 0 0 0 -112 112 M430 1049 a69 69 0 0 0 69 -69 M499 1014 a34 34 0 0 0 -34 -34" stroke="var(--color-accent)" strokeWidth="1.6" />
+          <path d="M542 980 a112 112 0 0 0 -112 112 M430 1049 a69 69 0 0 0 69 -69 M499 1014 a34 34 0 0 0 -34 -34" stroke="var(--color-ink)" strokeWidth="1.6" />
         </motion.g>
         </g>
       </motion.g>
 
       <style>{`
-        .da-label { font-family: var(--font-display); font-size: 12.5px; letter-spacing: 0.2em; text-transform: uppercase; }
-        .da-axis { font-family: var(--font-display); font-size: 12.5px; letter-spacing: 0.05em; }
-        .da-stat { font-family: var(--font-display); font-size: 13.5px; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+        .da-label { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.2em; text-transform: uppercase; }
+        .da-axis { font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.05em; }
+        .da-stat { font-family: var(--font-mono); font-size: 13.5px; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
       `}</style>
     </svg>
   );

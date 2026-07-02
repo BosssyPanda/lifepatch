@@ -8,7 +8,7 @@ type Size = "sm" | "md" | "lg";
 
 // LEDGER buttons: square, mono, flat. Emphasis from inversion, never glow.
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-ink text-bg border-ink hover:bg-accent-2",
+  primary: "bg-ink text-bg border-ink hover:bg-ink-bright",
   secondary: "bg-transparent text-ink border-ink/50 hover:bg-ink hover:text-bg",
   outline: "bg-transparent text-ink border-ink/35 hover:bg-ink hover:text-bg",
   ghost: "bg-transparent text-ink-dim border-transparent hover:text-ink",

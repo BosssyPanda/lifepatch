@@ -68,7 +68,7 @@ export function ColdOpen({
       {/* progress ticks */}
       <div className="absolute bottom-7 left-1/2 flex -translate-x-1/2 gap-1.5">
         {COLD_OPEN.map((b, idx) => (
-          <span key={b.id} className="h-1 w-5 rounded-full" style={{ background: idx <= i ? "var(--color-accent)" : "var(--color-ink-dim)", opacity: idx <= i ? 1 : 0.3 }} />
+          <span key={b.id} className="h-1 w-5 rounded-full" style={{ background: idx <= i ? "var(--color-ink)" : "var(--color-ink-dim)", opacity: idx <= i ? 1 : 0.3 }} />
         ))}
       </div>
     </div>

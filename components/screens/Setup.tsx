@@ -26,7 +26,7 @@ export function Setup({
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-5xl flex-col justify-center px-5 py-14">
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-        <p className="eyebrow text-accent">{MODES[mode].name} · starts at age {BACKGROUNDS.find((b) => b.id === picked)?.startAge}</p>
+        <p className="eyebrow text-ink">{MODES[mode].name} · starts at age {BACKGROUNDS.find((b) => b.id === picked)?.startAge}</p>
         <h1 className="display-caps mt-3 text-4xl text-ink sm:text-5xl">Who do you become?</h1>
       </motion.div>
 
@@ -37,7 +37,7 @@ export function Setup({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Type a name"
-          className="mt-1.5 w-full rounded-[4px] border border-ink/20 bg-bg2 px-3 py-2.5 font-serif text-ink outline-none focus:border-accent placeholder:text-ink-dim/60"
+          className="mt-1.5 w-full rounded-[4px] border border-ink/20 bg-bg2 px-3 py-2.5 font-body text-ink outline-none focus:border-ink placeholder:text-ink-dim/60"
         />
       </div>
 
@@ -53,23 +53,23 @@ export function Setup({
               animate={{ opacity: active ? 1 : picked ? 0.5 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
               transition={{ type: "spring", stiffness: 220, damping: 20, delay: i * 0.07 }}
               whileHover={{ y: -5 }}
-              className={`paper relative overflow-hidden rounded-[5px] p-5 text-left ${active ? "ring-2 ring-accent ring-offset-2 ring-offset-bg" : ""}`}
+              className={`paper relative overflow-hidden rounded-[5px] p-5 text-left ${active ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""}`}
             >
               {active && (
                 <>
                   <span className="pointer-events-none absolute inset-0 z-[1] bg-ink/15" />
-                  <span className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full border-2 border-paper bg-accent text-paper">
+                  <span className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full border-2 border-bg bg-ink text-bg">
                     <CheckIcon size={15} />
                   </span>
                 </>
               )}
-              <div className="flex items-center justify-between border-b-2 border-paper-ink pb-2">
-                <span className="eyebrow text-paper-dim">Age {b.startAge}</span>
+              <div className="flex items-center justify-between border-b-2 border-ink pb-2">
+                <span className="eyebrow text-secondary">Age {b.startAge}</span>
                 <Badge tone={b.difficulty}>{b.difficulty}</Badge>
               </div>
-              <h2 className="display-caps mt-3 text-2xl text-paper-ink">{b.name}</h2>
-              <p className="mt-1 font-serif text-sm italic text-paper-ink/60">{b.tagline}</p>
-              <p className="mt-2.5 font-serif text-[0.86rem] leading-snug text-paper-ink/75">{b.story}</p>
+              <h2 className="display-caps mt-3 text-2xl text-ink">{b.name}</h2>
+              <p className="mt-1 font-body text-sm italic text-ink/60">{b.tagline}</p>
+              <p className="mt-2.5 font-body text-[0.86rem] leading-snug text-ink/75">{b.story}</p>
               <dl className="mt-3 space-y-1">
                 <Row k="Cash" v={currency(b.cash)} />
                 <Row k="Debt" v={currency(b.debt)} />
@@ -93,9 +93,9 @@ export function Setup({
 
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex items-baseline justify-between border-b border-paper-ink/15 pb-1">
-      <dt className="eyebrow text-paper-dim">{k}</dt>
-      <dd className="num text-sm text-paper-ink">{v}</dd>
+    <div className="flex items-baseline justify-between border-b border-ink/15 pb-1">
+      <dt className="eyebrow text-secondary">{k}</dt>
+      <dd className="num text-sm text-ink">{v}</dd>
     </div>
   );
 }

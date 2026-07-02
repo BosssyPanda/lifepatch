@@ -35,7 +35,7 @@ function Row({
 }) {
   if (!strong && value === 0 && dim) return null;
   // Color semantics: gain = income, loss = expense.
-  const color = accent === "income" ? "text-gain" : accent === "expense" ? "text-loss" : "text-paper-ink";
+  const color = accent === "income" ? "text-gain" : accent === "expense" ? "text-loss" : "text-ink";
   // A strong row is a section total — it sits on a hairline shelf and dominates
   // the recessed line items above it (scale contrast, not just bold).
   return (
@@ -45,8 +45,8 @@ function Row({
       <span
         className={
           strong
-            ? "display-caps text-[0.84rem] tracking-wide text-paper-ink"
-            : `text-[0.82rem] ${dim ? "text-paper-ink/50" : "text-paper-ink/80"}`
+            ? "display-caps text-[0.84rem] tracking-wide text-ink"
+            : `text-[0.82rem] ${dim ? "text-ink/50" : "text-ink/80"}`
         }
         title={hint}
       >
@@ -86,7 +86,7 @@ export function FinancialStatement({ s, className = "" }: { s: CashflowState; cl
       <span aria-hidden className="absolute inset-y-0 left-0 w-[2px]" style={{ background: "var(--color-secondary)" }} />
       {/* masthead — hairline rule under the title */}
       <div className="flex items-center justify-between border-b border-hairline pb-2">
-        <h3 className="display-caps text-xl text-paper-ink">Financial Statement</h3>
+        <h3 className="display-caps text-xl text-ink">Financial Statement</h3>
         <span className="eyebrow text-secondary" style={{ fontSize: "0.58rem", letterSpacing: "0.18em" }}>
           monthly
         </span>
@@ -122,8 +122,8 @@ export function FinancialStatement({ s, className = "" }: { s: CashflowState; cl
       >
         <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${pay >= 0 ? "bg-gain" : "bg-loss"}`} />
         <div>
-          <p className="display-caps text-[0.86rem] text-paper-ink">Payday · Cash Flow</p>
-          <p className="text-[0.66rem] text-paper-ink/60">Income − Expenses, every payday</p>
+          <p className="display-caps text-[0.86rem] text-ink">Payday · Cash Flow</p>
+          <p className="text-[0.66rem] text-ink/60">Income − Expenses, every payday</p>
         </div>
         <span className={`num text-2xl font-bold tabular-nums ${pay >= 0 ? "text-gain" : "text-loss"}`}>
           <AnimatedNumber value={pay} format={(n) => (n >= 0 ? `+${currency(n)}` : currency(n))} />
@@ -134,10 +134,10 @@ export function FinancialStatement({ s, className = "" }: { s: CashflowState; cl
       <div className="relative mt-2 flex items-center justify-between border border-hairline bg-bg2 px-3.5 py-2.5">
         <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: "var(--color-ink)" }} />
         <div>
-          <p className="display-caps text-[0.86rem] text-paper-ink">Passive Income</p>
-          <p className="text-[0.66rem] text-paper-ink/60">Beat your expenses to win</p>
+          <p className="display-caps text-[0.86rem] text-ink">Passive Income</p>
+          <p className="text-[0.66rem] text-ink/60">Beat your expenses to win</p>
         </div>
-        <span className="num text-2xl font-bold tabular-nums text-paper-ink">
+        <span className="num text-2xl font-bold tabular-nums text-ink">
           <AnimatedNumber value={passive} format={(n) => currency(n)} />
         </span>
       </div>
@@ -160,8 +160,8 @@ export function FinancialStatement({ s, className = "" }: { s: CashflowState; cl
         </div>
       </div>
       <div className="mt-2 flex items-center justify-between border border-hairline bg-bg2 px-3.5 py-2">
-        <span className="display-caps text-[0.8rem] text-paper-ink">Net Worth</span>
-        <span className="num text-[1.15rem] font-bold tabular-nums text-paper-ink">
+        <span className="display-caps text-[0.8rem] text-ink">Net Worth</span>
+        <span className="num text-[1.15rem] font-bold tabular-nums text-ink">
           <AnimatedNumber value={netWorth(s)} format={(n) => currency(n)} />
         </span>
       </div>

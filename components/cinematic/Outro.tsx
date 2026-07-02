@@ -77,7 +77,7 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
         >
           {kind === "open" && (
             <>
-              <p className="eyebrow text-accent">The life of {run.name}</p>
+              <p className="eyebrow text-ink">The life of {run.name}</p>
               <p className="display-caps mt-3 text-5xl text-ink sm:text-7xl">{hist.length} years.<br />One life.</p>
             </>
           )}
@@ -86,7 +86,7 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
             <>
               <p className="eyebrow text-ink-dim">You lived through</p>
               <p className="num mt-3 text-6xl text-ink sm:text-8xl">{firstYear} – {lastYear}</p>
-              <p className="mt-2 font-serif italic text-ink-dim">…and you never saw it coming.</p>
+              <p className="mt-2 font-body italic text-ink-dim">…and you never saw it coming.</p>
             </>
           )}
 
@@ -99,17 +99,17 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
 
           {kind === "win" && (
             <>
-              <p className="eyebrow text-olive">Your biggest win</p>
-              <p className="num mt-3 text-5xl text-olive sm:text-7xl">+{currency(Math.max(0, best?.portfolioDelta ?? 0))}</p>
-              <p className="mt-2 font-serif italic text-ink/70">{macroEvent(best?.year ?? 0)?.title ?? "a quiet, green year"}</p>
+              <p className="eyebrow text-gain">Your biggest win</p>
+              <p className="num mt-3 text-5xl text-gain sm:text-7xl">+{currency(Math.max(0, best?.portfolioDelta ?? 0))}</p>
+              <p className="mt-2 font-body italic text-ink/70">{macroEvent(best?.year ?? 0)?.title ?? "a quiet, green year"}</p>
             </>
           )}
 
           {kind === "loss" && (
             <>
-              <p className="eyebrow text-brick">Your biggest hit</p>
-              <p className="num mt-3 text-5xl text-brick sm:text-7xl">−{currency(Math.abs(Math.min(0, worst?.portfolioDelta ?? 0)))}</p>
-              <p className="mt-2 font-serif italic text-ink/70">{macroEvent(worst?.year ?? 0)?.title ?? "the market just shrugged"}</p>
+              <p className="eyebrow text-loss">Your biggest hit</p>
+              <p className="num mt-3 text-5xl text-loss sm:text-7xl">−{currency(Math.abs(Math.min(0, worst?.portfolioDelta ?? 0)))}</p>
+              <p className="mt-2 font-body italic text-ink/70">{macroEvent(worst?.year ?? 0)?.title ?? "the market just shrugged"}</p>
             </>
           )}
 
@@ -119,14 +119,14 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
               <p className="display-caps max-w-2xl text-3xl text-ink sm:text-4xl">
                 {verdict.good ? "Hm. You actually made it work. Disgusting." : "Cooked — just like the rest. See you next run."}
               </p>
-              <span className="eyebrow text-accent">— The System</span>
+              <span className="eyebrow text-ink">— The System</span>
             </div>
           )}
 
           {kind === "verdict" && (
             <div className="flex flex-col items-center gap-6">
               <VerdictStamp title={verdict.title} hex={verdict.hex} />
-              <p className="mx-auto max-w-md font-serif italic text-ink/75">{verdict.blurb}</p>
+              <p className="mx-auto max-w-md font-body italic text-ink/75">{verdict.blurb}</p>
               <NeonButton variant="primary" size="lg" onClick={finish}>See the full report →</NeonButton>
             </div>
           )}

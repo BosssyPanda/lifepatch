@@ -65,17 +65,17 @@ export function Mascot({
       {/* bow tie */}
       <path
         d="M88 206l12 8 12-8-12-6z"
-        fill="var(--color-accent)"
+        fill="var(--color-ink)"
         stroke="var(--color-ink)"
         strokeWidth="2"
       />
       {/* neck */}
-      <rect x="88" y="182" width="24" height="22" fill="var(--color-paper)" stroke="var(--color-ink)" strokeWidth="2" />
+      <rect x="88" y="182" width="24" height="22" fill="var(--color-bg)" stroke="var(--color-ink)" strokeWidth="2" />
 
       {/* head */}
       <path
         d="M62 120c0-30 14-48 38-48s38 18 38 48c0 34-18 56-38 56s-38-22-38-56z"
-        fill="var(--color-paper)"
+        fill="var(--color-bg)"
         stroke="var(--color-ink)"
         strokeWidth="2.5"
       />
@@ -84,22 +84,22 @@ export function Mascot({
       <g stroke="var(--color-ink)" strokeWidth="2.5" strokeLinejoin="round">
         <path d="M50 88c8-6 92-6 100 0l-6 6c-12 5-76 5-88 0z" fill="var(--color-bg)" />
         <path d="M64 88l4-46c0-6 60-6 64 0l4 46" fill="var(--color-bg)" />
-        <path d="M66 64c14 5 54 5 68 0" fill="none" stroke="var(--color-accent)" strokeWidth="6" />
+        <path d="M66 64c14 5 54 5 68 0" fill="none" stroke="var(--color-ink)" strokeWidth="6" />
       </g>
 
       {/* eyes */}
       <motion.g animate={{ opacity: 1 }}>
-        <circle cx="82" cy="132" r="4.2" fill="var(--color-paper-ink)" />
+        <circle cx="82" cy="132" r="4.2" fill="var(--color-ink)" />
         {/* monocle */}
-        <circle cx="118" cy="132" r="9" fill="none" stroke="var(--color-brass)" strokeWidth="2.5" />
-        <circle cx="118" cy="132" r="3.4" fill="var(--color-paper-ink)" />
-        <path d="M126 138l6 18" stroke="var(--color-brass)" strokeWidth="2" />
+        <circle cx="118" cy="132" r="9" fill="none" stroke="var(--color-secondary)" strokeWidth="2.5" />
+        <circle cx="118" cy="132" r="3.4" fill="var(--color-ink)" />
+        <path d="M126 138l6 18" stroke="var(--color-secondary)" strokeWidth="2" />
       </motion.g>
 
       {/* brows */}
       <motion.path
         d={BROWS[mood]}
-        stroke="var(--color-paper-ink)"
+        stroke="var(--color-ink)"
         strokeWidth="3"
         fill="none"
         strokeLinecap="round"
@@ -110,7 +110,7 @@ export function Mascot({
       {/* mustache */}
       <path
         d="M84 142c4 4 28 4 32 0"
-        stroke="var(--color-paper-ink)"
+        stroke="var(--color-ink)"
         strokeWidth="5"
         fill="none"
         strokeLinecap="round"
@@ -119,22 +119,22 @@ export function Mascot({
       {/* mouth */}
       <motion.path
         d={MOUTHS[mood]}
-        stroke="var(--color-paper-ink)"
+        stroke="var(--color-ink)"
         strokeWidth="3"
-        fill={mood === "gloating" ? "var(--color-brick)" : "none"}
+        fill={mood === "gloating" ? "var(--color-loss)" : "none"}
         strokeLinecap="round"
         animate={{ d: MOUTHS[mood] }}
         transition={{ type: "spring", stiffness: 220, damping: 18 }}
       />
       {/* gold tooth on a grin */}
       {(mood === "smug" || mood === "gloating") && (
-        <rect x="96" y="150" width="6" height="6" fill="var(--color-brass)" />
+        <rect x="96" y="150" width="6" height="6" fill="var(--color-secondary)" />
       )}
       {/* sweat when rattled */}
       {mood === "rattled" && (
         <motion.path
           d="M140 120c0 6-4 8-4 12a4 4 0 0 0 8 0c0-4-4-6-4-12z"
-          fill="var(--color-steel)"
+          fill="var(--color-tertiary)"
           initial={{ y: -4, opacity: 0 }}
           animate={{ y: 4, opacity: 1 }}
           transition={{ repeat: Infinity, repeatType: "reverse", duration: 1 }}

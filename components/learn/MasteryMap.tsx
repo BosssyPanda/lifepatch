@@ -70,24 +70,24 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
             transition={{ duration: 0.4, ease: EASE }}
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="border-b-2 border-paper-ink/15 px-5 py-4">
+            <header className="border-b-2 border-ink/15 px-5 py-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="eyebrow text-accent">Your progress</p>
-                  <h2 className="display-caps text-3xl text-paper-ink">Money Brain</h2>
+                  <p className="eyebrow text-ink">Your progress</p>
+                  <h2 className="display-caps text-3xl text-ink">Money Brain</h2>
                 </div>
                 <button
                   type="button"
                   onClick={onClose}
                   aria-label="Close Money Brain"
-                  className="grid h-9 w-9 place-items-center rounded-full border-2 border-paper-ink/25 text-paper-ink/70 transition-colors hover:bg-paper-ink/10"
+                  className="grid h-9 w-9 place-items-center rounded-full border-2 border-ink/25 text-ink/70 transition-colors hover:bg-ink/10"
                 >
                   <CloseIcon size={16} />
                 </button>
               </div>
               <div className="mt-3">
                 <MoneyBrainMeter mastery={mastery} />
-                <p className="mt-1.5 font-serif text-xs italic text-paper-dim">
+                <p className="mt-1.5 font-body text-xs italic text-secondary">
                   {masteredCount} of {CONCEPTS.length} concepts mastered · master by applying them
                   well, not just seeing them.
                 </p>
@@ -102,7 +102,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                   <div key={cat} className="mb-5 last:mb-0">
                     <div className="mb-2 flex items-center gap-2">
                       <span className="h-3 w-3 rounded-[2px]" style={{ background: "var(--color-secondary)" }} />
-                      <span className="eyebrow text-paper-dim">{meta.label}</span>
+                      <span className="eyebrow text-secondary">{meta.label}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {concepts.map((c) => (
@@ -121,7 +121,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
               })}
             </div>
 
-            <footer className="border-t-2 border-paper-ink/10 px-5 py-3">
+            <footer className="border-t-2 border-ink/10 px-5 py-3">
               <NeonButton variant="ghost" size="sm" onClick={onClose}>
                 Close
               </NeonButton>
@@ -154,12 +154,12 @@ function ConceptNode({
       onClick={onToggle}
       className={`rounded-[4px] border px-3 py-2 text-left transition-all ${
         locked
-          ? "border-paper-ink/10 opacity-55"
-          : "border-paper-ink/20 hover:border-paper-ink/50 hover:bg-paper-ink/[0.03]"
-      } ${expanded ? "col-span-2 bg-paper-ink/[0.04] sm:col-span-3" : ""}`}
+          ? "border-ink/10 opacity-55"
+          : "border-ink/20 hover:border-ink/50 hover:bg-ink/[0.03]"
+      } ${expanded ? "col-span-2 bg-ink/[0.04] sm:col-span-3" : ""}`}
       style={state === "mastering" ? { borderColor: "var(--color-secondary)" } : undefined}
     >
-      <span className="inline-flex items-center gap-1 font-display text-[0.82rem] font-semibold leading-tight text-paper-ink">
+      <span className="inline-flex items-center gap-1 font-mono text-[0.82rem] font-semibold leading-tight text-ink">
         {locked && <LockIcon size={11} className="shrink-0 opacity-70" />}
         {concept.title}
       </span>
@@ -174,12 +174,12 @@ function ConceptNode({
           ))}
         </span>
       ) : (
-        <span className="eyebrow mt-1.5 block text-[0.55rem] text-paper-dim">
+        <span className="eyebrow mt-1.5 block text-[0.55rem] text-secondary">
           {state === "introduced" ? "Introduced" : "Locked"}
         </span>
       )}
       {expanded && (
-        <p className="mt-2 font-serif text-[0.82rem] italic leading-snug text-paper-ink/75">
+        <p className="mt-2 font-body text-[0.82rem] italic leading-snug text-ink/75">
           {concept.def}
         </p>
       )}

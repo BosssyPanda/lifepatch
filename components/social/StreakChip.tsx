@@ -41,16 +41,16 @@ export function StreakChip() {
   if (current <= 0) return null;
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-bg2/70 px-3 py-1 text-sm shadow-[0_6px_18px_-12px_rgba(0,0,0,0.85)]">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-ink/40 bg-bg2/70 px-3 py-1 text-sm shadow-[0_6px_18px_-12px_rgba(0,0,0,0.85)]">
       <motion.span
         aria-hidden
         animate={pulse && !reduce ? { scale: [1, 1.55, 1], rotate: [0, -12, 10, 0] } : { scale: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="text-accent"
+        className="text-ink"
       >
         <FlameIcon size={14} />
       </motion.span>
-      <span className="display-caps tracking-[0.1em] text-accent">{current}</span>
+      <span className="display-caps tracking-[0.1em] text-ink">{current}</span>
       <span className="text-ink-dim">day{current === 1 ? "" : "s"}</span>
     </span>
   );

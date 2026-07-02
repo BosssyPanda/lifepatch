@@ -16,7 +16,7 @@ function profExpenses(p: Profession): number {
 
 const DOTS = (n: number) =>
   Array.from({ length: 5 }).map((_, i) => (
-    <span key={i} className={`h-1.5 w-1.5 rounded-full ${i < n ? "bg-accent" : "bg-paper-ink/20"}`} />
+    <span key={i} className={`h-1.5 w-1.5 rounded-full ${i < n ? "bg-ink" : "bg-ink/20"}`} />
   ));
 
 export function CashflowSetup({
@@ -39,15 +39,15 @@ export function CashflowSetup({
   return (
     <div className="mx-auto min-h-[100svh] w-full max-w-5xl px-4 py-10">
       <div className="flex items-center justify-between">
-        <p className="eyebrow text-accent">Escape the Rat Race · Setup</p>
+        <p className="eyebrow text-ink">Escape the Rat Race · Setup</p>
         <NeonButton variant="ghost" size="sm" onClick={onExit}>
           ← Title
         </NeonButton>
       </div>
 
       {hasSave && step === "profession" && (
-        <div className="mt-5 flex items-center justify-between rounded-[5px] border border-accent/40 bg-accent/10 px-4 py-3">
-          <p className="font-serif text-[0.9rem] text-ink">You have a game in progress.</p>
+        <div className="mt-5 flex items-center justify-between rounded-[5px] border border-ink/40 bg-ink/10 px-4 py-3">
+          <p className="font-body text-[0.9rem] text-ink">You have a game in progress.</p>
           <NeonButton variant="primary" size="sm" onClick={() => { audio.sfx("confirm"); onResume(); }}>
             Continue run →
           </NeonButton>
@@ -57,7 +57,7 @@ export function CashflowSetup({
       {step === "profession" ? (
         <>
           <h1 className="display-caps mt-7 text-3xl text-ink sm:text-5xl">Choose your profession</h1>
-          <p className="mt-2 max-w-2xl font-serif text-ink-dim">
+          <p className="mt-2 max-w-2xl font-body text-ink-dim">
             Each job sets your salary AND your expenses. Watch the lesson hiding in plain sight: a bigger paycheck usually means a bigger bar to clear.
           </p>
 
@@ -74,22 +74,22 @@ export function CashflowSetup({
                   animate={{ opacity: 1, y: 0, scale: active ? 1.02 : 1 }}
                   transition={{ delay: i * 0.05, type: "spring", stiffness: 220, damping: 20 }}
                   whileHover={{ y: -4 }}
-                  className={`paper relative overflow-hidden rounded-[6px] p-4 text-left ${active ? "ring-2 ring-accent ring-offset-2 ring-offset-bg" : ""}`}
+                  className={`paper relative overflow-hidden rounded-[6px] p-4 text-left ${active ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""}`}
                 >
                   {active && (
-                    <span className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-full bg-accent text-paper">
+                    <span className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-full bg-ink text-bg">
                       <CheckIcon size={13} />
                     </span>
                   )}
-                  <h2 className="display-caps text-xl text-paper-ink">{p.title}</h2>
-                  <p className="mt-1 font-serif text-[0.82rem] leading-snug text-paper-ink/70">{p.blurb}</p>
-                  <div className="mt-3 space-y-1 border-t border-paper-ink/15 pt-2 num text-[0.82rem]">
-                    <div className="flex justify-between"><span className="text-paper-ink/60">Salary</span><span className="text-paper-ink">{currency(p.salary)}/mo</span></div>
-                    <div className="flex justify-between"><span className="text-paper-ink/60">Expenses</span><span className="text-brick">{currency(exp)}/mo</span></div>
-                    <div className="flex justify-between"><span className="text-paper-ink/60">Payday</span><span className={pay >= 0 ? "text-olive" : "text-brick"}>{pay >= 0 ? "+" : ""}{currency(pay)}/mo</span></div>
+                  <h2 className="display-caps text-xl text-ink">{p.title}</h2>
+                  <p className="mt-1 font-body text-[0.82rem] leading-snug text-ink/70">{p.blurb}</p>
+                  <div className="mt-3 space-y-1 border-t border-ink/15 pt-2 num text-[0.82rem]">
+                    <div className="flex justify-between"><span className="text-ink/60">Salary</span><span className="text-ink">{currency(p.salary)}/mo</span></div>
+                    <div className="flex justify-between"><span className="text-ink/60">Expenses</span><span className="text-loss">{currency(exp)}/mo</span></div>
+                    <div className="flex justify-between"><span className="text-ink/60">Payday</span><span className={pay >= 0 ? "text-gain" : "text-loss"}>{pay >= 0 ? "+" : ""}{currency(pay)}/mo</span></div>
                   </div>
                   <div className="mt-2.5 flex items-center gap-1.5">
-                    <span className="eyebrow text-paper-dim" style={{ fontSize: "0.54rem" }}>Difficulty</span>
+                    <span className="eyebrow text-secondary" style={{ fontSize: "0.54rem" }}>Difficulty</span>
                     <span className="flex items-center gap-1">{DOTS(p.difficulty)}</span>
                   </div>
                 </motion.button>
@@ -105,11 +105,11 @@ export function CashflowSetup({
         </>
       ) : (
         <>
-          <button onClick={() => setStep("profession")} className="mt-7 font-serif text-[0.82rem] text-ink-dim underline">
+          <button onClick={() => setStep("profession")} className="mt-7 font-body text-[0.82rem] text-ink-dim underline">
             ← back to professions
           </button>
           <h1 className="display-caps mt-3 text-3xl text-ink sm:text-5xl">Choose your dream</h1>
-          <p className="mt-2 max-w-2xl font-serif text-ink-dim">
+          <p className="mt-2 max-w-2xl font-body text-ink-dim">
             This is what you&apos;ll chase on the Fast Track once you&apos;re free. Pick the one that makes the grind worth it.
           </p>
 
@@ -124,25 +124,25 @@ export function CashflowSetup({
                   animate={{ opacity: 1, y: 0, scale: active ? 1.03 : 1 }}
                   transition={{ delay: i * 0.04, type: "spring", stiffness: 240, damping: 20 }}
                   whileHover={{ y: -4 }}
-                  className={`rounded-[6px] border p-4 text-left ${active ? "border-accent bg-accent/15" : "border-ink/15 bg-bg2 hover:border-ink/35"}`}
+                  className={`rounded-[6px] border p-4 text-left ${active ? "border-ink bg-ink/15" : "border-ink/15 bg-bg2 hover:border-ink/35"}`}
                 >
                   <h3 className="display-caps text-base text-ink">{d.title}</h3>
-                  <p className="mt-1 font-serif text-[0.78rem] leading-snug text-ink-dim">{d.blurb}</p>
-                  <p className="mt-2 num text-sm text-accent">{currency(d.cost)}</p>
+                  <p className="mt-1 font-body text-[0.78rem] leading-snug text-ink-dim">{d.blurb}</p>
+                  <p className="mt-2 num text-sm text-ink">{currency(d.cost)}</p>
                 </motion.button>
               );
             })}
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
-            <label className="flex items-center gap-2 font-serif text-[0.85rem] text-ink-dim">
+            <label className="flex items-center gap-2 font-body text-[0.85rem] text-ink-dim">
               Name
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Player"
                 maxLength={16}
-                className="w-36 rounded-[4px] border border-ink/20 bg-bg2 px-3 py-1.5 num text-ink outline-none focus:border-accent"
+                className="w-36 rounded-[4px] border border-ink/20 bg-bg2 px-3 py-1.5 num text-ink outline-none focus:border-ink"
               />
             </label>
             <NeonButton

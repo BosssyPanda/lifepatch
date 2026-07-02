@@ -34,7 +34,7 @@ export function MoneyBrainMeter({
         style={{ background: "color-mix(in srgb, currentColor 14%, transparent)" }}
       >
         <div
-          className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
+          className="h-full rounded-full bg-ink transition-[width] duration-700 ease-out"
           style={{ width: `${pct}%` }}
         />
         {/* faint quarter-marks so progress reads against milestones */}

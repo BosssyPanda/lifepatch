@@ -84,13 +84,13 @@ export function LifeEventCard({
       transition={{ type: "spring", stiffness: 200, damping: 22 }}
       className="paper mx-auto max-w-3xl px-5 py-5 sm:px-6"
     >
-      <div className="flex items-center justify-between border-b border-paper-ink/30 pb-2">
-        <span className="eyebrow text-paper-dim">{event.tag}</span>
-        <span className="eyebrow text-paper-dim">Life event</span>
+      <div className="flex items-center justify-between border-b border-ink/30 pb-2">
+        <span className="eyebrow text-secondary">{event.tag}</span>
+        <span className="eyebrow text-secondary">Life event</span>
       </div>
-      <p className="mt-3 font-serif text-[1.02rem] leading-relaxed text-paper-ink/85">{event.prompt}</p>
+      <p className="mt-3 font-body text-[1.02rem] leading-relaxed text-ink/85">{event.prompt}</p>
 
-      <div className="my-3 h-px bg-paper-ink/15" />
+      <div className="my-3 h-px bg-ink/15" />
 
       <ul className="space-y-2">
         {event.choices.map((c) => {
@@ -103,15 +103,15 @@ export function LifeEventCard({
                 disabled={answered}
                 onClick={() => { audio.sfx("paper"); onChoose(event.id, c); }}
                 className={`group flex w-full items-start gap-2.5 rounded-[3px] border px-3.5 py-2.5 text-left transition-all ${
-                  isChosen ? "border-accent bg-accent/10" : dim ? "border-paper-ink/10 opacity-45" : "border-paper-ink/25 hover:border-paper-ink hover:bg-paper-ink/[0.04]"
+                  isChosen ? "border-ink bg-ink/10" : dim ? "border-ink/10 opacity-45" : "border-ink/25 hover:border-ink hover:bg-ink/[0.04]"
                 } ${answered ? "cursor-default" : "cursor-pointer"}`}
               >
-                <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${isChosen ? "border-accent bg-accent text-paper" : "border-paper-ink/40 text-transparent"}`}>
+                <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${isChosen ? "border-ink bg-ink text-bg" : "border-ink/40 text-transparent"}`}>
                   <CheckIcon size={12} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="font-display text-sm font-semibold uppercase tracking-wide text-paper-ink">{c.label}</span>
-                  <span className="mt-0.5 block font-serif text-sm leading-snug text-paper-ink/60">{c.blurb}</span>
+                  <span className="font-mono text-sm font-semibold uppercase tracking-wide text-ink">{c.label}</span>
+                  <span className="mt-0.5 block font-body text-sm leading-snug text-ink/60">{c.blurb}</span>
                 </span>
               </button>
             </li>
@@ -120,7 +120,7 @@ export function LifeEventCard({
       </ul>
 
       {!answered ? (
-        <p className="mt-4 flex items-center justify-center gap-2 text-paper-dim">
+        <p className="mt-4 flex items-center justify-center gap-2 text-secondary">
           <LockIcon size={14} />
           <span className="eyebrow">Outcome hidden — choose to find out</span>
         </p>

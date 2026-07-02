@@ -11,10 +11,10 @@ export function MicroLesson({ lesson }: { lesson: string }) {
       transition={{ delay: 0.15 }}
       className="flex items-start gap-3 border-t border-ink/15 pt-4"
     >
-      <InfoIcon size={20} className="mt-0.5 shrink-0 text-accent" />
+      <InfoIcon size={20} className="mt-0.5 shrink-0 text-ink" />
       <div>
         <p className="eyebrow text-ink-dim">The lesson</p>
-        <p className="mt-1 font-serif text-[1.02rem] italic leading-snug text-ink/90">
+        <p className="mt-1 font-body text-[1.02rem] italic leading-snug text-ink/90">
           {lesson}
         </p>
       </div>
