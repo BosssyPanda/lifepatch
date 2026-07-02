@@ -13,7 +13,7 @@ import {
   type AlmanacSectionId,
 } from "@/lib/almanac";
 
-const VERDICT_HEX: Record<string, string> = { Myth: "#a33218", Fact: "#7f8b52", "It depends": "#c8861e" };
+const VERDICT_HEX: Record<string, string> = { Myth: "#ff3b30", Fact: "#2bd576", "It depends": "#8f8e85" };
 
 export function Almanac({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [section, setSection] = useState<AlmanacSectionId>("wealth");
@@ -23,7 +23,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
       {open && (
         <motion.div className="fixed inset-0 z-50 flex flex-col bg-bg" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
           {/* header + tabs */}
-          <div className="sticky top-0 z-10 border-b border-ink/12 bg-bg/95 backdrop-blur-md">
+          <div className="sticky top-0 z-10 border-b border-ink/12 bg-bg">
             <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-3">
               <div>
                 <p className="eyebrow text-accent">The Almanac</p>
@@ -58,8 +58,8 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
                         <h3 className="display-caps text-xl text-ink">{m.name}</h3>
                         <p className="mt-1 font-serif text-sm italic text-ink-dim">{m.how}</p>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <List label="Pros" hex="#7f8b52" items={m.pros} />
-                          <List label="Cons" hex="#a33218" items={m.cons} />
+                          <List label="Pros" hex="#2bd576" items={m.pros} />
+                          <List label="Cons" hex="#ff3b30" items={m.cons} />
                         </div>
                       </article>
                     </Reveal>

@@ -31,7 +31,7 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
         className="pointer-events-none absolute inset-0"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        style={{ background: "radial-gradient(60% 50% at 50% 40%, rgba(127,139,82,0.25), transparent 70%)" }}
+        style={{ background: "transparent" }}
       />
       {/* particles */}
       {!reduce &&

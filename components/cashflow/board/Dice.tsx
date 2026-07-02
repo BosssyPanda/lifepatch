@@ -52,9 +52,8 @@ function Pip({ red }: { red: boolean }) {
         height: "26%",
         borderRadius: "50%",
         background: red
-          ? "radial-gradient(circle at 34% 30%, #ef7a45 0%, #d4541e 42%, #7a1f0c 100%)"
-          : "radial-gradient(circle at 34% 30%, #5b5046 0%, #221b13 55%, #0c0907 100%)",
-        boxShadow: "inset 0 1.2px 1.4px rgba(0,0,0,0.65), 0 1px 0 rgba(255,255,255,0.55)",
+          ? "var(--color-loss)"
+          : "var(--color-bg)",
         alignSelf: "center",
         justifySelf: "center",
       }}
@@ -77,23 +76,11 @@ function Face({ v, transform }: { v: number; transform: string }) {
         transform,
         backfaceVisibility: "hidden",
         borderRadius: 13,
-        border: "1px solid rgba(120,100,70,0.35)",
-        background: "linear-gradient(150deg, #fdfbf4 0%, #f4eee2 52%, #e4dac4 100%)",
-        boxShadow:
-          "inset 0 0 7px rgba(255,255,255,0.85), inset 0 -4px 7px rgba(150,128,92,0.28), inset 0 3px 5px rgba(255,255,255,0.6)",
+        border: "1px solid var(--color-hairline)",
+        background: "var(--color-ink)",
         overflow: "hidden",
       }}
     >
-      {/* glossy specular highlight */}
-      <span
-        style={{
-          position: "absolute",
-          inset: 0,
-          borderRadius: 13,
-          background: "radial-gradient(60% 45% at 30% 22%, rgba(255,255,255,0.7), rgba(255,255,255,0) 60%)",
-          pointerEvents: "none",
-        }}
-      />
       <div
         style={{
           position: "absolute",
@@ -127,7 +114,7 @@ function Burst() {
           position: "absolute",
           inset: "10%",
           borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(212,84,30,0.55), rgba(212,84,30,0) 70%)",
+          background: "transparent",
         }}
       />
       {/* dust particles */}
@@ -148,7 +135,7 @@ function Burst() {
               marginLeft: -2,
               marginTop: -2,
               borderRadius: "50%",
-              background: i % 2 ? "rgba(231,223,201,0.9)" : "rgba(201,162,74,0.9)",
+              background: i % 2 ? "var(--color-ink)" : "var(--color-secondary)",
             }}
           />
         );
@@ -217,8 +204,8 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
           bottom: 0,
           height: 12,
           borderRadius: "50%",
-          background: "radial-gradient(ellipse, rgba(0,0,0,0.6), rgba(0,0,0,0) 70%)",
-          filter: "blur(3px)",
+          background: "transparent",
+  
         }}
       />
 
@@ -243,7 +230,7 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
                   left: `calc(50% + ${dx}px)`,
                   width: 2,
                   borderRadius: 2,
-                  background: "linear-gradient(to bottom, rgba(231,223,201,0), rgba(231,223,201,0.7), rgba(231,223,201,0))",
+                  background: "var(--color-ink)",
                 }}
               />
             ))}
