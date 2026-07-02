@@ -35,18 +35,6 @@ export function Gate({
       onPointerMove={onMove}
       className="relative flex min-h-[100svh] w-full flex-col items-center justify-center gap-6 overflow-hidden px-6 py-16 lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-16"
     >
-      {/* faint blueprint grid wash */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.5]"
-        style={{
-          backgroundImage: "radial-gradient(circle at 1px 1px, rgba(242,241,234,0.10) 1px, transparent 0)",
-          backgroundSize: "26px 26px",
-          maskImage: "radial-gradient(110% 80% at 30% 45%, #000 30%, transparent 78%)",
-          WebkitMaskImage: "radial-gradient(110% 80% at 30% 45%, #000 30%, transparent 78%)",
-        }}
-      />
-
       {/* ---------------- HUD: corner brackets ---------------- */}
       <div aria-hidden className="pointer-events-none absolute inset-3 z-20 lg:inset-5">
         <span className="absolute left-0 top-0 h-7 w-7 border-l-2 border-t-2 border-ink/40 lg:h-10 lg:w-10" />
@@ -117,7 +105,7 @@ export function Gate({
           transition={{ delay: 0.55, type: "spring", stiffness: 220, damping: 16 }}
           whileHover={{ scale: 1.04 }}
           whileTap={{ scale: 0.97 }}
-          className="group mt-9 flex items-center gap-3 rounded-[4px] border-2 border-ink bg-ink/5 px-9 py-4 text-ink transition-colors hover:bg-ink hover:text-bg"
+          className="group mt-9 flex items-center gap-3 border-2 border-ink bg-ink/5 px-9 py-4 text-ink transition-colors hover:bg-ink hover:text-bg"
         >
           <motion.span
             animate={reduce ? undefined : { scale: [1, 1.18, 1] }}
