@@ -10,7 +10,13 @@ import { conceptsForText } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEffect, LifeEvent } from "@/lib/lifeEvents";
 
-const TONE_HEX: Record<string, string> = { good: "#7f8b52", bad: "#a33218", warning: "#c8861e", neutral: "#a89f8c" };
+// LEDGER: outcomes read gain/loss; neutral tones stay ink-secondary.
+const TONE_HEX: Record<string, string> = {
+  good: "var(--color-gain)",
+  bad: "var(--color-loss)",
+  warning: "var(--color-secondary)",
+  neutral: "var(--color-secondary)",
+};
 
 function chips(e: LifeEffect): { text: string; positive: boolean }[] {
   const out: { text: string; positive: boolean }[] = [];
@@ -102,24 +108,23 @@ export function LifeEventCard({
         </p>
       ) : (
         outcome && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 rounded-[4px] border-l-2 px-4 py-3" style={{ borderColor: TONE_HEX[outcome.tone], background: "#00000010" }}>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 border-l-2 pl-4 pr-1 py-3" style={{ borderColor: TONE_HEX[outcome.tone] }}>
             {outcome.note && (
-              <p className="display-caps text-base" style={{ color: TONE_HEX[outcome.tone] === "#c8861e" ? "#9a6512" : TONE_HEX[outcome.tone] }}>
+              <p className="display-caps text-base" style={{ color: TONE_HEX[outcome.tone] }}>
                 {outcome.note}
               </p>
             )}
-            <p className="mt-1 font-serif text-[0.97rem] leading-relaxed text-paper-ink/85">{outcome.consequence}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <p className="mt-1 font-body text-[0.97rem] leading-relaxed text-ink/85">{outcome.consequence}</p>
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
               {chips(outcome.effect).map((ch, i) => (
-                <span key={i} className="num rounded-[2px] px-1.5 py-0.5 text-[0.66rem]" style={{ color: ch.positive ? "#5d6a37" : "#8c2c14", background: ch.positive ? "#7f8b5222" : "#a3321822" }}>
+                <span key={i} className="num border px-1.5 py-0.5 text-[0.66rem]" style={{ color: ch.positive ? "var(--color-gain)" : "var(--color-loss)", borderColor: ch.positive ? "var(--color-gain)" : "var(--color-loss)" }}>
                   {ch.text}
                 </span>
               ))}
             </div>
             {outcome.lesson && (
-              <div className="mt-3 border-t border-paper-ink/15 pt-2.5">
-                <p className="eyebrow text-paper-dim">The lesson</p>
-                <p className="mt-0.5 font-serif text-[0.95rem] italic leading-snug text-paper-ink/80">{outcome.lesson}</p>
+              <div className="mt-3 border-t border-hairline pt-2.5">
+                <p className="voice text-[1.05rem] leading-snug text-ink/90">{outcome.lesson}</p>
               </div>
             )}
           </motion.div>

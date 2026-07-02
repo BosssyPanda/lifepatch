@@ -1,30 +1,49 @@
 @import "tailwindcss";
 
+/* ================================================================
+   LEDGER design system — a printed financial statement / terminal.
+   Flat ink, hard structure, tabular figures. No shadows, no gradients,
+   no grain, no glow, no radius. Hierarchy from scale / weight / case.
+   ================================================================ */
+
 /* ---------------- Fonts (next/font CSS vars) ---------------- */
 @theme inline {
-  --font-display: var(--font-oswald), "Oswald", "Arial Narrow", sans-serif;
-  --font-serif: var(--font-newsreader), "Newsreader", Georgia, "Times New Roman", serif;
+  --font-anton: var(--font-anton-src), "Anton", "Arial Narrow", sans-serif; /* display numerals + wordmark only */
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace; /* labels, data, HUD, buttons, chrome */
+  --font-voice: var(--font-instrument), "Instrument Serif", Georgia, serif; /* single-line voice insights only */
+  --font-body: var(--font-archivo), "Archivo", system-ui, sans-serif; /* body / scenario prose */
+
+  /* legacy aliases so the ~58 not-yet-migrated components keep resolving until Phase 3 */
+  --font-display: var(--font-mono);
+  --font-serif: var(--font-body);
 }
 
-/* ---------------- Color tokens (SPENT gritty editorial) ---------------- */
+/* ---------------- LEDGER color tokens ---------------- */
 @theme {
-  --color-bg: #14110e;
-  --color-bg2: #1e1a15;
-  --color-bg3: #2a241d;
-  --color-ink: #e9e1cf;
-  --color-ink-dim: #a89f8c;
-  --color-accent: #d4541e;
-  --color-accent-2: #e9692f;
-  --color-paper: #e7dfc9;
-  --color-paper-2: #efe8d4;
-  --color-paper-ink: #211c16;
-  --color-paper-dim: #6f6657;
+  --color-bg: #0e0e0c; /* background / paper */
+  --color-bg2: #131211; /* faint framed panel (structure still comes from 1px borders) */
+  --color-bg3: #191714;
+  --color-ink: #f2f1ea; /* primary */
+  --color-ink-dim: #8f8e85; /* secondary */
+  --color-secondary: #8f8e85;
+  --color-tertiary: #5c5b53; /* faint */
+  --color-hairline: #2a2a25;
+  --color-dotted: #3a3a33;
+  --color-loss: #ff3b30; /* flat red — losses */
+  --color-gain: #2bd576; /* flat green — gains */
 
-  --color-olive: #7f8b52;
-  --color-brick: #a33218;
-  --color-ochre: #c8861e;
-  --color-brass: #c9a24a;
-  --color-steel: #5f7480;
+  /* legacy semantic tokens remapped onto LEDGER (per-screen craft lands in Phase 3) */
+  --color-accent: #f2f1ea; /* was terracotta → neutral ink; emphasis via weight/case, not color */
+  --color-accent-2: #ffffff;
+  --color-paper: #0e0e0c; /* was cream → dark panel */
+  --color-paper-2: #131211;
+  --color-paper-ink: #f2f1ea; /* text on a panel → ink */
+  --color-paper-dim: #8f8e85;
+  --color-olive: #2bd576; /* good → gain */
+  --color-brick: #ff3b30; /* bad → loss */
+  --color-ochre: #8f8e85; /* warning → neutral (no amber allowed) */
+  --color-brass: #8f8e85; /* metal → neutral */
+  --color-steel: #5c5b53; /* cool → faint */
 }
 
 :root {
@@ -35,9 +54,19 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* LEDGER hard rule: enforce zero radius + zero shadow/glow everywhere.
+   Treated as a lint gate — no element may carry a shadow or a rounded corner. */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
 html {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-bg3) transparent;
+  scrollbar-color: var(--color-hairline) transparent;
 }
 
 html,
@@ -49,140 +78,135 @@ body {
 body {
   background-color: var(--color-bg);
   color: var(--color-ink);
-  font-family: var(--font-serif);
+  font-family: var(--font-body);
   font-synthesis-weight: none;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* ---------------- Typography helpers ---------------- */
+/* ---------------- Typography helpers → LEDGER roles ---------------- */
 .font-display {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
 }
 .font-serif {
-  font-family: var(--font-serif);
+  font-family: var(--font-body);
 }
-.display-caps {
-  font-family: var(--font-display);
-  text-transform: uppercase;
+.font-mono {
+  font-family: var(--font-mono);
+}
+.font-anton {
+  font-family: var(--font-anton);
+}
+/* single-line voice insight — the only serif italic in the system */
+.voice {
+  font-family: var(--font-voice);
+  font-style: italic;
   letter-spacing: 0.01em;
-  line-height: 0.95;
+}
+/* headers / titles → mono chrome (Anton is reserved for the wordmark + big numerals) */
+.display-caps {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
   font-weight: 600;
 }
 .eyebrow {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
   text-transform: uppercase;
-  letter-spacing: 0.28em;
+  letter-spacing: 0.22em;
   font-weight: 500;
   font-size: 0.72rem;
 }
 .num {
-  font-family: var(--font-display);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+/* big display figures (delta numerals, hero stats) */
+.figure {
+  font-family: var(--font-anton);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
 
-/* ---------------- Film grain + vignette atmosphere ---------------- */
-.grain-overlay {
-  position: fixed;
-  inset: -120%;
-  z-index: 60;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: 0.05;
-  mix-blend-mode: overlay;
-  animation: grain 0.6s steps(3) infinite;
-}
-@keyframes grain {
-  0% { transform: translate(0, 0); }
-  33% { transform: translate(-3%, 2%); }
-  66% { transform: translate(2%, -3%); }
-  100% { transform: translate(-2%, -2%); }
-}
-.vignette {
-  position: fixed;
-  inset: 0;
-  z-index: 55;
-  pointer-events: none;
-  background: radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
-}
-
-/* ---------------- Paper card (SPENT job document) ---------------- */
-.paper {
-  background-color: var(--color-paper);
-  color: var(--color-paper-ink);
-  background-image:
-    repeating-linear-gradient(0deg, rgba(33, 28, 22, 0.025) 0 1px, transparent 1px 4px);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.35) inset,
-    0 22px 40px -28px rgba(0, 0, 0, 0.85);
-}
-.paper-rule {
-  border-color: var(--color-paper-ink);
-}
-
-/* hairline rule used across editorial sections */
+/* ---------------- Structure: hairlines + dot leaders ---------------- */
 .hairline {
   height: 1px;
-  background: linear-gradient(90deg, transparent, var(--color-ink-dim), transparent);
-  opacity: 0.4;
+  background: var(--color-hairline);
+}
+.rule-dotted {
+  height: 0;
+  border-top: 1px dotted var(--color-dotted);
+}
+
+/* Framed panel — flat dark section with a 1px hairline (no shadow, no texture) */
+.paper {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
+}
+.paper-rule {
+  border-color: var(--color-hairline);
 }
 
 /* ---------------- Focus ring ---------------- */
 :where(button, a, [tabindex], input, select):focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
 }
 
-/* ---------------- Detour scrollbars ---------------- */
-.thin-scroll::-webkit-scrollbar { width: 7px; }
-.thin-scroll::-webkit-scrollbar-thumb { background: var(--color-bg3); border-radius: 999px; }
-.thin-scroll::-webkit-scrollbar-track { background: transparent; }
+/* ---------------- Scrollbars ---------------- */
+.thin-scroll::-webkit-scrollbar {
+  width: 7px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-hairline);
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-/* ---------------- Allocation slider ---------------- */
-/* Per-row accent + fill come from inline style: --accent and --fill (0-100). */
+/* ---------------- Allocation slider (functional two-tone fill) ---------------- */
 .allocator {
-  --accent: var(--color-accent);
+  --accent: var(--color-ink);
   --fill: 0%;
   appearance: none;
   -webkit-appearance: none;
-  height: 6px;
-  border-radius: 999px;
-  background:
-    linear-gradient(
-      to right,
-      var(--accent) 0%,
-      var(--accent) var(--fill),
-      rgba(233, 225, 207, 0.14) var(--fill),
-      rgba(233, 225, 207, 0.14) 100%
-    );
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--fill),
+    var(--color-hairline) var(--fill),
+    var(--color-hairline) 100%
+  );
 }
 .allocator::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 15px;
-  height: 15px;
-  border-radius: 999px;
+  width: 12px;
+  height: 12px;
   background: var(--color-ink);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--color-ink);
   cursor: pointer;
 }
 .allocator::-moz-range-thumb {
-  width: 13px;
-  height: 13px;
-  border-radius: 999px;
+  width: 12px;
+  height: 12px;
   background: var(--color-ink);
-  border: 2px solid var(--accent);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--color-ink);
   cursor: pointer;
 }
-.allocator:disabled::-webkit-slider-thumb { cursor: not-allowed; }
-.allocator:disabled::-moz-range-thumb { cursor: not-allowed; }
+.allocator:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+.allocator:disabled::-moz-range-thumb {
+  cursor: not-allowed;
+}
 
 /* ---------------- Reduced motion ---------------- */
 @media (prefers-reduced-motion: reduce) {
-  .grain-overlay { animation: none; }
   *,
   *::before,
   *::after {

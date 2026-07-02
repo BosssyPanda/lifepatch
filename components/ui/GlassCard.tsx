@@ -12,14 +12,10 @@ export function PaperCard({
 }) {
   if (variant === "dark") {
     return (
-      <div
-        className={`rounded-[4px] border border-ink/15 bg-bg2 ${className}`}
-      >
-        {children}
-      </div>
+      <div className={`border border-hairline bg-bg2 ${className}`}>{children}</div>
     );
   }
-  return <div className={`paper rounded-[4px] ${className}`}>{children}</div>;
+  return <div className={`paper ${className}`}>{children}</div>;
 }
 
 // Back-compat alias.

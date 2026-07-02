@@ -2,16 +2,27 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useRef } from "react";
-import { Mascot } from "@/components/brand/Mascot";
-import { ArrowDown } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
+
+const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+
+/** A hairline-separated ledger cell (mono, uppercase). */
+function Cell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span
+      className={`eyebrow text-secondary ${className}`}
+      style={{ fontSize: "0.55rem", letterSpacing: "0.22em" }}
+    >
+      {children}
+    </span>
+  );
+}
 
 export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: () => void }) {
   const audio = useAudio();
 
-  // Arrival: open the signature title theme + fire the reveal swell once as the
-  // economy resolves behind the logo. No-ops cleanly when muted / not started.
+  // Arrival: open the signature title theme + fire the reveal swell once.
   const revealed = useRef(false);
   useEffect(() => {
     if (revealed.current) return;
@@ -21,149 +32,138 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
   }, [audio]);
 
   return (
-    <div className="relative">
-      {/* HERO — engraved masthead */}
-      <section className="relative flex min-h-[100svh] flex-col items-center justify-center px-5 py-20 text-center">
-        {/* masthead dateline rule */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.9 }}
-          className="absolute inset-x-0 top-0 flex items-center gap-4 px-5 pt-6 sm:px-10"
-        >
-          <span className="num hidden text-[0.6rem] tracking-[0.25em] text-ink-dim/70 sm:block">VOL. I · NO. 1</span>
-          <span className="h-px flex-1 bg-ink/15" />
-          <span className="eyebrow text-ink-dim/80" style={{ fontSize: "0.55rem" }}>A Financial Survival Story</span>
-          <span className="h-px flex-1 bg-ink/15" />
-          <span className="num hidden text-[0.6rem] tracking-[0.25em] text-ink-dim/70 sm:block">EST. MMXXVI</span>
-        </motion.div>
+    <div className="relative bg-bg text-ink">
+      {/* ===================== HERO — statement cover ===================== */}
+      <section className="relative flex min-h-[100svh] flex-col">
+        {/* top HUD rail */}
+        <div className="flex items-stretch border-b border-hairline">
+          <div className="flex items-center gap-2 border-r border-hairline px-4 py-3 sm:px-6">
+            <span className="eyebrow text-ink" style={{ fontSize: "0.62rem", letterSpacing: "0.2em" }}>
+              LIFEPATCH
+            </span>
+            <Cell>/ Survival</Cell>
+          </div>
+          <div className="ml-auto flex items-center gap-4 px-4 py-3 sm:px-6">
+            <Cell className="hidden sm:inline">A Financial Survival Game</Cell>
+            <span className="hidden h-3 w-px bg-hairline sm:block" />
+            <Cell>Est. MMXXVI</Cell>
+          </div>
+        </div>
 
-        <motion.div className="relative z-10 flex flex-col items-center">
-          {/* the engraved seal */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.86, rotate: -8 }}
-            animate={{ opacity: 1, scale: 1, rotate: 0 }}
-            transition={{ type: "spring", stiffness: 120, damping: 16 }}
+        {/* main block — left-anchored, asymmetric */}
+        <div className="flex flex-1 flex-col justify-center px-5 py-16 sm:px-10 lg:px-16">
+          <motion.p
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: EASE }}
+            className="eyebrow text-secondary"
           >
-            <Mascot mood="smug" className="h-[38vw] max-h-[196px] w-[38vw] max-w-[196px]" />
-          </motion.div>
+            File No. 01 — Your Money
+          </motion.p>
 
           <motion.h1
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.12, type: "spring", stiffness: 160, damping: 18 }}
-            className="display-caps mt-3 text-[17vw] leading-[0.82] text-ink sm:text-[9.5rem]"
+            transition={{ delay: 0.06, duration: 0.6, ease: EASE }}
+            className="font-anton mt-3 leading-[0.86] tracking-[-0.01em] text-ink"
+            style={{ fontSize: "clamp(3.75rem, 18vw, 13rem)" }}
           >
-            Life<span className="text-accent">patch</span>
+            LIFEPATCH
           </motion.h1>
 
-          {/* ornamental double-rule with a center lozenge */}
-          <motion.div
-            initial={{ opacity: 0, scaleX: 0.6 }}
-            animate={{ opacity: 1, scaleX: 1 }}
-            transition={{ delay: 0.3, duration: 0.7 }}
-            className="mt-4 flex w-[min(22rem,80vw)] items-center gap-3 text-accent"
-          >
-            <span className="h-px flex-1 bg-current opacity-50" />
-            <svg width="18" height="8" viewBox="0 0 18 8" fill="none" aria-hidden>
-              <path d="M9 0l4.5 4L9 8 4.5 4z" stroke="currentColor" strokeWidth="1" />
-              <path d="M0 4h3M15 4h3" stroke="currentColor" strokeWidth="1" />
-            </svg>
-            <span className="h-px flex-1 bg-current opacity-50" />
-          </motion.div>
+          <div className="mt-5 h-px w-full max-w-3xl bg-hairline" />
 
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.42 }}
-            className="mt-4 font-serif text-xl italic text-ink/75 sm:text-2xl"
+            transition={{ delay: 0.16, duration: 0.6 }}
+            className="eyebrow mt-4 text-ink"
+            style={{ letterSpacing: "0.24em" }}
           >
             Survive the Internet Economy
           </motion.p>
 
           <motion.p
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.54 }}
-            className="mx-auto mt-5 max-w-md font-serif text-base leading-relaxed text-ink-dim"
+            transition={{ delay: 0.24, duration: 0.6, ease: EASE }}
+            className="mt-5 max-w-xl font-body text-[0.98rem] leading-relaxed text-ink-dim"
           >
             You&apos;re running out of money fast, and every choice costs something. Nine months.
-            One verdict. Try not to get financially cooked.
+            One verdict.
+          </motion.p>
+
+          <motion.p
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.32, duration: 0.6, ease: EASE }}
+            className="voice mt-3 max-w-xl text-lg text-ink"
+          >
+            Try not to get financially cooked.
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.66 }}
-            className="mt-8 flex flex-wrap items-center justify-center gap-3"
+            transition={{ delay: 0.42, duration: 0.6, ease: EASE }}
+            className="mt-9 flex flex-wrap items-center gap-3"
           >
             <NeonButton variant="primary" size="lg" onClick={() => { audio.sfx("confirm"); onBegin(); }}>
-              Choose your run →
+              Enter →
             </NeonButton>
             <NeonButton variant="secondary" size="lg" onClick={onAlmanac}>
-              Open the Almanac
+              Almanac
             </NeonButton>
           </motion.div>
-        </motion.div>
+        </div>
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, y: [0, 8, 0] }}
-          transition={{ opacity: { delay: 1 }, y: { duration: 1.8, repeat: Infinity } }}
-          className="absolute bottom-7 flex flex-col items-center gap-1 text-ink-dim"
-        >
-          <span className="eyebrow" style={{ fontSize: "0.55rem" }}>The setup</span>
-          <ArrowDown size={18} />
-        </motion.div>
+        {/* bottom ledger footer rail */}
+        <div className="flex items-stretch border-t border-hairline">
+          <div className="flex items-center gap-3 border-r border-hairline px-4 py-3 sm:px-6">
+            <Cell>Modes</Cell>
+            <Cell className="text-ink">Story · Infinite · Rat Race</Cell>
+          </div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, y: [0, 3, 0] }}
+            transition={{ opacity: { delay: 0.9 }, y: { duration: 1.8, repeat: Infinity } }}
+            className="ml-auto flex items-center gap-2 px-4 py-3 sm:px-6"
+          >
+            <Cell>Scroll ↓</Cell>
+          </motion.div>
+        </div>
       </section>
 
-      {/* PREMISE */}
-      <section className="relative flex min-h-[90svh] items-center justify-center px-5 py-20">
-        <div className="mx-auto grid max-w-4xl items-center gap-10 sm:grid-cols-[1fr_auto]">
-          <div>
-            <motion.p
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              className="eyebrow text-accent"
-            >
-              The setup
-            </motion.p>
-            <motion.h2
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ delay: 0.1 }}
-              className="display-caps mt-3 text-4xl leading-tight text-ink sm:text-6xl"
-            >
-              The economy is rigged.<br />You still have to play.
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.2 }}
-              transition={{ delay: 0.2 }}
-              className="mt-5 max-w-lg font-serif text-lg leading-relaxed text-ink/80"
-            >
-              Nine months. Rent, scams, debt traps, group-chat FOMO, and a market that
-              hates you. Your choices move real numbers. Meet the house you&apos;re playing
-              against — and pick who you&apos;ll be.
-            </motion.p>
-
+      {/* ===================== PREMISE — framed statement ===================== */}
+      <section className="px-5 py-20 sm:px-10 lg:px-16">
+        <div className="mx-auto grid max-w-5xl gap-px border border-hairline bg-hairline sm:grid-cols-[1.4fr_1fr]">
+          {/* left cell */}
+          <div className="bg-bg p-6 sm:p-10">
+            <p className="eyebrow text-secondary">The Setup</p>
+            <h2 className="display-caps mt-3 text-2xl leading-tight text-ink sm:text-4xl">
+              The economy is rigged.
+              <br />
+              You still have to play.
+            </h2>
+            <p className="mt-5 max-w-lg font-body text-[0.95rem] leading-relaxed text-ink-dim">
+              Nine months. Rent, scams, debt traps, group-chat FOMO, and a market that hates you.
+              Your choices move real numbers.
+            </p>
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, x: 20, rotate: 4 }}
-            animate={{ opacity: 1, x: 0, rotate: 0 }}
-            viewport={{ once: true, amount: 0.2 }}
-            transition={{ type: "spring", stiffness: 160, damping: 18 }}
-            className="mx-auto w-40 sm:w-56"
-          >
-            <Mascot mood="smug" />
-            <p className="mt-2 text-center font-serif text-sm italic text-ink-dim">
-              &ldquo;Welcome. I&apos;m the house.&rdquo;
-            </p>
-          </motion.div>
+          {/* right cell — itemized threats + the house voice line */}
+          <div className="flex flex-col justify-between bg-bg p-6 sm:p-10">
+            <div className="space-y-2">
+              {["Rent", "Scams", "Debt", "The Market"].map((t) => (
+                <div key={t} className="flex items-baseline gap-2">
+                  <span className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>{t}</span>
+                  <span className="mt-1 flex-1 rule-dotted" />
+                  <span className="num text-secondary" style={{ fontSize: "0.6rem" }}>PENDING</span>
+                </div>
+              ))}
+            </div>
+            <p className="voice mt-8 text-base text-ink">&ldquo;Welcome. I&apos;m the house.&rdquo;</p>
+          </div>
         </div>
       </section>
     </div>

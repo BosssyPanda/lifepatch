@@ -6,14 +6,15 @@ import type { ReactNode } from "react";
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline" | "paper" | "brass";
 type Size = "sm" | "md" | "lg";
 
+// LEDGER buttons: square, mono, flat. Emphasis from inversion, never glow.
 const VARIANTS: Record<Variant, string> = {
-  brass: "text-[#3a2c0e] border-[#8a6d22] bg-gradient-to-b from-[#e6cb7e] to-[#b8912f] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_9px_-3px_rgba(0,0,0,0.7)] hover:brightness-[1.06] active:brightness-95",
-  primary: "bg-accent text-bg border-accent hover:bg-accent-2",
-  secondary: "bg-transparent text-ink border-ink/45 hover:bg-ink hover:text-bg",
-  danger: "bg-brick text-ink border-brick hover:brightness-110",
-  outline: "bg-transparent text-paper-ink border-paper-ink/40 hover:bg-paper-ink hover:text-paper",
+  primary: "bg-ink text-bg border-ink hover:bg-accent-2",
+  secondary: "bg-transparent text-ink border-ink/50 hover:bg-ink hover:text-bg",
+  outline: "bg-transparent text-ink border-ink/35 hover:bg-ink hover:text-bg",
   ghost: "bg-transparent text-ink-dim border-transparent hover:text-ink",
-  paper: "bg-paper-ink text-paper border-paper-ink hover:bg-transparent hover:text-paper-ink",
+  paper: "bg-ink text-bg border-ink hover:bg-transparent hover:text-ink",
+  danger: "bg-transparent text-loss border-loss hover:bg-loss hover:text-bg",
+  brass: "bg-transparent text-ink border-ink/50 hover:bg-ink hover:text-bg",
 };
 
 const SIZES: Record<Size, string> = {
@@ -50,7 +51,7 @@ export function NeonButton({
       whileHover={disabled ? undefined : { y: -1 }}
       whileTap={disabled ? undefined : { y: 1, scale: 0.99 }}
       transition={{ type: "spring", stiffness: 500, damping: 26 }}
-      className={`inline-flex items-center justify-center gap-2 rounded-[3px] border display-caps tracking-[0.14em] transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 border display-caps tracking-[0.12em] transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
     >
       {children}
     </motion.button>

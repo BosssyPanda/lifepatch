@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 
+// LEDGER: gain/loss for good/bad, neutral ink/secondary for the rest (no amber).
 const TONE_HEX: Record<string, string> = {
-  good: "#7f8b52",
-  bad: "#a33218",
-  warning: "#c8861e",
-  neutral: "#a89f8c",
-  accent: "#d4541e",
-  Chill: "#7f8b52",
-  Normal: "#c8861e",
-  Brutal: "#a33218",
+  good: "#2bd576",
+  bad: "#ff3b30",
+  warning: "#8f8e85",
+  neutral: "#8f8e85",
+  accent: "#f2f1ea",
+  Chill: "#2bd576",
+  Normal: "#8f8e85",
+  Brutal: "#ff3b30",
 };
 
 export function Badge({
