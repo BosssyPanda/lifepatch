@@ -6,6 +6,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { COLD_OPEN } from "@/lib/cinematic";
 import { Beat } from "./Beat";
 import { MuteButton, SkipButton } from "./Controls";
+import { DUR } from "@/src/motion/tokens";
 
 export function ColdOpen({
   muted,
@@ -50,7 +51,7 @@ export function ColdOpen({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: DUR.instant }}
             className="flex w-full items-center justify-center"
           >
             <Beat beat={beat} />

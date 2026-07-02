@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import { DUR, EASE } from "@/src/motion/tokens";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import {
   bankLoanPayment,
@@ -117,7 +118,7 @@ export function FinancialStatement({ s, className = "" }: { s: CashflowState; cl
         key={pay}
         initial={reduce ? false : { scale: 0.965, opacity: 0.85 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.4, ease: [0.2, 0.65, 0.3, 0.9] }}
+        transition={{ duration: DUR.base, ease: EASE }}
         className="relative mt-3 flex items-center justify-between border border-hairline bg-bg2 px-3.5 py-2.5"
       >
         <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${pay >= 0 ? "bg-gain" : "bg-loss"}`} />

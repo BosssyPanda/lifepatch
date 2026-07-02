@@ -9,6 +9,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { currency } from "@/lib/format";
 import { MODES, type ModeId } from "@/lib/modes";
+import { SPRING, STAGGER } from "@/src/motion/tokens";
 
 export function Setup({
   mode,
@@ -51,7 +52,7 @@ export function Setup({
               onClick={() => setPicked(b.id)}
               initial={{ opacity: 0, y: 24, rotate: i % 2 ? 1 : -1 }}
               animate={{ opacity: active ? 1 : picked ? 0.5 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
-              transition={{ type: "spring", stiffness: 220, damping: 20, delay: i * 0.07 }}
+              transition={{ ...SPRING.pop, delay: i * STAGGER.base }}
               whileHover={{ y: -5 }}
               className={`paper relative overflow-hidden rounded-[5px] p-5 text-left ${active ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""}`}
             >

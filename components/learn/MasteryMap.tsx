@@ -10,7 +10,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { MAX_MASTERY_LEVEL } from "@/lib/cloud/mastery";
 import { getSeen } from "@/lib/cloud/seen";
 import { CATEGORY_META, CONCEPTS, type Concept, type ConceptCategory } from "@/lib/concepts";
-import { EASE } from "@/lib/motion";
+import { DUR, EASE } from "@/src/motion/tokens";
 const ORDER: ConceptCategory[] = ["earn", "grow", "protect", "borrow", "spend"];
 
 type NodeState = "locked" | "introduced" | "mastering";
@@ -67,7 +67,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            transition={{ duration: 0.4, ease: EASE }}
+            transition={{ duration: DUR.base, ease: EASE }}
             onClick={(e) => e.stopPropagation()}
           >
             <header className="border-b-2 border-ink/15 px-5 py-4">

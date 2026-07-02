@@ -9,6 +9,7 @@ import { DREAMS } from "@/lib/cashflow/dreams";
 import { PROFESSIONS } from "@/lib/cashflow/professions";
 import { currency } from "@/lib/format";
 import type { Profession } from "@/lib/cashflow/types";
+import { SPRING, STAGGER } from "@/src/motion/tokens";
 
 function profExpenses(p: Profession): number {
   return p.taxes + p.homeMortgage + p.schoolLoan + p.carLoan + p.creditCard + p.retail + p.other;
@@ -72,7 +73,7 @@ export function CashflowSetup({
                   onClick={() => { audio.sfx("click"); setProf(p.id); }}
                   initial={{ opacity: 0, y: 22 }}
                   animate={{ opacity: 1, y: 0, scale: active ? 1.02 : 1 }}
-                  transition={{ delay: i * 0.05, type: "spring", stiffness: 220, damping: 20 }}
+                  transition={{ delay: i * STAGGER.tight, ...SPRING.pop }}
                   whileHover={{ y: -4 }}
                   className={`paper relative overflow-hidden rounded-[6px] p-4 text-left ${active ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""}`}
                 >

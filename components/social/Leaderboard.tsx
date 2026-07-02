@@ -13,7 +13,7 @@ import { getProfiles } from "@/lib/cloud/profiles";
 import { topResults, type LeaderboardScope } from "@/lib/cloud/results";
 import type { GameMode, Profile, ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
-import { EASE } from "@/lib/motion";
+import { DUR, EASE } from "@/src/motion/tokens";
 
 // staggered row reveal (re-runs per tab via a keyed list)
 const listContainer = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
@@ -109,7 +109,7 @@ export function Leaderboard({
             initial={{ opacity: 0, y: 24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            transition={{ duration: 0.4, ease: EASE }}
+            transition={{ duration: DUR.base, ease: EASE }}
             onClick={(e) => e.stopPropagation()}
           >
             <header className="flex items-center justify-between border-b-2 border-ink/15 px-5 py-4">

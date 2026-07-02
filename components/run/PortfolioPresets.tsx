@@ -5,7 +5,7 @@ import type { AssetDef } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import type { AssetId } from "@/lib/markets";
 
-const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
 
 type Mix = Partial<Record<AssetId, number>>;
 
@@ -126,7 +126,7 @@ export function PortfolioPresets({
             onClick={() => apply(preset)}
             initial={reduce ? false : { opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: EASE, delay: reduce ? 0 : i * 0.05 }}
+            transition={{ duration: DUR.base, ease: EASE, delay: reduce ? 0 : i * STAGGER.tight }}
             whileHover={reduce || !canInvest ? undefined : { y: -2 }}
             whileTap={reduce || !canInvest ? undefined : { y: 0, scale: 0.99 }}
             className="group relative overflow-hidden rounded-[5px] border bg-bg2 px-3.5 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"

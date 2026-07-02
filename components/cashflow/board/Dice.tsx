@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { DUR } from "@/src/motion/tokens";
 
 // ── pip layout (3×3 grid coordinates [col,row]) ──────────────────────────────
 const PIPS: Record<number, [number, number][]> = {
@@ -109,7 +110,7 @@ function Burst() {
       <motion.span
         initial={{ scale: 0.3, opacity: 0.75 }}
         animate={{ scale: 1.7, opacity: 0 }}
-        transition={{ duration: 0.55, ease: "easeOut" }}
+        transition={{ duration: DUR.scene, ease: "easeOut" }}
         style={{
           position: "absolute",
           inset: "10%",
@@ -125,7 +126,7 @@ function Burst() {
             key={i}
             initial={{ x: 0, y: 0, opacity: 0.9, scale: 1 }}
             animate={{ x: Math.cos(a) * (26 + (i % 3) * 7), y: Math.sin(a) * (20 + (i % 3) * 6) - 6, opacity: 0, scale: 0.4 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+            transition={{ duration: DUR.slow, ease: "easeOut" }}
             style={{
               position: "absolute",
               left: "50%",
@@ -166,7 +167,7 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
       setRot(acc.current);
       setAirborne(true);
       wasRolling.current = true;
-      bounce.start({ y: -26, scaleX: 1, scaleY: 1 }, { duration: 0.18, ease: "easeOut" });
+      bounce.start({ y: -26, scaleX: 1, scaleY: 1 }, { duration: DUR.instant, ease: "easeOut" });
     } else {
       const rest = REST[value];
       acc.current = {

@@ -7,6 +7,7 @@ import { NeonButton } from "@/components/ui/NeonButton";
 import { StreakChip } from "@/components/social/StreakChip";
 import { useAudio } from "@/hooks/useAudio";
 import { MODES, type ModeId } from "@/lib/modes";
+import { SPRING } from "@/src/motion/tokens";
 
 const ICON = { story: TrophyIcon, infinite: ReplayIcon, cashflow: FreedomIcon };
 
@@ -46,7 +47,7 @@ export function ModeSelect({
               onClick={() => { audio.sfx("click"); setPicked(id); }}
               initial={{ opacity: 0, y: 26, rotate: i % 2 ? 1 : -1 }}
               animate={{ opacity: picked && !active ? 0.55 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
-              transition={{ type: "spring", stiffness: 220, damping: 20, delay: i * 0.1 }}
+              transition={{ ...SPRING.pop, delay: i * 0.1 }}
               whileHover={{ y: -6 }}
               className={`paper relative overflow-hidden rounded-[5px] p-6 text-left ${active ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""}`}
             >

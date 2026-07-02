@@ -9,6 +9,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { AudioProvider, useAudio } from "@/hooks/useAudio";
 import { useRun } from "@/hooks/useRun";
 import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
+import { MotionProvider, useMotionCtx } from "@/src/motion/MotionProvider";
+import { wipeFor, type TransitionKind } from "@/src/motion/transitions";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
@@ -30,18 +32,26 @@ const Almanac = dynamic(() => import("@/components/screens/Almanac").then((m) =>
 const Leaderboard = dynamic(() => import("@/components/social/Leaderboard").then((m) => m.Leaderboard), { ssr: false });
 const MasteryMap = dynamic(() => import("@/components/learn/MasteryMap").then((m) => m.MasteryMap), { ssr: false });
 
-const wipe = {
-  initial: { opacity: 0, y: 16 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -16 },
-  transition: { duration: 0.4, ease: [0.2, 0.65, 0.3, 0.9] },
-};
+// Phase-C transition layer: one of two LEDGER-native wipes (see src/motion/transitions).
+// The director picks one and the loser is deleted; `?wipe=flicker|paper` overrides the
+// default for side-by-side capture. Reduced motion collapses both to a plain fade.
+const WIPE_DEFAULT: TransitionKind = "paper";
+function useWipeKind(): TransitionKind {
+  const [kind, setKind] = useState<TransitionKind>(WIPE_DEFAULT);
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("wipe");
+    if (q === "flicker" || q === "paper") setKind(q);
+  }, []);
+  return kind;
+}
 
 export function AppShell() {
   return (
     <AudioProvider>
       <ConceptLearnProvider>
-        <AppShellInner />
+        <MotionProvider>
+          <AppShellInner />
+        </MotionProvider>
       </ConceptLearnProvider>
     </AudioProvider>
   );
@@ -51,6 +61,9 @@ function AppShellInner() {
   const auth = useAuth();
   const run = useRun(auth.user?.id ?? null);
   const audio = useAudio();
+  const { reduced } = useMotionCtx();
+  const wipeKind = useWipeKind();
+  const wipe = wipeFor(wipeKind, reduced);
   const { phase, mode } = run;
   // Each overlay stays mounted once first opened (defers its chunk without losing
   // the open/close animation); `*Open` drives visibility, `*Mounted` gates the load.
@@ -106,7 +119,7 @@ function AppShellInner() {
 
   return (
     <main className="relative min-h-[100svh] w-full">
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {phase === "intro" && (
           <motion.div key="intro" {...wipe}>
             <Opening onStart={run.goMode} onAlmanac={openAlmanac} />

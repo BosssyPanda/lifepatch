@@ -14,8 +14,9 @@ import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
 import { netWorth, portfolioValue, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
+import { STAGGER } from "@/src/motion/tokens";
 
-const container = { hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.12 } } };
+const container = { hidden: {}, show: { transition: { staggerChildren: STAGGER.list, delayChildren: STAGGER.loose } } };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
 
 const REASON: Record<string, { label: string; Icon: typeof TrophyIcon }> = {

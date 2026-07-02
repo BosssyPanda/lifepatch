@@ -5,7 +5,7 @@ import { currency } from "@/lib/format";
 import { freedomRatio, passiveIncome, totalExpenses } from "@/lib/cashflow/selectors";
 import type { CashflowState } from "@/lib/cashflow/types";
 
-const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+import { DUR, EASE } from "@/src/motion/tokens";
 /** Progress milestones — each is a notch the fill crosses on the way to free. */
 const MILESTONES = [25, 50, 75] as const;
 
@@ -62,7 +62,7 @@ export function FreedomMeter({ s, compact = false }: { s: CashflowState; compact
           key={free ? "free" : "goal"}
           initial={reduce ? false : { y: free ? 6 : 0, opacity: free ? 0 : 1 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.4, ease: EASE }}
+          transition={{ duration: DUR.base, ease: EASE }}
           className="eyebrow"
           style={{ fontSize: "0.54rem", color: free ? "var(--color-gain)" : "var(--color-secondary)", letterSpacing: "0.2em" }}
         >

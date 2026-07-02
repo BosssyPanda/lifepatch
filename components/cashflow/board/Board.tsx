@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { TileIcon } from "./TileIcon";
+import { DUR } from "@/src/motion/tokens";
 
 export type BoardSquareView = { index: number; type: string };
 
@@ -163,7 +164,7 @@ export function Board({
             }`}
             style={chipStyle}
             animate={active && !reduce ? { scale: [1, 1.16, 1.09] } : { scale: 1 }}
-            transition={{ duration: 0.4 }}
+            transition={{ duration: DUR.base }}
           >
             <TileIcon type={sq.type} className="h-[38%] w-auto" style={{ color: active ? "var(--color-bg)" : tint }} />
             <span

@@ -1,11 +1,14 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAudio } from "@/hooks/useAudio";
 import { conceptsForText, conceptTitle } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEvent, Outcome } from "@/lib/lifeEvents";
+import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { useSkippable } from "@/src/motion/useSkippable";
 import { beatFor } from "./consequenceBeats";
 
 /**
@@ -17,12 +20,12 @@ import { beatFor } from "./consequenceBeats";
  *
  * Tiering (§4): FULL ceremony when |Δmoney| ≥ $1,000 or the swing is ≥10% of
  * net worth; otherwise a MINOR (trimmed) version. Reduced-motion renders the
- * final state with no motion/ceremony. Any input skips to the final state.
+ * final state with no motion/ceremony. Any input skips to the final state — via
+ * the global input-skip (useSkippable), the plumbing later ceremonies share.
  */
 
 const FULL_MONEY = 1000;
 const FULL_NW_FRACTION = 0.1;
-const EASE = [0.2, 0.65, 0.3, 0.9] as const;
 
 type Phase = "stamp" | "hold" | "count" | "land" | "rows" | "done";
 type RowTone = "loss" | "gain" | "muted";
@@ -56,7 +59,7 @@ export function ConsequenceBeat({
   onDone: () => void;
 }) {
   const audio = useAudio();
-  const reduced = useReducedMotion();
+  const { reduced } = useMotionCtx();
   const beat = beatFor(event.id);
 
   const effect = outcome.effect;
@@ -203,16 +206,10 @@ export function ConsequenceBeat({
     setPhase("done");
   }, [done, onDone, clearTimers, primary]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
-        e.preventDefault();
-        skip();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [skip]);
+  // Global input-skip: while the ceremony is still animating (!done), any pointer/key
+  // anywhere jumps it to the final state. It unregisters at `done`, so ambient input
+  // skips the animation but never advances — the Continue control below owns that.
+  useSkippable(!done, skip);
 
   const showFigure = reduced || phase === "count" || phase === "land" || phase === "rows" || done;
   const showRows = reduced || phase === "rows" || done;
@@ -226,7 +223,7 @@ export function ConsequenceBeat({
       className="fixed inset-0 z-[95] flex flex-col bg-bg text-ink"
       initial={reduced ? undefined : { opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.18 }}
+      transition={{ duration: DUR.instant }}
       onClick={skip}
     >
       {/* top rail — event tag + net-worth before → after (after flashes on land) */}
@@ -251,7 +248,7 @@ export function ConsequenceBeat({
             className="num px-1.5 py-0.5"
             style={{ fontSize: "0.78rem", color: nwDelta < 0 ? TONE_VAR.loss : nwDelta > 0 ? TONE_VAR.gain : "var(--color-ink)" }}
             animate={flash ? { backgroundColor: ["rgba(242,241,234,0)", "rgba(242,241,234,0.16)", "rgba(242,241,234,0)"] } : { backgroundColor: "rgba(242,241,234,0)" }}
-            transition={{ duration: 0.55 }}
+            transition={{ duration: DUR.scene }}
           >
             {currency(showFigure ? netWorthAfter : netWorthBefore)}
           </motion.span>
@@ -262,14 +259,14 @@ export function ConsequenceBeat({
       <motion.div
         className="flex flex-1 flex-col justify-center px-5 py-10 sm:px-12 lg:px-20"
         animate={jolt ? { x: [0, -6, 5, -3, 2, 0], y: [0, 2, -2, 1, 0, 0] } : { x: 0, y: 0 }}
-        transition={{ duration: 0.34, ease: "easeOut" }}
+        transition={{ duration: DUR.fast, ease: "easeOut" }}
       >
         {/* choice stamp */}
         <motion.div
           className="flex items-center gap-3"
           initial={reduced ? undefined : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: EASE }}
+          transition={{ duration: DUR.base, ease: EASE }}
         >
           <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem", letterSpacing: "0.24em" }}>
             You chose
@@ -279,6 +276,7 @@ export function ConsequenceBeat({
             style={{ fontSize: "0.82rem" }}
             initial={reduced ? undefined : { rotate: -2.5, scale: 1.12, opacity: 0 }}
             animate={{ rotate: 0, scale: 1, opacity: 1 }}
+            // bespoke stamp pop — a punchier spring than the house SPRING.pop; kept inline.
             transition={{ type: "spring", stiffness: 320, damping: 18 }}
           >
             {choice.label}
@@ -324,7 +322,7 @@ export function ConsequenceBeat({
           className="mt-5 max-w-xl font-body text-[0.97rem] leading-relaxed text-ink-dim"
           initial={reduced ? undefined : { opacity: 0 }}
           animate={{ opacity: showRows ? 1 : 0.35 }}
-          transition={{ duration: 0.4 }}
+          transition={{ duration: DUR.base }}
         >
           {outcome.consequence}
         </motion.p>
@@ -337,7 +335,7 @@ export function ConsequenceBeat({
               className={`flex items-baseline gap-2 py-1.5 ${r.rule ? "mt-1 border-t border-hairline pt-2.5" : ""}`}
               initial={reduced ? undefined : { opacity: 0, clipPath: "inset(0 0 100% 0)" }}
               animate={showRows ? { opacity: 1, clipPath: "inset(0 0 0% 0)" } : { opacity: 0, clipPath: "inset(0 0 100% 0)" }}
-              transition={{ duration: 0.34, ease: EASE, delay: showRows && !reduced ? i * 0.12 : 0 }}
+              transition={{ duration: DUR.fast, ease: EASE, delay: showRows && !reduced ? i * STAGGER.loose : 0 }}
             >
               <span
                 className={r.strong ? "display-caps text-ink" : "eyebrow text-secondary"}
@@ -362,7 +360,7 @@ export function ConsequenceBeat({
             className="mt-7 flex flex-wrap items-center gap-x-3 gap-y-1.5"
             initial={reduced ? undefined : { opacity: 0, y: 8 }}
             animate={done ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-            transition={{ duration: 0.5, ease: EASE, delay: reduced ? 0 : 0.08 }}
+            transition={{ duration: DUR.slow, ease: EASE, delay: reduced ? 0 : 0.08 }}
           >
             <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem", letterSpacing: "0.24em" }}>
               Lesson learned
@@ -384,7 +382,7 @@ export function ConsequenceBeat({
             className={`voice ${learnedConcept ? "mt-3" : "mt-7"} max-w-xl text-[1.12rem] leading-snug text-ink`}
             initial={reduced ? undefined : { opacity: 0, y: 8 }}
             animate={done ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-            transition={{ duration: 0.5, ease: EASE }}
+            transition={{ duration: DUR.slow, ease: EASE }}
           >
             {outcome.lesson}
           </motion.p>

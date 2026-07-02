@@ -4,8 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 import { currency } from "@/lib/format";
 
-/** House easing — shared across the cashflow mode's motion. */
-const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+import { EASE } from "@/src/motion/tokens";
 
 /** Money in tabular display numerals, optionally signed/colored. */
 export function Money({

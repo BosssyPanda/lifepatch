@@ -2,6 +2,7 @@
 
 import { motion, useMotionValue, useReducedMotion, useTransform, type MotionValue } from "framer-motion";
 import { useEffect, useState } from "react";
+import { DUR } from "@/src/motion/tokens";
 
 /**
  * "Data Atlas" — the landing hero. A real engraved Atlas (CC0 Met bronze,
@@ -82,7 +83,7 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
   const draw = (delay: number, dur = 1.6) =>
     reduce
       ? { initial: { pathLength: 1, opacity: 1 }, animate: { pathLength: 1, opacity: 1 } }
-      : { initial: { pathLength: 0, opacity: 0 }, animate: { pathLength: 1, opacity: 1 }, transition: { pathLength: { duration: dur, delay, ease: "easeInOut" as const }, opacity: { duration: 0.4, delay } } };
+      : { initial: { pathLength: 0, opacity: 0 }, animate: { pathLength: 1, opacity: 1 }, transition: { pathLength: { duration: dur, delay, ease: "easeInOut" as const }, opacity: { duration: DUR.base, delay } } };
 
   return (
     <svg viewBox="0 0 600 1200" className={className} role="img" aria-label="Atlas holding a globe of market data" preserveAspectRatio="xMidYMid meet">
@@ -161,7 +162,7 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
               return (
                 <motion.g key={i}
                   variants={{ hide: { opacity: 0, scaleY: reduce ? 1 : 0 }, show: { opacity: 1, scaleY: 1 } }}
-                  transition={{ duration: 0.4, ease: "backOut" }}
+                  transition={{ duration: DUR.base, ease: "backOut" }}
                   style={{ transformBox: "fill-box", transformOrigin: "center bottom" }}>
                   <line x1={c.x} y1={c.high} x2={c.x} y2={c.low} stroke={color} strokeWidth="1.3" />
                   <rect x={c.x - 4.4} y={c.top} width="8.8" height={Math.max(3, c.bot - c.top)}

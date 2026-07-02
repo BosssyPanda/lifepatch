@@ -14,7 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromCashflow, submitRunOnce } from "@/lib/cloud/buildResult";
 
-const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+import { DUR, EASE } from "@/src/motion/tokens";
 
 /**
  * Between-scene wipe. Each view enters from a depth-pushed clip-reveal and the
@@ -29,12 +29,12 @@ const sceneVariants: Variants = {
       : { opacity: 0, scale: 1.03, y: 22 },
   animate: (reduce: boolean) =>
     reduce
-      ? { opacity: 1, transition: { duration: 0.18 } }
+      ? { opacity: 1, transition: { duration: DUR.instant } }
       : {
           opacity: 1,
           scale: 1,
           y: 0,
-          transition: { duration: 0.5, ease: EASE },
+          transition: { duration: DUR.slow, ease: EASE },
         },
   exit: (reduce: boolean) =>
     reduce

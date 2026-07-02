@@ -15,8 +15,9 @@ import { getProfession } from "@/lib/cashflow/professions";
 import { netWorth, passiveIncome } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
 import type { CashflowState } from "@/lib/cashflow/types";
+import { STAGGER } from "@/src/motion/tokens";
 
-const container = { hidden: {}, show: { transition: { staggerChildren: 0.06, delayChildren: 0.12 } } };
+const container = { hidden: {}, show: { transition: { staggerChildren: STAGGER.list, delayChildren: STAGGER.loose } } };
 const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
 
 function archetype(s: CashflowState): { title: string; line: string } {

@@ -6,6 +6,7 @@ import { Intro } from "@/components/screens/Intro";
 import { useAudio } from "@/hooks/useAudio";
 import { ColdOpen } from "./ColdOpen";
 import { Gate } from "./Gate";
+import { DUR } from "@/src/motion/tokens";
 
 type Stage = "gate" | "cold" | "title";
 
@@ -13,7 +14,7 @@ const wipe = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
   exit: { opacity: 0 },
-  transition: { duration: 0.4 },
+  transition: { duration: DUR.base },
 };
 
 export function Opening({ onStart, onAlmanac }: { onStart: () => void; onAlmanac: () => void }) {

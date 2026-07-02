@@ -4,7 +4,7 @@ import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-moti
 import type { PointerEvent } from "react";
 import { DataAtlas } from "./DataAtlas";
 import { MuteButton } from "./Controls";
-import { EASE } from "@/lib/motion";
+import { EASE, SPRING } from "@/src/motion/tokens";
 
 export function Gate({
   onBegin,
@@ -102,7 +102,7 @@ export function Gate({
         <motion.h1
           initial={reduce ? false : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.32, type: "spring", stiffness: 150, damping: 18 }}
+          transition={{ delay: 0.32, ...SPRING.soft }}
           className="display-caps mt-4 text-[19vw] leading-[0.82] sm:text-[14vw] lg:text-[clamp(4.5rem,8vw,9rem)]"
         >
           <span className="text-ink">Life</span>

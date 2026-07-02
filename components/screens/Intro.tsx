@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
 
-const EASE = [0.2, 0.65, 0.3, 0.9] as const;
+import { DUR, EASE } from "@/src/motion/tokens";
 
 /** A hairline-separated ledger cell (mono, uppercase). */
 function Cell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
@@ -55,7 +55,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
           <motion.p
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, ease: EASE }}
+            transition={{ duration: DUR.slow, ease: EASE }}
             className="eyebrow text-secondary"
           >
             File No. 01 — Your Money
