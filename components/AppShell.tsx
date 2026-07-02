@@ -1,25 +1,34 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { CashflowShell } from "@/components/cashflow/CashflowShell";
 import { Opening } from "@/components/cinematic/Opening";
-import { Outro } from "@/components/cinematic/Outro";
-import { Almanac } from "@/components/screens/Almanac";
-import { AuthGate } from "@/components/screens/AuthGate";
-import { LifeReport } from "@/components/screens/LifeReport";
 import { ModeSelect } from "@/components/screens/ModeSelect";
-import { Setup } from "@/components/screens/Setup";
-import { YearLoop } from "@/components/run/YearLoop";
 import { useAuth } from "@/hooks/useAuth";
 import { AudioProvider, useAudio } from "@/hooks/useAudio";
 import { useRun } from "@/hooks/useRun";
-import { Leaderboard } from "@/components/social/Leaderboard";
-import { MasteryMap } from "@/components/learn/MasteryMap";
 import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
+
+// Code-split every screen first paint doesn't need. Only the intro (Opening) and
+// ModeSelect stay eager; the run engine, Rat Race board, cinematics, report, and
+// overlays load on demand — keeping `/`'s First Load lean. ssr:false because these
+// are all client-only screens gated behind a phase or a user action.
+const screenFallback = () => <div className="min-h-[100svh] bg-bg" />;
+const CashflowShell = dynamic(() => import("@/components/cashflow/CashflowShell").then((m) => m.CashflowShell), { ssr: false, loading: screenFallback });
+const YearLoop = dynamic(() => import("@/components/run/YearLoop").then((m) => m.YearLoop), { ssr: false, loading: screenFallback });
+const Outro = dynamic(() => import("@/components/cinematic/Outro").then((m) => m.Outro), { ssr: false, loading: screenFallback });
+const LifeReport = dynamic(() => import("@/components/screens/LifeReport").then((m) => m.LifeReport), { ssr: false, loading: screenFallback });
+const AuthGate = dynamic(() => import("@/components/screens/AuthGate").then((m) => m.AuthGate), { ssr: false, loading: screenFallback });
+const Setup = dynamic(() => import("@/components/screens/Setup").then((m) => m.Setup), { ssr: false, loading: screenFallback });
+// Overlays: keep their always-mounted open/close API (and exit animation) but defer
+// the chunk until the first time each is opened, then leave it mounted.
+const Almanac = dynamic(() => import("@/components/screens/Almanac").then((m) => m.Almanac), { ssr: false });
+const Leaderboard = dynamic(() => import("@/components/social/Leaderboard").then((m) => m.Leaderboard), { ssr: false });
+const MasteryMap = dynamic(() => import("@/components/learn/MasteryMap").then((m) => m.MasteryMap), { ssr: false });
 
 const wipe = {
   initial: { opacity: 0, y: 16 },
@@ -43,13 +52,18 @@ function AppShellInner() {
   const run = useRun(auth.user?.id ?? null);
   const audio = useAudio();
   const { phase, mode } = run;
+  // Each overlay stays mounted once first opened (defers its chunk without losing
+  // the open/close animation); `*Open` drives visibility, `*Mounted` gates the load.
   const [almanacOpen, setAlmanacOpen] = useState(false);
-  const openAlmanac = () => { audio.sfx("modal"); setAlmanacOpen(true); };
+  const [almanacMounted, setAlmanacMounted] = useState(false);
+  const openAlmanac = () => { audio.sfx("modal"); setAlmanacMounted(true); setAlmanacOpen(true); };
   const [socialOpen, setSocialOpen] = useState(false);
+  const [socialMounted, setSocialMounted] = useState(false);
   const [socialMode, setSocialMode] = useState<GameMode>("story");
-  const openLeaderboard = (m: GameMode) => { audio.sfx("modal"); setSocialMode(m); setSocialOpen(true); };
+  const openLeaderboard = (m: GameMode) => { audio.sfx("modal"); setSocialMounted(true); setSocialMode(m); setSocialOpen(true); };
   const [masteryOpen, setMasteryOpen] = useState(false);
-  const openMasteryMap = () => { audio.sfx("modal"); setMasteryOpen(true); };
+  const [masteryMounted, setMasteryMounted] = useState(false);
+  const openMasteryMap = () => { audio.sfx("modal"); setMasteryMounted(true); setMasteryOpen(true); };
   const { resetRun } = useConceptLearn();
 
   // The Rat Race mode is a fully self-contained board game with its own internal
@@ -84,8 +98,8 @@ function AppShellInner() {
     return (
       <main className="relative min-h-[100svh] w-full">
         <CashflowShell onExit={run.toTitle} onOpenAlmanac={openAlmanac} onMasteryMap={openMasteryMap} />
-        <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />
-        <MasteryMap open={masteryOpen} onClose={() => setMasteryOpen(false)} />
+        {almanacMounted && <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />}
+        {masteryMounted && <MasteryMap open={masteryOpen} onClose={() => setMasteryOpen(false)} />}
       </main>
     );
   }
@@ -142,9 +156,9 @@ function AppShellInner() {
         )}
       </AnimatePresence>
 
-      <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />
-      <Leaderboard open={socialOpen} onClose={() => setSocialOpen(false)} initialMode={socialMode} />
-      <MasteryMap open={masteryOpen} onClose={() => setMasteryOpen(false)} />
+      {almanacMounted && <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />}
+      {socialMounted && <Leaderboard open={socialOpen} onClose={() => setSocialOpen(false)} initialMode={socialMode} />}
+      {masteryMounted && <MasteryMap open={masteryOpen} onClose={() => setMasteryOpen(false)} />}
     </main>
   );
 }
