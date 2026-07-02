@@ -117,7 +117,7 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
         <motion.ellipse cx={300} cy={660} rx={150} ry={210} fill="var(--color-accent)" opacity="0.12" filter="url(#da-blur)" style={{ x: glowX, y: glowY }} />
         <rect x="120" y="520" width="360" height="560" fill="url(#da-figGlow)" />
         <motion.g animate={reduce ? undefined : { y: [0, -5, 0] }} transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut" }}>
-          <image href="/img/atlas-engraving.png" x={-53} y={48} width={569} height={1153} preserveAspectRatio="xMidYMid meet" />
+          <image href="/img/atlas-engraving.png" x={-53} y={48} width={569} height={1153} preserveAspectRatio="xMidYMid meet" style={{ filter: "grayscale(1) brightness(1.08) contrast(1.02)" }} />
         </motion.g>
       </motion.g>
 

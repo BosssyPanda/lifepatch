@@ -26,7 +26,7 @@ const PRESETS: Preset[] = [
     label: "Safe",
     tagline: "Sleep at night. Barely keep up with inflation.",
     mix: { savings: 50, bonds: 30, index: 20 },
-    hex: "#7f8b52",
+    hex: "var(--color-gain)",
     risk: "low risk",
   },
   {
@@ -34,7 +34,7 @@ const PRESETS: Preset[] = [
     label: "Balanced",
     tagline: "Spread the bets. Grow without the heart attacks.",
     mix: { index: 40, realEstate: 20, bonds: 20, gold: 10, savings: 10 },
-    hex: "#c8861e",
+    hex: "var(--color-secondary)",
     risk: "medium risk",
   },
   {
@@ -42,7 +42,7 @@ const PRESETS: Preset[] = [
     label: "Bold",
     tagline: "Swing for growth. Stomach the drawdowns.",
     mix: { index: 45, realEstate: 20, crypto: 20, gold: 15 },
-    hex: "#a33218",
+    hex: "var(--color-loss)",
     risk: "high risk",
   },
 ];

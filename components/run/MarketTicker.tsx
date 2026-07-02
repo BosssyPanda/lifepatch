@@ -6,10 +6,10 @@ import { currency } from "@/lib/format";
 import { playHeadline, type RunState } from "@/lib/runEngine";
 
 const TONE_HEX: Record<string, string> = {
-  good: "#7f8b52",
-  bad: "#a33218",
-  warning: "#c8861e",
-  neutral: "#a89f8c",
+  good: "var(--color-gain)",
+  bad: "var(--color-loss)",
+  warning: "var(--color-secondary)",
+  neutral: "var(--color-secondary)",
 };
 
 function taunt(indexReturn: number, delta: number): { line: string; mood: "gloating" | "rattled" } | null {
@@ -43,7 +43,7 @@ export function MarketTicker({ run }: { run: RunState }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="eyebrow text-ink-dim">The market did this</p>
-            <p className="num text-3xl sm:text-4xl" style={{ color: last.indexReturn >= 0 ? "#7f8b52" : "#a33218" }}>
+            <p className="num text-3xl sm:text-4xl" style={{ color: last.indexReturn >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}>
               {last.indexReturn >= 0 ? "+" : ""}{last.indexReturn.toFixed(1)}%
             </p>
           </div>
@@ -54,7 +54,7 @@ export function MarketTicker({ run }: { run: RunState }) {
               initial={{ scale: 1.2 }}
               animate={{ scale: 1 }}
               className="num text-2xl sm:text-3xl"
-              style={{ color: up ? "#7f8b52" : "#a33218" }}
+              style={{ color: up ? "var(--color-gain)" : "var(--color-loss)" }}
             >
               {up ? "+" : "−"}{currency(Math.abs(last.portfolioDelta)).replace("$", "$")}
             </motion.p>

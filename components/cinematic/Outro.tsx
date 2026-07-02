@@ -146,7 +146,7 @@ function CountUp({ to }: { to: number }) {
     return () => clearTimeout(id);
   }, [to]);
   return (
-    <p className="num mt-3 text-6xl sm:text-8xl" style={{ color: to >= 0 ? "#7f8b52" : "#a33218" }}>
+    <p className="num mt-3 text-6xl sm:text-8xl" style={{ color: to >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}>
       <AnimatedNumber value={v} format={currency} duration={2000} />
     </p>
   );

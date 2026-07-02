@@ -1,9 +1,17 @@
 /**
- * Deterministic, generated avatar — no uploads (teen-safe). A brand-palette tile
- * picked from the avatar seed, stamped with the username's monogram.
+ * Deterministic, generated avatar — no uploads (teen-safe). A squared LEDGER
+ * chit: mono monogram on a faint framed panel, the seed only tinting the
+ * monogram to one of the ledger's own tones (ink / secondary / tertiary /
+ * gain / loss). No decorative palette, no shadow (§3.1/§3.2).
  */
 
-const PALETTE = ["#7f8b52", "#a33218", "#c8861e", "#c9a24a", "#5f7480", "#d4541e"];
+const ACCENTS = [
+  "var(--color-ink)",
+  "var(--color-secondary)",
+  "var(--color-tertiary)",
+  "var(--color-gain)",
+  "var(--color-loss)",
+];
 
 function hashSeed(seed: string): number {
   let h = 2166136261;
@@ -30,18 +38,12 @@ export function Avatar({
   username: string;
   size?: number;
 }) {
-  const color = PALETTE[hashSeed(seed) % PALETTE.length];
+  const accent = ACCENTS[hashSeed(seed) % ACCENTS.length];
   return (
     <span
       aria-hidden
-      className="grid shrink-0 place-items-center rounded-[5px] font-semibold text-paper"
-      style={{
-        width: size,
-        height: size,
-        background: color,
-        fontSize: size * 0.38,
-        boxShadow: "inset 0 0 0 2px rgba(0,0,0,0.18)",
-      }}
+      className="num grid shrink-0 place-items-center border border-hairline bg-bg2"
+      style={{ width: size, height: size, fontSize: size * 0.36, color: accent }}
     >
       {monogram(username)}
     </span>

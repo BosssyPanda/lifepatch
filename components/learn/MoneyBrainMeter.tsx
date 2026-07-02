@@ -35,7 +35,7 @@ export function MoneyBrainMeter({
       >
         <div
           className="h-full rounded-full bg-accent transition-[width] duration-700 ease-out"
-          style={{ width: `${pct}%`, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.28)" }}
+          style={{ width: `${pct}%` }}
         />
         {/* faint quarter-marks so progress reads against milestones */}
         {[25, 50, 75].map((t) => (

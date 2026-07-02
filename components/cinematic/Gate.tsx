@@ -40,7 +40,7 @@ export function Gate({
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.5]"
         style={{
-          backgroundImage: "radial-gradient(circle at 1px 1px, rgba(168,159,140,0.16) 1px, transparent 0)",
+          backgroundImage: "radial-gradient(circle at 1px 1px, rgba(242,241,234,0.10) 1px, transparent 0)",
           backgroundSize: "26px 26px",
           maskImage: "radial-gradient(110% 80% at 30% 45%, #000 30%, transparent 78%)",
           WebkitMaskImage: "radial-gradient(110% 80% at 30% 45%, #000 30%, transparent 78%)",
@@ -73,12 +73,12 @@ export function Gate({
         transition={{ duration: 1, ease: EASE }}
         className="relative z-10 flex w-full max-w-[260px] shrink-0 justify-center overflow-hidden sm:max-w-[320px] lg:h-[90svh] lg:max-h-[900px] lg:w-auto lg:max-w-none"
       >
-        <DataAtlas px={sx} py={sy} className="h-auto w-full lg:h-full lg:w-auto drop-shadow-[0_30px_60px_rgba(0,0,0,0.6)]" />
+        <DataAtlas px={sx} py={sy} className="h-auto w-full lg:h-full lg:w-auto" />
         {/* slow accent scanline sweep over the panel */}
         {!reduce && (
           <motion.span
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent"
+            className="pointer-events-none absolute inset-x-0 h-px bg-ink/20"
             initial={{ top: "8%" }}
             animate={{ top: ["8%", "92%", "8%"] }}
             transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}

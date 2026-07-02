@@ -56,7 +56,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/85 p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -101,7 +101,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                 return (
                   <div key={cat} className="mb-5 last:mb-0">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-[2px]" style={{ background: meta.hex }} />
+                      <span className="h-3 w-3 rounded-[2px]" style={{ background: "var(--color-secondary)" }} />
                       <span className="eyebrow text-paper-dim">{meta.label}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -157,7 +157,7 @@ function ConceptNode({
           ? "border-paper-ink/10 opacity-55"
           : "border-paper-ink/20 hover:border-paper-ink/50 hover:bg-paper-ink/[0.03]"
       } ${expanded ? "col-span-2 bg-paper-ink/[0.04] sm:col-span-3" : ""}`}
-      style={state === "mastering" ? { borderColor: `${meta.hex}66` } : undefined}
+      style={state === "mastering" ? { borderColor: "var(--color-secondary)" } : undefined}
     >
       <span className="inline-flex items-center gap-1 font-display text-[0.82rem] font-semibold leading-tight text-paper-ink">
         {locked && <LockIcon size={11} className="shrink-0 opacity-70" />}
@@ -169,7 +169,7 @@ function ConceptNode({
             <span
               key={i}
               className="h-1.5 flex-1 rounded-full"
-              style={{ background: meta.hex, opacity: i < level ? 1 : 0.14 }}
+              style={{ background: "var(--color-gain)", opacity: i < level ? 1 : 0.14 }}
             />
           ))}
         </span>

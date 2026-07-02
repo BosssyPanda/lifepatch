@@ -65,7 +65,7 @@ export function Opening({ onStart, onAlmanac }: { onStart: () => void; onAlmanac
             <button
               type="button"
               onClick={replay}
-              className="fixed left-4 top-4 z-30 flex items-center gap-1.5 rounded-[3px] border border-ink/25 bg-bg/60 px-2.5 py-1.5 text-ink-dim backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
+              className="fixed left-4 top-4 z-30 flex items-center gap-1.5 rounded-[3px] border border-ink/25 bg-bg px-2.5 py-1.5 text-ink-dim transition-colors hover:border-accent hover:text-accent"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 4l13 8-13 8z" /></svg>
               <span className="eyebrow" style={{ fontSize: "0.56rem" }}>Intro</span>

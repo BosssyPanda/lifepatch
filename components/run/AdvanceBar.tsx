@@ -22,7 +22,7 @@ export function AdvanceBar({
   const blocked = !allEventsResolved(run);
 
   return (
-    <div className="sticky bottom-0 z-30 border-t border-ink/12 bg-bg/90 backdrop-blur-md">
+    <div className="sticky bottom-0 z-30 border-t border-ink/12 bg-bg">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-5 py-3">
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => { audio.sfx("soft"); onQuit(); }} className="eyebrow text-ink-dim transition-colors hover:text-brick">

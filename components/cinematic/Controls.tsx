@@ -15,7 +15,7 @@ export function MuteButton({ muted, onToggle }: { muted: boolean; onToggle: () =
       type="button"
       onClick={onToggle}
       aria-label={muted ? "Unmute" : "Mute"}
-      className="pointer-events-auto flex items-center gap-1.5 rounded-[3px] border border-ink/25 bg-bg/60 px-2.5 py-1.5 text-ink-dim backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
+      className="pointer-events-auto flex items-center gap-1.5 rounded-[3px] border border-ink/25 bg-bg px-2.5 py-1.5 text-ink-dim transition-colors hover:border-accent hover:text-accent"
     >
       <Speaker muted={muted} />
       <span className="eyebrow" style={{ fontSize: "0.56rem" }}>{muted ? "Muted" : "Sound"}</span>
@@ -28,7 +28,7 @@ export function SkipButton({ onSkip }: { onSkip: () => void }) {
     <button
       type="button"
       onClick={onSkip}
-      className="pointer-events-auto flex items-center gap-1.5 rounded-[3px] border border-ink/25 bg-bg/60 px-3 py-1.5 text-ink-dim backdrop-blur-sm transition-colors hover:border-accent hover:text-accent"
+      className="pointer-events-auto flex items-center gap-1.5 rounded-[3px] border border-ink/25 bg-bg px-3 py-1.5 text-ink-dim transition-colors hover:border-accent hover:text-accent"
     >
       <span className="eyebrow" style={{ fontSize: "0.56rem" }}>Skip</span>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

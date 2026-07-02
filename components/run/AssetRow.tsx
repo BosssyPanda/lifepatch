@@ -8,10 +8,10 @@ import type { AssetId } from "@/lib/markets";
 import { Sparkline } from "./Sparkline";
 
 const RISK_HEX: Record<string, string> = {
-  low: "#7f8b52",
-  med: "#c9a24a",
-  high: "#c8861e",
-  extreme: "#a33218",
+  low: "var(--color-gain)",
+  med: "var(--color-secondary)",
+  high: "var(--color-secondary)",
+  extreme: "var(--color-loss)",
 };
 
 export function AssetRow({
@@ -73,7 +73,7 @@ export function AssetRow({
             {lastReturn !== null && (
               <span
                 className="num text-[0.7rem]"
-                style={{ color: lastReturn >= 0 ? "#7f8b52" : "#a33218" }}
+                style={{ color: lastReturn >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}
               >
                 {lastReturn >= 0 ? "+" : ""}
                 {lastReturn.toFixed(1)}%

@@ -20,7 +20,7 @@ const listContainer = { hidden: {}, show: { transition: { staggerChildren: 0.04 
 const listItem = { hidden: { opacity: 0, x: -10 }, show: { opacity: 1, x: 0 } };
 
 // gold / silver / bronze discs for the top three (from the warm token palette)
-const MEDALS = ["#c9a24a", "#aab0b4", "#b9763f"];
+const MEDALS = ["var(--color-ink)", "var(--color-secondary)", "var(--color-tertiary)"];
 
 const MODE_TABS: { id: GameMode; label: string; metric: string }[] = [
   { id: "story", label: "Story", metric: "net worth" },
@@ -98,7 +98,7 @@ export function Leaderboard({
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/85 p-4"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -188,7 +188,7 @@ export function Leaderboard({
                         variants={listItem}
                         className={`flex items-center gap-3 rounded-[4px] px-3 py-2 transition-colors ${
                           isMe
-                            ? "bg-accent/15 shadow-[inset_0_0_0_1px_rgba(212,84,30,0.4)]"
+                            ? "bg-ink/10 border border-ink"
                             : i % 2
                               ? "bg-paper-ink/[0.03] hover:bg-paper-ink/[0.06]"
                               : "hover:bg-paper-ink/[0.04]"
@@ -231,7 +231,7 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank <= 3) {
     return (
       <span
-        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[0.72rem] font-bold tabular-nums text-bg shadow-[0_2px_6px_-2px_rgba(0,0,0,0.6)]"
+        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[0.72rem] font-bold tabular-nums text-bg"
         style={{ background: MEDALS[rank - 1] }}
       >
         {rank}

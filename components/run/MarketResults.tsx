@@ -16,7 +16,7 @@ export function MarketResults({ run }: { run: RunState }) {
           {assets.map((a) => {
             const r = lastAssetReturn(run, a.id);
             const Icon = a.Icon;
-            const hex = r === null ? "#a89f8c" : r >= 0 ? "#7f8b52" : "#a33218";
+            const hex = r === null ? "var(--color-secondary)" : r >= 0 ? "var(--color-gain)" : "var(--color-loss)";
             return (
               <div key={a.id} className="flex items-center gap-2">
                 <Icon size={16} className="shrink-0 text-ink-dim" />
