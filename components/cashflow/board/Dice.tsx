@@ -249,7 +249,6 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
             width: SIZE,
             height: SIZE,
             transformStyle: "preserve-3d",
-            filter: rolling && !reduce ? "blur(0.8px)" : "none",
           }}
         >
           {FACES.map((f) => (
