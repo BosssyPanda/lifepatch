@@ -64,7 +64,7 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
         <div className="space-y-4 py-2">
           {events.map((e) => (
             <Reveal key={e.id}>
-              <LifeEventCard event={e} chosen={s.yearChoices[e.id]} onChoose={run.choose} />
+              <LifeEventCard event={e} chosen={s.yearChoices[e.id]} onChoose={run.choose} runState={s} />
             </Reveal>
           ))}
         </div>

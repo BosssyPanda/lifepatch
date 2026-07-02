@@ -7,8 +7,9 @@ import { ChevronDown, InfoIcon } from "@/components/icons";
 import { currency } from "@/lib/format";
 import { netWorth, type RunState, yearIndex } from "@/lib/runEngine";
 
-function barHex(v: number) {
-  return v >= 60 ? "#7f8b52" : v >= 35 ? "#c8861e" : "#a33218";
+// LEDGER: meters read gain (green) high, secondary (grey) mid, loss (red) low.
+function barVar(v: number) {
+  return v >= 60 ? "var(--color-gain)" : v >= 35 ? "var(--color-secondary)" : "var(--color-loss)";
 }
 
 export function YearHud({
@@ -22,22 +23,22 @@ export function YearHud({
 }) {
   const [open, setOpen] = useState(false);
   const nw = netWorth(run);
-  const nwHex = nw >= 0 ? "#7f8b52" : "#a33218";
+  const nwVar = nw >= 0 ? "var(--color-gain)" : "var(--color-loss)";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-ink/12 bg-bg/90 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-hairline bg-bg">
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-3 py-2.5 sm:gap-6 sm:px-5">
         <div className="shrink-0">
-          <p className="eyebrow text-ink-dim" style={{ fontSize: "0.6rem" }}>Year</p>
-          <p className="num text-2xl leading-none text-accent">{yearIndex(run)}</p>
+          <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>Year</p>
+          <p className="num text-2xl leading-none text-ink">{yearIndex(run)}</p>
         </div>
-        <div className="hidden h-7 w-px shrink-0 bg-ink/15 sm:block" />
+        <div className="hidden h-7 w-px shrink-0 bg-hairline sm:block" />
 
         <Stat label="Age" value={`${run.age}`} />
         <Stat label="Cash" animated={run.cash} fmt={currency} />
         <div className="flex flex-1 flex-col">
-          <p className="eyebrow text-ink-dim" style={{ fontSize: "0.6rem" }}>Net worth</p>
-          <p className="num text-lg sm:text-xl" style={{ color: nwHex }}>
+          <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>Net worth</p>
+          <p className="num text-lg sm:text-xl" style={{ color: nwVar }}>
             <AnimatedNumber value={nw} format={currency} />
           </p>
         </div>
@@ -45,14 +46,14 @@ export function YearHud({
         <button
           type="button"
           onClick={onOpenAlmanac}
-          className="hidden shrink-0 items-center gap-1 rounded-[3px] border border-ink/25 px-2.5 py-1.5 text-ink-dim transition-colors hover:border-accent hover:text-accent sm:flex"
+          className="hidden shrink-0 items-center gap-1 border border-ink/25 px-2.5 py-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink sm:flex"
         >
           <InfoIcon size={14} /><span className="eyebrow" style={{ fontSize: "0.58rem" }}>Learn</span>
         </button>
         <motion.span
           animate={saving ? { opacity: [0.4, 1, 0.4] } : { opacity: 0.5 }}
           transition={saving ? { duration: 1, repeat: Infinity } : {}}
-          className="hidden shrink-0 eyebrow text-ink-dim md:inline"
+          className="hidden shrink-0 eyebrow text-secondary md:inline"
           style={{ fontSize: "0.56rem" }}
         >
           {saving ? "Saving" : "Saved"}
@@ -62,7 +63,7 @@ export function YearHud({
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           aria-label="Toggle full stats"
-          className="shrink-0 rounded-[3px] border border-ink/25 p-1.5 text-ink-dim transition-colors hover:border-accent hover:text-accent"
+          className="shrink-0 border border-ink/25 p-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink"
         >
           <motion.span animate={{ rotate: open ? 180 : 0 }} className="block"><ChevronDown size={16} /></motion.span>
         </button>
@@ -74,24 +75,24 @@ export function YearHud({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-t border-ink/10 bg-bg2/60"
+            className="overflow-hidden border-t border-hairline bg-bg2"
           >
             <div className="mx-auto grid max-w-5xl gap-3 px-3 py-3 sm:grid-cols-3 sm:px-5">
               <div className="space-y-2">
-                <KV label="Salary" value={run.salary > 0 ? `${currency(run.salary)}/yr` : "Unemployed"} hex={run.salary > 0 ? "#e9e1cf" : "#a33218"} />
-                <KV label="Debt" value={currency(run.debt)} hex={run.debt > 0 ? "#a33218" : "#7f8b52"} />
-                <KV label="Job" value={run.salary > 0 ? run.job : "Looking for work"} hex="#a89f8c" />
+                <KV label="Salary" value={run.salary > 0 ? `${currency(run.salary)}/yr` : "Unemployed"} colorVar={run.salary > 0 ? "var(--color-ink)" : "var(--color-loss)"} />
+                <KV label="Debt" value={currency(run.debt)} colorVar={run.debt > 0 ? "var(--color-loss)" : "var(--color-gain)"} />
+                <KV label="Job" value={run.salary > 0 ? run.job : "Looking for work"} colorVar="var(--color-secondary)" />
               </div>
               <div className="space-y-2.5">
                 <Bar label="Health" v={run.life.health} />
                 <Bar label="Mood" v={run.life.happiness} />
               </div>
               <div className="space-y-2">
-                <KV label="Status" value={run.life.partner ? "Married" : "Single"} hex="#a89f8c" />
-                <KV label="Kids" value={`${run.life.kids}`} hex="#a89f8c" />
-                <KV label="Home" value={run.life.housing === "owned" ? "Homeowner" : "Renting"} hex="#a89f8c" />
+                <KV label="Status" value={run.life.partner ? "Married" : "Single"} colorVar="var(--color-secondary)" />
+                <KV label="Kids" value={`${run.life.kids}`} colorVar="var(--color-secondary)" />
+                <KV label="Home" value={run.life.housing === "owned" ? "Homeowner" : "Renting"} colorVar="var(--color-secondary)" />
               </div>
-              <button type="button" onClick={onOpenAlmanac} className="eyebrow text-accent sm:hidden">Open the Almanac →</button>
+              <button type="button" onClick={onOpenAlmanac} className="eyebrow text-ink sm:hidden">Open the Almanac →</button>
             </div>
           </motion.div>
         )}
@@ -103,7 +104,7 @@ export function YearHud({
 function Stat({ label, value, animated, fmt }: { label: string; value?: string; animated?: number; fmt?: (n: number) => string }) {
   return (
     <div className="flex flex-col">
-      <p className="eyebrow text-ink-dim" style={{ fontSize: "0.6rem" }}>{label}</p>
+      <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>{label}</p>
       <p className="num text-base sm:text-lg text-ink">
         {animated !== undefined && fmt ? <AnimatedNumber value={animated} format={fmt} /> : value}
       </p>
@@ -111,25 +112,25 @@ function Stat({ label, value, animated, fmt }: { label: string; value?: string; 
   );
 }
 
-function KV({ label, value, hex }: { label: string; value: string; hex: string }) {
+function KV({ label, value, colorVar }: { label: string; value: string; colorVar: string }) {
   return (
     <div className="flex items-baseline justify-between">
-      <span className="eyebrow text-ink-dim">{label}</span>
-      <span className="num text-sm" style={{ color: hex }}>{value}</span>
+      <span className="eyebrow text-secondary">{label}</span>
+      <span className="num text-sm" style={{ color: colorVar }}>{value}</span>
     </div>
   );
 }
 
 function Bar({ label, v }: { label: string; v: number }) {
-  const hex = barHex(v);
+  const colorVar = barVar(v);
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <span className="eyebrow text-ink-dim">{label}</span>
-        <span className="num text-xs" style={{ color: hex }}>{Math.round(v)}</span>
+        <span className="eyebrow text-secondary">{label}</span>
+        <span className="num text-xs" style={{ color: colorVar }}>{Math.round(v)}</span>
       </div>
-      <div className="mt-1 h-2 overflow-hidden rounded-full bg-black/40">
-        <motion.div className="h-full rounded-full" style={{ background: hex }} animate={{ width: `${v}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+      <div className="mt-1 h-2 overflow-hidden bg-hairline">
+        <motion.div className="h-full" style={{ background: colorVar }} animate={{ width: `${v}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckIcon, LockIcon } from "@/components/icons";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
@@ -9,6 +9,9 @@ import { stingForTone } from "@/lib/audioMap";
 import { conceptsForText } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEffect, LifeEvent } from "@/lib/lifeEvents";
+import { netWorth, type RunState } from "@/lib/runEngine";
+import { ConsequenceBeat } from "./ConsequenceBeat";
+import { beatFor } from "./consequenceBeats";
 
 // LEDGER: outcomes read gain/loss; neutral tones stay ink-secondary.
 const TONE_HEX: Record<string, string> = {
@@ -33,10 +36,12 @@ export function LifeEventCard({
   event,
   chosen,
   onChoose,
+  runState,
 }: {
   event: LifeEvent & { choices: LifeChoice[] };
   chosen?: string; // "choiceId|outcomeIdx"
   onChoose: (eventId: string, choice: LifeChoice) => void;
+  runState?: RunState;
 }) {
   const audio = useAudio();
   const { learn } = useConceptLearn();
@@ -45,26 +50,39 @@ export function LifeEventCard({
   const chosenChoice = event.choices.find((c) => c.id === chosenId);
   const outcome = chosenChoice?.outcomes[Number(idxStr)] ?? chosenChoice?.outcomes[0];
 
+  // A flagship consequence beat plays for tagged events (Phase 2), but only on a
+  // fresh answer — never when revisiting a card that was already answered.
+  const beat = beatFor(event.id);
+  const answeredAtMount = useRef(answered);
+  const [showBeat, setShowBeat] = useState(false);
+
   // reveal sting once, keyed to the outcome's tone
   const stungRef = useRef(false);
   useEffect(() => {
     if (answered && outcome && !stungRef.current) {
       stungRef.current = true;
-      audio.sting(stingForTone(outcome.tone));
+      const fresh = !answeredAtMount.current;
+      if (fresh && beat && runState) {
+        // the full-screen beat owns the reveal audio for these events
+        setShowBeat(true);
+      } else {
+        audio.sting(stingForTone(outcome.tone));
+      }
       // The teaching moment: derive concepts from the lesson; a "good" outcome
       // is a correct application that raises mastery, others are seen-only.
       learn(conceptsForText(outcome.lesson, outcome.consequence), {
         applied: outcome.tone === "good",
       });
     }
-  }, [answered, outcome, audio, learn]);
+  }, [answered, outcome, audio, learn, beat, runState]);
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: "spring", stiffness: 200, damping: 22 }}
-      className="paper mx-auto max-w-3xl rounded-[5px] px-5 py-5 sm:px-6"
+      className="paper mx-auto max-w-3xl px-5 py-5 sm:px-6"
     >
       <div className="flex items-center justify-between border-b border-paper-ink/30 pb-2">
         <span className="eyebrow text-paper-dim">{event.tag}</span>
@@ -131,5 +149,15 @@ export function LifeEventCard({
         )
       )}
     </motion.div>
+    {showBeat && chosenChoice && outcome && runState && (
+      <ConsequenceBeat
+        event={event}
+        choice={chosenChoice}
+        outcome={outcome}
+        netWorthAfter={netWorth(runState)}
+        onDone={() => setShowBeat(false)}
+      />
+    )}
+    </>
   );
 }

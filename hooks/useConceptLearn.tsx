@@ -1,13 +1,12 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { Toast } from "@/components/cashflow/shared";
+import { ConceptToast } from "@/components/learn/ConceptToast";
 import { useAudio } from "@/hooks/useAudio";
 import { useAuth } from "@/hooks/useAuth";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { recordConcepts } from "@/lib/cloud/mastery";
 import { markSeen } from "@/lib/cloud/seen";
-import { getConcept } from "@/lib/concepts";
 
 /**
  * The learning bus. Gameplay calls `learn(conceptIds, { applied })` whenever a
@@ -83,23 +82,6 @@ export function ConceptLearnProvider({ children }: { children: ReactNode }) {
       {children}
       <ConceptToast conceptId={current} />
     </Ctx.Provider>
-  );
-}
-
-function ConceptToast({ conceptId }: { conceptId: string | null }) {
-  const concept = conceptId ? getConcept(conceptId) : undefined;
-  return (
-    <Toast show={!!conceptId}>
-      <div className="flex items-center gap-3 rounded-full border border-accent/40 bg-bg2/95 px-5 py-2.5 shadow-xl">
-        <span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-base">
-          🧠
-        </span>
-        <span className="leading-tight">
-          <span className="eyebrow block text-[0.58rem] text-accent">You just learned</span>
-          <span className="display-caps text-sm text-ink">{concept?.title ?? conceptId}</span>
-        </span>
-      </div>
-    </Toast>
   );
 }
 
