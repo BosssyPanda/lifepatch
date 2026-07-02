@@ -26,13 +26,7 @@ const sceneVariants: Variants = {
   initial: (reduce: boolean) =>
     reduce
       ? { opacity: 0 }
-      : {
-          opacity: 0,
-          scale: 1.03,
-          y: 22,
-          filter: "blur(6px)",
-          clipPath: "inset(8% 0% 8% 0% round 14px)",
-        },
+      : { opacity: 0, scale: 1.03, y: 22 },
   animate: (reduce: boolean) =>
     reduce
       ? { opacity: 1, transition: { duration: 0.18 } }
@@ -40,8 +34,6 @@ const sceneVariants: Variants = {
           opacity: 1,
           scale: 1,
           y: 0,
-          filter: "blur(0px)",
-          clipPath: "inset(0% 0% 0% 0% round 0px)",
           transition: { duration: 0.5, ease: EASE },
         },
   exit: (reduce: boolean) =>
@@ -51,8 +43,6 @@ const sceneVariants: Variants = {
           opacity: 0,
           scale: 0.985,
           y: -18,
-          filter: "blur(5px)",
-          clipPath: "inset(6% 0% 6% 0% round 14px)",
           transition: { duration: 0.32, ease: EASE },
         },
 };
@@ -109,7 +99,7 @@ export function CashflowShell({
       initial="initial"
       animate="animate"
       exit="exit"
-      style={{ transformOrigin: "center top", willChange: "transform, filter, clip-path, opacity" }}
+      style={{ transformOrigin: "center top", willChange: "transform, opacity" }}
     >
       {children}
     </motion.div>

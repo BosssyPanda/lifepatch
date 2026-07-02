@@ -76,13 +76,15 @@ export function Gate({
         <DataAtlas px={sx} py={sy} className="h-auto w-full lg:h-full lg:w-auto" />
         {/* slow accent scanline sweep over the panel */}
         {!reduce && (
-          <motion.span
+          <motion.div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 h-px bg-ink/20"
-            initial={{ top: "8%" }}
-            animate={{ top: ["8%", "92%", "8%"] }}
+            className="pointer-events-none absolute inset-0"
+            initial={{ y: "-42%" }}
+            animate={{ y: ["-42%", "42%", "-42%"] }}
             transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-          />
+          >
+            <span className="absolute inset-x-0 top-1/2 h-px bg-ink/20" />
+          </motion.div>
         )}
       </motion.div>
 

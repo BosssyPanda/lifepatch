@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { AudioEngine, type AccentKind, type ScorePhase } from "@/src/audio/AudioEngine";
+import type { AudioEngine, AccentKind, ScorePhase } from "@/src/audio/AudioEngine";
 import type { AmbienceId, SfxName, StingTone } from "@/src/audio/sfxBank";
 
 const MUTE_KEY = "lp_muted";
@@ -47,14 +47,10 @@ function prefersReduced(): boolean {
 export function AudioProvider({ children }: { children: ReactNode }) {
   const engineRef = useRef<AudioEngine | null>(null);
   const desiredPhase = useRef<ScorePhase>("menu");
+  const bootingRef = useRef(false);
   const [started, setStarted] = useState(false);
   const [muted, setMutedState] = useState(false);
   const mutedRef = useRef(false);
-
-  // lazy singleton (client only)
-  if (typeof window !== "undefined" && !engineRef.current) {
-    engineRef.current = new AudioEngine();
-  }
 
   // initial mute pref: stored value wins, else default muted under reduced-motion/data
   useEffect(() => {
@@ -72,17 +68,26 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const unlock = useCallback((phase?: ScorePhase) => {
-    const eng = engineRef.current;
-    if (!eng) return;
+    if (typeof window === "undefined") return;
     const p = phase ?? desiredPhase.current;
     desiredPhase.current = p;
-    if (eng.isStarted) {
-      eng.setPhase(p);
+    const eng = engineRef.current;
+    if (eng) {
+      if (eng.isStarted) eng.setPhase(p);
+      else void eng.start(p).then(() => { setStarted(true); eng.setVolume(mutedRef.current ? 0 : VOL, 0.05); });
       return;
     }
-    void eng.start(p).then(() => {
-      setStarted(true);
-      eng.setVolume(mutedRef.current ? 0 : VOL, 0.05);
+    // First user gesture: pull the audio engine (Tone.js) chunk on demand so it
+    // never weighs down first paint, construct it, then start on the latest phase.
+    if (bootingRef.current) return;
+    bootingRef.current = true;
+    void import("@/src/audio/AudioEngine").then(({ AudioEngine }) => {
+      const e = new AudioEngine();
+      engineRef.current = e;
+      return e.start(desiredPhase.current).then(() => {
+        setStarted(true);
+        e.setVolume(mutedRef.current ? 0 : VOL, 0.05);
+      });
     });
   }, []);
 
