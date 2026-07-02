@@ -7,13 +7,6 @@ import { currency } from "@/lib/format";
 /** House easing — shared across the cashflow mode's motion. */
 const EASE = [0.2, 0.65, 0.3, 0.9] as const;
 
-/** Modal tone → the colored aura behind the card (opportunity / loss / neutral). */
-const TONE_GLOW: Record<"accent" | "brick" | "neutral", string> = {
-  accent: "radial-gradient(60% 50% at 50% 38%, rgba(212,84,30,0.28), transparent 70%)",
-  brick: "radial-gradient(60% 50% at 50% 38%, rgba(163,50,24,0.3), transparent 70%)",
-  neutral: "radial-gradient(60% 50% at 50% 38%, rgba(233,225,207,0.12), transparent 72%)",
-};
-
 /** Money in tabular display numerals, optionally signed/colored. */
 export function Money({
   n,
@@ -29,9 +22,9 @@ export function Money({
 }
 
 /**
- * A modal scaffold: a deepening backdrop + a cinematic card reveal that rises,
- * settles, and tilts back into place behind a tonal aura. Parent controls
- * mounting; pass `tone` to color the aura (opportunity / loss / neutral).
+ * A modal scaffold: a flat darkening scrim + a card that rises and settles.
+ * LEDGER: no aura, no backdrop-blur, no glow — depth comes from the scrim and
+ * the card's own hairline frame. `tone` is retained for caller compatibility.
  */
 export function Modal({
   children,
@@ -44,6 +37,7 @@ export function Modal({
   maxWidth?: string;
   tone?: "accent" | "brick" | "neutral";
 }) {
+  void tone;
   const reduce = useReducedMotion();
   return (
     <motion.div
@@ -52,43 +46,25 @@ export function Modal({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.22, ease: EASE }}
-      style={{ perspective: 1400 }}
     >
-      {/* backdrop: darkens + blurs in, so the card reads as lifted off the table */}
+      {/* flat scrim — darkens the board so the card reads as lifted */}
       <motion.button
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/75"
+        className="absolute inset-0 bg-black/80"
         disabled={!onClose}
-        initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-        animate={{ opacity: 1, backdropFilter: reduce ? "blur(0px)" : "blur(3px)" }}
-        exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
         transition={{ duration: 0.26, ease: EASE }}
       />
-      {/* tonal aura behind the card */}
-      {!reduce && (
-        <motion.span
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{ background: TONE_GLOW[tone] }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.4, ease: EASE }}
-        />
-      )}
       <motion.div
-        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 40, scale: 0.94, rotateX: 12 }}
-        animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1, rotateX: 0 }}
-        exit={reduce ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.97, rotateX: 6 }}
-        transition={
-          reduce
-            ? { duration: 0 }
-            : { type: "spring", stiffness: 260, damping: 24, mass: 0.9 }
-        }
+        initial={reduce ? { opacity: 0 } : { opacity: 0, y: 40, scale: 0.96 }}
+        animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+        exit={reduce ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.98 }}
+        transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 260, damping: 24, mass: 0.9 }}
         className={`relative w-full ${maxWidth} thin-scroll max-h-[88svh] overflow-y-auto`}
-        style={{ transformStyle: "preserve-3d", transformOrigin: "center bottom" }}
       >
         {children}
       </motion.div>
@@ -96,7 +72,10 @@ export function Modal({
   );
 }
 
-/** The recurring "why this matters" teaching callout. Reveals just after the card. */
+/**
+ * The recurring teaching callout. LEDGER §3.3: no "Why this matters" header,
+ * no badge — it renders as one quiet serif voice line under a hairline.
+ */
 export function LessonBox({ children }: { children: ReactNode }) {
   const reduce = useReducedMotion();
   return (
@@ -104,12 +83,9 @@ export function LessonBox({ children }: { children: ReactNode }) {
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={reduce ? { duration: 0 } : { duration: 0.35, ease: EASE, delay: 0.12 }}
-      className="mt-4 rounded-[4px] border-l-[3px] border-accent bg-accent/10 px-3.5 py-2.5 shadow-[0_8px_18px_-16px_rgba(212,84,30,0.9)]"
+      className="mt-4 border-t border-hairline pt-3"
     >
-      <p className="eyebrow text-accent" style={{ fontSize: "0.6rem" }}>
-        Why this matters
-      </p>
-      <p className="mt-1 font-serif text-[0.9rem] leading-relaxed text-paper-ink/85">{children}</p>
+      <p className="voice text-[1rem] leading-snug text-paper-ink/90">{children}</p>
     </motion.div>
   );
 }
@@ -117,12 +93,12 @@ export function LessonBox({ children }: { children: ReactNode }) {
 export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone?: "good" | "bad" | "neutral" }) {
   const cls =
     tone === "good"
-      ? "bg-olive/20 text-olive border-olive/40"
+      ? "text-gain border-gain/50"
       : tone === "bad"
-        ? "bg-brick/20 text-brick border-brick/40"
-        : "bg-paper-ink/10 text-paper-ink/70 border-paper-ink/20";
+        ? "text-loss border-loss/50"
+        : "text-paper-ink/70 border-paper-ink/25";
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 num text-[0.7rem] ${cls}`}>
+    <span className={`inline-flex items-center gap-1 border px-2 py-0.5 num text-[0.7rem] ${cls}`}>
       {children}
     </span>
   );

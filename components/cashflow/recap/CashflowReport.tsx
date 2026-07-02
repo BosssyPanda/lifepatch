@@ -101,9 +101,8 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
         <Stat label="Started as" value={0} format={() => prof.title} />
       </div>
 
-      <div className="mt-8 rounded-[6px] border-l-[3px] border-accent bg-accent/10 px-4 py-3">
-        <p className="eyebrow text-accent" style={{ fontSize: "0.6rem" }}>The lesson you just lived</p>
-        <p className="mt-1 font-serif text-[0.95rem] leading-relaxed text-ink">
+      <div className="mt-8 border-t border-hairline pt-4">
+        <p className="voice text-[1.15rem] leading-snug text-ink">
           Freedom never came from a bigger paycheck — it came from buying assets that pay you whether you work or not. That&apos;s real financial IQ, and it works exactly the same in real life.
         </p>
       </div>

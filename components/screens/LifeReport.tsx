@@ -39,7 +39,7 @@ function NetWorthArc({ values }: { values: number[] }) {
   return (
     <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="mt-2 h-16 w-full" aria-hidden>
       <line x1="0" y1={zeroY} x2="100" y2={zeroY} stroke="var(--color-ink-dim)" strokeWidth="0.3" strokeDasharray="1 1" opacity="0.5" />
-      <polyline points={pts.join(" ")} fill="none" stroke={up ? "#7f8b52" : "#a33218"} strokeWidth="0.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <polyline points={pts.join(" ")} fill="none" stroke={up ? "#2bd576" : "#ff3b30"} strokeWidth="0.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
