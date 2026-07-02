@@ -30,6 +30,7 @@ import {
 } from "@/lib/cashflow/board";
 import { FAST_TRACK_DEALS } from "@/lib/cashflow/decks";
 import { FAST_TRACK_CASHFLOW_GOAL, getDream } from "@/lib/cashflow/dreams";
+import { FT_SETBACK_ACTION, FT_SETBACK_BODY, FT_SETBACK_TITLE } from "@/lib/cashflow/messages";
 import {
   addBaby,
   applyDownsized,
@@ -526,7 +527,7 @@ export function CashflowGame({
             {pending.kind === "ftdeal" && <FtDealCard deal={pending.deal} cash={s.cash} onBuy={() => { audio.sfx("stamp"); audio.sting("good"); finishResolve(buyFastTrackDeal(s, pending.deal)); }} onPass={() => endTurn(s)} />}
             {pending.kind === "cashflowday" && <FtSimpleCard title="Cash Flow Day" body={`Collect your monthly cash flow of ${currency(fastTrackMonthly(s))}.`} action="Collect" onOk={() => { audio.sfx("cash"); finishResolve(collectCashflowDay(s)); }} />}
             {pending.kind === "dream" && <FtDreamCard s={s} onBuy={() => { audio.sting("good"); audio.swellWarmth(); finishResolve(buyDream(s)); }} onPass={() => endTurn(s)} />}
-            {pending.kind === "ftloss" && <FtSimpleCard title="Setback" body="A risky venture went sideways. You lose up to $20,000 — even the wealthy manage risk." action="Take the hit" tone="bad" onOk={() => { audio.sting("bad"); finishResolve(applyFtLoss(s)); }} />}
+            {pending.kind === "ftloss" && <FtSimpleCard title={FT_SETBACK_TITLE} body={FT_SETBACK_BODY} action={FT_SETBACK_ACTION} tone="bad" onOk={() => { audio.sting("bad"); finishResolve(applyFtLoss(s)); }} />}
 
             {pending.kind === "quiz" && (
               <QuizCard

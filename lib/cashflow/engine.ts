@@ -1,6 +1,7 @@
 import { FAST_BOARD, FAST_SIZE, RAT_BOARD, RAT_SIZE } from "./board";
 import { BIG_DEALS, DOODADS, MARKET_CARDS, SMALL_DEALS } from "./decks";
 import { FAST_TRACK_CASHFLOW_GOAL, getDream } from "./dreams";
+import { FT_LOSS_AMOUNT } from "./messages";
 import { getProfession } from "./professions";
 import { pickIndex, rollDice as rollDiceRaw } from "./rng";
 import {
@@ -306,7 +307,7 @@ export function collectCashflowDay(s: CashflowState): CashflowState {
 }
 
 export function applyFtLoss(s: CashflowState): CashflowState {
-  return { ...s, cash: Math.max(0, s.cash - 20000) };
+  return { ...s, cash: Math.max(0, s.cash - FT_LOSS_AMOUNT) };
 }
 
 export function canAffordFt(s: CashflowState, deal: FastTrackDeal): boolean {

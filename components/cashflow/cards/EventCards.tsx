@@ -4,6 +4,7 @@ import { HeartIcon, ScamIcon, VampireIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { LessonBox, Money } from "@/components/cashflow/shared";
 import { businessSalePrice, charityCost } from "@/lib/cashflow/engine";
+import { CHARITY_STRATEGY_NOTE, EXPENSE_FREEDOM_NOTE } from "@/lib/cashflow/messages";
 import { totalExpenses } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
 import type { CashflowState, DoodadCard as DoodadT, MarketCard as MarketT } from "@/lib/cashflow/types";
@@ -60,7 +61,7 @@ export function CharityCard({ s, onDonate, onSkip }: { s: CashflowState; onDonat
       <p className="mt-2 font-serif text-[0.88rem] text-paper-ink/80">
         Donate {currency(cost)} (10% of your income) and for the next 3 turns you may roll <strong>one or two</strong> dice — your choice. More control over where you land.
       </p>
-      <LessonBox>Generosity here is also strategy: choosing your dice count lets you aim for Opportunity squares and dodge Doodads.</LessonBox>
+      <LessonBox>{CHARITY_STRATEGY_NOTE}</LessonBox>
       <div className="mt-4 flex items-center justify-end gap-2">
         <NeonButton variant="outline" size="sm" onClick={onSkip}>
           Not now
@@ -197,7 +198,7 @@ export function BabyCard({ s, onOk }: { s: CashflowState; onOk: () => void }) {
           ? "Your family is already full (3 kids). No new expense this time."
           : `Congratulations. Each child adds ${currency(s.perChild)}/month to your expenses.`}
       </p>
-      <LessonBox>Life raises the bar to freedom. The more it costs to live, the more passive income you need — plan ahead.</LessonBox>
+      <LessonBox>{EXPENSE_FREEDOM_NOTE}</LessonBox>
       <div className="mt-4 flex justify-end">
         <NeonButton variant="paper" size="md" onClick={onOk}>
           {maxed ? "Continue" : "Welcome the baby"}
