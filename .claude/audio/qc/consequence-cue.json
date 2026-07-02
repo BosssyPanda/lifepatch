@@ -1,0 +1,51 @@
+{
+  "cueId": "consequence",
+  "name": "Consequence land (money beat)",
+  "role": "Fired at the full-tier consequence-beat land — the punctuation as a big money outcome settles onto the ledger. accent('consequence') in ConsequenceBeat's `land` phase, replacing the generic thump on the flagship (full-tier) events only.",
+  "emotionalTarget": "weight, finality, resolution — the number has landed and the ledger is closed",
+  "engine": "src/audio/AudioEngine.ts (Tone.js synth — no samples)",
+  "phase": "gameplay",
+  "bpm": 76,
+  "key": "A minor",
+  "timeSignature": "4/4",
+  "bars": 1,
+  "leitmotif": {
+    "lengthBars": 1,
+    "subdivision": "8n",
+    "notes": ["E5", "D5", "C5", "A4"],
+    "shape": "stepwise descent resolving to the tonic A — the figure 'coming to rest'; deliberately the mirror of the ascending, celebratory `mastered`/`levelup` arps"
+  },
+  "harmony": ["Am (settle: A2 / E3 / A3 / C4, held 1 measure)"],
+  "loop": {
+    "type": "one-shot",
+    "note": "Not a loop. A single grid-quantized accent fired on `land`; each synth voice disposes itself. Quantized to the next 8n via the shared accent scheduler so it locks to the running Transport."
+  },
+  "stems": {
+    "impact": 1.0,
+    "motif": 0.7,
+    "settle": 0.55
+  },
+  "voices": {
+    "impact": "Tone.MembraneSynth A1 half-note (-3dB) + white NoiseSynth transient (0.14s, 160Hz highpass, -14dB) — the deep tonic stamp + paper texture.",
+    "motif": "arpAccent triangle E5-D5-C5-A4, 0.07s step, -9dB — the resolving descent.",
+    "settle": "PolySynth triangle Am chord (A2/E3/A3/C4), 1 measure, -12dB — the low, quiet close."
+  },
+  "intensityLayers": "None — a one-shot. Only fires on the full tier (|Δmoney| >= $1,000 or >= 10% of net worth); the minor tier stays lighter per the bookends/fatigue rule (section 1.2).",
+  "cuePoints": {
+    "land": "accent('consequence') at land+60ms, layered under the existing tonal stampGood/stampBad and the cash sfx so gain/loss color is preserved."
+  },
+  "transitions": {
+    "in": "Beat already running the `gameplay` bed; the accent sits on top, no phase change.",
+    "out": "Voices self-dispose (disposeLater); beat resolves to `done`."
+  },
+  "accessibility": "Respects global mute (routed through the accent bus / master gain). Silent until a user gesture starts the engine. Under prefers-reduced-motion the beat renders its final state with no ceremony and does not fire the cue (no motion, no cue churn).",
+  "originality": "Original generic tonal voicings composed for this engine — a descending Am resolution. No transcribed, sampled, or copied melodies/beats/riffs.",
+  "license": "Original work, in-repo synth. No third-party samples or external sources.",
+  "qc": {
+    "loopClean": "n/a — one-shot",
+    "beatLocked": true,
+    "noClipping": "voices sum well under 0dBFS (impact 0dB membrane, motif -9dB, settle -12dB) on the accent bus which pre-masters; verify no >0dBFS when stacked with stampGood/Bad + cash",
+    "rampedGains": true,
+    "muteRespected": true
+  }
+}

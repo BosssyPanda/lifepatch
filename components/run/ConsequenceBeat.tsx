@@ -3,6 +3,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAudio } from "@/hooks/useAudio";
+import { conceptsForText, conceptTitle } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEvent, Outcome } from "@/lib/lifeEvents";
 import { beatFor } from "./consequenceBeats";
@@ -72,6 +73,12 @@ export function ConsequenceBeat({
     (netWorthBefore !== 0 && Math.abs(nwDelta) >= FULL_NW_FRACTION * Math.abs(netWorthBefore))
       ? "full"
       : "minor";
+
+  // the "why": name the concept this outcome teaches; a good (applied) outcome is
+  // what raises mastery, so mark it. Display-only — learn() records in LifeEventCard.
+  const conceptIds = conceptsForText(outcome.lesson, outcome.consequence);
+  const learnedConcept = conceptIds.length > 0 ? conceptTitle(conceptIds[0]) : null;
+  const applied = outcome.tone === "good";
 
   // ---- ledger rows (derivation first, then secondary effects) ---------------
   const rows: Row[] = [];
@@ -170,7 +177,7 @@ export function ConsequenceBeat({
       audio.sting("neutral");
     }
     if (tier === "full") {
-      at(60, () => audio.accent("thump"));
+      at(60, () => audio.accent("consequence"));
       setJolt(true);
       setFlash(true);
       at(360, () => setJolt(false));
@@ -328,9 +335,9 @@ export function ConsequenceBeat({
             <motion.div
               key={`${r.label}-${i}`}
               className={`flex items-baseline gap-2 py-1.5 ${r.rule ? "mt-1 border-t border-hairline pt-2.5" : ""}`}
-              initial={reduced ? undefined : { opacity: 0, y: 6 }}
-              animate={showRows ? { opacity: 1, y: 0 } : { opacity: 0, y: 6 }}
-              transition={{ duration: 0.32, ease: EASE, delay: showRows && !reduced ? i * 0.11 : 0 }}
+              initial={reduced ? undefined : { opacity: 0, clipPath: "inset(0 0 100% 0)" }}
+              animate={showRows ? { opacity: 1, clipPath: "inset(0 0 0% 0)" } : { opacity: 0, clipPath: "inset(0 0 100% 0)" }}
+              transition={{ duration: 0.34, ease: EASE, delay: showRows && !reduced ? i * 0.12 : 0 }}
             >
               <span
                 className={r.strong ? "display-caps text-ink" : "eyebrow text-secondary"}
@@ -349,10 +356,32 @@ export function ConsequenceBeat({
           ))}
         </div>
 
+        {/* the concept this outcome teaches — the "why", named and (if applied) banked */}
+        {learnedConcept && (
+          <motion.div
+            className="mt-7 flex flex-wrap items-center gap-x-3 gap-y-1.5"
+            initial={reduced ? undefined : { opacity: 0, y: 8 }}
+            animate={done ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+            transition={{ duration: 0.5, ease: EASE, delay: reduced ? 0 : 0.08 }}
+          >
+            <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem", letterSpacing: "0.24em" }}>
+              Lesson learned
+            </span>
+            <span className="border border-ink px-2.5 py-1 display-caps text-ink" style={{ fontSize: "0.72rem" }}>
+              {learnedConcept}
+            </span>
+            {applied && (
+              <span className="num" style={{ fontSize: "0.64rem", color: "var(--color-gain)", letterSpacing: "0.06em" }}>
+                mastery ↑
+              </span>
+            )}
+          </motion.div>
+        )}
+
         {/* the lesson as one quiet voice line — no header (§3.3) */}
         {outcome.lesson && (
           <motion.p
-            className="voice mt-7 max-w-xl text-[1.12rem] leading-snug text-ink"
+            className={`voice ${learnedConcept ? "mt-3" : "mt-7"} max-w-xl text-[1.12rem] leading-snug text-ink`}
             initial={reduced ? undefined : { opacity: 0, y: 8 }}
             animate={done ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
             transition={{ duration: 0.5, ease: EASE }}

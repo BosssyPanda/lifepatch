@@ -12,7 +12,11 @@
  * omits the derivation rows if they ever drift, so the ledger can never show
  * math that disagrees with the engine.
  *
- * Keyed by `LifeEvent.id`. Only the two Phase-2 flagship events are covered.
+ * Keyed by `LifeEvent.id`. Flagship events earn the full-screen ceremony; the
+ * ~others resolve inline (§1.2 bookends — mid-run spectacle stays rare). Only
+ * events with a large, correctly-signed money swing are tagged; events whose bad
+ * outcome carries positive `cash` (layoff severance, credit-card spend, payday
+ * advance) are deliberately excluded so the DEBIT/CREDIT stamp never misreads.
  */
 
 export type BeatDerivation = {
@@ -50,6 +54,15 @@ export const CONSEQUENCE_BEATS: Record<string, ConsequenceBeatConfig> = {
   bonus: {
     headline: "Year-end bonus",
   },
+  // — big, correctly-signed lump-sum moments (headline framing; no ×N story) —
+  // inheritance → +$25k (invest) / +$7k (splurge); the windfall lesson lands hard.
+  inheritance: { headline: "Inheritance" },
+  // medical → −$6k out of pocket (or a debt hit on the ignore path); emergency-fund beat.
+  medical: { headline: "Hospital bill" },
+  // marriage → −$30k (big) / −$3k (courthouse); status-spending vs the actual asset.
+  marriage: { headline: "Wedding day" },
+  // carBreaks → −$2.5k repair; the textbook "this is what an emergency fund is for".
+  carBreaks: { headline: "Car repair" },
 };
 
 export function beatFor(eventId: string): ConsequenceBeatConfig | undefined {

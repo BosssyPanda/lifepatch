@@ -19,7 +19,9 @@ export type AccentKind =
   | "thump" | "hit" | "stab" | "riser" | "title"
   | "rise" | "ping" | "thud" | "stampGood" | "stampBad"
   // v2 learning/social milestones (celebratory, grid-quantized)
-  | "mastered" | "levelup" | "streak";
+  | "mastered" | "levelup" | "streak"
+  // Addendum B: the money-consequence land motif (build→impact→settle, A minor)
+  | "consequence";
 
 type StemId = "sub" | "pad" | "rhodes" | "tick" | "crackle" | "tension" | "warmth" | "lead";
 
@@ -344,6 +346,15 @@ export class AudioEngine {
       case "levelup": this.arpAccent(["C5", "E5", "G5", "C6"], at, 0.06, "triangle", -9); mk.chord(["C6", "E6"], "triangle", "4n", -14); break;
       // streak kept alive: a warm, confident two-step with a soft kick (the "fire")
       case "streak": mk.membrane("F1", "4n", -5); this.arpAccent(["E4", "A4", "C5"], at, 0.05, "triangle", -9); break;
+      // Addendum B: the money consequence lands. A deep tonic stamp + paper transient
+      // (impact), a resolving E–D–C–A descent to the tonic (the figure "coming to rest"),
+      // and a low A-minor settle chord held a bar. Original; A minor; grid-quantized.
+      case "consequence":
+        mk.membrane("A1", "2n", -3);
+        mk.noiseHit(0.14, 160, -14);
+        this.arpAccent(["E5", "D5", "C5", "A4"], at, 0.07, "triangle", -9);
+        mk.chord(["A2", "E3", "A3", "C4"], "triangle", "1m", -12);
+        break;
     }
   }
 
