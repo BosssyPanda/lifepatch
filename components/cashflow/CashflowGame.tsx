@@ -9,6 +9,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { conceptsForText } from "@/lib/concepts";
 import { Dice } from "@/components/cashflow/board/Dice";
+import { BoardBackdrop } from "@/components/cashflow/board/BoardBackdrop";
 
 // WebGL board is loaded only inside the cashflow shell (never the landing bundle).
 // It self-falls-back to the flat 2D <Board> when WebGL is unavailable.
@@ -377,7 +378,8 @@ export function CashflowGame({
   const rollLabel = s.skipTurns > 0 ? `Skip turn · downsized ×${s.skipTurns}` : turnPhase === "idle" ? "Roll" : "…";
 
   return (
-    <div className="mx-auto min-h-[100svh] w-full max-w-6xl px-3 py-4 sm:px-5">
+    <div className="relative isolate mx-auto min-h-[100svh] w-full max-w-6xl px-3 py-4 sm:px-5">
+      <BoardBackdrop />
       {/* HUD */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
