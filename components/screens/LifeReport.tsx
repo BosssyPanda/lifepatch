@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ShareCard } from "@/components/share/ShareCard";
 import { BrainIcon, CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
@@ -106,6 +107,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
   const { mastery } = useProfile();
   const { runGains } = useConceptLearn();
   const { setBrainGlow } = useAudio();
+  const [shareOpen, setShareOpen] = useState(false);
   const nw = netWorth(run);
 
   // warm the calm report bed by how rich the Money Brain has become
@@ -121,6 +123,19 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
   const lastYear = hist[hist.length - 1]?.year ?? run.startYear;
   const best = [...hist].sort((a, b) => b.portfolioDelta - a.portfolioDelta)[0];
   const worst = [...hist].sort((a, b) => a.portfolioDelta - b.portfolioDelta)[0];
+
+  const shareData = {
+    verdict: klass.title,
+    verdictHex: klass.hex,
+    netWorth: nw,
+    netWorthText: currency(nw),
+    years: hist.length,
+    runId: `${run.mode}-${run.seed}`,
+    history: hist.map((h) => h.netWorth),
+    statLabel: "Biggest hit",
+    statValue: worst ? `−${currency(Math.abs(Math.min(0, worst.portfolioDelta)))}` : "—",
+    url: typeof window !== "undefined" ? window.location.origin : "https://lifepatch.app",
+  };
 
   const ledger = [
     { label: "Net worth", value: currency(nw) },
@@ -217,10 +232,13 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
           <NeonButton variant="primary" size="lg" onClick={onReplay}>
             <ReplayIcon size={18} /> Run it back
           </NeonButton>
+          <NeonButton variant="secondary" size="lg" onClick={() => setShareOpen(true)}>Share ↗</NeonButton>
           <NeonButton variant="secondary" size="md" onClick={onAlmanac}>Almanac</NeonButton>
           <NeonButton variant="ghost" size="md" onClick={onTitle}>Title screen</NeonButton>
         </motion.div>
       </motion.div>
+
+      {shareOpen && <ShareCard data={shareData} onClose={() => setShareOpen(false)} />}
     </div>
   );
 }

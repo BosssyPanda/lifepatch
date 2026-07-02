@@ -8,7 +8,7 @@ export function VerdictStamp({ title, hex }: { title: string; hex: string }) {
       initial={{ scale: 2.4, rotate: -16, opacity: 0 }}
       animate={{ scale: 1, rotate: -3, opacity: 1 }}
       transition={{ type: "spring", stiffness: 220, damping: 9 }}
-      className="inline-block rounded-[5px] border-[3px] px-8 py-4 text-center"
+      className="inline-block border-[3px] px-8 py-4 text-center"
       style={{ borderColor: hex, color: hex }}
     >
       <p className="eyebrow" style={{ opacity: 0.7 }}>Final verdict</p>
