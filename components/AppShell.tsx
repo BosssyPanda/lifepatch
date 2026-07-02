@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { AudioProvider, useAudio } from "@/hooks/useAudio";
 import { useRun } from "@/hooks/useRun";
 import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
+import { TerminalOp } from "@/components/ui/TerminalOp";
 import { MotionProvider, useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor, type TransitionKind } from "@/src/motion/transitions";
 import { resolvePlayerId } from "@/lib/cloud/identity";
@@ -19,7 +20,11 @@ import type { GameMode } from "@/lib/cloud/types";
 // ModeSelect stay eager; the run engine, Rat Race board, cinematics, report, and
 // overlays load on demand — keeping `/`'s First Load lean. ssr:false because these
 // are all client-only screens gated behind a phase or a user action.
-const screenFallback = () => <div className="min-h-[100svh] bg-bg" />;
+const screenFallback = () => (
+  <div className="flex min-h-[100svh] items-center justify-center bg-bg">
+    <TerminalOp label="Loading" center />
+  </div>
+);
 const CashflowShell = dynamic(() => import("@/components/cashflow/CashflowShell").then((m) => m.CashflowShell), { ssr: false, loading: screenFallback });
 const YearLoop = dynamic(() => import("@/components/run/YearLoop").then((m) => m.YearLoop), { ssr: false, loading: screenFallback });
 const Outro = dynamic(() => import("@/components/cinematic/Outro").then((m) => m.Outro), { ssr: false, loading: screenFallback });

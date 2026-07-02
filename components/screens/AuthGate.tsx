@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { MailIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { TerminalOp } from "@/components/ui/TerminalOp";
 import type { useAuth } from "@/hooks/useAuth";
 import { MODES, type ModeId } from "@/lib/modes";
 import { loadRun } from "@/lib/saves";
@@ -46,7 +47,7 @@ export function AuthGate({
 
         <div className="mt-8 rounded-[5px] border border-ink/12 bg-bg2 p-5">
           {loading ? (
-            <p className="text-center font-body text-ink-dim">…</p>
+            <p className="text-center"><TerminalOp label="Verifying ID" center /></p>
           ) : !user ? (
             <form
               onSubmit={(e) => { e.preventDefault(); signIn(email); }}

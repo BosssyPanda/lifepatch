@@ -51,8 +51,13 @@ export function NeonButton({
       whileHover={disabled ? undefined : { y: -1 }}
       whileTap={disabled ? undefined : { y: 1, scale: 0.99 }}
       transition={{ type: "spring", stiffness: 500, damping: 26 }}
-      className={`inline-flex items-center justify-center gap-2 border display-caps tracking-[0.12em] transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
+      className={`group relative inline-flex items-center justify-center gap-2 border display-caps tracking-[0.12em] transition-colors duration-200 disabled:opacity-40 disabled:cursor-not-allowed ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
     >
+      {/* §8.3 bracket highlight — corner marks that register on hover/focus */}
+      <span aria-hidden className="pointer-events-none absolute left-0.5 top-0.5 h-1.5 w-1.5 border-l border-t border-current opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-visible:opacity-70" />
+      <span aria-hidden className="pointer-events-none absolute right-0.5 top-0.5 h-1.5 w-1.5 border-r border-t border-current opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-visible:opacity-70" />
+      <span aria-hidden className="pointer-events-none absolute bottom-0.5 left-0.5 h-1.5 w-1.5 border-b border-l border-current opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-visible:opacity-70" />
+      <span aria-hidden className="pointer-events-none absolute bottom-0.5 right-0.5 h-1.5 w-1.5 border-b border-r border-current opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-visible:opacity-70" />
       {children}
     </motion.button>
   );

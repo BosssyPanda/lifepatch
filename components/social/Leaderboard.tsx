@@ -6,6 +6,7 @@ import { CloseIcon } from "@/components/icons";
 import { Avatar } from "@/components/social/Avatar";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
 import { listFriendIds } from "@/lib/cloud/friends";
@@ -167,7 +168,7 @@ export function Leaderboard({
 
             <div className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3">
               {loading ? (
-                <p className="py-10 text-center font-body text-secondary">Loading…</p>
+                <p className="py-10 text-center"><TerminalOp label="Fetching ledger" center /></p>
               ) : rows.length === 0 ? (
                 <EmptyState scope={scope} />
               ) : (

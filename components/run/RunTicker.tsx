@@ -1,0 +1,99 @@
+"use client";
+
+import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { currency } from "@/lib/format";
+import { macroEvent, sp500Return } from "@/lib/markets";
+import type { RunState } from "@/lib/runEngine";
+
+/**
+ * Ambient in-run ticker (Addendum A §8.1) — a thin, hairline-bounded mono strip
+ * under the HUD. Spoiler-safe: it only shows YEARS ALREADY LIVED (run.history) —
+ * never the in-progress year, whose market hasn't been revealed. A young run is
+ * seeded with real pre-start history from lib/markets. Quiet by design (§1.2):
+ * slower + dimmer than the title ticker. One translateX loop (compositor only),
+ * paused while off-screen (IntersectionObserver); static under reduced motion.
+ */
+
+type Tick = { label: string; value?: string; up?: boolean };
+
+const PRESEED_YEARS = 8;
+
+function buildTicks(run: RunState): Tick[] {
+  const ticks: Tick[] = [];
+  if (run.history.length === 0) {
+    // Year 1: real context from the years just before the run started.
+    for (let y = run.startYear - PRESEED_YEARS; y < run.startYear; y++) {
+      const pct = sp500Return(y);
+      ticks.push({ label: `S&P ${y}`, value: `${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(1)}%`, up: pct >= 0 });
+      const ev = macroEvent(y);
+      if (ev) ticks.push({ label: `${y} · ${ev.title.toUpperCase()}` });
+    }
+    return ticks;
+  }
+  for (const h of run.history) {
+    ticks.push({ label: `S&P ${h.year}`, value: `${h.indexReturn >= 0 ? "+" : "−"}${Math.abs(h.indexReturn).toFixed(1)}%`, up: h.indexReturn >= 0 });
+    if (h.portfolioDelta !== 0) {
+      ticks.push({ label: `YOUR BOOK ${h.year}`, value: `${h.portfolioDelta >= 0 ? "+" : "−"}${currency(Math.abs(h.portfolioDelta))}`, up: h.portfolioDelta >= 0 });
+    }
+    const ev = macroEvent(h.year);
+    if (ev) ticks.push({ label: `${h.year} · ${ev.title.toUpperCase()}` });
+  }
+  return ticks;
+}
+
+function Row({ ticks }: { ticks: Tick[] }) {
+  return (
+    <div className="flex shrink-0 items-center gap-7 pr-7" aria-hidden>
+      {ticks.map((t, i) => (
+        <span key={`${t.label}-${i}`} className="flex items-baseline gap-1.5 whitespace-nowrap">
+          <span className="eyebrow text-tertiary" style={{ fontSize: "0.54rem", letterSpacing: "0.16em" }}>{t.label}</span>
+          {t.value && (
+            <span className="num" style={{ fontSize: "0.6rem", color: t.up ? "var(--color-gain)" : "var(--color-loss)", opacity: 0.8 }}>
+              {t.value}
+            </span>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export function RunTicker({ run }: { run: RunState }) {
+  const reduce = useReducedMotion();
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(true);
+  const ticks = buildTicks(run);
+
+  // pause the loop whenever the strip is scrolled out of view (§8.5: trivial ambient CPU)
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { threshold: 0 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  if (ticks.length === 0) return null;
+
+  return (
+    <div
+      ref={hostRef}
+      className="relative flex w-full items-center overflow-hidden border-b border-hairline bg-bg py-1.5"
+      aria-label="Market history ticker"
+    >
+      {reduce ? (
+        <div className="flex items-center gap-7 overflow-hidden px-3"><Row ticks={ticks} /></div>
+      ) : (
+        <motion.div
+          className="flex w-max items-center"
+          animate={visible ? { x: ["0%", "-50%"] } : undefined}
+          transition={{ duration: 64, repeat: Infinity, ease: "linear" }}
+        >
+          <Row ticks={ticks} />
+          <Row ticks={ticks} />
+        </motion.div>
+      )}
+    </div>
+  );
+}

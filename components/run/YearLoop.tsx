@@ -14,6 +14,7 @@ import { LifeEventCard } from "./LifeEventCard";
 import { MarketResults } from "./MarketResults";
 import { MarketTicker } from "./MarketTicker";
 import { PortfolioPanel } from "./PortfolioPanel";
+import { RunTicker } from "./RunTicker";
 import { YearHud } from "./YearHud";
 
 type Run = ReturnType<typeof useRun>;
@@ -56,6 +57,7 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   return (
     <div className="min-h-[100svh] w-full pb-4">
       <YearHud run={s} saving={run.saving} onOpenAlmanac={onOpenAlmanac} />
+      <RunTicker run={s} />
 
       <MarketTicker run={s} />
       <MarketResults run={s} />

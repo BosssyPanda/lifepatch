@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@/components/icons";
+import { TerminalOp } from "@/components/ui/TerminalOp";
 import { drawShareCard, FORMATS, type ShareCardData, type ShareFormat } from "./drawShareCard";
 
 /**
@@ -94,7 +95,7 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
             <img src={preview} alt="Share card preview" className="h-full w-full object-contain" />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
-              <span className="num text-[0.7rem] text-secondary">RENDERING…</span>
+              <TerminalOp label="Printing statement" center />
             </div>
           )}
         </div>

@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { sparkGlyphs } from "@/components/ui/BlockSpark";
 
 /**
  * Canvas-rendered LEDGER share card (Addendum A §7.2). Palette-locked "printed
@@ -149,6 +150,13 @@ export async function drawShareCard(format: ShareFormat, data: ShareCardData): P
     ctx.fillStyle = data.netWorth >= 0 ? GAIN : LOSS;
     ctx.fillText(data.netWorthText, left, 1010);
     drawSparkline(ctx, data.history, left, 1060, right - left, 200);
+    if (data.history.length > 1) {
+      // block-glyph strip (§13 #7) — the same series as text, departure-mono flavored
+      ctx.font = `36px ${mono}`;
+      ctx.fillStyle = data.history[data.history.length - 1] >= data.history[0] ? GAIN : LOSS;
+      ctx.textAlign = "left";
+      ctx.fillText(sparkGlyphs(data.history), left, 1330);
+    }
 
     const rowY = 1420;
     const drawRow = (lab: string, val: string, y: number) => {

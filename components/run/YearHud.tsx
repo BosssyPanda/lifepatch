@@ -1,8 +1,9 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
+import { BlockSpark } from "@/components/ui/BlockSpark";
 import { ChevronDown, InfoIcon } from "@/components/icons";
 import { currency } from "@/lib/format";
 import { netWorth, type RunState, yearIndex } from "@/lib/runEngine";
@@ -10,6 +11,33 @@ import { netWorth, type RunState, yearIndex } from "@/lib/runEngine";
 // LEDGER: meters read gain (green) high, secondary (grey) mid, loss (red) low.
 function barVar(v: number) {
   return v >= 60 ? "var(--color-gain)" : v >= 35 ? "var(--color-secondary)" : "var(--color-loss)";
+}
+
+/**
+ * HUD micro-interaction (Addendum A §8.2): when a tracked value changes, its
+ * numeral gets a one-shot background tint flash in gain/loss color — the same
+ * pulse the consequence beat's net-worth rail uses. Compositor-only, ≤600ms.
+ */
+function FlashValue({ value, children }: { value: number; children: ReactNode }) {
+  const prev = useRef(value);
+  const [flash, setFlash] = useState<"gain" | "loss" | null>(null);
+  useEffect(() => {
+    if (value === prev.current) return;
+    setFlash(value > prev.current ? "gain" : "loss");
+    prev.current = value;
+    const id = window.setTimeout(() => setFlash(null), 650);
+    return () => window.clearTimeout(id);
+  }, [value]);
+  const tint = flash === "gain" ? "rgba(43,213,118,0.16)" : "rgba(255,59,48,0.16)";
+  return (
+    <motion.span
+      className="-mx-1 inline-block px-1"
+      animate={flash ? { backgroundColor: ["rgba(0,0,0,0)", tint, "rgba(0,0,0,0)"] } : { backgroundColor: "rgba(0,0,0,0)" }}
+      transition={{ duration: 0.55 }}
+    >
+      {children}
+    </motion.span>
+  );
 }
 
 export function YearHud({
@@ -39,7 +67,9 @@ export function YearHud({
         <div className="flex flex-1 flex-col">
           <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>Net worth</p>
           <p className="num text-lg sm:text-xl" style={{ color: nwVar }}>
-            <AnimatedNumber value={nw} format={currency} />
+            <FlashValue value={nw}>
+              <AnimatedNumber value={nw} format={currency} />
+            </FlashValue>
           </p>
         </div>
 
@@ -82,6 +112,12 @@ export function YearHud({
                 <KV label="Salary" value={run.salary > 0 ? `${currency(run.salary)}/yr` : "Unemployed"} colorVar={run.salary > 0 ? "var(--color-ink)" : "var(--color-loss)"} />
                 <KV label="Debt" value={currency(run.debt)} colorVar={run.debt > 0 ? "var(--color-loss)" : "var(--color-gain)"} />
                 <KV label="Job" value={run.salary > 0 ? run.job : "Looking for work"} colorVar="var(--color-secondary)" />
+                {run.history.length > 1 && (
+                  <div className="flex items-baseline justify-between">
+                    <span className="eyebrow text-secondary">Trend</span>
+                    <BlockSpark values={run.history.map((h) => h.netWorth)} />
+                  </div>
+                )}
               </div>
               <div className="space-y-2.5">
                 <Bar label="Health" v={run.life.health} />
@@ -106,7 +142,13 @@ function Stat({ label, value, animated, fmt }: { label: string; value?: string; 
     <div className="flex flex-col">
       <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>{label}</p>
       <p className="num text-base sm:text-lg text-ink">
-        {animated !== undefined && fmt ? <AnimatedNumber value={animated} format={fmt} /> : value}
+        {animated !== undefined && fmt ? (
+          <FlashValue value={animated}>
+            <AnimatedNumber value={animated} format={fmt} />
+          </FlashValue>
+        ) : (
+          value
+        )}
       </p>
     </div>
   );
@@ -127,7 +169,9 @@ function Bar({ label, v }: { label: string; v: number }) {
     <div>
       <div className="flex items-baseline justify-between">
         <span className="eyebrow text-secondary">{label}</span>
-        <span className="num text-xs" style={{ color: colorVar }}>{Math.round(v)}</span>
+        <span className="num text-xs" style={{ color: colorVar }}>
+          <FlashValue value={v}>{Math.round(v)}</FlashValue>
+        </span>
       </div>
       <div className="mt-1 h-2 overflow-hidden bg-hairline">
         <motion.div className="h-full" style={{ background: colorVar }} animate={{ width: `${v}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />

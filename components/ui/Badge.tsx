@@ -24,7 +24,7 @@ export function Badge({
   const hex = TONE_HEX[tone] ?? TONE_HEX.neutral;
   return (
     <span
-      className={`eyebrow inline-flex items-center gap-1 rounded-[2px] border px-2 py-0.5 ${className}`}
+      className={`eyebrow inline-flex items-center gap-1 border px-2 py-0.5 ${className}`}
       style={{ color: hex, borderColor: `${hex}66` }}
     >
       {children}

@@ -6,6 +6,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { conceptsForText, conceptTitle } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEvent, Outcome } from "@/lib/lifeEvents";
+import { buzz, BUZZ } from "@/src/motion/haptics";
 import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
@@ -181,6 +182,7 @@ export function ConsequenceBeat({
     }
     if (tier === "full") {
       at(60, () => audio.accent("consequence"));
+      buzz(BUZZ.land, audio.muted); // §13 #11 — impact haptic with the stamp
       setJolt(true);
       setFlash(true);
       at(360, () => setJolt(false));

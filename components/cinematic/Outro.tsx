@@ -10,7 +10,9 @@ import { deriveVerdict } from "@/lib/verdict";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
+import { buzz, BUZZ } from "@/src/motion/haptics";
 import { MuteButton, SkipButton } from "./Controls";
+import { MoneyFall } from "./MoneyFall";
 import { VerdictStamp } from "./VerdictStamp";
 import { SplitFlap } from "./SplitFlap";
 
@@ -55,6 +57,8 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
 
   const [step, setStep] = useState(reduced ? 5 : 0);
   const [settled, setSettled] = useState(reduced);
+  // money-fall fires ONLY from the natural timeline (never on skip / reduced)
+  const [fall, setFall] = useState(false);
   const timers = useRef<number[]>([]);
   const startedRef = useRef(false);
   const doneRef = useRef(false);
@@ -79,7 +83,11 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
     at(3150, () => {
       setStep(4); // verdict resolves
       try { audio.accent(verdict.good ? "stampGood" : "stampBad"); } catch {}
-      if (verdict.good) audio.swellWarmth();
+      buzz(BUZZ.verdict, audio.muted);
+      if (verdict.good) {
+        audio.swellWarmth();
+        setFall(true); // §13 #5 — one shower of flat ink bills on a good verdict
+      }
     });
     at(3900, () => setStep(5)); // voice + continue
     at(4300, () => setSettled(true));
@@ -202,6 +210,8 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
           <NeonButton variant="primary" size="lg" className="mt-6" onClick={finish}>See the full report →</NeonButton>
         </motion.div>
       </div>
+
+      {fall && <MoneyFall />}
 
       <div className="absolute right-4 top-4 z-20"><MuteButton muted={audio.muted} onToggle={() => audio.setMuted(!audio.muted)} /></div>
       <div className="absolute bottom-6 right-4 z-20"><SkipButton onSkip={finish} /></div>
