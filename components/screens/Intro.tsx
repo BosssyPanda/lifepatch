@@ -1,11 +1,23 @@
 "use client";
 
 import { motion } from "framer-motion";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { TitleAscii } from "@/components/cinematic/TitleAscii";
 import { TitleTicker } from "@/components/cinematic/TitleTicker";
 import { BracketCTA } from "@/components/cinematic/BracketCTA";
+import { ScrollProgress } from "@/components/cinematic/landing/ScrollProgress";
+import { FooterColophon } from "@/components/cinematic/landing/FooterColophon";
+
+// The below-the-fold landing set pieces load as their own chunks so the title
+// screen's First Load stays lean; each renders a placeholder band meanwhile.
+const sectionFallback = () => <div className="min-h-[40svh] border-t border-hairline" aria-hidden />;
+const RunTour = dynamic(() => import("@/components/cinematic/landing/RunTour").then((m) => m.RunTour), { ssr: false, loading: sectionFallback });
+const MarketSection = dynamic(() => import("@/components/cinematic/landing/MarketSection").then((m) => m.MarketSection), { ssr: false, loading: sectionFallback });
+const CompoundToy = dynamic(() => import("@/components/cinematic/landing/CompoundToy").then((m) => m.CompoundToy), { ssr: false, loading: sectionFallback });
+const VerdictWall = dynamic(() => import("@/components/cinematic/landing/VerdictWall").then((m) => m.VerdictWall), { ssr: false, loading: sectionFallback });
+const StatBand = dynamic(() => import("@/components/cinematic/landing/StatBand").then((m) => m.StatBand), { ssr: false, loading: sectionFallback });
 import { useAudio } from "@/hooks/useAudio";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
@@ -75,8 +87,11 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
 
   const tagline = useScramble(TAGLINE, taglineOn, { reduced: reduced || settled, durationMs: 850 });
 
+  const beginWithSfx = () => { try { audio.sfx("confirm"); } catch {} onBegin(); };
+
   return (
     <div className="relative bg-bg text-ink">
+      <ScrollProgress />
       {/* ===================== HERO — statement cover ===================== */}
       <section className="relative isolate flex min-h-[100svh] flex-col overflow-hidden">
         {/* ASCII-rendered board-orbit loop, quantized to glyphs behind everything */}
@@ -189,7 +204,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             transition={reduced ? { duration: 0 } : SPRING.pop}
             className="mt-9 flex flex-wrap items-center gap-3"
           >
-            <BracketCTA label="Begin a Run" onClick={() => { try { audio.sfx("confirm"); } catch {} onBegin(); }} />
+            <BracketCTA label="Begin a Run" onClick={beginWithSfx} />
             <NeonButton variant="secondary" size="lg" onClick={onAlmanac}>Almanac</NeonButton>
           </motion.div>
         </div>
@@ -215,7 +230,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
       <section className="px-5 py-20 sm:px-10 lg:px-16">
         <div className="mx-auto grid max-w-5xl gap-px border border-hairline bg-hairline sm:grid-cols-[1.4fr_1fr]">
           <div className="bg-bg p-6 sm:p-10">
-            <p className="eyebrow text-secondary">The Setup</p>
+            <p className="eyebrow text-secondary">001 — The Setup</p>
             <h2 className="display-caps mt-3 text-2xl leading-tight text-ink sm:text-4xl">
               The economy is rigged.
               <br />
@@ -241,6 +256,14 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
           </div>
         </div>
       </section>
+
+      {/* ===================== LANDING SET PIECES (Phase K) ===================== */}
+      <RunTour />
+      <MarketSection />
+      <CompoundToy />
+      <VerdictWall />
+      <StatBand />
+      <FooterColophon onBegin={beginWithSfx} />
     </div>
   );
 }
