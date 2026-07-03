@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NeonButton } from "@/components/ui/NeonButton";
+import { TitleAscii } from "@/components/cinematic/TitleAscii";
 import { TitleTicker } from "@/components/cinematic/TitleTicker";
 import { BracketCTA } from "@/components/cinematic/BracketCTA";
 import { useAudio } from "@/hooks/useAudio";
@@ -77,7 +78,18 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
   return (
     <div className="relative bg-bg text-ink">
       {/* ===================== HERO — statement cover ===================== */}
-      <section className="relative flex min-h-[100svh] flex-col overflow-hidden">
+      <section className="relative isolate flex min-h-[100svh] flex-col overflow-hidden">
+        {/* ASCII-rendered board-orbit loop, quantized to glyphs behind everything */}
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10"
+          initial={reduced ? false : { opacity: 0 }}
+          animate={framed ? { opacity: 1 } : { opacity: 0 }}
+          transition={{ duration: DUR.scene, ease: EASE }}
+        >
+          <TitleAscii />
+        </motion.div>
+
         {/* the frame prints in over the whole hero (hairline, clip-path reveal) */}
         <motion.div
           aria-hidden
