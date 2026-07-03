@@ -11,7 +11,7 @@ import { useRun } from "@/hooks/useRun";
 import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { MotionProvider, useMotionCtx } from "@/src/motion/MotionProvider";
-import { wipeFor, type TransitionKind } from "@/src/motion/transitions";
+import { wipeFor } from "@/src/motion/transitions";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
@@ -37,19 +37,6 @@ const Almanac = dynamic(() => import("@/components/screens/Almanac").then((m) =>
 const Leaderboard = dynamic(() => import("@/components/social/Leaderboard").then((m) => m.Leaderboard), { ssr: false });
 const MasteryMap = dynamic(() => import("@/components/learn/MasteryMap").then((m) => m.MasteryMap), { ssr: false });
 
-// Phase-C transition layer: one of two LEDGER-native wipes (see src/motion/transitions).
-// The director picks one and the loser is deleted; `?wipe=flicker|paper` overrides the
-// default for side-by-side capture. Reduced motion collapses both to a plain fade.
-const WIPE_DEFAULT: TransitionKind = "paper";
-function useWipeKind(): TransitionKind {
-  const [kind, setKind] = useState<TransitionKind>(WIPE_DEFAULT);
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("wipe");
-    if (q === "flicker" || q === "paper") setKind(q);
-  }, []);
-  return kind;
-}
-
 export function AppShell() {
   return (
     <AudioProvider>
@@ -67,8 +54,8 @@ function AppShellInner() {
   const run = useRun(auth.user?.id ?? null);
   const audio = useAudio();
   const { reduced } = useMotionCtx();
-  const wipeKind = useWipeKind();
-  const wipe = wipeFor(wipeKind, reduced);
+  // Phase-C transition layer: the paper-feed wipe (director's pick; see src/motion/transitions).
+  const wipe = wipeFor(reduced);
   const { phase, mode } = run;
   // Each overlay stays mounted once first opened (defers its chunk without losing
   // the open/close animation); `*Open` drives visibility, `*Mounted` gates the load.

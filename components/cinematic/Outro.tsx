@@ -13,31 +13,19 @@ import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
 import { buzz, BUZZ } from "@/src/motion/haptics";
 import { MuteButton, SkipButton } from "./Controls";
 import { MoneyFall } from "./MoneyFall";
-import { VerdictStamp } from "./VerdictStamp";
 import { SplitFlap } from "./SplitFlap";
-
-type VerdictKind = "stamp" | "flap";
-function useVerdictKind(): VerdictKind {
-  // ?verdict=flap|stamp overrides the default so both A/B reveals can be captured.
-  const [kind, setKind] = useState<VerdictKind>("stamp");
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("verdict");
-    if (q === "flap" || q === "stamp") setKind(q);
-  }, []);
-  return kind;
-}
 
 /**
  * Run-end verdict ceremony — Spectacle S2 (Addendum A §7.1). One skippable sequence:
  * RUN CLOSED kicker → the final statement prints row-by-row (dot leaders) → the
- * net-worth sparkline draws left-to-right → the verdict word resolves (stamp OR
- * split-flap, A/B via ?verdict=) → a serif-italic voice line. Reduced motion renders
+ * net-worth sparkline draws left-to-right → the verdict word resolves on the
+ * split-flap board (director's pick from the Phase E A/B; the stamp variant was
+ * deleted with the pick) → a serif-italic voice line. Reduced motion renders
  * the final frame; any input skips to it. All data from RunState / deriveVerdict.
  */
 export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
   const audio = useAudio();
   const { reduced } = useMotionCtx();
-  const verdictKind = useVerdictKind();
 
   const verdict = deriveVerdict(run);
   const nw = netWorth(run);
@@ -185,17 +173,11 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
           </div>
         )}
 
-        {/* verdict resolves — stamp OR split-flap */}
+        {/* verdict resolves on the split-flap board */}
         <div className="mt-8 flex min-h-[5.5rem] flex-col items-start">
-          {verdictKind === "flap" && (
-            <span className="eyebrow text-secondary" style={{ fontSize: "0.56rem", opacity: showVerdict ? 1 : 0 }}>Final verdict</span>
-          )}
+          <span className="eyebrow text-secondary" style={{ fontSize: "0.56rem", opacity: showVerdict ? 1 : 0 }}>Final verdict</span>
           <div className="mt-2">
-            {verdictKind === "flap" ? (
-              <SplitFlap text={verdict.title} hex={verdict.hex} active={showVerdict} reduced={reduced} className="text-4xl sm:text-6xl" />
-            ) : (
-              (showVerdict) && <VerdictStamp title={verdict.title} hex={verdict.hex} />
-            )}
+            <SplitFlap text={verdict.title} hex={verdict.hex} active={showVerdict} reduced={reduced} className="text-4xl sm:text-6xl" />
           </div>
         </div>
 
