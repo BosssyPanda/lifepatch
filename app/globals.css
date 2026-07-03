@@ -56,7 +56,9 @@ html {
 html,
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  /* `clip` (not `hidden`): hidden turns <body> into a scroll container, which
+     silently kills every position:sticky descendant (the Phase-K pinned tour). */
+  overflow-x: clip;
 }
 
 body {

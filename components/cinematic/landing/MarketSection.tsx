@@ -45,7 +45,11 @@ function buildSeries(): { pts: Pt[]; final: number } {
 export function MarketSection() {
   const { reduced } = useMotionCtx();
   const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start 0.85", "end 0.6"] });
+  const chartRef = useRef<HTMLDivElement>(null);
+  // Track the chart box itself and finish the draw while it is still fully on
+  // screen (by the time its center passes ~55% of the viewport), so the line
+  // never exits half-drawn.
+  const { scrollYProgress } = useScroll({ target: chartRef, offset: ["start 0.92", "center 0.55"] });
   const pathLength = useTransform(scrollYProgress, [0, 1], [0, 1]);
 
   const { pts, final } = useMemo(buildSeries, []);
@@ -71,7 +75,7 @@ export function MarketSection() {
         </p>
       </div>
 
-      <div className="mt-10 border border-hairline bg-bg2 p-3 sm:p-5">
+      <div ref={chartRef} className="mt-10 border border-hairline bg-bg2 p-3 sm:p-5">
         <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img"
           aria-label={`$${START_STAKE} invested in the S&P 500 in ${FIRST_YEAR} grows to about $${Math.round(final).toLocaleString("en-US")} by ${LAST_YEAR}, log scale, with major crashes annotated`}>
           {/* horizontal ruled lines */}
