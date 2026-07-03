@@ -17,6 +17,23 @@ const Board3D = dynamic(() => import("@/components/cashflow/board/Board3D").then
   ssr: false,
   loading: () => <div className="mx-auto aspect-square w-full max-w-[560px]" />,
 });
+
+// Physics roll overlay (Addendum §13 #10) — three/R3F/Rapier stay out of every
+// bundle until the first roll on this screen. Falls back to the classic timed
+// roll when WebGL is unavailable or reduced motion is on.
+const DiceRollOverlay = dynamic(() => import("@/components/cashflow/board/DiceRollOverlay"), { ssr: false });
+
+let webglProbe: boolean | null = null;
+function hasWebGL(): boolean {
+  if (webglProbe !== null) return webglProbe;
+  try {
+    const c = document.createElement("canvas");
+    webglProbe = !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    webglProbe = false;
+  }
+  return webglProbe;
+}
 import { DealCard, DealChooser } from "@/components/cashflow/cards/DealCard";
 import { BabyCard, CharityCard, DoodadCard, DownsizedCard, MarketCardView } from "@/components/cashflow/cards/EventCards";
 import { CoachCard, GlossaryModal, QuizCard, Tutorial } from "@/components/cashflow/learn/Learn";
@@ -139,6 +156,14 @@ export function CashflowGame({
 
   const [turnPhase, setTurnPhase] = useState<"idle" | "rolling" | "moving" | "resolve">("idle");
   const [dice, setDice] = useState<number[]>(isFast ? [3, 4] : [6]);
+  const [rollFx, setRollFx] = useState<number[] | null>(null);
+  const landRef = useRef<(() => void) | null>(null);
+
+  // Warm the physics chunk + wasm while the player reads the board, so the
+  // first roll's overlay appears instantly instead of after a module load.
+  useEffect(() => {
+    if (hasWebGL()) void import("@/components/cashflow/board/DiceRollOverlay");
+  }, []);
   const [twoDice, setTwoDice] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -327,7 +352,7 @@ export function CashflowGame({
     setTurnPhase("rolling");
     audio.sfx("dice");
 
-    window.setTimeout(() => {
+    const land = () => {
       audio.sfx("diceLand");
       let moved = beginTurn(rolled.next);
       if (s.track === "rat" && s.charityRolls > 0) moved = consumeCharityRoll(moved);
@@ -347,7 +372,15 @@ export function CashflowGame({
         audio.accent("stab");
         resolveLanding(mv.state, mv.landedType);
       }, travel);
-    }, reduce ? 120 : 820);
+    };
+
+    // Physics overlay performs the engine's roll; classic timing otherwise.
+    if (!reduce && hasWebGL()) {
+      landRef.current = land;
+      setRollFx(rolled.rolls);
+    } else {
+      window.setTimeout(land, reduce ? 120 : 820);
+    }
   }
 
   // ── per-modal action handlers ──
@@ -380,6 +413,17 @@ export function CashflowGame({
   return (
     <div className="relative isolate mx-auto min-h-[100svh] w-full max-w-6xl px-3 py-4 sm:px-5">
       <BoardBackdrop />
+      {rollFx && (
+        <DiceRollOverlay
+          values={rollFx}
+          onDone={() => {
+            setRollFx(null);
+            const land = landRef.current;
+            landRef.current = null;
+            land?.();
+          }}
+        />
+      )}
       {/* HUD */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">

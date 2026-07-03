@@ -13,6 +13,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-three/fiber": "^9.6.1",
+    "@react-three/rapier": "^2.2.0",
     "@supabase/supabase-js": "^2.108.2",
     "@tonejs/midi": "^2.0.28",
     "@types/howler": "^2.2.13",
@@ -27,6 +29,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.6.0",
+    "three": "^0.185.1",
     "tone": "^15.1.22"
   },
   "devDependencies": {
@@ -35,6 +38,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.185.0",
     "eslint": "^8.57.1",
     "eslint-config-next": "^15.1.6",
     "postcss": "^8.4.49",
