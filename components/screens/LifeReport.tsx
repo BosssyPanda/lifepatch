@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { ShareCard } from "@/components/share/ShareCard";
+import { useShareUrl } from "@/components/share/useShareUrl";
 import { BrainIcon, CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
@@ -108,6 +109,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
   const { runGains } = useConceptLearn();
   const { setBrainGlow } = useAudio();
   const [shareOpen, setShareOpen] = useState(false);
+  const shareUrl = useShareUrl(run);
   const nw = netWorth(run);
 
   // warm the calm report bed by how rich the Money Brain has become
@@ -134,7 +136,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
     history: hist.map((h) => h.netWorth),
     statLabel: "Biggest hit",
     statValue: worst ? `−${currency(Math.abs(Math.min(0, worst.portfolioDelta)))}` : "—",
-    url: typeof window !== "undefined" ? window.location.origin : "https://lifepatch.app",
+    url: shareUrl,
   };
 
   const ledger = [

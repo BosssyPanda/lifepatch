@@ -8,7 +8,14 @@ const plexMono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600
 const instrument = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-instrument" });
 const archivo = Archivo({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-archivo" });
 
+// Absolute base for og/twitter image URLs (crawlers require absolute).
+// Prod domain first; falls back to the per-deploy URL, then localhost in dev.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "LifePatch — Survive the Internet Economy",
   description:
     "You're running out of money fast. Every choice costs something. Survive the internet economy without getting financially cooked.",
