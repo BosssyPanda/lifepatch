@@ -8,7 +8,7 @@ import { TitleAscii } from "@/components/cinematic/TitleAscii";
 import { TitleTicker } from "@/components/cinematic/TitleTicker";
 import { BracketCTA } from "@/components/cinematic/BracketCTA";
 import { ScrollProgress } from "@/components/cinematic/landing/ScrollProgress";
-import { FooterColophon } from "@/components/cinematic/landing/FooterColophon";
+import { FooterColophon, STORY_SEEN_KEY } from "@/components/cinematic/landing/FooterColophon";
 
 // The below-the-fold landing set pieces load as their own chunks so the title
 // screen's First Load stays lean; each renders a placeholder band meanwhile.
@@ -50,6 +50,16 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
   const [settled, setSettled] = useState(reduced);
   const [flash, setFlash] = useState(false);
   const timers = useRef<number[]>([]);
+  // First visit: the run button lives ONLY at the end of the scroll story —
+  // the hero pushes you down the page. Once the finale has been reached in
+  // this session, the hero CTA comes back (server + first paint render the
+  // gated state so hydration matches; promote after mount).
+  const [seenStory, setSeenStory] = useState(false);
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(STORY_SEEN_KEY) === "1") setSeenStory(true);
+    } catch {}
+  }, []);
 
   // one-shot choreographed timeline (skipped entirely under reduced motion)
   useEffect(() => {
@@ -197,15 +207,36 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             <TitleTicker />
           </motion.div>
 
-          {/* bracketed terminal CTA */}
+          {/* first visit: no CTA up top — the run is earned at the end of the
+              file. Returning visitors (this session) get the shortcut back. */}
           <motion.div
             initial={reduced ? false : { opacity: 0, y: 8 }}
             animate={showCta ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
             transition={reduced ? { duration: 0 } : SPRING.pop}
             className="mt-9 flex flex-wrap items-center gap-3"
           >
-            <BracketCTA label="Begin a Run" onClick={beginWithSfx} />
-            <NeonButton variant="secondary" size="lg" onClick={onAlmanac}>Almanac</NeonButton>
+            {seenStory ? (
+              <>
+                <BracketCTA label="Begin a Run" onClick={beginWithSfx} />
+                <NeonButton variant="secondary" size="lg" onClick={onAlmanac}>Almanac</NeonButton>
+              </>
+            ) : (
+              <div className="flex items-center gap-3 border border-hairline px-4 py-3">
+                <span className="num text-ink" aria-hidden>[</span>
+                <span className="eyebrow text-ink" style={{ fontSize: "0.66rem", letterSpacing: "0.22em" }}>
+                  Read the file — the run waits at the end
+                </span>
+                <motion.span
+                  aria-hidden
+                  className="num text-ink"
+                  animate={reduced ? {} : { y: [0, 3, 0] }}
+                  transition={{ duration: 1.8, repeat: Infinity }}
+                >
+                  ↓
+                </motion.span>
+                <span className="num text-ink" aria-hidden>]</span>
+              </div>
+            )}
           </motion.div>
         </div>
 
@@ -263,7 +294,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
       <CompoundToy />
       <VerdictWall />
       <StatBand />
-      <FooterColophon onBegin={beginWithSfx} />
+      <FooterColophon onBegin={beginWithSfx} onAlmanac={onAlmanac} />
     </div>
   );
 }

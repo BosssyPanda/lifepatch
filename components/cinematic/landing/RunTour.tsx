@@ -145,7 +145,8 @@ function PanelVerdict({ live, reduced }: { live: boolean; reduced: boolean }) {
         <span className="eyebrow text-secondary">Final verdict</span>
         <span className="eyebrow text-tertiary">Form 01</span>
       </div>
-      <div className="mt-5 text-2xl sm:text-3xl">
+      {/* 16 flap cells must fit the max-w-md card — cell width tracks font size */}
+      <div className="mt-5 text-lg lg:text-xl">
         <SplitFlap text={v.title} hex={v.hex} active={live} reduced={reduced} />
       </div>
       <p className="mt-4 font-body text-sm leading-relaxed text-ink-dim">{v.blurb}</p>
