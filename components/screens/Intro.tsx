@@ -14,6 +14,7 @@ import { FooterColophon, STORY_SEEN_KEY } from "@/components/cinematic/landing/F
 // screen's First Load stays lean; each renders a placeholder band meanwhile.
 const sectionFallback = () => <div className="min-h-[40svh] border-t border-hairline" aria-hidden />;
 const RunTour = dynamic(() => import("@/components/cinematic/landing/RunTour").then((m) => m.RunTour), { ssr: false, loading: sectionFallback });
+const BoardDiorama = dynamic(() => import("@/components/cinematic/landing/BoardDiorama").then((m) => m.BoardDiorama), { ssr: false, loading: sectionFallback });
 const MarketSection = dynamic(() => import("@/components/cinematic/landing/MarketSection").then((m) => m.MarketSection), { ssr: false, loading: sectionFallback });
 const CompoundToy = dynamic(() => import("@/components/cinematic/landing/CompoundToy").then((m) => m.CompoundToy), { ssr: false, loading: sectionFallback });
 const VerdictWall = dynamic(() => import("@/components/cinematic/landing/VerdictWall").then((m) => m.VerdictWall), { ssr: false, loading: sectionFallback });
@@ -288,8 +289,9 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
         </div>
       </section>
 
-      {/* ===================== LANDING SET PIECES (Phase K) ===================== */}
+      {/* ================== LANDING SET PIECES (Phases K + L) ================== */}
       <RunTour />
+      <BoardDiorama />
       <MarketSection />
       <CompoundToy />
       <VerdictWall />

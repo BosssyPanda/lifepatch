@@ -43,7 +43,7 @@ export function FooterColophon({ onBegin, onAlmanac }: { onBegin: () => void; on
         viewport={{ amount: 0.55, once: true }}
         aria-labelledby="finale-heading"
       >
-        <p className="eyebrow text-secondary">006 — Filing</p>
+        <p className="eyebrow text-secondary">007 — Filing</p>
         <h2 id="finale-heading" className="voice mt-4 max-w-xl text-xl text-ink sm:text-2xl">
           You&apos;ve read the file. The house is ready when you are.
         </h2>

@@ -4,7 +4,7 @@ import { VERDICTS } from "@/lib/verdict";
 import { Marquee } from "./Marquee";
 
 /**
- * Landing set piece 005 — "SIX WAYS THIS ENDS" (spectacle Phase K4a).
+ * Landing set piece 006 — "SIX WAYS THIS ENDS" (spectacle Phase K4a).
  * The six real end-of-run archetypes from lib/verdict, dealt as split-flap
  * style plates on an infinite marquee. Each keeps its sanctioned seal hex
  * (the one archetype-color exception to the LEDGER palette).
@@ -44,7 +44,7 @@ export function VerdictWall() {
   return (
     <section className="border-t border-hairline py-20" aria-labelledby="verdicts-heading">
       <div className="px-5 sm:px-10 lg:px-16">
-        <p className="eyebrow text-secondary">005 — The Endings</p>
+        <p className="eyebrow text-secondary">006 — The Endings</p>
         <h2 id="verdicts-heading" className="display-caps mt-3 text-3xl text-ink sm:text-5xl">
           Six ways this ends.
         </h2>

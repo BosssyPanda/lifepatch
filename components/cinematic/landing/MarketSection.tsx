@@ -8,7 +8,7 @@ import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 
 /**
- * Landing set piece 003 — "THE HOUSE KEEPS SCORE" (spectacle Phase K2).
+ * Landing set piece 004 — "THE HOUSE KEEPS SCORE" (spectacle Phase K2).
  * The full 1957–2025 S&P history from lib/markets drawn as one scroll-revealed
  * ledger line (log scale — the honest scale for 69 years of compounding), with
  * the real macro events pinned to their years via dotted leaders. The line is
@@ -64,7 +64,7 @@ export function MarketSection() {
     <section ref={ref} className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="market-heading">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="eyebrow text-secondary">003 — The House Ledger</p>
+          <p className="eyebrow text-secondary">004 — The House Ledger</p>
           <h2 id="market-heading" className="display-caps mt-3 text-3xl text-ink sm:text-5xl">
             69 years. Every crash. Still up.
           </h2>

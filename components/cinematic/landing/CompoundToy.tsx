@@ -5,7 +5,7 @@ import { assetReturn, FIRST_YEAR, LAST_YEAR, type AssetId } from "@/lib/markets"
 import { NumberTicker } from "./NumberTicker";
 
 /**
- * Landing set piece 004 — "RUN THE NUMBERS" (spectacle Phase K3).
+ * Landing set piece 005 — "RUN THE NUMBERS" (spectacle Phase K3).
  * An interactive compound-growth toy: pick a monthly amount, a horizon, and
  * one of three real assets. The average annual return per asset is COMPUTED
  * from the same 1957–2025 history the game runs on (geometric mean), then a
@@ -85,7 +85,7 @@ export function CompoundToy() {
 
   return (
     <section className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="toy-heading">
-      <p className="eyebrow text-secondary">004 — Run the Numbers</p>
+      <p className="eyebrow text-secondary">005 — Run the Numbers</p>
       <h2 id="toy-heading" className="display-caps mt-3 text-3xl text-ink sm:text-5xl">
         Boring money, absurd endings.
       </h2>

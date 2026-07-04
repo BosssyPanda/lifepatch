@@ -10,7 +10,7 @@ import { VERDICTS } from "@/lib/verdict";
 import { NumberTicker } from "./NumberTicker";
 
 /**
- * Landing set piece 005b — the counting band (spectacle Phase K4b).
+ * Landing set piece 006b — the counting band (spectacle Phase K4b).
  * Every figure is derived (a `.length` or a year span) from the live game
  * data — the honest version of the marketing stat strip.
  */
