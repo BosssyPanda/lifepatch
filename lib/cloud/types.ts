@@ -14,7 +14,8 @@ export type Profile = {
   createdAt: string;
 };
 
-export type ResultMetrics = Record<string, number | string>;
+// number[] carries the per-year net-worth series for the share-page chart (Phase M3)
+export type ResultMetrics = Record<string, number | string | number[]>;
 
 export type ResultRow = {
   id: string;

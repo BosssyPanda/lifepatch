@@ -1,15 +1,17 @@
 "use client";
 
-import { AnimatePresence, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { BankIcon, FreedomIcon, InfoIcon, SoundOffIcon, SoundOnIcon } from "@/components/icons";
+import { BankIcon, FreedomIcon, InfoIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { conceptsForText } from "@/lib/concepts";
 import { Dice } from "@/components/cashflow/board/Dice";
 import { BoardBackdrop } from "@/components/cashflow/board/BoardBackdrop";
+import { HudRail } from "@/components/ui/HudRail";
+import { EASE } from "@/src/motion/tokens";
 
 // WebGL board is loaded only inside the cashflow shell (never the landing bundle).
 // It self-falls-back to the flat 2D <Board> when WebGL is unavailable.
@@ -208,6 +210,19 @@ export function CashflowGame({
     }
   }
 
+  // ── Phase M1: compositor zoom-pulse toward the landed square + payday blink ──
+  const boardPulse = useAnimationControls();
+  const [paydayFlash, setPaydayFlash] = useState(0);
+  function handleLand(type: string, at: { xPct: number; yPct: number }) {
+    landingSfx(type);
+    if (reduce) return;
+    void boardPulse.start({
+      scale: [1, 1.035, 1],
+      transformOrigin: `${at.xPct}% ${at.yPct}%`,
+      transition: { duration: 0.38, ease: EASE, times: [0, 0.35, 1] },
+    });
+  }
+
   const dream = getDream(s.dreamId);
   const prof = getProfession(s.professionId);
   const busy = turnPhase !== "idle" || pending !== null || tutorialOpen;
@@ -362,6 +377,7 @@ export function CashflowGame({
 
       if (mv.paydaysPassed > 0 && mv.paydayAmount !== 0) {
         setPaydayToast(mv.paydayAmount * mv.paydaysPassed);
+        setPaydayFlash((n) => n + 1);
         if (mv.paydayAmount >= 0) audio.sfx("cash");
         else audio.sting("bad");
         window.setTimeout(() => setPaydayToast(null), 1800);
@@ -413,6 +429,11 @@ export function CashflowGame({
   return (
     <div className="relative isolate mx-auto min-h-[100svh] w-full max-w-6xl px-3 py-4 sm:px-5">
       <BoardBackdrop />
+      <HudRail
+        mode={isFast ? "Fast Track" : "Rat Race"}
+        counter={`Turn ${String(s.turn).padStart(2, "0")}`}
+        className="-mx-3 -mt-4 mb-3 sm:-mx-5"
+      />
       {rollFx && (
         <DiceRollOverlay
           values={rollFx}
@@ -439,9 +460,6 @@ export function CashflowGame({
           <button onClick={() => { audio.sfx("modal"); setGlossaryOpen(true); }} aria-label="Glossary" className="grid h-9 w-9 place-items-center rounded-full border border-ink/15 bg-bg2 text-ink-dim hover:text-ink">
             <InfoIcon size={18} />
           </button>
-          <button onClick={() => audio.setMuted(!audio.muted)} aria-label="Toggle sound" className="grid h-9 w-9 place-items-center rounded-full border border-ink/15 bg-bg2 text-ink-dim hover:text-ink">
-            {audio.muted ? <SoundOffIcon size={17} /> : <SoundOnIcon size={17} />}
-          </button>
           <NeonButton variant="ghost" size="sm" onClick={onExit}>
             Exit
           </NeonButton>
@@ -452,6 +470,7 @@ export function CashflowGame({
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         {/* board column */}
         <div className="order-2 lg:order-1">
+          <motion.div animate={boardPulse}>
           <Board3D
             squares={isFast ? FAST_BOARD : RAT_BOARD}
             position={s.position}
@@ -459,7 +478,8 @@ export function CashflowGame({
             labelFor={(t) => (isFast ? FAST_SQUARE_META[t as keyof typeof FAST_SQUARE_META] : RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META])?.short ?? "?"}
             tokenLabel={s.playerName.charAt(0).toUpperCase()}
             title={isFast ? `Dream: ${dream.title}` : "Escape the Rat Race"}
-            onLand={landingSfx}
+            onLand={handleLand}
+            paydayFlash={paydayFlash}
             onTileHover={() => audio.sfx("hover")}
           >
             <div className="mt-2 flex flex-col items-center gap-2">
@@ -482,6 +502,7 @@ export function CashflowGame({
               )}
             </div>
           </Board3D>
+          </motion.div>
 
           {/* freedom + goal hint under board */}
           <div className="mt-4">

@@ -67,6 +67,8 @@ export function Board({
   labelFor,
   tokenLabel,
   title,
+  onLand,
+  paydayFlash = 0,
   children,
 }: {
   squares: BoardSquareView[];
@@ -75,6 +77,10 @@ export function Board({
   labelFor: (type: string) => string;
   tokenLabel: string;
   title: string;
+  /** Fires when the token settles on its destination square (post-hop), with the square's % coords. */
+  onLand?: (type: string, at: { xPct: number; yPct: number }) => void;
+  /** Bump this counter to ink-flash the payday squares (a payday was passed). */
+  paydayFlash?: number;
   children?: ReactNode;
 }) {
   const reduce = useReducedMotion();
@@ -83,6 +89,8 @@ export function Board({
   const pts = useMemo(() => perimeterPoints(size, pad), [size]);
   const prev = useRef(position);
   const [moving, setMoving] = useState(false);
+  const onLandRef = useRef(onLand);
+  onLandRef.current = onLand;
   void colorFor; // superseded by the LEDGER tint map; kept for call-site compatibility
 
   // Build the hop path from the previous square to the current one.
@@ -102,12 +110,16 @@ export function Board({
   useEffect(() => {
     if (path.steps > 0) {
       setMoving(true);
-      const t = setTimeout(() => setMoving(false), reduce ? 0 : path.steps * 165 + 250);
+      const t = setTimeout(() => {
+        setMoving(false);
+        const sq = squares[position];
+        if (sq) onLandRef.current?.(sq.type, { xPct: pts[position].x, yPct: pts[position].y });
+      }, reduce ? 0 : path.steps * 165 + 250);
       prev.current = position;
       return () => clearTimeout(t);
     }
     prev.current = position;
-  }, [position, path.steps, reduce]);
+  }, [position, path.steps, reduce, pts, squares]);
 
   const dur = reduce ? 0 : Math.max(0.35, path.steps * 0.165);
 
@@ -173,6 +185,17 @@ export function Board({
             >
               {labelFor(sq.type)}
             </span>
+            {/* payday-passed blink: one ink flash per bump, payday squares only */}
+            {paydayFlash > 0 && !reduce && (sq.type === "payday" || sq.type === "cashflowday") && (
+              <motion.span
+                key={paydayFlash}
+                aria-hidden
+                className="pointer-events-none absolute inset-0 bg-ink"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0, 0.9, 0] }}
+                transition={{ duration: 0.28, times: [0, 0.3, 1] }}
+              />
+            )}
           </motion.div>
         );
       })}

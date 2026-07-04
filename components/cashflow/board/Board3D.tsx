@@ -12,8 +12,11 @@ type Board3DProps = {
   labelFor: (type: string) => string;
   tokenLabel: string;
   title: string;
-  /** accepted for call-site compatibility; the 2D board has no settle/hover SFX */
-  onLand?: (type: string) => void;
+  /** fires when the token settles on its destination square (with % coords) */
+  onLand?: (type: string, at: { xPct: number; yPct: number }) => void;
+  /** bump to ink-flash the payday squares (a payday was passed) */
+  paydayFlash?: number;
+  /** accepted for call-site compatibility; the 2D board has no hover SFX */
   onTileHover?: (type: string) => void;
   children?: ReactNode;
 };
@@ -23,7 +26,7 @@ type Board3DProps = {
  * editorial 2D board) is now the only renderer. Kept as a thin pass-through so
  * the `CashflowGame` call site (and its dynamic import) stay unchanged.
  */
-export function Board3D({ squares, position, colorFor, labelFor, tokenLabel, title, children }: Board3DProps) {
+export function Board3D({ squares, position, colorFor, labelFor, tokenLabel, title, onLand, paydayFlash, children }: Board3DProps) {
   return (
     <Board
       squares={squares}
@@ -32,6 +35,8 @@ export function Board3D({ squares, position, colorFor, labelFor, tokenLabel, tit
       labelFor={labelFor}
       tokenLabel={tokenLabel}
       title={title}
+      onLand={onLand}
+      paydayFlash={paydayFlash}
     >
       {children}
     </Board>

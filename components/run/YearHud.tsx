@@ -54,7 +54,7 @@ export function YearHud({
   const nwVar = nw >= 0 ? "var(--color-gain)" : "var(--color-loss)";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-hairline bg-bg">
+    <header className="sticky top-8 z-40 border-b border-hairline bg-bg">
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-3 py-2.5 sm:gap-6 sm:px-5">
         <div className="shrink-0">
           <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>Year</p>

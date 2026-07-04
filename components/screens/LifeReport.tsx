@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
+import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { ShareCard } from "@/components/share/ShareCard";
 import { useShareUrl } from "@/components/share/useShareUrl";
 import { BrainIcon, CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
@@ -49,25 +50,6 @@ function LedgerRow({ label, value, strong = false }: { label: string; value: str
       <span className="rule-dotted h-px flex-1" />
       <span className={`num ${strong ? "text-[1.05rem] font-bold text-ink" : "text-[0.9rem] text-ink"}`}>{value}</span>
     </div>
-  );
-}
-
-function NetWorthArc({ values }: { values: number[] }) {
-  const min = Math.min(...values, 0);
-  const max = Math.max(...values, 1);
-  const range = max - min || 1;
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * 100;
-    const y = 28 - ((v - min) / range) * 26;
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  });
-  const zeroY = 28 - ((0 - min) / range) * 26;
-  const up = values[values.length - 1] >= 0;
-  return (
-    <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="h-16 w-full" aria-hidden>
-      <line x1="0" y1={zeroY} x2="100" y2={zeroY} stroke="var(--color-ink-dim)" strokeWidth="0.3" strokeDasharray="1 1" opacity="0.5" />
-      <polyline points={pts.join(" ")} fill="none" stroke={up ? "#2bd576" : "#ff3b30"} strokeWidth="0.8" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-    </svg>
   );
 }
 
@@ -180,13 +162,11 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
           ))}
         </motion.section>
 
-        {/* net-worth arc */}
+        {/* annotated net-worth line — best/worst swings + the macro events crossed */}
         {hist.length > 1 && (
           <motion.div variants={item}>
             <SectionLabel>Net worth, year by year</SectionLabel>
-            <div className="border border-hairline bg-bg2 p-4">
-              <NetWorthArc values={hist.map((h) => h.netWorth)} />
-            </div>
+            <AnnotatedLifeChart points={hist.map((h) => ({ year: h.year, netWorth: h.netWorth }))} />
           </motion.div>
         )}
 

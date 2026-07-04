@@ -22,6 +22,7 @@ import type { GameMode, NewResult } from "./types";
 export function resultFromRun(run: RunState): NewResult {
   const nw = netWorth(run);
   const verdict = deriveVerdict(run);
+  const hist = run.history.slice(-100); // cap the stored series for very long infinite runs
   return {
     mode: run.mode as GameMode,
     score: nw,
@@ -31,6 +32,10 @@ export function resultFromRun(run: RunState): NewResult {
       happiness: run.life.happiness,
       age: run.age,
       good: verdict.good ? 1 : 0,
+      // Phase M3: per-year net-worth series + its first calendar year, so the
+      // /r/[id] share page can draw the annotated life chart.
+      history: hist.map((h) => Math.round(h.netWorth)),
+      startYear: hist[0]?.year ?? run.startYear,
     },
   };
 }

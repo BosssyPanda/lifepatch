@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { getResult } from "@/lib/cloud/results";
 import type { ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
@@ -9,8 +10,9 @@ import { VERDICTS } from "@/lib/verdict";
 /**
  * Share-landing for one finished run (Addendum §13 #9). The URL that rides on
  * the share card / QR: crawlers get the per-run OG statement (/api/og/{id});
- * humans get the same statement as a LEDGER page one click from BEGIN.
- * Server-rendered, zero client JS beyond the framework.
+ * humans get the same statement as a LEDGER page one click from BEGIN. Runs
+ * submitted with a `history` series (Phase M3) also get the annotated
+ * net-worth chart; older rows fall back to the stat plates alone.
  */
 
 function verdictHex(title: string): string {
@@ -71,6 +73,15 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
   const hex = verdictHex(row.verdict);
   const good = row.mode === "cashflow" ? Number(row.metrics?.escaped) === 1 : row.score >= 0;
 
+  // per-year net-worth series, present only on runs submitted after Phase M3
+  const rawHistory = row.metrics?.history;
+  const startYear = Number(row.metrics?.startYear);
+  const series = Array.isArray(rawHistory) ? rawHistory.map(Number).filter(Number.isFinite) : [];
+  const chartPoints =
+    series.length > 1 && Number.isFinite(startYear)
+      ? series.map((v, i) => ({ year: startYear + i, netWorth: v }))
+      : null;
+
   return (
     <main className="mx-auto flex min-h-[100svh] w-full max-w-xl flex-col justify-center px-5 py-14">
       {/* rail */}
@@ -104,6 +115,18 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
           </div>
         ))}
       </div>
+
+      {/* annotated life line (when the run shipped its history) */}
+      {chartPoints && (
+        <div className="mt-9">
+          <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem", letterSpacing: "0.2em" }}>
+            Net worth · year by year
+          </p>
+          <div className="mt-2">
+            <AnnotatedLifeChart points={chartPoints} />
+          </div>
+        </div>
+      )}
 
       {/* CTA */}
       <div className="mt-12 border-t border-hairline pt-6">

@@ -8,7 +8,9 @@ import type { useRun } from "@/hooks/useRun";
 import { ambienceForTag } from "@/lib/audioMap";
 import { LIFE_EVENTS } from "@/lib/lifeEvents";
 import { macroEvent } from "@/lib/markets";
+import { MODES } from "@/lib/modes";
 import { canRetire } from "@/lib/runEngine";
+import { HudRail } from "@/components/ui/HudRail";
 import { AdvanceBar } from "./AdvanceBar";
 import { LifeEventCard } from "./LifeEventCard";
 import { MarketResults } from "./MarketResults";
@@ -56,6 +58,8 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
 
   return (
     <div className="min-h-[100svh] w-full pb-4">
+      {/* Phase M2 chrome rail — relative year only (calendar years are end-report spoilers) */}
+      <HudRail mode={MODES[s.mode].name} counter={`Year ${s.year - s.startYear + 1} — Age ${s.age}`} />
       <YearHud run={s} saving={run.saving} onOpenAlmanac={onOpenAlmanac} />
       <RunTicker run={s} />
 

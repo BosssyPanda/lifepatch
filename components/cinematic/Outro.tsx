@@ -11,6 +11,7 @@ import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
 import { buzz, BUZZ } from "@/src/motion/haptics";
+import { NumberTicker } from "@/components/cinematic/landing/NumberTicker";
 import { MuteButton, SkipButton } from "./Controls";
 import { MoneyFall } from "./MoneyFall";
 import { SplitFlap } from "./SplitFlap";
@@ -179,6 +180,18 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
           <div className="mt-2">
             <SplitFlap text={verdict.title} hex={verdict.hex} active={showVerdict} reduced={reduced} className="text-4xl sm:text-6xl" />
           </div>
+          {/* Phase M4 — the years counted out under the verdict */}
+          {showVerdict && hist.length > 0 && (
+            <motion.p
+              initial={reduced ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: DUR.base, ease: EASE, delay: reduced ? 0 : 0.35 }}
+              className="num mt-3 text-[0.7rem] text-secondary"
+              style={{ letterSpacing: "0.18em" }}
+            >
+              YEARS LIVED — <NumberTicker value={hist.length} durationMs={900} className="text-ink" />
+            </motion.p>
+          )}
         </div>
 
         {/* serif-italic voice line + continue */}
