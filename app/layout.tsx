@@ -9,10 +9,17 @@ const instrument = Instrument_Serif({ subsets: ["latin"], weight: "400", style: 
 const archivo = Archivo({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-archivo" });
 
 // Absolute base for og/twitter image URLs (crawlers require absolute).
-// Prod domain first; falls back to the per-deploy URL, then localhost in dev.
+// Explicit env first; otherwise production builds use the canonical prod
+// domain (the `/` route is statically prerendered, so this is baked at build
+// time — a localhost fallback would ship broken unfurls), then the per-deploy
+// URL, then localhost in dev.
 const siteUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  (process.env.NODE_ENV === "production"
+    ? "https://lifepatch-nine.vercel.app"
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000");
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
