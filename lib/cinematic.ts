@@ -50,18 +50,25 @@ export const COLD_OPEN: ColdBeat[] = [
 
 export const COLD_OPEN_TOTAL = COLD_OPEN.reduce((t, b) => t + b.ms, 0);
 
-/** Outro recap beat ids in order (visual + audio driven off the same timer). */
-export type RecapKind = "open" | "years" | "networth" | "win" | "loss" | "mascot" | "verdict";
+/**
+ * Outro recap film scenes (CINEMA Phase Q) — authored base durations; the
+ * "years" scene is computed at runtime from run length (per-year flips +
+ * milestone holds) and CAPPED at its ms here so 40-year lives still replay
+ * in ~5s. "swing" is THE WIN or THE HIT (symmetric — every run gets one).
+ */
+export type RecapSceneKind = "closed" | "years" | "swing" | "line" | "verdict";
 
-export type RecapBeat = { kind: RecapKind; ms: number };
+export type RecapScene = { kind: RecapSceneKind; ms: number };
 
-// Slowed so each recap card is readable (numbers/copy need a beat to land).
-export const RECAP_BEATS: RecapBeat[] = [
-  { kind: "open", ms: 2900 },
-  { kind: "years", ms: 3100 },
-  { kind: "networth", ms: 4000 }, // count-up needs time to climb
-  { kind: "win", ms: 3000 },
-  { kind: "loss", ms: 3000 },
-  { kind: "mascot", ms: 3300 },
-  { kind: "verdict", ms: 4200 },
+export const RECAP_SCENES: RecapScene[] = [
+  { kind: "closed", ms: 2200 }, // RUN CLOSED slam + statement stamp
+  { kind: "years", ms: 5000 }, // cap — actual = years × flip + milestones × hold
+  { kind: "swing", ms: 3000 }, // THE WIN / THE HIT plate
+  { kind: "line", ms: 3800 }, // net worth drawn full-bleed
+  { kind: "verdict", ms: 4200 }, // giant split-flap → settle into receipt
 ];
+
+/** Scene-2 pacing atoms (flip-all-years, pause-on-milestones — director's pick). */
+export const YEARS_FLIP_MS = 140;
+export const YEARS_HOLD_MS = 600;
+export const YEARS_MIN_MS = 1600;

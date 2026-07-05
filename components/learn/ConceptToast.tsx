@@ -15,7 +15,8 @@ export function ConceptToast({ conceptId }: { conceptId: string | null }) {
   const concept = conceptId ? getConcept(conceptId) : undefined;
   return (
     <Toast show={!!conceptId}>
-      <div className="pointer-events-none flex items-center gap-3 border border-hairline bg-bg2 px-4 py-2.5">
+      {/* .concept-toast: hidden while a ceremony owns the screen (body[data-ceremony]) */}
+      <div className="concept-toast pointer-events-none flex items-center gap-3 border border-hairline bg-bg2 px-4 py-2.5">
         <span
           className="eyebrow text-secondary"
           style={{ fontSize: "0.55rem", letterSpacing: "0.24em" }}

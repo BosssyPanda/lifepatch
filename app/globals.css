@@ -139,6 +139,11 @@ body {
   outline-offset: 2px;
 }
 
+/* A running ceremony (outro recap film) owns the screen — game toasts wait. */
+body[data-ceremony] .concept-toast {
+  display: none;
+}
+
 /* ---------------- Skip link (visible on keyboard focus only) ---------------- */
 .skip-link {
   position: fixed;
