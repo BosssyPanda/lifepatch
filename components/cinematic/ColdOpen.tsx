@@ -1,13 +1,31 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { useAudio } from "@/hooks/useAudio";
-import { COLD_OPEN } from "@/lib/cinematic";
+import { ACT_LABELS, COLD_OPEN } from "@/lib/cinematic";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { Beat } from "./Beat";
 import { MuteButton, SkipButton } from "./Controls";
+import { FilmLayer } from "./film/FilmLayer";
+import { VideoBeat } from "./film/VideoBeat";
 import { DUR } from "@/src/motion/tokens";
 
+// Act II's WebGL backdrop — three only loads if/when the act arms.
+const BillVortex = dynamic(
+  () => import("./film/BillVortex").then((m) => m.BillVortex),
+  { ssr: false },
+);
+
+/**
+ * The intro film (CINEMA Phase P): a ~20s three-act cold open. Act I slams
+ * kinetic type over looping film clips (public/film/), Act II runs the live
+ * BillVortex WebGL scene, Act III resolves the title. FilmLayer supplies the
+ * sanctioned grain/flicker/flash vocabulary; every beat stays skippable and
+ * reduced motion keeps the old text-only pacing with posters instead of
+ * motion. Audio escalates per beat exactly as before (accents + intensity).
+ */
 export function ColdOpen({
   muted,
   onToggleMute,
@@ -18,9 +36,14 @@ export function ColdOpen({
   onDone: () => void;
 }) {
   const audio = useAudio();
+  const { reduced } = useMotionCtx();
   const [i, setI] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doneRef = useRef(false);
+  // WebGL support check happens client-side only (this tree never SSRs).
+  const [webgl] = useState(
+    () => typeof window !== "undefined" && typeof window.WebGLRenderingContext !== "undefined",
+  );
 
   useEffect(() => {
     const beat = COLD_OPEN[i];
@@ -41,9 +64,72 @@ export function ColdOpen({
   };
 
   const beat = COLD_OPEN[i];
+  const act = beat?.act;
+  // The vortex mounts once Act II arms and stays through the act (no churn
+  // between its three beats); it unmounts when the title act cuts in.
+  const vortexLive = !reduced && webgl && beat?.scene === "vortex";
 
   return (
-    <div className="bg-arena relative flex min-h-[100svh] w-full items-center justify-center overflow-hidden">
+    <div className="relative flex min-h-[100svh] w-full items-center justify-center overflow-hidden bg-bg">
+      {/* ---- backdrop: Act I film loops (crossfade per clip) ---- */}
+      <AnimatePresence>
+        {beat?.film && (
+          <motion.div
+            key={beat.film}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DUR.base }}
+            className="absolute inset-0"
+          >
+            <VideoBeat
+              src={`/film/${beat.film}.webm`}
+              poster={`/film/${beat.film}-poster.jpg`}
+              active
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ---- backdrop: Act II live vortex ---- */}
+      <AnimatePresence>
+        {vortexLive && (
+          <motion.div
+            key="vortex"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DUR.slow }}
+            className="absolute inset-0"
+          >
+            <BillVortex />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* legibility scrim between backdrop and type */}
+      {(beat?.film || vortexLive) && (
+        <div aria-hidden className="absolute inset-0 bg-bg/45" />
+      )}
+
+      {/* ---- act eyebrow ---- */}
+      <AnimatePresence mode="wait">
+        {(act === 1 || act === 2) && (
+          <motion.span
+            key={act}
+            initial={reduced ? false : { opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: DUR.base }}
+            className="eyebrow absolute top-7 left-1/2 z-10 -translate-x-1/2 text-ink-dim"
+            style={{ fontSize: "0.6rem", letterSpacing: "0.3em" }}
+          >
+            {ACT_LABELS[act]}
+          </motion.span>
+        )}
+      </AnimatePresence>
+
+      {/* ---- the type ---- */}
       <AnimatePresence mode="wait">
         {beat && (
           <motion.div
@@ -52,22 +138,32 @@ export function ColdOpen({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: DUR.instant }}
-            className="flex w-full items-center justify-center"
+            className="relative z-10 flex w-full items-center justify-center"
           >
             <Beat beat={beat} />
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="absolute right-4 top-4 z-20">
+      {/* ---- film vocabulary: grain + flicker + vignette + per-beat flash ---- */}
+      <FilmLayer
+        grain={0.65}
+        flicker={0.55}
+        vignette={0.75}
+        flashKey={beat?.id ?? null}
+        flashTone={beat?.accent === "stab" ? "loss" : "ink"}
+        className="z-20"
+      />
+
+      <div className="absolute right-4 top-4 z-30">
         <MuteButton muted={muted} onToggle={onToggleMute} />
       </div>
-      <div className="absolute bottom-6 right-4 z-20">
+      <div className="absolute bottom-6 right-4 z-30">
         <SkipButton onSkip={skip} />
       </div>
 
       {/* progress ticks */}
-      <div className="absolute bottom-7 left-1/2 flex -translate-x-1/2 gap-1.5">
+      <div className="absolute bottom-7 left-1/2 z-30 flex -translate-x-1/2 gap-1.5">
         {COLD_OPEN.map((b, idx) => (
           <span key={b.id} className="h-1 w-5" style={{ background: idx <= i ? "var(--color-ink)" : "var(--color-ink-dim)", opacity: idx <= i ? 1 : 0.3 }} />
         ))}

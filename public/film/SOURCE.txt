@@ -1,0 +1,19 @@
+public/film/ — Act I intro-film loops (Phase P, CINEMA plan §P0.3)
+
+All three clips are SELF-RENDERED, not stock and not AI-generated:
+procedural canvas scenes (LEDGER palette only: #0E0E0C/#F2F1EA/#131211/
+#8F8E85/#2A2A25) authored for this project, captured frame-exact at
+24fps × 6s (seamless mathematical loop) via Playwright and encoded with
+ffmpeg (libvpx-vp9, yuv420p, muted).
+
+  ticker.webm / ticker-poster.jpg — degrading CRT ticker wall (beat: "The
+    economy is rigged."). Glyph grid re-rolls, row glitches, scanline sweep.
+  paper.webm / paper-poster.jpg — ledger paper with overdue stamps slamming
+    in (beat: "Rent doesn't wait."). Authored presentational copy only.
+  static.webm / static-poster.jpg — city silhouette drowning in static,
+    windows flicking off (beats: "Scams don't sleep." / market indifference).
+
+AI video generation (Veo3 / Gemini) was attempted first per the approved
+plan and failed with model-availability 404s; the self-render fallback is
+the sanctioned path. Generator source lives in the session scratchpad
+(film-scenes.html + capture-film.mjs) — re-create by re-running those.
