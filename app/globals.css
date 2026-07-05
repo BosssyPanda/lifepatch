@@ -139,6 +139,25 @@ body {
   outline-offset: 2px;
 }
 
+/* ---------------- Skip link (visible on keyboard focus only) ---------------- */
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--color-ink);
+  color: var(--color-bg);
+  font-family: var(--font-plex-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transform: translateY(-200%);
+}
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 /* ---------------- Scrollbars ---------------- */
 .thin-scroll::-webkit-scrollbar {
   width: 7px;

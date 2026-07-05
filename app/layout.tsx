@@ -19,6 +19,20 @@ export const metadata: Metadata = {
   title: "LifePatch — Survive the Internet Economy",
   description:
     "You're running out of money fast. Every choice costs something. Survive the internet economy without getting financially cooked.",
+  openGraph: {
+    title: "LifePatch — Survive the Internet Economy",
+    description:
+      "You're running out of money fast. Every choice costs something. Survive the internet economy without getting financially cooked.",
+    url: "/",
+    siteName: "LifePatch",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "LifePatch — Survive the Internet Economy",
+    description:
+      "Every choice costs something. Survive the internet economy without getting financially cooked.",
+  },
 };
 
 export const viewport: Viewport = {
@@ -35,7 +49,12 @@ export default function RootLayout({
       lang="en"
       className={`${anton.variable} ${plexMono.variable} ${instrument.variable} ${archivo.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

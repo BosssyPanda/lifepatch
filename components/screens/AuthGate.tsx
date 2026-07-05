@@ -75,7 +75,9 @@ export function AuthGate({
               )}
               {!isCloud && (
                 <p className="font-body text-xs italic text-ink-dim">
-                  Dev mode: saves stay on this device until cloud keys are added.
+                  {process.env.NODE_ENV === "production"
+                    ? "Saves stay on this device."
+                    : "Dev mode: saves stay on this device until cloud keys are added."}
                 </p>
               )}
             </form>

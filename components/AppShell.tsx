@@ -101,7 +101,7 @@ function AppShellInner() {
 
   if (inCashflow) {
     return (
-      <main className="relative min-h-[100svh] w-full">
+      <main id="main" className="relative min-h-[100svh] w-full">
         <CashflowShell onExit={run.toTitle} onOpenAlmanac={openAlmanac} onMasteryMap={openMasteryMap} />
         {almanacMounted && <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />}
         {masteryMounted && <MasteryMap open={masteryOpen} onClose={() => setMasteryOpen(false)} />}
@@ -110,7 +110,7 @@ function AppShellInner() {
   }
 
   return (
-    <main className="relative min-h-[100svh] w-full">
+    <main id="main" className="relative min-h-[100svh] w-full">
       <AnimatePresence mode="wait">
         {phase === "intro" && (
           <motion.div key="intro" {...wipe}>
