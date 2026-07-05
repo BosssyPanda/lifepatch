@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { NumberTicker } from "@/components/cinematic/landing/NumberTicker";
 import { CloseIcon } from "@/components/icons";
 import { Avatar } from "@/components/social/Avatar";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
@@ -14,11 +15,17 @@ import { getProfiles } from "@/lib/cloud/profiles";
 import { topResults, type LeaderboardScope } from "@/lib/cloud/results";
 import type { GameMode, Profile, ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 
-// staggered row reveal (re-runs per tab via a keyed list)
-const listContainer = { hidden: {}, show: { transition: { staggerChildren: 0.04 } } };
-const listItem = { hidden: { opacity: 0, x: -10 }, show: { opacity: 1, x: 0 } };
+// staggered split-flap row landing (re-runs per tab via a keyed list);
+// compositor-only: the whole row flips in like a Solari board line
+const listContainer = { hidden: {}, show: { transition: { staggerChildren: 0.05 } } };
+const listItem = {
+  hidden: { opacity: 0, rotateX: -72, y: 8 },
+  show: { opacity: 1, rotateX: 0, y: 0, transition: { duration: 0.32, ease: EASE } },
+};
+const listItemReduced = { hidden: { opacity: 0 }, show: { opacity: 1 } };
 
 // gold / silver / bronze discs for the top three (from the warm token palette)
 const MEDALS = ["var(--color-ink)", "var(--color-secondary)", "var(--color-tertiary)"];
@@ -50,6 +57,7 @@ export function Leaderboard({
 }) {
   const { profile } = useProfile();
   const { sfx } = useAudio();
+  const { reduced } = useMotionCtx();
   const [mode, setMode] = useState<GameMode>(initialMode);
   const [scope, setScope] = useState<LeaderboardScope>("all");
   const [rows, setRows] = useState<ResultRow[]>([]);
@@ -170,7 +178,7 @@ export function Leaderboard({
               {loading ? (
                 <p className="py-10 text-center"><TerminalOp label="Fetching ledger" center /></p>
               ) : rows.length === 0 ? (
-                <EmptyState scope={scope} />
+                <EmptyState scope={scope} reduced={reduced} />
               ) : (
                 <motion.ol
                   key={`${mode}-${scope}`}
@@ -186,13 +194,14 @@ export function Leaderboard({
                     return (
                       <motion.li
                         key={r.id}
-                        variants={listItem}
-                        className={`flex items-center gap-3 rounded-[4px] px-3 py-2 transition-colors ${
+                        variants={reduced ? listItemReduced : listItem}
+                        style={{ transformPerspective: 640, transformOrigin: "center top" }}
+                        className={`flex items-center gap-3 border px-3 py-2 transition-colors ${
                           isMe
-                            ? "bg-ink/10 border border-ink"
+                            ? "border-ink bg-ink/10"
                             : i % 2
-                              ? "bg-ink/[0.03] hover:bg-ink/[0.06]"
-                              : "hover:bg-ink/[0.04]"
+                              ? "border-transparent bg-ink/[0.03] hover:bg-ink/[0.06]"
+                              : "border-transparent hover:bg-ink/[0.04]"
                         }`}
                       >
                         <RankBadge rank={i + 1} />
@@ -232,22 +241,39 @@ function RankBadge({ rank }: { rank: number }) {
   if (rank <= 3) {
     return (
       <span
-        className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[0.72rem] font-bold tabular-nums text-bg"
+        className="grid h-6 w-6 shrink-0 place-items-center text-[0.72rem] font-bold text-bg"
         style={{ background: MEDALS[rank - 1] }}
       >
-        {rank}
+        <NumberTicker value={rank} durationMs={450} />
       </span>
     );
   }
-  return <span className="w-6 shrink-0 text-right font-body text-sm tabular-nums text-secondary">{rank}</span>;
+  return (
+    <span className="w-6 shrink-0 text-right font-body text-sm text-secondary">
+      <NumberTicker value={rank} durationMs={450} />
+    </span>
+  );
 }
 
-function EmptyState({ scope }: { scope: LeaderboardScope }) {
+function EmptyState({ scope, reduced }: { scope: LeaderboardScope; reduced: boolean }) {
   const msg =
     scope === "friends"
       ? "No friends added yet. Share your friend code to race together."
       : scope === "week"
         ? "No runs this week. Finish a run to claim the top spot."
         : "No runs yet. Finish a run to be the first on the board.";
-  return <p className="py-10 text-center font-body text-sm text-secondary">{msg}</p>;
+  return (
+    <motion.div
+      key={scope}
+      initial={reduced ? false : { scale: 1.28, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.26, ease: EASE }}
+      className="mx-auto my-10 max-w-xs border-2 border-ink/30 p-1.5 text-center"
+    >
+      <div className="border border-ink/25 px-4 py-6">
+        <p className="font-anton text-xl leading-tight tracking-[0.06em] text-ink">NO ENTRIES — BE THE FIRST</p>
+        <p className="mt-2 font-body text-xs text-secondary">{msg}</p>
+      </div>
+    </motion.div>
+  );
 }
