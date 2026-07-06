@@ -18,8 +18,12 @@ import { DUR, EASE } from "./tokens";
 export type Wipe = Pick<MotionProps, "initial" | "animate" | "exit" | "transition">;
 
 const fade: Wipe = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
+  // clipPath rides along fully open: `reduced` promotes false→true one frame
+  // after mount (MotionProvider's hydration gate), which swaps a mid-flight
+  // paperFeed to this fade. Without a clipPath target here framer abandons the
+  // half-run inset() where it stands and the whole screen stays clipped.
+  initial: { opacity: 0, clipPath: "inset(0 0 0% 0)" },
+  animate: { opacity: 1, clipPath: "inset(0 0 0% 0)" },
   exit: { opacity: 0 },
   transition: { duration: DUR.instant },
 };

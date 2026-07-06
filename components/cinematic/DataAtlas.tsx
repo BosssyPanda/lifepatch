@@ -1,7 +1,8 @@
 "use client";
 
-import { motion, useMotionValue, useReducedMotion, useTransform, type MotionValue } from "framer-motion";
+import { motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
 import { useEffect, useState } from "react";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR } from "@/src/motion/tokens";
 
 /**
@@ -58,7 +59,9 @@ const STATS0 = [
 ];
 
 export function DataAtlas({ className = "", px, py }: { className?: string; px?: MotionValue<number>; py?: MotionValue<number> }) {
-  const reduce = useReducedMotion();
+  // via MotionCtx, not framer's hook: the provider holds `reduced` false through the
+  // first client paint so this SSR-visible tree hydrates against matching markup.
+  const { reduced: reduce } = useMotionCtx();
   const [stats, setStats] = useState(STATS0);
 
   // pointer springs (fall back to static if not provided)

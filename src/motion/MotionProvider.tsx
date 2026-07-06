@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 
 /**
@@ -30,7 +30,15 @@ type MotionCtxValue = {
 const MotionCtx = createContext<MotionCtxValue | null>(null);
 
 export function MotionProvider({ children }: { children: React.ReactNode }) {
-  const reduced = !!useReducedMotion();
+  // framer's useReducedMotion reads matchMedia synchronously on the client, so its
+  // value flips during hydration (server: false, first client render: true) and any
+  // SSR-visible markup that branches on it mismatches (React #418). Hold `reduced`
+  // at the server value through the first paint and promote after mount — same gate
+  // as Opening's sessionStorage promote and HudRail's clock.
+  const prefersReduced = !!useReducedMotion();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const reduced = mounted && prefersReduced;
   const skips = useRef<Set<SkipFn>>(new Set());
 
   const register = useCallback((fn: SkipFn) => {

@@ -1,9 +1,10 @@
 "use client";
 
-import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
+import { motion, useMotionValue, useSpring } from "framer-motion";
 import type { PointerEvent } from "react";
 import { DataAtlas } from "./DataAtlas";
 import { MuteButton } from "./Controls";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { EASE, SPRING } from "@/src/motion/tokens";
 
 export function Gate({
@@ -15,7 +16,9 @@ export function Gate({
   muted: boolean;
   onToggleMute: () => void;
 }) {
-  const reduce = useReducedMotion();
+  // via MotionCtx, not framer's hook: the provider holds `reduced` false through the
+  // first client paint so this SSR-visible tree hydrates against matching markup.
+  const { reduced: reduce } = useMotionCtx();
 
   // normalized pointer (−0.5..0.5), springed — drives layered parallax in DataAtlas
   const px = useMotionValue(0);
