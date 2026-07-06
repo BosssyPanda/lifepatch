@@ -109,14 +109,12 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
   const hy = useMotionValue(0);
   const shx = useSpring(hx, { stiffness: 55, damping: 17 });
   const shy = useSpring(hy, { stiffness: 55, damping: 17 });
-  // deltas stay tight: front vs back letter shear must read as depth, not as a
-  // misprinted glyph — ≤7px between the two letter planes at full deflection.
+  // two planes only: the title moves gently, the statue in the right bay moves
+  // a touch more — depth without ever shearing a glyph.
   const backX = useTransform(shx, [-0.5, 0.5], [-5, 5]);
   const backY = useTransform(shy, [-0.5, 0.5], [-4, 4]);
-  const midX = useTransform(shx, [-0.5, 0.5], [-9, 9]);
-  const midY = useTransform(shy, [-0.5, 0.5], [-7, 7]);
-  const frontX = useTransform(shx, [-0.5, 0.5], [-12, 12]);
-  const frontY = useTransform(shy, [-0.5, 0.5], [-9, 9]);
+  const midX = useTransform(shx, [-0.5, 0.5], [-11, 11]);
+  const midY = useTransform(shy, [-0.5, 0.5], [-8, 8]);
   const onHeroMove = (e: PointerEvent<HTMLElement>) => {
     if (reduced || e.pointerType !== "mouse") return;
     const r = e.currentTarget.getBoundingClientRect();
@@ -149,6 +147,30 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
           transition={{ duration: DUR.slow, ease: EASE }}
         />
 
+        {/* the Atlas — standing in the hero's right bay over the ASCII board
+            zone (xl+ only: below that the text column owns the full width, and
+            "no overlap" beats presence — the Gate still shows it everywhere) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute right-[5%] top-1/2 z-0 hidden -translate-y-1/2 select-none xl:block"
+        >
+          <motion.div
+            style={{ x: midX, y: midY }}
+            initial={reduced ? false : { opacity: 0 }}
+            animate={{ opacity: stamped ? 0.95 : 0 }}
+            transition={reduced ? { duration: 0 } : { duration: DUR.slow, ease: EASE, delay: 0.25 }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/img/atlas-engraving.png"
+              alt=""
+              draggable={false}
+              className="h-[70svh] max-h-[760px] w-auto"
+              style={{ filter: "grayscale(1) brightness(0.95)" }}
+            />
+          </motion.div>
+        </div>
+
         {/* top HUD rail */}
         <div className="flex items-stretch border-b border-hairline">
           <div className="flex items-center gap-2 border-r border-hairline px-4 py-3 sm:px-6">
@@ -173,13 +195,13 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             File No. 01 — Your Money
           </motion.p>
 
-          {/* the wordmark STAMPS in with an invert flash — Phase R: the Atlas
-              threads BETWEEN the letter planes (back glyphs / statue / front
-              glyph bottoms), pointer parallax separating the depths. */}
+          {/* the wordmark STAMPS in with an invert flash — one SOLID plane.
+              (The R interleave sheared the glyphs under parallax and read as a
+              misprint at wide viewports; the Atlas stands in the right bay now.) */}
           <div className="relative mt-3 w-fit">
             <motion.span
               aria-hidden
-              className="absolute inset-0 z-30 bg-ink"
+              className="absolute inset-0 z-10 bg-ink"
               initial={{ opacity: 0 }}
               animate={flash ? { opacity: [0, 1, 0] } : { opacity: 0 }}
               transition={{ duration: 0.16, ease: "linear" }}
@@ -189,49 +211,13 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
               animate={stamped ? { opacity: 1, scaleY: 1, y: 0 } : { opacity: 0, scaleY: 1.18, y: 6 }}
               transition={reduced ? { duration: 0 } : SPRING.pop}
               style={{ transformOrigin: "left bottom" }}
-              className="relative"
             >
-              {/* back plane — the full wordmark */}
               <motion.h1
                 style={{ fontSize: "clamp(3.75rem, 18vw, 13rem)", x: backX, y: backY }}
                 className="font-anton leading-[0.86] tracking-[-0.01em] text-ink"
               >
                 LIFEPATCH
               </motion.h1>
-
-              {/* mid plane — the Atlas rises through the line of type */}
-              <motion.div
-                aria-hidden
-                initial={reduced ? false : { opacity: 0, y: 18 }}
-                animate={stamped ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
-                transition={reduced ? { duration: 0 } : { duration: DUR.slow, ease: EASE, delay: reduced ? 0 : 0.22 }}
-                style={{ x: midX, y: midY }}
-                className="pointer-events-none absolute right-[4%] top-[-88%] z-10 h-[296%] select-none"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/img/atlas-engraving.png"
-                  alt=""
-                  draggable={false}
-                  className="h-full w-auto"
-                  style={{ filter: "grayscale(1) brightness(0.92)", opacity: 0.58 }}
-                />
-              </motion.div>
-
-              {/* front plane — the lower half of the glyphs repaints over the
-                  statue, so the figure reads as woven through the wordmark */}
-              <motion.span
-                aria-hidden
-                style={{
-                  fontSize: "clamp(3.75rem, 18vw, 13rem)",
-                  x: frontX,
-                  y: frontY,
-                  clipPath: "inset(52% -2% -6% -2%)",
-                }}
-                className="absolute inset-0 z-20 block font-anton leading-[0.86] tracking-[-0.01em] text-ink"
-              >
-                LIFEPATCH
-              </motion.span>
             </motion.div>
           </div>
 
