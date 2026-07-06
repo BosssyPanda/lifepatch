@@ -1,11 +1,22 @@
 "use client";
 
-import { motion, useMotionValue, useSpring } from "framer-motion";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import type { PointerEvent } from "react";
 import { DataAtlas } from "./DataAtlas";
 import { MuteButton } from "./Controls";
+import { FilmLayer } from "./film/FilmLayer";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { EASE, SPRING } from "@/src/motion/tokens";
+
+/** Drifting ink motes over the Atlas — Phase R "living" garnish (film exception). */
+const MOTES = [
+  { left: "18%", size: 2, dur: 11, delay: 0 },
+  { left: "34%", size: 1.5, dur: 14, delay: 2.4 },
+  { left: "48%", size: 2.5, dur: 9.5, delay: 1.1 },
+  { left: "61%", size: 1.5, dur: 12.5, delay: 4.2 },
+  { left: "72%", size: 2, dur: 10.5, delay: 0.8 },
+  { left: "84%", size: 1.5, dur: 13.5, delay: 3.0 },
+];
 
 export function Gate({
   onBegin,
@@ -25,6 +36,10 @@ export function Gate({
   const py = useMotionValue(0);
   const sx = useSpring(px, { stiffness: 60, damping: 18 });
   const sy = useSpring(py, { stiffness: 60, damping: 18 });
+  // Phase R: the whole illustration plane also TILTS toward the pointer (real
+  // perspective depth on top of the per-layer translate parallax).
+  const tiltX = useTransform(sy, [-0.5, 0.5], [3.5, -3.5]);
+  const tiltY = useTransform(sx, [-0.5, 0.5], [-4.5, 4.5]);
 
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
     if (reduce) return;
@@ -57,26 +72,47 @@ export function Gate({
         <MuteButton muted={muted} onToggle={onToggleMute} />
       </div>
 
-      {/* ---------------- illustration ---------------- */}
+      {/* ---------------- illustration (tilting plane, Phase R) ---------------- */}
       <motion.div
         initial={reduce ? false : { opacity: 0, scale: 0.97 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1, ease: EASE }}
-        className="relative z-10 flex w-full max-w-[260px] shrink-0 justify-center overflow-hidden sm:max-w-[320px] lg:h-[90svh] lg:max-h-[900px] lg:w-auto lg:max-w-none"
+        style={{ perspective: 1100 }}
+        className="relative z-10 flex w-full max-w-[260px] shrink-0 justify-center sm:max-w-[320px] lg:h-[90svh] lg:max-h-[900px] lg:w-auto lg:max-w-none"
       >
-        <DataAtlas px={sx} py={sy} className="h-auto w-full lg:h-full lg:w-auto" />
-        {/* slow accent scanline sweep over the panel */}
-        {!reduce && (
-          <motion.div
-            aria-hidden
-            className="pointer-events-none absolute inset-0"
-            initial={{ y: "-42%" }}
-            animate={{ y: ["-42%", "42%", "-42%"] }}
-            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-          >
-            <span className="absolute inset-x-0 top-1/2 h-px bg-ink/20" />
-          </motion.div>
-        )}
+        <motion.div
+          style={reduce ? undefined : { rotateX: tiltX, rotateY: tiltY }}
+          className="relative flex h-full w-full justify-center overflow-hidden"
+        >
+          <DataAtlas px={sx} py={sy} className="h-auto w-full lg:h-full lg:w-auto" />
+          {/* slow accent scanline sweep over the panel */}
+          {!reduce && (
+            <motion.div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              initial={{ y: "-42%" }}
+              animate={{ y: ["-42%", "42%", "-42%"] }}
+              transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <span className="absolute inset-x-0 top-1/2 h-px bg-ink/20" />
+            </motion.div>
+          )}
+          {/* drifting ink motes — rise slowly through the composition */}
+          {!reduce && (
+            <div aria-hidden className="pointer-events-none absolute inset-0">
+              {MOTES.map((m, i) => (
+                <motion.span
+                  key={i}
+                  className="absolute bg-ink"
+                  style={{ left: m.left, bottom: "-2%", width: m.size, height: m.size }}
+                  initial={{ y: 0, opacity: 0 }}
+                  animate={{ y: "-104vh", opacity: [0, 0.4, 0.32, 0] }}
+                  transition={{ duration: m.dur, delay: m.delay, repeat: Infinity, ease: "linear" }}
+                />
+              ))}
+            </div>
+          )}
+        </motion.div>
       </motion.div>
 
       {/* ---------------- title block ---------------- */}
@@ -131,6 +167,9 @@ export function Gate({
           Best with sound on. Headphones recommended.
         </motion.p>
       </div>
+
+      {/* ---------------- film vocabulary: grain + vignette (§ Film Exception) ---------------- */}
+      <FilmLayer grain={0.4} vignette={0.5} className="z-[15]" />
 
       {/* ---------------- HUD: footer status ticker ---------------- */}
       <div aria-hidden className="pointer-events-none absolute inset-x-6 bottom-5 z-20 hidden items-center justify-between lg:flex">

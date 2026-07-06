@@ -34,12 +34,29 @@ never hardcode hex outside the sanctioned palette, never invent fonts.
 
 - **Radius 0.** No rounded corners on anything new. (Some legacy game-screen chrome still
   carries small radii; new and rebuilt elements are flat — converge, don't imitate.)
-- **No glow, no gradient, no drop shadow, no blur, no grain, no vignette.** Flat panels
-  separated by 1px hairlines. `.paper` = flat `--color-bg` + hairline border.
+- **No glow, no gradient, no drop shadow, no blur, no grain, no vignette** — except the
+  sanctioned § Film Exception below. Flat panels separated by 1px hairlines. `.paper` =
+  flat `--color-bg` + hairline border.
 - Depth comes from hairline framing (double rules, inset frames), stacking, and motion —
   never from shadows.
 - Section grammar: numbered mono eyebrows (`003 — The Arena`), hairline-framed stages,
   dotted leaders connecting label→value, stamped plates, folio/footer rules.
+
+## § Film Exception (cinematics only)
+
+The four ceremonial surfaces — **Gate, ColdOpen, Outro, and the landing hero** — may carry
+the film vocabulary, and ONLY via `components/cinematic/film/FilmLayer.tsx`:
+
+- **Grain** — one small tiled canvas layer (~128px noise tile, ~12fps re-roll), opacity only.
+- **Flicker** — per-frame random dim pass (projector flutter). Ceremonies only; never on
+  resting surfaces (the hero carries grain + vignette + flash, but no flicker).
+- **Flash frames** — one-shot ink or loss-red full-frame hits, keyed to stamps/beats.
+- **Vignette** — canvas radial pre-render, opacity composite. No CSS blur involved.
+
+Still banned even inside the exception: CSS blur, gradients as decoration, color casts
+(palette hexes only), rounded corners. Reduced motion collapses FilmLayer to a single
+static faint frame. Do NOT mount FilmLayer anywhere else in the app — everything outside
+these four surfaces stays strict LEDGER.
 
 ## Motion (compositor-only, ceremonial)
 

@@ -1,10 +1,12 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PointerEvent } from "react";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { TitleAscii } from "@/components/cinematic/TitleAscii";
+import { FilmLayer } from "@/components/cinematic/film/FilmLayer";
 import { TitleTicker } from "@/components/cinematic/TitleTicker";
 import { BracketCTA } from "@/components/cinematic/BracketCTA";
 import { ScrollProgress } from "@/components/cinematic/landing/ScrollProgress";
@@ -100,11 +102,33 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
 
   const beginWithSfx = () => { try { audio.sfx("confirm"); } catch {} onBegin(); };
 
+  // Phase R "Living Atlas": pointer parallax separating the hero's depth planes
+  // (ascii backdrop ← back letters ← statue ← front letters). Mouse only —
+  // touch scroll must never fight the layers.
+  const hx = useMotionValue(0);
+  const hy = useMotionValue(0);
+  const shx = useSpring(hx, { stiffness: 55, damping: 17 });
+  const shy = useSpring(hy, { stiffness: 55, damping: 17 });
+  // deltas stay tight: front vs back letter shear must read as depth, not as a
+  // misprinted glyph — ≤7px between the two letter planes at full deflection.
+  const backX = useTransform(shx, [-0.5, 0.5], [-5, 5]);
+  const backY = useTransform(shy, [-0.5, 0.5], [-4, 4]);
+  const midX = useTransform(shx, [-0.5, 0.5], [-9, 9]);
+  const midY = useTransform(shy, [-0.5, 0.5], [-7, 7]);
+  const frontX = useTransform(shx, [-0.5, 0.5], [-12, 12]);
+  const frontY = useTransform(shy, [-0.5, 0.5], [-9, 9]);
+  const onHeroMove = (e: PointerEvent<HTMLElement>) => {
+    if (reduced || e.pointerType !== "mouse") return;
+    const r = e.currentTarget.getBoundingClientRect();
+    hx.set((e.clientX - r.left) / r.width - 0.5);
+    hy.set((e.clientY - r.top) / r.height - 0.5);
+  };
+
   return (
     <div className="relative bg-bg text-ink">
       <ScrollProgress />
       {/* ===================== HERO — statement cover ===================== */}
-      <section className="relative isolate flex min-h-[100svh] flex-col overflow-hidden">
+      <section onPointerMove={onHeroMove} className="relative isolate flex min-h-[100svh] flex-col overflow-hidden">
         {/* ASCII-rendered board-orbit loop, quantized to glyphs behind everything */}
         <motion.div
           aria-hidden
@@ -149,24 +173,66 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             File No. 01 — Your Money
           </motion.p>
 
-          {/* the wordmark STAMPS in with an invert flash */}
+          {/* the wordmark STAMPS in with an invert flash — Phase R: the Atlas
+              threads BETWEEN the letter planes (back glyphs / statue / front
+              glyph bottoms), pointer parallax separating the depths. */}
           <div className="relative mt-3 w-fit">
             <motion.span
               aria-hidden
-              className="absolute inset-0 z-10 bg-ink"
+              className="absolute inset-0 z-30 bg-ink"
               initial={{ opacity: 0 }}
               animate={flash ? { opacity: [0, 1, 0] } : { opacity: 0 }}
               transition={{ duration: 0.16, ease: "linear" }}
             />
-            <motion.h1
+            <motion.div
               initial={reduced ? false : { opacity: 0, scaleY: 1.18, y: 6 }}
               animate={stamped ? { opacity: 1, scaleY: 1, y: 0 } : { opacity: 0, scaleY: 1.18, y: 6 }}
               transition={reduced ? { duration: 0 } : SPRING.pop}
-              style={{ fontSize: "clamp(3.75rem, 18vw, 13rem)", transformOrigin: "left bottom" }}
-              className="font-anton leading-[0.86] tracking-[-0.01em] text-ink"
+              style={{ transformOrigin: "left bottom" }}
+              className="relative"
             >
-              LIFEPATCH
-            </motion.h1>
+              {/* back plane — the full wordmark */}
+              <motion.h1
+                style={{ fontSize: "clamp(3.75rem, 18vw, 13rem)", x: backX, y: backY }}
+                className="font-anton leading-[0.86] tracking-[-0.01em] text-ink"
+              >
+                LIFEPATCH
+              </motion.h1>
+
+              {/* mid plane — the Atlas rises through the line of type */}
+              <motion.div
+                aria-hidden
+                initial={reduced ? false : { opacity: 0, y: 18 }}
+                animate={stamped ? { opacity: 1, y: 0 } : { opacity: 0, y: 18 }}
+                transition={reduced ? { duration: 0 } : { duration: DUR.slow, ease: EASE, delay: reduced ? 0 : 0.22 }}
+                style={{ x: midX, y: midY }}
+                className="pointer-events-none absolute right-[4%] top-[-88%] z-10 h-[296%] select-none"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/img/atlas-engraving.png"
+                  alt=""
+                  draggable={false}
+                  className="h-full w-auto"
+                  style={{ filter: "grayscale(1) brightness(0.92)", opacity: 0.58 }}
+                />
+              </motion.div>
+
+              {/* front plane — the lower half of the glyphs repaints over the
+                  statue, so the figure reads as woven through the wordmark */}
+              <motion.span
+                aria-hidden
+                style={{
+                  fontSize: "clamp(3.75rem, 18vw, 13rem)",
+                  x: frontX,
+                  y: frontY,
+                  clipPath: "inset(52% -2% -6% -2%)",
+                }}
+                className="absolute inset-0 z-20 block font-anton leading-[0.86] tracking-[-0.01em] text-ink"
+              >
+                LIFEPATCH
+              </motion.span>
+            </motion.div>
           </div>
 
           <div className="mt-5 h-px w-full max-w-3xl bg-hairline" />
@@ -256,6 +322,11 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             <Cell>Scroll ↓</Cell>
           </motion.div>
         </div>
+
+        {/* film vocabulary over the hero only (§ Film Exception) — grain +
+            vignette persist; the flash frame fires with the wordmark stamp so
+            ColdOpen Act III cuts into an identical-feeling frame. */}
+        <FilmLayer grain={0.45} vignette={0.4} flashKey={flash ? "stamp" : null} className="z-40" />
       </section>
 
       {/* ===================== PREMISE — framed statement ===================== */}
