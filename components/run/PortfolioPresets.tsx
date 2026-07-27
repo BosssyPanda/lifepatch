@@ -24,7 +24,7 @@ const PRESETS: Preset[] = [
   {
     id: "safe",
     label: "Safe",
-    tagline: "Sleep at night. Barely keep up with inflation.",
+    tagline: "Slow and steady. Low stress.",
     mix: { savings: 50, bonds: 30, index: 20 },
     hex: "var(--color-gain)",
     risk: "low risk",
@@ -32,7 +32,7 @@ const PRESETS: Preset[] = [
   {
     id: "balanced",
     label: "Balanced",
-    tagline: "Spread the bets. Grow without the heart attacks.",
+    tagline: "A bit of everything.",
     mix: { index: 40, realEstate: 20, bonds: 20, gold: 10, savings: 10 },
     hex: "var(--color-secondary)",
     risk: "medium risk",
@@ -40,7 +40,7 @@ const PRESETS: Preset[] = [
   {
     id: "bold",
     label: "Bold",
-    tagline: "Swing for growth. Stomach the drawdowns.",
+    tagline: "Big gains, big drops.",
     mix: { index: 45, realEstate: 20, crypto: 20, gold: 15 },
     hex: "var(--color-loss)",
     risk: "high risk",
@@ -154,8 +154,8 @@ export function PortfolioPresets({
       </div>
       <p className="mt-2 font-body text-xs italic text-ink-dim/80">
         {canInvest
-          ? <>One tap splits your {currency(cash)} across a starter mix. Fine-tune below.</>
-          : "Invested. Sell something below to free up cash, or advance the year."}
+          ? <>One tap invests your {currency(cash)} in that mix. Adjust below.</>
+          : "All invested. Sell something below to free up cash, or advance the year."}
       </p>
     </div>
   );

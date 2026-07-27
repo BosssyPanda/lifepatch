@@ -7,6 +7,11 @@ import type { MusicCueMeta } from "./audioTypes";
  */
 export const MUSIC_MANIFEST: { id: string; metaUrl: string }[] = [
   { id: "example-track", metaUrl: "/audio/meta/example-track.music.json" },
+  { id: "score-intro", metaUrl: "/audio/meta/score-intro.music.json" },
+  { id: "score-gameplay", metaUrl: "/audio/meta/score-gameplay.music.json" },
+  { id: "score-recap", metaUrl: "/audio/meta/score-recap.music.json" },
+  { id: "score-market-crash", metaUrl: "/audio/meta/score-market-crash.music.json" },
+  { id: "score-market-boom", metaUrl: "/audio/meta/score-market-boom.music.json" },
 ];
 
 export function metaUrlFor(id: string): string | null {

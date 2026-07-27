@@ -15,13 +15,18 @@ import type { AmbienceId, SfxName, StingTone } from "./sfxBank";
  */
 
 export type ScorePhase = "intro" | "title" | "menu" | "gameplay" | "recapGood" | "recapBad";
+/** Big-market-event overlay on the gameplay bed (crash = dark, boom = warm). */
+export type MarketMood = "calm" | "crash" | "boom";
 export type AccentKind =
   | "thump" | "hit" | "stab" | "riser" | "title"
   | "rise" | "ping" | "thud" | "stampGood" | "stampBad"
   // v2 learning/social milestones (celebratory, grid-quantized)
   | "mastered" | "levelup" | "streak"
   // Addendum B: the money-consequence land motif (build→impact→settle, A minor)
-  | "consequence";
+  | "consequence"
+  // Phase 3: big-market-event lands. Both are slow swells, never transient slams —
+  // the world darkens/brightens without jumpscaring the player.
+  | "crash" | "boom";
 
 type StemId = "sub" | "pad" | "rhodes" | "tick" | "crackle" | "tension" | "warmth" | "lead";
 
@@ -58,12 +63,25 @@ const PRESETS: Record<ScorePhase, Record<StemId, number>> = {
   recapBad:  { sub: 0.5,  pad: 0.4,  rhodes: 0.2,  tick: 0.2,  crackle: 0.06, tension: 0.55, warmth: 0.0, lead: 0.0  },
 };
 
+// Minimum ms between repeats of the same SFX. Guards the audio thread against
+// UI spam (e.g. a portfolio-slider drag firing a trade per 1% step): unthrottled,
+// one drag could allocate hundreds of synth voices in a second, starve the
+// renderer, and get the whole AudioContext suspended by the browser.
+const SFX_MIN_GAP_MS: Partial<Record<SfxName, number>> = {
+  coins: 140, cash: 140, stamp: 120, paper: 90, confirm: 120, uitick: 45,
+};
+const SFX_DEFAULT_GAP_MS = 40;
+
 export class AudioEngine {
   private started = false;
   private phase: ScorePhase = "menu";
   private intensity = 0.3;
   private brainGlow = 0; // 0..1 Money-Brain progress → warms the menu/recap bed
+  private marketMood: MarketMood = "calm";
   private seg = 0;
+  private lastSfxMs: Partial<Record<SfxName, number>> = {};
+  private watchdog: ReturnType<typeof setInterval> | null = null;
+  private onCtxStateChange = () => { void this.ensureRunning(); };
 
   private master!: Tone.Gain;
   private musicBus!: Tone.Gain;
@@ -102,7 +120,8 @@ export class AudioEngine {
     t.bpm.value = BPM;
 
     this.master = new Tone.Gain(0.85).toDestination();
-    this.musicBus = new Tone.Gain(1).connect(this.master);
+    // Phase-3 tester note: BGM sat a touch hot vs SFX/dialogue — music bed ~2 dB down.
+    this.musicBus = new Tone.Gain(0.78).connect(this.master);
     this.accentBus = new Tone.Gain(0.9).connect(this.master);
     this.sfxBus = new Tone.Gain(0.9).connect(this.master);
     this.ambBus = new Tone.Gain(0.8).connect(this.master);
@@ -229,6 +248,24 @@ export class AudioEngine {
     t.start();
     this.started = true;
     this.setPhase(initialPhase, 0.6);
+
+    // Self-heal: if the context drops out of "running" (tab switch, mobile route
+    // change / interruption, or a momentary render overload), resume it instead
+    // of staying silent forever. Belt (statechange) + braces (slow watchdog);
+    // useAudio adds a user-gesture fallback for browsers that require one.
+    try { Tone.getContext().rawContext.addEventListener("statechange", this.onCtxStateChange); } catch {}
+    this.watchdog = setInterval(this.onCtxStateChange, 4000);
+  }
+
+  /** Resume the context + transport if anything suspended them. Safe to spam. */
+  async ensureRunning(): Promise<void> {
+    if (!this.started) return;
+    try {
+      const ctx = Tone.getContext();
+      if (ctx.state !== "running") await ctx.resume();
+      const t = Tone.getTransport();
+      if (t.state !== "started") t.start();
+    } catch {}
   }
 
   /** Crossfade stem gains to a phase preset. Transport keeps running. */
@@ -279,7 +316,39 @@ export class AudioEngine {
       base.warmth += this.brainGlow * 0.22;
       base.pad += this.brainGlow * 0.08;
     }
+    // Big-market-event mood overlay (applied last so it survives phase/intensity
+    // re-ramps): crash = the b9 tension grind takes over and the motif recedes;
+    // boom = the Dorian warmth layer opens. Same piece, same grid — only gains move.
+    if (this.marketMood === "crash") {
+      base.tension = Math.max(base.tension, 0.6);
+      base.warmth = 0;
+      base.rhodes *= 0.45;
+      base.pad *= 0.8;
+      base.lead = 0;
+      base.sub = Math.min(0.62, base.sub + 0.12);
+      base.crackle = 0.09;
+    } else if (this.marketMood === "boom") {
+      base.warmth = Math.max(base.warmth, 0.45);
+      base.tension = 0;
+      base.rhodes = Math.min(0.6, base.rhodes + 0.12);
+    }
     return base;
+  }
+
+  /**
+   * Crossfade the whole bed into/out of a big-market-event mood. Slow ramp
+   * (~1 bar at 76 BPM) so the mood shift reads as weather, not a jumpscare.
+   */
+  setMarketMood(mood: MarketMood, fade = 3.2): void {
+    if (this.marketMood === mood) return;
+    this.marketMood = mood;
+    if (!this.started) return;
+    const target = this.targetGains();
+    const now = Tone.now();
+    (Object.keys(this.stems) as StemId[]).forEach((id) => {
+      this.stems[id].gain.cancelScheduledValues(now);
+      this.stems[id].gain.linearRampTo(target[id], fade, now);
+    });
   }
 
   /** 0..1 Money-Brain progress. Warms the calm (menu/recap) bed a touch. */
@@ -355,6 +424,26 @@ export class AudioEngine {
         this.arpAccent(["E5", "D5", "C5", "A4"], at, 0.07, "triangle", -9);
         mk.chord(["A2", "E3", "A3", "C4"], "triangle", "1m", -12);
         break;
+      // MARKET CRASH lands: a low tonic cluster with the score's b9 grind that
+      // SWELLS in over ~1.4s (slow attack — deliberately no transient slam) over
+      // a soft deep thud. The bed itself darkens via setMarketMood.
+      case "crash": {
+        const lp = new Tone.Filter(520, "lowpass").connect(bus);
+        const p = new Tone.PolySynth(Tone.Synth, {
+          oscillator: { type: "sawtooth" },
+          envelope: { attack: 1.4, decay: 1.2, sustain: 0.35, release: 3.5 },
+          volume: -15,
+        }).connect(lp);
+        p.triggerAttackRelease(["A1", "A2", "A#2", "E3"], "2m", at);
+        this.disposeLater(p, 14); this.disposeLater(lp, 14);
+        mk.membrane("A1", "2n", -10);
+        break;
+      }
+      // MARKET BOOM lands: warm C-major(add6) swell + an easy upward figure.
+      case "boom":
+        mk.chord(["C3", "G3", "C4", "E4", "A4"], "triangle", "1m", -10);
+        this.arpAccent(["C5", "E5", "G5", "A5"], at + 0.3, 0.11, "triangle", -13);
+        break;
     }
   }
 
@@ -392,9 +481,13 @@ export class AudioEngine {
   // mute + fades apply uniformly and nothing ever hard-cuts.
   // ===========================================================================
 
-  /** One-shot UI / foley effect. */
+  /** One-shot UI / foley effect. Per-name throttled (see SFX_MIN_GAP_MS). */
   playSfx(name: SfxName): void {
     if (!this.started) return;
+    const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const last = this.lastSfxMs[name];
+    if (last !== undefined && nowMs - last < (SFX_MIN_GAP_MS[name] ?? SFX_DEFAULT_GAP_MS)) return;
+    this.lastSfxMs[name] = nowMs;
     const at = Tone.now() + 0.01;
     const bus = this.sfxBus;
     switch (name) {
@@ -414,8 +507,13 @@ export class AudioEngine {
       case "stamp": this.thock(at, "G1", -3); this.noiseBurst(at, 0.05, 600, "lowpass", -12); break;
       case "page": this.swish(at, 0.26); break;
       case "chime": [523.25, 659.25, 783.99].forEach((f, i) => this.blip(at + i * 0.015, f, "triangle", 0.9, -14)); break;
-      case "soft": this.blip(at, 320, "sine", 0.16, -16, 200); break;
-      case "modal": this.blip(at, 220, "sine", 0.26, -14, 520); break;
+      // Phase-3 tester note: the low-pitched sine beeps read as pointless noise.
+      // Both are now soft, non-tonal paper/air gestures instead of beeps.
+      case "soft": this.swish(at, 0.16); break;
+      case "modal":
+        this.noiseBurst(at, 0.05, 1000, "bandpass", -18, 1.1);
+        this.noiseBurst(at + 0.05, 0.09, 1500, "bandpass", -20, 1.1);
+        break;
       // confident two-note rise when your own row places on the board
       case "rankUp": this.blip(at, 659.25, "triangle", 0.1, -11); this.blip(at + 0.075, 987.77, "triangle", 0.14, -11); break;
       case "dice": {
@@ -464,9 +562,14 @@ export class AudioEngine {
     this.disposeLater(s, dur + 0.8);
   }
   private ping(at: number, freq: number): void {
-    const m = new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.12, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3500, octaves: 1.4, volume: -22 }).connect(this.sfxBus);
-    m.triggerAttackRelease(freq, "16n", at);
-    this.disposeLater(m, 1);
+    // Light two-partial "coin" sparkle. Replaces a per-call Tone.MetalSynth —
+    // by far the heaviest voice in the engine — which under trade-SFX bursts
+    // could starve the audio render thread and silence the whole context.
+    const body = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.001, decay: 0.09, sustain: 0, release: 0.03 }, volume: -19 }).connect(this.sfxBus);
+    const shimmer = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.001, decay: 0.055, sustain: 0, release: 0.02 }, volume: -25 }).connect(this.sfxBus);
+    body.triggerAttackRelease(freq, "32n", at);
+    shimmer.triggerAttackRelease(freq * 2.01, "32n", at + 0.004);
+    this.disposeLater(body, 0.7); this.disposeLater(shimmer, 0.7);
   }
   private thock(at: number, note: string, vol: number): void {
     const m = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 4, envelope: { attack: 0.001, decay: 0.18, sustain: 0 }, volume: vol }).connect(this.sfxBus);
@@ -580,8 +683,13 @@ export class AudioEngine {
   async dispose(): Promise<void> {
     if (!this.started) return;
     this.started = false;
+    if (this.watchdog) { clearInterval(this.watchdog); this.watchdog = null; }
+    try { Tone.getContext().rawContext.removeEventListener("statechange", this.onCtxStateChange); } catch {}
     try {
-      this.setVolume(0, 0.4);
+      // ramp master directly — setVolume() no-ops once `started` is false
+      const now = Tone.now();
+      this.master.gain.cancelScheduledValues(now);
+      this.master.gain.linearRampTo(0, 0.4, now);
       try { this.currentAmb?.out.gain.linearRampTo(0, 0.3, Tone.now()); } catch {}
       await new Promise((r) => setTimeout(r, 450));
       Tone.getTransport().stop();

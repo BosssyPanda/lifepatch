@@ -33,7 +33,7 @@ export function ModeSelect({
     <div className="mx-auto flex min-h-[100svh] w-full max-w-4xl flex-col justify-center px-5 py-14">
       <div className="mb-4 flex justify-end"><StreakChip /></div>
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-        <p className="eyebrow text-ink">Choose your run</p>
+        <p className="eyebrow text-ink">Pick a mode</p>
         <h1 className="display-caps mt-3 text-4xl text-ink sm:text-6xl">Three ways to play</h1>
         <div className="mx-auto mt-5 h-px w-24 bg-ink" />
       </motion.div>

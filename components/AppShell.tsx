@@ -13,7 +13,7 @@ import { TerminalOp } from "@/components/ui/TerminalOp";
 import { MotionProvider, useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
 import { resolvePlayerId } from "@/lib/cloud/identity";
-import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
+import { flushPendingResults, resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
 
 // Code-split every screen first paint doesn't need. Only the intro (Opening) and
@@ -92,6 +92,15 @@ function AppShellInner() {
     const id = resolvePlayerId(auth.user?.id ?? null);
     void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r));
   }, [phase, run.run, auth.user]);
+
+  // Drain the result outbox — runs that finished signed-out or during a network
+  // blip post to the GLOBAL board as soon as an identity/connection exists.
+  useEffect(() => {
+    const flush = () => void flushPendingResults(resolvePlayerId(auth.user?.id ?? null));
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [auth.user]);
 
   // Fresh run → clear the "this run sharpened" concept summary.
   const runSeed = run.run?.seed ?? null;

@@ -8,7 +8,14 @@ import {
 } from "../cashflow/selectors";
 import type { CashflowState } from "../cashflow/types";
 import { ensureProfile } from "./profiles";
-import { alreadySubmitted, markSubmitted, submitResult } from "./results";
+import {
+  alreadySubmitted,
+  markSubmitted,
+  pendingResults,
+  queuePendingResult,
+  removePendingResult,
+  submitResult,
+} from "./results";
 import { bumpStreak } from "./streaks";
 import type { GameMode, NewResult } from "./types";
 
@@ -60,19 +67,49 @@ export function resultFromCashflow(s: CashflowState): NewResult {
 /**
  * Post a finished run exactly once and bump the daily streak. `runKey` must be
  * stable+unique per run (e.g. the run seed). Durable across reloads, so this is
- * the single submit path for every mode — no per-mount ref needed. Best-effort:
- * if the player id is unresolved (anon in cloud) nothing posts.
+ * the single submit path for every mode — no per-mount ref needed.
+ *
+ * A run is only marked submitted AFTER the post lands (the old optimistic mark
+ * permanently swallowed any run whose first post failed — the board then looked
+ * "local only"). Runs that can't post yet — anonymous player in a cloud build,
+ * or a network failure — are parked in a durable outbox and re-posted by
+ * flushPendingResults() once a player id / connectivity exists.
  */
+const inFlight = new Set<string>(); // re-fires within a mount no-op synchronously
+
 export async function submitRunOnce(
   runKey: string,
   playerId: string | null,
   result: NewResult,
 ): Promise<void> {
-  if (!playerId || alreadySubmitted(runKey)) return;
-  markSubmitted(runKey); // optimistic: synchronous, so re-fires within a mount no-op
+  if (alreadySubmitted(runKey) || inFlight.has(runKey)) return;
+  if (!playerId) {
+    // anon in cloud: park it — it posts (to the account they sign in with) later
+    queuePendingResult(runKey, result);
+    return;
+  }
+  inFlight.add(runKey);
   try {
     await ensureProfile(playerId);
     await submitResult(playerId, result);
-    await bumpStreak(playerId);
-  } catch {}
+    markSubmitted(runKey);
+    removePendingResult(runKey);
+    await bumpStreak(playerId).catch(() => {}); // streak is best-effort, never re-posts the run
+  } catch {
+    queuePendingResult(runKey, result); // net blip / RLS refusal — retried on next flush
+  } finally {
+    inFlight.delete(runKey);
+  }
+}
+
+/** Re-post every parked run. Call on load, sign-in, and reconnect. */
+export async function flushPendingResults(playerId: string | null): Promise<void> {
+  if (!playerId) return;
+  for (const row of pendingResults()) {
+    if (alreadySubmitted(row.runKey)) {
+      removePendingResult(row.runKey);
+      continue;
+    }
+    await submitRunOnce(row.runKey, playerId, row.result);
+  }
 }

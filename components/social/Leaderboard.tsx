@@ -9,6 +9,7 @@ import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { NeonButton } from "@/components/ui/NeonButton";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
+import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { listFriendIds } from "@/lib/cloud/friends";
 import { getProfiles } from "@/lib/cloud/profiles";
@@ -56,6 +57,7 @@ export function Leaderboard({
   initialMode?: GameMode;
 }) {
   const { profile } = useProfile();
+  const { user, isCloud: cloud } = useAuth();
   const { sfx } = useAudio();
   const { reduced } = useMotionCtx();
   const [mode, setMode] = useState<GameMode>(initialMode);
@@ -173,6 +175,18 @@ export function Leaderboard({
             <p className="px-5 pt-3 font-body text-xs italic text-secondary">
               Best run per player, ranked by {metric}.
             </p>
+
+            {/* sync state — say WHERE these scores live instead of silently
+                showing a device-local board that looks global */}
+            {!cloud ? (
+              <p className="px-5 pt-1.5 font-body text-xs text-ink/60">
+                This build isn&apos;t connected to the online leaderboard — scores stay on this device.
+              </p>
+            ) : !user ? (
+              <p className="px-5 pt-1.5 font-body text-xs text-ink/60">
+                You&apos;re playing signed out. Sign in and your finished runs post to the global board automatically.
+              </p>
+            ) : null}
 
             <div className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3">
               {loading ? (

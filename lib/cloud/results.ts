@@ -172,3 +172,42 @@ export function markSubmitted(runKey: string): void {
     localStorage.setItem(SUBMITTED_KEY, JSON.stringify([...set]));
   } catch {}
 }
+
+// ── Pending outbox ───────────────────────────────────────────────────────────
+// Runs that finished but could NOT be posted to the global board yet — the
+// player was signed out in a cloud build, or the network call failed. They're
+// parked here durably and re-posted by flushPendingResults() (on load, on
+// sign-in, on regaining connectivity), so a finished run is never silently
+// stranded on-device. This is the "leaderboard only syncs locally" fix.
+const OUTBOX_KEY = "lifepatch.resultOutbox";
+
+export type PendingResult = { runKey: string; result: NewResult };
+
+function readOutbox(): PendingResult[] {
+  try {
+    const raw = localStorage.getItem(OUTBOX_KEY);
+    return raw ? (JSON.parse(raw) as PendingResult[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOutbox(rows: PendingResult[]): void {
+  try {
+    localStorage.setItem(OUTBOX_KEY, JSON.stringify(rows));
+  } catch {}
+}
+
+export function queuePendingResult(runKey: string, result: NewResult): void {
+  const rows = readOutbox().filter((r) => r.runKey !== runKey);
+  rows.push({ runKey, result });
+  writeOutbox(rows);
+}
+
+export function pendingResults(): PendingResult[] {
+  return readOutbox();
+}
+
+export function removePendingResult(runKey: string): void {
+  writeOutbox(readOutbox().filter((r) => r.runKey !== runKey));
+}

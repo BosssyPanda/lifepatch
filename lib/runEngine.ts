@@ -329,6 +329,23 @@ export function isCompatibleSave(s: unknown): s is RunState {
   return Boolean(s && typeof s === "object" && "marketLog" in s && "flags" in s && "yearChoices" in s);
 }
 
+// ── Big market events (Phase 3) ─────────────────────────────────────────────
+// A resolved year violent enough to own the screen for a beat: a crash (the
+// index tanks) or a boom (it rips). Drives the MarketEventBeat ceremony + the
+// score's market mood. Titles are generic on purpose — macro-event names like
+// "Global Financial Crisis" would leak the calendar year, which is a spoiler.
+export type BigMarketEventKind = "crash" | "boom";
+export type BigMarketEvent = { kind: BigMarketEventKind; title: string };
+
+const CRASH_AT = -15; // index return ≤ → crash ceremony
+const BOOM_AT = 30; // index return ≥ → boom ceremony
+
+export function bigMarketEvent(rec: YearRecord): BigMarketEvent | null {
+  if (rec.indexReturn <= CRASH_AT) return { kind: "crash", title: "MARKET CRASH" };
+  if (rec.indexReturn >= BOOM_AT) return { kind: "boom", title: "MARKET BOOM" };
+  return null;
+}
+
 export function playHeadline(year: number, indexReturn: number): { text: string; tone: "good" | "bad" | "warning" | "neutral" } | null {
   if (indexReturn <= -20) return { text: "MARKET CRASH — everything is red.", tone: "bad" };
   if (indexReturn <= -8) return { text: "Rough year. Stocks slide.", tone: "warning" };

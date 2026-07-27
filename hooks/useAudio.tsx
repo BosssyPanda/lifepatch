@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import type { AudioEngine, AccentKind, ScorePhase } from "@/src/audio/AudioEngine";
+import type { AudioEngine, AccentKind, MarketMood, ScorePhase } from "@/src/audio/AudioEngine";
 import type { AmbienceId, SfxName, StingTone } from "@/src/audio/sfxBank";
 
 const MUTE_KEY = "lp_muted";
@@ -11,6 +11,7 @@ export type AudioApi = {
   unlock: (phase?: ScorePhase) => void;
   setPhase: (phase: ScorePhase, fade?: number) => void;
   setIntensity: (level: number) => void;
+  setMarketMood: (mood: MarketMood) => void;
   swellWarmth: () => void;
   setBrainGlow: (level: number) => void;
   accent: (kind: AccentKind) => void;
@@ -23,7 +24,7 @@ export type AudioApi = {
 };
 
 const noop: AudioApi = {
-  unlock: () => {}, setPhase: () => {}, setIntensity: () => {}, swellWarmth: () => {}, setBrainGlow: () => {},
+  unlock: () => {}, setPhase: () => {}, setIntensity: () => {}, setMarketMood: () => {}, swellWarmth: () => {}, setBrainGlow: () => {},
   accent: () => {}, sfx: () => {}, sting: () => {}, ambience: () => {}, muted: false, setMuted: () => {}, started: false,
 };
 
@@ -97,6 +98,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setIntensity = useCallback((level: number) => engineRef.current?.setIntensity(level), []);
+  const setMarketMood = useCallback((mood: MarketMood) => engineRef.current?.setMarketMood(mood), []);
   const swellWarmth = useCallback(() => engineRef.current?.swellWarmth(), []);
   const setBrainGlow = useCallback((level: number) => engineRef.current?.setBrainGlow(level), []);
   const accent = useCallback((kind: AccentKind) => engineRef.current?.accent(kind), []);
@@ -111,6 +113,26 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     engineRef.current?.setVolume(v ? 0 : VOL);
   }, []);
 
+  // Self-heal from any AudioContext drop (mobile interruptions, tab switches,
+  // momentary render overload). The engine's own statechange/watchdog hooks try
+  // to resume automatically; these gesture/visibility listeners cover browsers
+  // that only allow resume() inside a user gesture. This is what un-sticks
+  // "the music and audio stopped completely" mid-run.
+  useEffect(() => {
+    const heal = () => void engineRef.current?.ensureRunning();
+    const onVisible = () => { if (!document.hidden) heal(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", heal);
+    window.addEventListener("pointerdown", heal, { capture: true, passive: true });
+    window.addEventListener("keydown", heal, { capture: true });
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", heal);
+      window.removeEventListener("pointerdown", heal, { capture: true });
+      window.removeEventListener("keydown", heal, { capture: true });
+    };
+  }, []);
+
   // teardown on full unmount (fades first inside dispose)
   useEffect(() => {
     return () => {
@@ -119,7 +141,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const api: AudioApi = {
-    unlock, setPhase, setIntensity, swellWarmth, setBrainGlow, accent, sfx, sting, ambience, muted, setMuted, started,
+    unlock, setPhase, setIntensity, setMarketMood, swellWarmth, setBrainGlow, accent, sfx, sting, ambience, muted, setMuted, started,
   };
 
   return <AudioCtx.Provider value={api}>{children}</AudioCtx.Provider>;

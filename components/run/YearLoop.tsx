@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Reveal } from "@/components/ui/Reveal";
 import { useAudio } from "@/hooks/useAudio";
 import { useLenis } from "@/hooks/useLenis";
@@ -9,10 +9,11 @@ import { ambienceForTag } from "@/lib/audioMap";
 import { LIFE_EVENTS } from "@/lib/lifeEvents";
 import { macroEvent } from "@/lib/markets";
 import { MODES } from "@/lib/modes";
-import { canRetire } from "@/lib/runEngine";
+import { bigMarketEvent, canRetire, type YearRecord } from "@/lib/runEngine";
 import { HudRail } from "@/components/ui/HudRail";
 import { AdvanceBar } from "./AdvanceBar";
 import { LifeEventCard } from "./LifeEventCard";
+import { MarketEventBeat } from "./MarketEventBeat";
 import { MarketResults } from "./MarketResults";
 import { MarketTicker } from "./MarketTicker";
 import { PortfolioPanel } from "./PortfolioPanel";
@@ -54,7 +55,33 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   }, [audio, openTag]);
   useEffect(() => () => audio.ambience(null), [audio]);
 
+  // ── Big market event (Phase 3): mood + full-screen caption ────────────────
+  // The mood tracks the LAST RESOLVED year (the crash the player is living in
+  // the aftermath of) and clears on the next calm year or when leaving the run.
+  const lastRec = s?.history[s.history.length - 1] ?? null;
+  const bigKind = lastRec ? (bigMarketEvent(lastRec)?.kind ?? null) : null;
+  useEffect(() => {
+    audio.setMarketMood(bigKind ?? "calm");
+  }, [audio, bigKind]);
+  useEffect(() => () => audio.setMarketMood("calm"), [audio]);
+
+  // The caption ceremony plays once per crash/boom year, and only for advances
+  // made this session — resuming a save mid-aftermath must not replay it.
+  const [beatRec, setBeatRec] = useState<YearRecord | null>(null);
+  const seenYearsRef = useRef<Set<number> | null>(null);
+  if (seenYearsRef.current === null) {
+    seenYearsRef.current = new Set((s?.history ?? []).map((h) => h.year));
+  }
+  useEffect(() => {
+    if (!lastRec) return;
+    const seen = seenYearsRef.current!;
+    if (seen.has(lastRec.year)) return;
+    seen.add(lastRec.year);
+    if (bigMarketEvent(lastRec)) setBeatRec(lastRec);
+  }, [lastRec]);
+
   if (!s) return null;
+  const beatEvent = beatRec ? bigMarketEvent(beatRec) : null;
 
   return (
     <div className="min-h-[100svh] w-full pb-4">
@@ -87,6 +114,10 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
         onRetire={run.retire}
         onQuit={run.quit}
       />
+
+      {beatRec && beatEvent && (
+        <MarketEventBeat record={beatRec} event={beatEvent} onDone={() => setBeatRec(null)} />
+      )}
     </div>
   );
 }

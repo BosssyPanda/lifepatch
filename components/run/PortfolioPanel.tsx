@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { useAudio } from "@/hooks/useAudio";
 import { assetsForYear, type AssetDef } from "@/lib/assets";
 import { currency } from "@/lib/format";
@@ -21,8 +22,18 @@ export function PortfolioPanel({
   const assets = assetsForYear(run.year);
   const port = portfolioValue(run);
 
+  // A slider drag fires a trade per 1% step — play ONE coin/cash tick per beat
+  // of dragging, not a machine-gun burst (the burst could overload the audio
+  // thread and silence the whole engine; see AudioEngine's SFX throttle).
+  const lastTradeSfx = useRef(0);
   const handleTrade = (id: AssetId, dollars: number) => {
-    audio.sfx(dollars >= 0 ? "coins" : "cash");
+    if (dollars !== 0) {
+      const now = performance.now();
+      if (now - lastTradeSfx.current > 150) {
+        lastTradeSfx.current = now;
+        audio.sfx(dollars > 0 ? "coins" : "cash");
+      }
+    }
     onTrade(id, dollars);
   };
   const handlePayDebt = (dollars: number) => {
@@ -74,7 +85,7 @@ export function PortfolioPanel({
       </div>
 
       <p className="mt-4 font-body text-sm italic text-ink-dim">
-        Drag each slider to set how much you hold. No ticker tells you what&apos;s next — only risk does.
+        Drag a slider up to invest, down to sell. You never know what next year brings.
       </p>
 
       <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
