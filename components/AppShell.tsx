@@ -10,7 +10,7 @@ import { AudioProvider, useAudio } from "@/hooks/useAudio";
 import { useRun } from "@/hooks/useRun";
 import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
 import { TerminalOp } from "@/components/ui/TerminalOp";
-import { MotionProvider, useMotionCtx } from "@/src/motion/MotionProvider";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
@@ -39,11 +39,10 @@ const MasteryMap = dynamic(() => import("@/components/learn/MasteryMap").then((m
 
 export function AppShell() {
   return (
+    // MotionProvider now lives in the root layout so the standalone routes get it too.
     <AudioProvider>
       <ConceptLearnProvider>
-        <MotionProvider>
-          <AppShellInner />
-        </MotionProvider>
+        <AppShellInner />
       </ConceptLearnProvider>
     </AudioProvider>
   );

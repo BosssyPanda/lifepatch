@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, IBM_Plex_Mono, Instrument_Serif, Archivo } from "next/font/google";
+import { MotionProvider } from "@/src/motion/MotionProvider";
 import "./globals.css";
 
 // LEDGER type system — each font has exactly one job (see globals.css).
@@ -60,7 +61,12 @@ export default function RootLayout({
         <a href="#main" className="skip-link">
           Skip to content
         </a>
-        {children}
+        {/* Mounted at the root, not in AppShell: shared UI (AnnotatedLifeChart, LedgerButton,
+            Reveal) also renders on the standalone routes — /r/[id] and the error/not-found
+            pages — which never mount AppShell. useMotionCtx throws without a provider, so a
+            shared statement link carrying chart history rendered a crash instead of a page.
+            Passing `children` through keeps every route's server components server-rendered. */}
+        <MotionProvider>{children}</MotionProvider>
       </body>
     </html>
   );
