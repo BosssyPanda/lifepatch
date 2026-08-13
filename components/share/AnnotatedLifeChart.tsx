@@ -39,6 +39,16 @@ type Geom = {
  */
 const TARGET_PX = { anno: 11, axis: 10, final: 15 };
 
+/**
+ * IBM Plex Mono's advance width, in em. It is exact for every label drawn here because they
+ * are all `.num`, whose `letter-spacing: 0` wins over an SVG `letterSpacing` presentation
+ * attribute (presentation attributes cascade below every author rule). The labels used to
+ * carry `letterSpacing="0.08em"` as well — it never rendered, but it made `halfW` read 13%
+ * short of the truth. If a label ever does get real tracking, it has to be added here too,
+ * or the clamp under-reserves and the viewBox clips the front of the string.
+ */
+const MONO_ADVANCE_EM = 0.6;
+
 const WIDE: Geom = {
   W: 960,
   H: 380,
@@ -154,10 +164,9 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
   const last = pts[pts.length - 1];
   const up = last.netWorth >= 0;
   // A centred label must keep its own half-width clear of the viewBox, or the SVG's
-  // overflow:hidden eats the front of it. Mono advance is 0.6em and `.num` zeroes
-  // letter-spacing, so the width is exact — a constant inset cannot be, because type is
-  // sized in real pixels (TARGET_PX) while the inset would be in viewBox units.
-  const halfW = (text: string, size: number) => (text.length * 0.6 * size) / 2;
+  // overflow:hidden eats the front of it. Measured, not inset by a constant: type is sized
+  // in real pixels (TARGET_PX) while an inset would be in viewBox units.
+  const halfW = (text: string, size: number) => (text.length * MONO_ADVANCE_EM * size) / 2;
   const clampX = (x: number, text: string, size = fs) => {
     const h = Math.min(halfW(text, size), W / 2); // wider than the frame → centre, don't push
     return Math.min(W - h, Math.max(h, x));
@@ -213,7 +222,7 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
             <motion.g key={p.year} {...anno} transition={{ delay: reduced ? 0 : 0.7 + i * 0.15 }}>
               <line x1={p.x} y1={labelY + 6} x2={p.x} y2={p.y - 5} stroke={tone} strokeDasharray="1 4" opacity="0.8" />
               <circle cx={p.x} cy={p.y} r="3.5" fill={tone} />
-              <text x={clampX(p.x, label)} y={labelY} textAnchor="middle" className="num" fontSize={fs} fill={tone} letterSpacing="0.08em">
+              <text x={clampX(p.x, label)} y={labelY} textAnchor="middle" className="num" fontSize={fs} fill={tone}>
                 {label}
               </text>
             </motion.g>
@@ -225,7 +234,7 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
         {best && bestDelta > 0 && best.year !== last.year && (
           <motion.g {...anno} transition={{ delay: reduced ? 0 : 1.0 }}>
             <circle cx={best.x} cy={best.y} r="4" fill="var(--color-gain)" />
-            <text x={clampX(best.x, bestLabel)} y={clampY(best.y - 12)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-gain)" letterSpacing="0.08em">
+            <text x={clampX(best.x, bestLabel)} y={clampY(best.y - 12)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-gain)">
               {bestLabel}
             </text>
           </motion.g>
@@ -233,7 +242,7 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
         {worst && worstDelta < 0 && worst.year !== last.year && (
           <motion.g {...anno} transition={{ delay: reduced ? 0 : 1.1 }}>
             <circle cx={worst.x} cy={worst.y} r="4" fill="var(--color-loss)" />
-            <text x={clampX(worst.x, worstLabel)} y={clampY(worst.y + fs + 8)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-loss)" letterSpacing="0.08em">
+            <text x={clampX(worst.x, worstLabel)} y={clampY(worst.y + fs + 8)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-loss)">
               {worstLabel}
             </text>
           </motion.g>
@@ -241,11 +250,11 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
 
         {/* start / final plates */}
         <motion.g {...anno} transition={{ delay: reduced ? 0 : 1.2 }}>
-          <text x={first.x} y={H - PAD.bottom + fsAxis + 10} textAnchor="start" className="num" fontSize={fsAxis} fill="var(--color-tertiary)" letterSpacing="0.08em">
+          <text x={first.x} y={H - PAD.bottom + fsAxis + 10} textAnchor="start" className="num" fontSize={fsAxis} fill="var(--color-tertiary)">
             {first.year}
           </text>
           <circle cx={last.x} cy={last.y} r="4.5" fill={up ? "var(--color-gain)" : "var(--color-loss)"} />
-          <text x={W - PAD.right} y={H - PAD.bottom + fsAxis + 10} textAnchor="end" className="num" fontSize={fsAxis} fill="var(--color-tertiary)" letterSpacing="0.08em">
+          <text x={W - PAD.right} y={H - PAD.bottom + fsAxis + 10} textAnchor="end" className="num" fontSize={fsAxis} fill="var(--color-tertiary)">
             {last.year}
           </text>
           <text x={clampX(last.x, finalLabel, fsFinal)} y={Math.max(fsFinal + 8, last.y - 14)} textAnchor="middle" className="num" fontSize={fsFinal} fontWeight="700" fill={up ? "var(--color-gain)" : "var(--color-loss)"}>

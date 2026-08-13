@@ -90,7 +90,7 @@ export function ModeSelect({
                   <ModePreview id={id} reduced={reduced} />
                 </div>
                 <h2 className="display-caps mt-3 text-4xl text-ink">{m.name}</h2>
-                <p className="mt-1 font-body text-sm italic text-ink/60">{m.tagline}</p>
+                <p className="voice mt-1 text-sm text-ink/60">{m.tagline}</p>
                 <p className="mt-3 font-body text-[0.95rem] leading-relaxed text-ink/80">{m.blurb}</p>
               </div>
             </motion.button>

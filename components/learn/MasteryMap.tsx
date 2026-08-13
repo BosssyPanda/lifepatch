@@ -84,7 +84,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                   type="button"
                   onClick={onClose}
                   aria-label="Close Money Brain"
-                  data-radius="round"
+                  data-radius=""
                   className="grid h-11 w-11 place-items-center border-2 border-hairline-strong text-ink-dim transition-colors hover:border-ink hover:text-ink"
                 >
                   <CloseIcon size={16} />
@@ -92,7 +92,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
               </div>
               <div className="mt-3">
                 <MoneyBrainMeter mastery={mastery} />
-                <p className="mt-1.5 font-body text-xs italic text-secondary">
+                <p className="voice mt-1.5 text-xs text-secondary">
                   {loading
                     ? "Reading your record…"
                     : `${masteredCount} of ${CONCEPTS.length} concepts mastered · master by applying them well, not just seeing them.`}
@@ -218,7 +218,7 @@ function ConceptNode({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: DUR.exitFast } }}
             transition={{ duration: DUR.fast, ease: EASE }}
-            className="mt-2 block font-body text-[0.82rem] italic leading-snug text-ink/75"
+            className="voice mt-2 block text-[0.82rem] leading-snug text-ink/75"
           >
             {concept.def}
           </motion.span>

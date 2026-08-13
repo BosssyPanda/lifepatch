@@ -444,7 +444,7 @@ export function CashflowGame({
           <h1 className="display-caps truncate text-xl text-ink sm:text-2xl">{prof.title}</h1>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="hidden rounded-full border border-ink/15 bg-bg2 px-3 py-1.5 num text-sm text-ink sm:inline">
+          <span className="hidden border border-hairline bg-bg2 px-3 py-1.5 num text-sm text-ink sm:inline">
             Cash <Money n={s.cash} className="text-gain" />
           </span>
           {onOpenAlmanac && (
@@ -518,7 +518,7 @@ export function CashflowGame({
           {/* freedom + goal hint under board */}
           <div className="mt-4">
             {isFast ? (
-              <div className="rounded-[5px] border border-ink/15 bg-bg2 p-3.5">
+              <div className="border border-hairline bg-bg2 p-3.5">
                 <div className="flex items-center gap-2 text-ink">
                   <FreedomIcon size={18} />
                   <span className="eyebrow" style={{ fontSize: "0.6rem" }}>
@@ -653,7 +653,7 @@ function FtDealCard({ deal, cash, onBuy, onPass }: { deal: FastTrackDeal; cash: 
   return (
     <div className="panel">
       <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-secondary text-bg">
+        <span className="grid h-10 w-10 place-items-center bg-secondary text-bg">
           <BankIcon size={22} />
         </span>
         <div>
@@ -663,12 +663,12 @@ function FtDealCard({ deal, cash, onBuy, onPass }: { deal: FastTrackDeal; cash: 
           <h3 className="display-caps text-xl text-ink">{deal.label}</h3>
         </div>
       </div>
-      <p className="mt-2 font-body text-[0.86rem] italic text-ink/65">{deal.flavor}</p>
-      <div className="mt-3 flex items-center justify-between rounded-[5px] bg-bg2 px-3 py-2">
+      <p className="mt-2 voice text-[0.86rem] text-ink/65">{deal.flavor}</p>
+      <div className="mt-3 flex items-center justify-between bg-bg2 px-3 py-2">
         <span className="font-body text-[0.84rem] text-ink/70">Price (cash)</span>
         <span className="num font-semibold text-ink">{currency(deal.price)}</span>
       </div>
-      <div className="mt-1 flex items-center justify-between rounded-[5px] bg-gain/15 px-3 py-2">
+      <div className="mt-1 flex items-center justify-between bg-gain/15 px-3 py-2">
         <span className="font-body text-[0.84rem] text-ink/70">Adds monthly cash flow</span>
         <span className="num font-bold text-gain">+{currency(deal.cashFlow)}</span>
       </div>
@@ -695,7 +695,7 @@ function FtDreamCard({ s, onBuy, onPass }: { s: CashflowState; onBuy: () => void
       </p>
       <h3 className="display-caps mt-1 text-2xl text-ink">{dream.title}</h3>
       <p className="mt-1 font-body text-[0.9rem] text-ink/80">{dream.blurb}</p>
-      <div className="mt-3 flex items-center justify-between rounded-[5px] bg-bg2 px-3 py-2">
+      <div className="mt-3 flex items-center justify-between bg-bg2 px-3 py-2">
         <span className="font-body text-[0.84rem] text-ink/70">Cost</span>
         <span className="num text-lg font-bold text-ink">{currency(dream.cost)}</span>
       </div>

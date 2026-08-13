@@ -155,7 +155,7 @@ export function CompoundToy() {
         </div>
       </div>
 
-      <p className="mt-4 font-body text-xs italic text-ink-dim">
+      <p className="mt-4 font-body text-xs text-ink-dim">
         Average returns are the geometric mean of each asset&apos;s {FIRST_YEAR}–{LAST_YEAR} history inside the game
         (savings ~{(avgs.get("savings") ?? 0).toFixed(1)}%, bonds ~{(avgs.get("bonds") ?? 0).toFixed(1)}%, index
         ~{(avgs.get("index") ?? 0).toFixed(1)}%). A steady average is a fiction — the game makes you live the bumpy version.

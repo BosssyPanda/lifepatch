@@ -12,7 +12,8 @@ export function CoachCard({ title, body, onOk }: { title: string; body: string; 
   return (
     <div className="panel">
       <div className="flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-bg">
+        {/* the coach's medallion — an intrinsically circular badge, not a control (amendment A) */}
+        <span data-radius="round" className="grid h-8 w-8 place-items-center bg-ink text-bg">
           <InfoIcon size={18} />
         </span>
         <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
@@ -51,13 +52,14 @@ export function QuizCard({ q, onDone }: { q: QuizQuestion; onDone: (correct: boo
               : isPicked
                 ? "border-loss bg-loss/15 text-ink"
                 : "border-ink/15 text-ink/50"
-            : "border-ink/25 text-ink hover:border-ink";
+            : "border-hairline-strong text-ink hover:border-ink";
           return (
             <button
               key={i}
               disabled={answered}
               onClick={() => setPicked(i)}
-              className={`flex w-full items-center justify-between rounded-[5px] border-2 px-3 py-2.5 text-left font-body text-[0.86rem] transition-colors ${tone}`}
+              data-radius=""
+              className={`flex w-full items-center justify-between border-2 px-3 py-2.5 text-left font-body text-[0.86rem] transition-colors ${tone}`}
             >
               <span>{o.label}</span>
               {show && o.correct && <CheckIcon size={16} />}
@@ -80,7 +82,7 @@ export function QuizCard({ q, onDone }: { q: QuizQuestion; onDone: (correct: boo
             transition={{ duration: DUR.fast, ease: EASE }}
             className="overflow-hidden"
           >
-            <p className={`mt-3 rounded-[4px] px-3 py-2 font-body text-[0.86rem] ${correct ? "bg-gain/15 text-ink" : "bg-loss/12 text-ink"}`}>
+            <p className={`mt-3 px-3 py-2 font-body text-[0.86rem] ${correct ? "bg-gain/15 text-ink" : "bg-loss/12 text-ink"}`}>
               <strong>{correct ? "Correct! " : "Not quite. "}</strong>
               {q.explain}
             </p>
@@ -99,14 +101,14 @@ export function QuizCard({ q, onDone }: { q: QuizQuestion; onDone: (correct: boo
 
 export function GlossaryModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="paper rounded-[6px]">
+    <div className="paper">
       <div className="sticky top-0 flex items-center justify-between border-b-2 border-ink bg-bg px-5 py-3">
         <h3 className="display-caps text-xl text-ink">Money Glossary</h3>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close glossary"
-          data-radius="round"
+          data-radius=""
           className="grid h-11 w-11 place-items-center border-2 border-hairline-strong text-ink-dim transition-colors hover:border-ink hover:text-ink"
         >
           <CloseIcon size={16} />
@@ -117,7 +119,7 @@ export function GlossaryModal({ onClose }: { onClose: () => void }) {
           <div key={t.term} className="border-b border-ink/12 pb-3 last:border-0">
             <p className="display-caps text-[0.95rem] text-ink">{t.term}</p>
             <p className="mt-0.5 font-body text-[0.86rem] leading-relaxed text-ink/80">{t.def}</p>
-            {t.example && <p className="mt-1 font-body text-[0.8rem] italic text-ink/55">e.g. {t.example}</p>}
+            {t.example && <p className="voice mt-1 text-[0.8rem] text-ink/55">e.g. {t.example}</p>}
           </div>
         ))}
       </div>
@@ -162,7 +164,7 @@ export function Tutorial({
       <div className="mt-5 flex items-center justify-between">
         <div className="flex gap-1.5">
           {steps.map((_, idx) => (
-            <span key={idx} className={`h-1.5 rounded-full transition-all ${idx === i ? "w-5 bg-ink" : "w-1.5 bg-ink/25"}`} />
+            <span key={idx} className={`h-1.5 transition-all ${idx === i ? "w-5 bg-ink" : "w-1.5 bg-ink/25"}`} />
           ))}
         </div>
         <div className="flex gap-2">

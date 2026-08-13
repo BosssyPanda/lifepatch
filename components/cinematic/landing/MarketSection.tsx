@@ -169,7 +169,7 @@ export function MarketSection() {
         </div>
       </div>
 
-      <p className="mt-4 font-body text-xs italic text-ink-dim">
+      <p className="mt-4 font-body text-xs text-ink-dim">
         S&P 500 annual total returns {FIRST_YEAR}–{LAST_YEAR} as curated in the game&apos;s Almanac — approximate,
         dividends reinvested, no fees, no taxes, no panic-selling. The last one is the hard part.
       </p>

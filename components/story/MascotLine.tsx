@@ -22,7 +22,7 @@ export function MascotLine({
       </div>
       <figcaption className="relative rounded-[4px] border-l-2 border-ink bg-bg2/70 px-4 py-2.5">
         <span className="eyebrow text-ink">The System</span>
-        <p className="font-body text-[0.98rem] italic leading-snug text-ink/90">
+        <p className="voice text-[0.98rem] leading-snug text-ink/90">
           &ldquo;{line}&rdquo;
         </p>
       </figcaption>

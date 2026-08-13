@@ -167,7 +167,7 @@ export function Gate({
           initial={reduce ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.9 }}
-          className="mt-6 font-body text-sm italic text-ink-dim"
+          className="voice mt-6 text-sm text-ink-dim"
         >
           Best with sound on. Headphones recommended.
         </motion.p>

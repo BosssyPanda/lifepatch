@@ -89,7 +89,7 @@ export function AuthGate({
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
         <p className="eyebrow text-center text-ink">{MODES[mode].name} · {MODES[mode].meta}</p>
         <h1 className="display-caps mt-3 text-center text-4xl text-ink">Save your life</h1>
-        <p className="mx-auto mt-2 max-w-xs text-center font-body text-sm italic text-ink-dim">
+        <p className="voice mx-auto mt-2 max-w-xs text-center text-sm text-ink-dim">
           Sign in with email so your run survives the tab closing.
         </p>
 
@@ -131,7 +131,7 @@ export function AuthGate({
                   {isCloud ? "Email me a magic link" : "Continue with email"}
                 </NeonButton>
                 {!isCloud && (
-                  <p className="font-body text-xs italic text-ink-dim">
+                  <p className="voice text-xs text-ink-dim">
                     {process.env.NODE_ENV === "production"
                       ? "Saves stay on this device."
                       : "Dev mode: saves stay on this device until cloud keys are added."}

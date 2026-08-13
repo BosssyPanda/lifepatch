@@ -148,7 +148,7 @@ export function Leaderboard({
         className={`${gutter} pt-2`}
       />
 
-      <p className={`${gutter} pt-3 font-body text-xs italic text-secondary`}>
+      <p className={`voice ${gutter} pt-3 text-xs text-secondary`}>
         Best run per player, ranked by {metric}.
       </p>
     </>
@@ -270,7 +270,7 @@ export function Leaderboard({
                 type="button"
                 onClick={onClose}
                 aria-label="Close leaderboards"
-                data-radius="round"
+                data-radius=""
                 className="grid h-11 w-11 place-items-center border-2 border-hairline-strong text-ink-dim transition-colors hover:border-ink hover:text-ink"
               >
                 <CloseIcon size={16} />

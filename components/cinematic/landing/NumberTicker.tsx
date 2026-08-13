@@ -5,6 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { EASE } from "@/src/motion/tokens";
 
+/** Re-target length after the reveal — short, or the figure lags a drag. Only the
+ *  reveal's length varies per call site; a post-reveal step is always this quick. */
+const UPDATE_MS = 220;
+
 /**
  * LEDGER number ticker — counts up (ease-out) the first time it scrolls into view.
  * Tabular numerals; static final value under reduced motion.
@@ -17,7 +21,7 @@ import { EASE } from "@/src/motion/tokens";
  * Two separate effects on purpose. The reveal owns the first crossing into view and
  * must NOT depend on `value`, or a live control (CompoundToy's sliders) restarts the
  * count-up from $0 on every step. Once revealed, updates re-target the same
- * MotionValue at `updateMs` — `animate()` starts from wherever the value currently
+ * MotionValue at UPDATE_MS — `animate()` starts from wherever the value currently
  * is, so an interrupted drag continues instead of snapping. Routing updates through
  * the observer instead would cost a frame per step and drop tweens mid-drag.
  */
@@ -26,7 +30,6 @@ export function NumberTicker({
   prefix = "",
   suffix = "",
   durationMs = 1100,
-  updateMs = 220,
   fractionDigits = 0,
   className = "",
 }: {
@@ -35,8 +38,6 @@ export function NumberTicker({
   suffix?: string;
   /** Count-up length for the one-time reveal. */
   durationMs?: number;
-  /** Re-target length after the reveal — short, or the figure lags a drag. */
-  updateMs?: number;
   fractionDigits?: number;
   className?: string;
 }) {
@@ -98,12 +99,12 @@ export function NumberTicker({
     }
     if (!started.current) return; // pre-reveal: the reveal owns the first count-up
     const controls = animate(mv, value, {
-      duration: updateMs / 1000,
+      duration: UPDATE_MS / 1000,
       ease: EASE,
       onComplete: () => setSettled(value),
     });
     return () => controls.stop();
-  }, [value, updateMs, reduced, mv]);
+  }, [value, reduced, mv]);
 
   // `settled` only paints before the first MotionValue write (SSR/pre-reveal) and
   // after a remount: once the "change" handler has set textContent, React's three

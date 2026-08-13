@@ -23,8 +23,17 @@ export function Marquee({
   const { reduced } = useMotionCtx();
 
   if (reduced) {
+    // Reduced motion turns the marquee into a scroller, which means a keyboard user has to be
+    // able to reach and drive it — a scrollable region that cannot take focus is unusable
+    // without a pointer (and axe flags exactly this). `group` + label make it announce as one
+    // named region rather than a bare box.
     return (
-      <div className={`flex items-stretch gap-4 overflow-x-auto ${className}`} aria-label={ariaLabel}>
+      <div
+        className={`thin-scroll flex items-stretch gap-4 overflow-x-auto ${className}`}
+        role="group"
+        aria-label={ariaLabel}
+        tabIndex={0}
+      >
         {children}
       </div>
     );

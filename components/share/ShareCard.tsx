@@ -122,6 +122,9 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
           id={PANEL_ID}
           role="tabpanel"
           aria-labelledby={tabId(PANEL_ID, format)}
+          // the preview holds no focusable content, so the pane itself must take focus or
+          // the keyboard cannot reach (or scroll) it from the format tabs
+          tabIndex={0}
           className="w-full max-w-[min(88vw,420px)] border border-hairline"
           style={{ aspectRatio: String(aspect), maxHeight: "58svh" }}
         >

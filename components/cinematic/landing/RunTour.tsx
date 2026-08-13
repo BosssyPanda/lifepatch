@@ -247,13 +247,16 @@ export function RunTour() {
                     >
                       {s.label}
                     </p>
-                    <motion.p
-                      animate={{ opacity: active ? 1 : 0.35 }}
-                      transition={{ duration: DUR.fast, ease: EASE }}
-                      className="mt-1 max-w-xs font-body text-sm leading-relaxed text-ink-dim"
+                    {/* Was `opacity: 0.35` on already-dim grey, which put the three inactive
+                        steps far under AA — axe flagged all three. The label above it carries
+                        the active/inactive signal at full strength (ink vs tertiary), so this
+                        line only needs to follow it, and tertiary is AA on its own. */}
+                    <p
+                      className="mt-1 max-w-xs font-body text-sm leading-relaxed transition-colors duration-300"
+                      style={{ color: active ? "var(--color-ink-dim)" : "var(--color-tertiary)" }}
                     >
                       {s.sub}
-                    </motion.p>
+                    </p>
                   </div>
                 </li>
               );

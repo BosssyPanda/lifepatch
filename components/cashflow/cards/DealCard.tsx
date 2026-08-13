@@ -17,7 +17,7 @@ export function DealChooser({
   onPass: () => void;
 }) {
   return (
-    <div className="paper rounded-[6px] p-5">
+    <div className="paper p-5">
       <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
         Opportunity
       </p>
@@ -29,7 +29,8 @@ export function DealChooser({
         <motion.button
           whileHover={{ y: -3 }}
           onClick={() => onPick("small")}
-          className="rounded-[5px] border-2 border-ink/30 bg-bg2 p-4 text-left hover:border-ink"
+          data-radius=""
+          className="border-2 border-hairline-strong bg-bg2 p-4 text-left hover:border-ink"
         >
           <span className="display-caps text-lg text-ink">Small Deal</span>
           <p className="mt-1 font-body text-[0.8rem] text-ink/70">Stocks & small properties. Low cash to enter.</p>
@@ -37,7 +38,8 @@ export function DealChooser({
         <motion.button
           whileHover={{ y: -3 }}
           onClick={() => onPick("big")}
-          className="rounded-[5px] border-2 border-ink/30 bg-bg2 p-4 text-left hover:border-ink"
+          data-radius=""
+          className="border-2 border-hairline-strong bg-bg2 p-4 text-left hover:border-ink"
         >
           <span className="display-caps text-lg text-ink">Big Deal</span>
           <p className="mt-1 font-body text-[0.8rem] text-ink/70">Apartments & businesses. Big cash flow, big ticket.</p>
@@ -95,9 +97,9 @@ export function DealCard({
   const needLoan = cash < down;
 
   return (
-    <div className="paper rounded-[6px] p-5">
+    <div className="paper p-5">
       <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-ink text-bg">
+        <span className="grid h-10 w-10 place-items-center bg-ink text-bg">
           <Icon size={22} />
         </span>
         <div>
@@ -108,7 +110,7 @@ export function DealCard({
         </div>
       </div>
 
-      <div className="mt-3 rounded-[5px] bg-bg2 px-3 py-1.5">
+      <div className="mt-3 bg-bg2 px-3 py-1.5">
         <StatLine label="Price" value={currency(deal.price)} />
         <StatLine label="Down payment (cash needed)" value={currency(down)} />
         {"mortgage" in deal && deal.mortgage > 0 && <StatLine label="Mortgage taken on" value={currency(deal.mortgage)} />}
@@ -120,7 +122,7 @@ export function DealCard({
       <LessonBox>{deal.lesson}</LessonBox>
 
       {needLoan && (
-        <p className="mt-3 rounded-[4px] bg-loss/12 px-3 py-2 font-body text-[0.8rem] text-loss">
+        <p className="mt-3 bg-loss/12 px-3 py-2 font-body text-[0.8rem] text-loss">
           You have {currency(cash)}. Buying means a bank loan to cover the gap — at 10%/month. Borrow wisely.
         </p>
       )}
@@ -157,9 +159,9 @@ function StockDealView({
   const yld = dividendYield(deal.dividend, deal.price);
 
   return (
-    <div className="paper rounded-[6px] p-5">
+    <div className="paper p-5">
       <div className="flex items-start gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-ink text-bg">
+        <span className="grid h-10 w-10 place-items-center bg-ink text-bg">
           <Icon size={22} />
         </span>
         <div>
@@ -171,7 +173,7 @@ function StockDealView({
         <span className="ml-auto num text-lg font-bold text-ink">{currency(deal.price)}<span className="text-[0.7rem] text-ink/50">/sh</span></span>
       </div>
 
-      <div className="mt-3 rounded-[5px] bg-bg2 px-3 py-1.5">
+      <div className="mt-3 bg-bg2 px-3 py-1.5">
         <StatLine label="Dividend" value={deal.dividend > 0 ? `${currency(deal.dividend)}/sh/mo` : "none"} tone={deal.dividend > 0 ? "good" : undefined} />
         <StatLine label="Dividend yield" value={`${yld.toFixed(0)}%/yr`} />
         <StatLine label="Typical range" value={`${currency(deal.range[0])} – ${currency(deal.range[1])}`} />
@@ -227,7 +229,7 @@ function StockDealView({
                 type="button"
                 onClick={() => setShares(maxShares)}
                 aria-label="Buy the maximum number of shares"
-                className="relative ml-1 border border-ink/30 px-2 py-1 num text-[0.7rem] text-ink/70 before:absolute before:-inset-x-1 before:-inset-y-[11px] before:content-['']"
+                className="relative ml-1 border border-hairline-strong px-2 py-1 num text-[0.7rem] text-ink/70 before:absolute before:-inset-x-1 before:-inset-y-[11px] before:content-['']"
               >
                 MAX
               </button>

@@ -14,7 +14,7 @@ export function DoodadCard({ card, cash, onPay }: { card: DoodadT; cash: number;
   return (
     <div className="panel">
       <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-loss text-bg">
+        <span className="grid h-10 w-10 place-items-center bg-loss text-bg">
           <VampireIcon size={22} />
         </span>
         <div>
@@ -25,10 +25,10 @@ export function DoodadCard({ card, cash, onPay }: { card: DoodadT; cash: number;
         </div>
         <span className="ml-auto num text-2xl font-bold text-loss">−{currency(card.cost)}</span>
       </div>
-      <p className="mt-2 font-body text-[0.86rem] italic text-ink/65">{card.flavor}</p>
+      <p className="voice mt-2 text-[0.86rem] text-ink/65">{card.flavor}</p>
       <LessonBox>{card.lesson}</LessonBox>
       {needLoan && (
-        <p className="mt-3 rounded-[4px] bg-loss/12 px-3 py-2 font-body text-[0.8rem] text-loss">
+        <p className="mt-3 bg-loss/12 px-3 py-2 font-body text-[0.8rem] text-loss">
           You only have {currency(cash)}. The bank will cover the rest — at 10%/month.
         </p>
       )}
@@ -46,7 +46,7 @@ export function CharityCard({ s, onDonate, onSkip }: { s: CashflowState; onDonat
   return (
     <div className="panel">
       <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-tertiary text-bg">
+        <span className="grid h-10 w-10 place-items-center bg-tertiary text-bg">
           <HeartIcon size={22} />
         </span>
         <div>
@@ -95,7 +95,7 @@ export function MarketCardView({
           The Market
         </p>
         <h3 className="display-caps mt-1 text-xl text-ink">{card.title}</h3>
-        <p className="mt-1 font-body text-[0.86rem] italic text-ink/65">{card.flavor}</p>
+        <p className="voice mt-1 text-[0.86rem] text-ink/65">{card.flavor}</p>
         <p className={`mt-3 num text-3xl font-bold ${good ? "text-gain" : "text-loss"}`}>
           {good ? "+" : ""}
           {currency(card.cash)}
@@ -117,14 +117,14 @@ export function MarketCardView({
 
   return (
     <div className="panel">
-      <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-ink text-bg">
+      <span className="grid h-10 w-10 place-items-center bg-ink text-bg">
         <ScamIcon size={22} />
       </span>
       <p className="mt-2 eyebrow text-secondary" style={{ fontSize: "0.58rem" }}>
         The Market
       </p>
       <h3 className="display-caps text-xl text-ink">{card.title}</h3>
-      <p className="mt-1 font-body text-[0.86rem] italic text-ink/65">{card.flavor}</p>
+      <p className="voice mt-1 text-[0.86rem] text-ink/65">{card.flavor}</p>
       <LessonBox>{card.lesson}</LessonBox>
 
       {matches.length === 0 ? (
@@ -140,7 +140,7 @@ export function MarketCardView({
                   const net = card.salePrice - h.mortgage;
                   const gain = card.salePrice - h.price;
                   return (
-                    <div key={h.uid} className="flex items-center justify-between rounded-[4px] bg-bg2 px-3 py-2">
+                    <div key={h.uid} className="flex items-center justify-between bg-bg2 px-3 py-2">
                       <div>
                         <p className="display-caps text-[0.82rem] text-ink">{h.label}</p>
                         <p className="font-body text-[0.72rem] text-ink/60">
@@ -158,7 +158,7 @@ export function MarketCardView({
                 const sale = businessSalePrice(h.price);
                 const net = sale - h.liability;
                 return (
-                  <div key={h.uid} className="flex items-center justify-between rounded-[4px] bg-bg2 px-3 py-2">
+                  <div key={h.uid} className="flex items-center justify-between bg-bg2 px-3 py-2">
                     <div>
                       <p className="display-caps text-[0.82rem] text-ink">{h.label}</p>
                       <p className="font-body text-[0.72rem] text-ink/60">
@@ -187,7 +187,7 @@ export function BabyCard({ s, onOk }: { s: CashflowState; onOk: () => void }) {
   const maxed = s.children >= 3;
   return (
     <div className="panel">
-      <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-secondary text-bg">
+      <span className="grid h-10 w-10 place-items-center bg-secondary text-bg">
         <HeartIcon size={22} />
       </span>
       <h3 className="display-caps mt-2 text-xl text-ink">{maxed ? "A full house" : "It's a baby!"}</h3>
@@ -209,7 +209,7 @@ export function BabyCard({ s, onOk }: { s: CashflowState; onOk: () => void }) {
 export function DownsizedCard({ s, onOk }: { s: CashflowState; onOk: () => void }) {
   return (
     <div className="panel">
-      <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-loss text-bg">
+      <span className="grid h-10 w-10 place-items-center bg-loss text-bg">
         <ScamIcon size={22} />
       </span>
       <h3 className="display-caps mt-2 text-xl text-ink">Downsized</h3>

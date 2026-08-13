@@ -67,7 +67,7 @@ export function AdvanceBar({
           {blocked && (
             <span
               id={hintId}
-              className="max-w-[8.5rem] text-right font-body text-[0.7rem] italic leading-tight text-ink-dim sm:max-w-none sm:text-xs"
+              className="voice max-w-[8.5rem] text-right text-[0.7rem] leading-tight text-ink-dim sm:max-w-none sm:text-xs"
             >
               Make your life choice first
             </span>

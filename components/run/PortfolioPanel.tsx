@@ -85,7 +85,7 @@ export function PortfolioPanel({
         <PortfolioPresets availableAssets={assets} cash={run.cash} onApply={handleApplyPreset} />
       </div>
 
-      <p className="mt-4 font-body text-sm italic text-ink-dim">
+      <p className="voice mt-4 text-sm text-ink-dim">
         Drag each slider to set how much you hold. No ticker tells you what&apos;s next — only risk does.
       </p>
 

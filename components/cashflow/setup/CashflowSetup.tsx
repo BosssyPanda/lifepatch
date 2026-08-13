@@ -52,7 +52,7 @@ export function CashflowSetup({
       </div>
 
       {hasSave && step === "profession" && (
-        <div className="mt-5 flex items-center justify-between rounded-[5px] border border-ink/40 bg-ink/10 px-4 py-3">
+        <div className="mt-5 flex items-center justify-between border border-ink/40 bg-ink/10 px-4 py-3">
           <p className="font-body text-[0.9rem] text-ink">You have a game in progress.</p>
           <NeonButton variant="primary" size="sm" onClick={() => { audio.sfx("confirm"); onResume(); }}>
             Continue run →

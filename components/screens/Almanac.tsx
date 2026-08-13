@@ -20,7 +20,13 @@ import {
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { EASE, STAGGER, stepDelay } from "@/src/motion/tokens";
 
-const VERDICT_HEX: Record<string, string> = { Myth: "#ff3b30", Fact: "#2bd576", "It depends": "#8f8e85" };
+// A quiz verdict is not money, so it never touches gain-green/loss-red — red/green here
+// would read as "wrong/right". Ink scale only, brighter = the claim holds up.
+const VERDICT_TONE: Record<string, string> = {
+  Fact: "var(--color-ink)",
+  "It depends": "var(--color-secondary)",
+  Myth: "var(--color-tertiary)",
+};
 const VERDICTS = ["Myth", "Fact", "It depends"] as const;
 type Verdict = MythFact["verdict"];
 
@@ -86,10 +92,11 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
                     <Reveal key={m.name} delay={stepDelay(i, 0.03)}>
                       <article className="border border-hairline bg-bg2 p-5">
                         <h3 className="display-caps text-xl text-ink">{m.name}</h3>
-                        <p className="mt-1 font-body text-sm italic text-ink-dim">{m.how}</p>
+                        <p className="voice mt-1 text-sm text-ink-dim">{m.how}</p>
                         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                          <LeaderList label="Pros" hex="#2bd576" items={m.pros} />
-                          <LeaderList label="Cons" hex="#ff3b30" items={m.cons} />
+                          {/* trade-offs, not cash flows — "Burnout risk" is not a loss in dollars */}
+                          <LeaderList label="Pros" tone="var(--color-ink)" items={m.pros} />
+                          <LeaderList label="Cons" tone="var(--color-secondary)" items={m.cons} />
                         </div>
                       </article>
                     </Reveal>
@@ -113,7 +120,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
                             </li>
                           ))}
                         </ol>
-                        <p className="mt-3 border-l-2 border-secondary pl-3 font-body text-sm italic text-ink/85">{g.everyone}</p>
+                        <p className="mt-3 border-l-2 border-secondary pl-3 font-body text-sm text-ink/85">{g.everyone}</p>
                         <div className="mt-3 border-t border-ink/10 pt-3">
                           <p className="eyebrow text-gain">How to protect yourself</p>
                           <p className="mt-1 font-body text-sm leading-relaxed text-ink/85">{g.mitigation}</p>
@@ -126,7 +133,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
 
               {section === "terms" && <TermsSection typedRef={termsTyped} />}
 
-              <p className="mt-10 text-center font-body text-xs italic text-ink-dim">
+              <p className="voice mt-10 text-center text-xs text-ink-dim">
                 Educational only — not financial advice. It&apos;s a game, but the lessons are real.
               </p>
             </div>
@@ -144,7 +151,7 @@ function Section({ title, sub, aside, children }: { title: string; sub: string; 
         <h2 className="display-caps text-3xl text-ink">{title}</h2>
         {aside}
       </div>
-      <p className="mt-1 font-body italic text-ink-dim">{sub}</p>
+      <p className="voice mt-1 text-ink-dim">{sub}</p>
       <div className="mt-5 space-y-3">{children}</div>
     </div>
   );
@@ -155,11 +162,11 @@ function Section({ title, sub, aside, children }: { title: string; sub: string; 
 const rowList = { hidden: {}, show: { transition: { staggerChildren: STAGGER.tight } } };
 const rowItem = { hidden: { opacity: 0, x: -8 }, show: { opacity: 1, x: 0, transition: { duration: 0.3, ease: EASE } } };
 
-function LeaderList({ label, hex, items }: { label: string; hex: string; items: string[] }) {
+function LeaderList({ label, tone, items }: { label: string; tone: string; items: string[] }) {
   const { reduced } = useMotionCtx();
   return (
     <div>
-      <p className="eyebrow" style={{ color: hex }}>{label}</p>
+      <p className="eyebrow" style={{ color: tone }}>{label}</p>
       <motion.ul
         className="mt-1 space-y-1"
         variants={reduced ? undefined : rowList}
@@ -169,7 +176,7 @@ function LeaderList({ label, hex, items }: { label: string; hex: string; items: 
       >
         {items.map((it, i) => (
           <motion.li key={i} variants={reduced ? undefined : rowItem} className="flex items-baseline gap-1.5 font-body text-sm leading-snug text-ink/85">
-            <span style={{ color: hex }}>{label === "Pros" ? "+" : "−"}</span>
+            <span style={{ color: tone }}>{label === "Pros" ? "+" : "−"}</span>
             <span>{it}</span>
             <span aria-hidden className="mx-1 min-w-4 flex-1 -translate-y-[3px] border-b border-dotted border-ink/20" />
           </motion.li>
@@ -221,7 +228,7 @@ function MythSection({
 function MythCard({ item, call, onGuess, reduced }: { item: MythFact; call: Verdict | undefined; onGuess: (v: Verdict) => void; reduced: boolean }) {
   const revealed = call !== undefined;
   const right = revealed && call === item.verdict;
-  const hex = VERDICT_HEX[item.verdict];
+  const tone = VERDICT_TONE[item.verdict];
 
   return (
     <article className="border border-hairline bg-bg2" style={{ perspective: 700 }}>
@@ -263,11 +270,11 @@ function MythCard({ item, call, onGuess, reduced }: { item: MythFact; call: Verd
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.22, ease: EASE, delay: reduced ? 0 : 0.08 }}
                 className="border px-2 py-0.5 font-mono text-[0.68rem] uppercase tracking-[0.14em]"
-                style={{ color: hex, borderColor: `${hex}66` }}
+                style={{ color: tone, borderColor: `color-mix(in srgb, ${tone} 40%, transparent)` }}
               >
                 {item.verdict}
               </motion.span>
-              <span className={`font-mono text-[0.62rem] uppercase tracking-[0.14em] ${right ? "text-gain" : "text-loss"}`}>
+              <span className={`font-mono text-[0.62rem] uppercase tracking-[0.14em] ${right ? "text-ink" : "text-secondary"}`}>
                 {right ? "You called it" : `Wrong call — you said ${call}`}
               </span>
             </div>

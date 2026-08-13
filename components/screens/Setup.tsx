@@ -74,7 +74,7 @@ export function Setup({
                 <Badge tone={b.difficulty}>{b.difficulty}</Badge>
               </div>
               <h2 className="display-caps mt-3 text-2xl text-ink">{b.name}</h2>
-              <p className="mt-1 font-body text-sm italic text-ink/60">{b.tagline}</p>
+              <p className="voice mt-1 text-sm text-ink/60">{b.tagline}</p>
               <p className="mt-2.5 font-body text-[0.86rem] leading-snug text-ink/75">{b.story}</p>
               <dl className="mt-3 space-y-1">
                 <Row k="Cash" v={currency(b.cash)} />
