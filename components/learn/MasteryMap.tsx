@@ -12,6 +12,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { MAX_MASTERY_LEVEL } from "@/lib/cloud/mastery";
 import { getSeen } from "@/lib/cloud/seen";
 import { CATEGORY_META, CONCEPTS, type Concept, type ConceptCategory } from "@/lib/concepts";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 const ORDER: ConceptCategory[] = ["earn", "grow", "protect", "borrow", "spend"];
 
@@ -30,6 +31,7 @@ function nodeState(level: number, seen: boolean): NodeState {
 export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { mastery, loading } = useProfile();
   const { setBrainGlow } = useAudio();
+  const { reduced } = useMotionCtx();
   const [selected, setSelected] = useState<string | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
 
@@ -122,6 +124,7 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                           state={nodeState(levelOf(c.id), seenSet.has(c.id))}
                           level={levelOf(c.id)}
                           expanded={selected === c.id}
+                          reduced={reduced}
                           onToggle={() => setSelected((s) => (s === c.id ? null : c.id))}
                         />
                       ))}
@@ -143,37 +146,52 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
   );
 }
 
+/**
+ * Expanding a node used to widen it to `col-span-2 sm:col-span-3` with nothing but a
+ * CSS `transition-all`, so the grid re-flowed instantly and shoved every later node
+ * down with no motion at all. The span change is the same, but the node (and its
+ * displaced neighbours) are `layout` components now, so framer animates the reflow
+ * as transforms. Reduced motion opts out and keeps the instant re-flow.
+ */
 function ConceptNode({
   concept,
   state,
   level,
   expanded,
+  reduced,
   onToggle,
 }: {
   concept: Concept;
   state: NodeState;
   level: number;
   expanded: boolean;
+  reduced: boolean;
   onToggle: () => void;
 }) {
   const locked = state === "locked";
-  const meta = CATEGORY_META[concept.category];
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onToggle}
       data-radius=""
-      className={`border px-3 py-2 text-left transition-all ${
+      layout={reduced ? false : true}
+      transition={{ duration: DUR.base, ease: EASE }}
+      className={`border px-3 py-2 text-left transition-colors ${
         locked
           ? "border-hairline opacity-55"
           : "border-hairline-strong hover:border-ink hover:bg-ink/[0.03]"
       } ${expanded ? "col-span-2 bg-ink/[0.04] sm:col-span-3" : ""}`}
       style={state === "mastering" ? { borderColor: "var(--color-secondary)" } : undefined}
     >
-      <span className="inline-flex items-center gap-1 font-mono text-[0.82rem] font-semibold leading-tight text-ink">
+      {/* `layout="position"` on the contents: the node's box is what resizes, so the
+          children ride along on translate only and never get scale-distorted. */}
+      <motion.span
+        layout={reduced ? false : "position"}
+        className="inline-flex items-center gap-1 font-mono text-[0.82rem] font-semibold leading-tight text-ink"
+      >
         {locked && <LockIcon size={11} className="shrink-0 opacity-70" />}
         {concept.title}
-      </span>
+      </motion.span>
       {state === "mastering" ? (
         <span className="mt-1.5 flex gap-0.5" aria-label={`Level ${level} of ${MAX_MASTERY_LEVEL}`}>
           {Array.from({ length: MAX_MASTERY_LEVEL }).map((_, i) => (
@@ -189,11 +207,19 @@ function ConceptNode({
           {state === "introduced" ? "Introduced" : "Locked"}
         </span>
       )}
-      {expanded && (
-        <p className="mt-2 font-body text-[0.82rem] italic leading-snug text-ink/75">
-          {concept.def}
-        </p>
-      )}
-    </button>
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <motion.p
+            initial={reduced ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: DUR.exitFast } }}
+            transition={{ duration: DUR.fast, ease: EASE }}
+            className="mt-2 font-body text-[0.82rem] italic leading-snug text-ink/75"
+          >
+            {concept.def}
+          </motion.p>
+        )}
+      </AnimatePresence>
+    </motion.button>
   );
 }

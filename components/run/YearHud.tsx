@@ -7,6 +7,7 @@ import { BlockSpark } from "@/components/ui/BlockSpark";
 import { ChevronDown, InfoIcon } from "@/components/icons";
 import { currency } from "@/lib/format";
 import { netWorth, type RunState, yearIndex } from "@/lib/runEngine";
+import { DUR, EASE } from "@/src/motion/tokens";
 
 // LEDGER: meters read gain (green) high, secondary (grey) mid, loss (red) low.
 function barVar(v: number) {
@@ -16,8 +17,16 @@ function barVar(v: number) {
 /**
  * HUD micro-interaction (Addendum A §8.2): when a tracked value changes, its
  * numeral gets a one-shot background tint flash in gain/loss color — the same
- * pulse the consequence beat's net-worth rail uses. Compositor-only, ≤600ms.
+ * pulse the consequence beat's net-worth rail uses.
+ *
+ * The tint used to be animated as `backgroundColor` on the numeral itself, which
+ * is a paint-property tween on the most frequently-changing figures in the game.
+ * It is now the OPACITY of a pre-tinted, absolutely-positioned overlay: the fill
+ * colour is static, only opacity moves, so the whole flash stays on the
+ * compositor (DESIGN.md § Motion). Same colours, same ≤600ms window.
  */
+const FLASH_TINT = { gain: "rgba(43,213,118,0.16)", loss: "rgba(255,59,48,0.16)" } as const;
+
 function FlashValue({ value, children }: { value: number; children: ReactNode }) {
   const prev = useRef(value);
   const [flash, setFlash] = useState<"gain" | "loss" | null>(null);
@@ -28,15 +37,18 @@ function FlashValue({ value, children }: { value: number; children: ReactNode })
     const id = window.setTimeout(() => setFlash(null), 650);
     return () => window.clearTimeout(id);
   }, [value]);
-  const tint = flash === "gain" ? "rgba(43,213,118,0.16)" : "rgba(255,59,48,0.16)";
   return (
-    <motion.span
-      className="-mx-1 inline-block px-1"
-      animate={flash ? { backgroundColor: ["rgba(0,0,0,0)", tint, "rgba(0,0,0,0)"] } : { backgroundColor: "rgba(0,0,0,0)" }}
-      transition={{ duration: 0.55 }}
-    >
-      {children}
-    </motion.span>
+    <span className="relative -mx-1 inline-block px-1">
+      <motion.span
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ background: FLASH_TINT[flash ?? "gain"] }}
+        initial={false}
+        animate={flash ? { opacity: [0, 1, 0] } : { opacity: 0 }}
+        transition={{ duration: DUR.scene }}
+      />
+      <span className="relative">{children}</span>
+    </span>
   );
 }
 
@@ -104,12 +116,18 @@ export function YearHud({
         </button>
       </div>
 
+      {/* The drawer used to animate `height: 0 ↔ "auto"`, which made framer measure the
+          content every open AND reflow the whole page under a *sticky* header for the
+          full tween. It now takes its natural height in one discrete step and reveals
+          with a clip-path wipe (the house paper-feed grammar) — one layout per toggle
+          instead of one per frame, and the reveal itself is compositor-only. */}
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ clipPath: "inset(0 0 100% 0)", opacity: 0 }}
+            animate={{ clipPath: "inset(0 0 0% 0)", opacity: 1 }}
+            exit={{ clipPath: "inset(0 0 100% 0)", opacity: 0, transition: { duration: DUR.exitFast, ease: EASE } }}
+            transition={{ duration: DUR.fast, ease: EASE }}
             className="overflow-hidden border-t border-hairline bg-bg2"
           >
             <div className="mx-auto grid max-w-5xl gap-3 px-3 py-3 sm:grid-cols-3 sm:px-5">
@@ -188,8 +206,16 @@ function Bar({ label, v }: { label: string; v: number }) {
           <FlashValue value={v}>{Math.round(v)}</FlashValue>
         </span>
       </div>
+      {/* fixed-size track, scaling fill: `width` was a layout tween on a meter that
+          moves every year — `scaleX` from the left edge is the same picture on the
+          compositor. Same spring, so the settle still overshoots identically. */}
       <div className="mt-1 h-2 overflow-hidden bg-hairline">
-        <motion.div className="h-full" style={{ background: colorVar }} animate={{ width: `${v}%` }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
+        <motion.div
+          className="h-full w-full origin-left"
+          style={{ background: colorVar }}
+          animate={{ scaleX: Math.max(0, Math.min(100, v)) / 100 }}
+          transition={{ type: "spring", stiffness: 120, damping: 20 }}
+        />
       </div>
     </div>
   );

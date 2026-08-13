@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { animate, AnimatePresence, motion, useMotionValue, useMotionValueEvent } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAudio } from "@/hooks/useAudio";
 import { conceptsForText, conceptTitle } from "@/lib/concepts";
@@ -101,12 +101,28 @@ export function ConsequenceBeat({
 
   // ---- state machine --------------------------------------------------------
   const [phase, setPhase] = useState<Phase>(reduced ? "done" : "stamp");
+  // `count` is the SETTLED figure only — the tween itself never touches React state
+  // (see the count-up effect below), so the ceremony doesn't re-render 60×/s while
+  // it is simultaneously running a shake and staggered rows.
   const [count, setCount] = useState(reduced ? Math.abs(primary) : 0);
   const [jolt, setJolt] = useState(false);
   const [flash, setFlash] = useState(false);
   const timers = useRef<number[]>([]);
-  const rafRef = useRef(0);
   const done = phase === "done";
+
+  const figureRef = useRef<HTMLSpanElement>(null);
+  const countMV = useMotionValue(reduced ? Math.abs(primary) : 0);
+  const countAnim = useRef<{ stop: () => void } | null>(null);
+  const signPrefix = isLoss ? "−" : isGain ? "+" : "";
+  const fmtFigure = useCallback(
+    (n: number) => `${signPrefix}${currency(Math.round(n))}`,
+    [signPrefix],
+  );
+  // the tween writes straight to the DOM node; React never sees the interim values
+  useMotionValueEvent(countMV, "change", (v) => {
+    const el = figureRef.current;
+    if (el) el.textContent = fmtFigure(v);
+  });
 
   const at = useCallback((ms: number, fn: () => void) => {
     timers.current.push(window.setTimeout(fn, ms));
@@ -114,7 +130,8 @@ export function ConsequenceBeat({
   const clearTimers = useCallback(() => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    countAnim.current?.stop();
+    countAnim.current = null;
   }, []);
 
   // lock body scroll while the overlay owns the screen
@@ -145,25 +162,24 @@ export function ConsequenceBeat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // count-up rAF; hands off to "land" when the figure lands
+  // count-up; hands off to "land" when the figure lands. Driven by a MotionValue
+  // (one DOM textContent write per frame) instead of setState-per-rAF-frame.
   useEffect(() => {
     if (phase !== "count") return;
     const to = Math.abs(primary);
-    const start = performance.now();
-    const dur = tier === "full" ? 1100 : 700;
+    const seconds = (tier === "full" ? 1100 : 700) / 1000;
     audio.sfx("uitick");
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / dur);
-      const eased = 1 - Math.pow(1 - t, 3);
-      setCount(Math.round(to * eased));
-      if (t < 1) rafRef.current = requestAnimationFrame(tick);
-      else {
+    countMV.jump(0);
+    const controls = animate(countMV, to, {
+      duration: seconds,
+      ease: EASE,
+      onComplete: () => {
         setCount(to);
         setPhase("land");
-      }
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+      },
+    });
+    countAnim.current = controls;
+    return () => controls.stop();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -202,11 +218,12 @@ export function ConsequenceBeat({
       return;
     }
     clearTimers();
+    countMV.jump(Math.abs(primary));
     setCount(Math.abs(primary));
     setJolt(false);
     setFlash(false);
     setPhase("done");
-  }, [done, onDone, clearTimers, primary]);
+  }, [done, onDone, clearTimers, primary, countMV]);
 
   // Global input-skip: while the ceremony is still animating (!done), any pointer/key
   // anywhere jumps it to the final state. It unregisters at `done`, so ambient input
@@ -215,7 +232,7 @@ export function ConsequenceBeat({
 
   const showFigure = reduced || phase === "count" || phase === "land" || phase === "rows" || done;
   const showRows = reduced || phase === "rows" || done;
-  const figureText = `${isLoss ? "−" : isGain ? "+" : ""}${currency(count)}`;
+  const figureText = fmtFigure(count);
 
   return (
     <motion.div
@@ -249,14 +266,21 @@ export function ConsequenceBeat({
             {currency(netWorthBefore)}
           </span>
           <span className="text-secondary">→</span>
-          <motion.span
-            className="num px-1.5 py-0.5"
-            style={{ fontSize: "0.78rem", color: nwDelta < 0 ? TONE_VAR.loss : nwDelta > 0 ? TONE_VAR.gain : "var(--color-ink)" }}
-            animate={flash ? { backgroundColor: ["rgba(242,241,234,0)", "rgba(242,241,234,0.16)", "rgba(242,241,234,0)"] } : { backgroundColor: "rgba(242,241,234,0)" }}
-            transition={{ duration: DUR.scene }}
-          >
-            {currency(showFigure ? netWorthAfter : netWorthBefore)}
-          </motion.span>
+          {/* The rail flash used to tween `backgroundColor` — a paint property, on the
+              figure that changes most often in the ceremony. The ink tint is a static
+              pre-coloured overlay now and only its OPACITY moves, so the flash is
+              compositor-only. Identical colour and DUR.scene window. */}
+          <span className="relative num px-1.5 py-0.5" style={{ fontSize: "0.78rem", color: nwDelta < 0 ? TONE_VAR.loss : nwDelta > 0 ? TONE_VAR.gain : "var(--color-ink)" }}>
+            <motion.span
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{ background: "rgba(242,241,234,0.16)" }}
+              initial={false}
+              animate={flash ? { opacity: [0, 1, 0] } : { opacity: 0 }}
+              transition={{ duration: DUR.scene }}
+            />
+            <span className="relative">{currency(showFigure ? netWorthAfter : netWorthBefore)}</span>
+          </span>
         </div>
       </div>
 

@@ -1,7 +1,16 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { animate, motion, useMotionValue, useMotionValueEvent } from "framer-motion";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { TileIcon } from "./TileIcon";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR } from "@/src/motion/tokens";
@@ -124,8 +133,81 @@ export function Board({
 
   const dur = reduce ? 0 : Math.max(0.35, path.steps * 0.165);
 
+  // ── token transport (compositor-only) ──────────────────────────────────────
+  // This used to animate `left`/`top` percentage KEYFRAME ARRAYS across the whole
+  // path — up to ~2s of continuous layout + paint on the busiest screen in the
+  // game, while the board also ran a scale pulse and the token an infinite bob.
+  // DESIGN.md § Motion bans width/height/top/left outright, so the hop now rides a
+  // single px `translate3d`: the board is measured with a ResizeObserver, one
+  // framer tween drives a progress value through the tile indices (keyframes
+  // [0…steps] with per-segment easeInOut — the exact cadence the left/top keyframe
+  // array produced), and each frame resolves the %-path to px against the *current*
+  // board width and writes one transform. Consequences:
+  //   • the final keyframe IS the destination tile's % coord, so the token lands
+  //     pixel-exact at every board size;
+  //   • a resize mid-move only re-reads the width and re-writes at the same
+  //     progress — the hop keeps running instead of restarting or drifting;
+  //   • zero React re-renders during the move (the writer touches the DOM node).
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const tokenRef = useRef<HTMLDivElement | null>(null);
+  const boardPx = useRef(0);
+  const pathRef = useRef(path);
+  pathRef.current = path;
+  const progress = useMotionValue(0);
+
+  /** Resolve the %-path at fractional tile index `p` and stamp it as a transform. */
+  const writeToken = useCallback((p: number) => {
+    const el = tokenRef.current;
+    if (!el) return;
+    const { xs, ys } = pathRef.current;
+    const last = xs.length - 1;
+    const i = Math.min(last, Math.max(0, Math.floor(p)));
+    const j = Math.min(last, i + 1);
+    const t = p - i;
+    const s = boardPx.current;
+    const px = ((xs[i] + (xs[j] - xs[i]) * t) / 100) * s;
+    const py = ((ys[i] + (ys[j] - ys[i]) * t) / 100) * s;
+    // the -50% pair is the old `-translate-x-1/2 -translate-y-1/2` centering,
+    // folded into the same transform so nothing fights over the property.
+    el.style.transform = `translate3d(${px}px, ${py}px, 0) translate(-50%, -50%)`;
+  }, []);
+
+  useMotionValueEvent(progress, "change", writeToken);
+
+  // Measure before first paint, and re-resolve (never restart) on every resize.
+  useLayoutEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    const read = () => {
+      boardPx.current = el.getBoundingClientRect().width;
+      writeToken(progress.get());
+    };
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [progress, writeToken]);
+
+  // The hop itself. Reduced motion keeps its old duty: jump straight to the end.
+  useEffect(() => {
+    const steps = path.steps;
+    if (reduce || steps <= 0) {
+      progress.jump(steps > 0 ? steps : 0);
+      writeToken(steps > 0 ? steps : 0);
+      return;
+    }
+    progress.jump(0);
+    writeToken(0);
+    const frames = Array.from({ length: steps + 1 }, (_, k) => k);
+    const controls = animate(progress, frames, { duration: dur, ease: "easeInOut" });
+    return () => controls.stop();
+    // `path` is rebuilt whenever `position` changes; keying off both is redundant.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position, path.steps, reduce, dur]);
+
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[560px]">
+    <div ref={boardRef} className="relative mx-auto aspect-square w-full max-w-[560px]">
       {/* flat board field — a terminal ledger spread, hairline double-rule frame */}
       <div className="absolute inset-[2%] border border-hairline bg-bg" />
       <div aria-hidden className="absolute inset-[3.6%] border border-hairline" />
@@ -201,13 +283,12 @@ export function Board({
         );
       })}
 
-      {/* player token — a flat ink stamp */}
-      <motion.div
-        className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
-        initial={false}
-        animate={reduce ? { left: `${pts[position].x}%`, top: `${pts[position].y}%` } : { left: path.xs.map((x) => `${x}%`), top: path.ys.map((y) => `${y}%`) }}
-        transition={{ duration: dur, ease: "easeInOut" }}
-        style={reduce ? undefined : { left: `${pts[prev.current].x}%`, top: `${pts[prev.current].y}%` }}
+      {/* player token — a flat ink stamp. Position lives entirely in `transform`
+          (written by `writeToken`); `left/top` stay pinned at the board origin. */}
+      <div
+        ref={tokenRef}
+        className="absolute left-0 top-0 z-20"
+        style={{ willChange: moving ? "transform" : undefined }}
       >
         <motion.div
           className="grid h-7 w-7 place-items-center border border-ink bg-ink"
@@ -218,7 +299,7 @@ export function Board({
             {tokenLabel}
           </span>
         </motion.div>
-      </motion.div>
+      </div>
     </div>
   );
 }

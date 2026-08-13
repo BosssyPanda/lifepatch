@@ -53,8 +53,13 @@ export function PortfolioPanel({
         <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">
           <p className="eyebrow text-gain">Cash left to invest</p>
           <p className="num text-xl text-ink">{currency(run.cash)}</p>
+          {/* fixed-size track + scaling fill: `transition-[width]` was a layout tween
+              on a bar that moves on every trade (DESIGN.md § Motion). Same 300ms. */}
           <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink/12" aria-hidden>
-            <div className="h-full rounded-full bg-gain transition-[width] duration-300" style={{ width: `${cashPct}%` }} />
+            <div
+              className="h-full w-full origin-left rounded-full bg-gain transition-transform duration-300"
+              style={{ transform: `scaleX(${Math.max(0, Math.min(100, cashPct)) / 100})` }}
+            />
           </div>
         </div>
         <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">

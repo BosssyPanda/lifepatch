@@ -117,11 +117,16 @@ export function Gate({
 
       {/* ---------------- title block ---------------- */}
       <div className="relative z-10 flex w-full max-w-xl flex-col items-center text-center lg:items-start lg:text-left">
+        {/* The eyebrow used to animate `letterSpacing` 0.5em → 0.28em, reflowing the
+            text run every frame. The tracking is static now and the settle rides
+            `scaleX` instead: 0.22em of extra tracking across 25 glyphs widened the
+            line ~1.27×, and the origin follows the flex alignment (centred on
+            mobile, left-anchored at lg) so the line converges from the same edge. */}
         <motion.p
-          initial={reduce ? false : { opacity: 0, y: 10, letterSpacing: "0.5em" }}
-          animate={{ opacity: 1, y: 0, letterSpacing: "0.28em" }}
+          initial={reduce ? false : { opacity: 0, y: 10, scaleX: 1.27 }}
+          animate={{ opacity: 1, y: 0, scaleX: 1 }}
           transition={{ duration: 0.8, delay: 0.2 }}
-          className="eyebrow text-ink"
+          className="eyebrow origin-center tracking-[0.28em] text-ink lg:origin-left"
         >
           A Financial Survival Story
         </motion.p>

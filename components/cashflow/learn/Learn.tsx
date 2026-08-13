@@ -6,6 +6,7 @@ import { CheckIcon, CloseIcon, InfoIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { GLOSSARY } from "@/lib/cashflow/glossary";
 import type { QuizQuestion, TutorialStep } from "@/lib/cashflow/lessons";
+import { DUR, EASE } from "@/src/motion/tokens";
 
 export function CoachCard({ title, body, onOk }: { title: string; body: string; onOk: () => void }) {
   return (
@@ -65,11 +66,18 @@ export function QuizCard({ q, onDone }: { q: QuizQuestion; onDone: (correct: boo
         })}
       </div>
 
+      {/* The explanation used to animate `height: 0 → "auto"` (framer has to measure
+          the content, and the whole card below reflows for the length of the tween)
+          and had no `exit` at all, so it snapped shut. It now takes its natural height
+          in one step and wipes in/out with clip-path — compositor-only, and the close
+          runs at the house exit speed instead of vanishing. */}
       <AnimatePresence>
         {answered && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
+            initial={{ opacity: 0, clipPath: "inset(0 0 100% 0)" }}
+            animate={{ opacity: 1, clipPath: "inset(0 0 0% 0)" }}
+            exit={{ opacity: 0, clipPath: "inset(0 0 100% 0)", transition: { duration: DUR.exitFast, ease: EASE } }}
+            transition={{ duration: DUR.fast, ease: EASE }}
             className="overflow-hidden"
           >
             <p className={`mt-3 rounded-[4px] px-3 py-2 font-body text-[0.86rem] ${correct ? "bg-gain/15 text-ink" : "bg-loss/12 text-ink"}`}>

@@ -70,11 +70,18 @@ export function Beat({ beat }: { beat: ColdBeat }) {
   if (beat.accent === "title") {
     return (
       <div className="text-center">
+        {/* The wordmark used to spring `letterSpacing` 0.3em → 0.02em alongside the
+            scale, which re-shapes and re-lays-out the text run on every frame of the
+            game's opening title. The tracking is now static and the same convergence
+            is carried on the compositor: the extra tracking across 9 glyphs widened
+            the word ~1.6×, so the stamp starts at scaleX 2.24 / scaleY 1.4 (1.6 × the
+            original 1.4 uniform scale) and springs to 1/1 on the identical spring —
+            same wide-and-huge → settled arrival, zero layout. */}
         <motion.h1
-          initial={reduced ? false : { scale: 1.4, opacity: 0, letterSpacing: "0.3em" }}
-          animate={{ scale: 1, opacity: 1, letterSpacing: "0.02em" }}
+          initial={reduced ? false : { scaleX: 2.24, scaleY: 1.4, opacity: 0 }}
+          animate={{ scaleX: 1, scaleY: 1, opacity: 1 }}
           transition={{ type: "spring", stiffness: 140, damping: 12 }}
-          className="display-caps text-[16vw] leading-[0.85] text-ink sm:text-[10rem]"
+          className="display-caps text-[16vw] leading-[0.85] tracking-[0.02em] text-ink sm:text-[10rem]"
         >
           Life<span className="text-ink">patch</span>
         </motion.h1>

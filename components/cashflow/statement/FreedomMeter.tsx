@@ -52,10 +52,15 @@ export function FreedomMeter({ s, compact = false }: { s: CashflowState; compact
         {MILESTONES.map((m) => (
           <span key={m} aria-hidden className="absolute inset-y-[2px] w-px" style={{ left: `${m}%`, background: "var(--color-hairline)" }} />
         ))}
+        {/* The fill used to animate `width` — a layout tween on the game's win
+            condition, re-run on every state recompute. The track is the fixed-size
+            box (the `role="progressbar"` element above); the fill is full-width and
+            scales from its left edge instead, so the gauge is compositor-only.
+            Same spring, so the crossing of each milestone notch reads identically. */}
         <motion.div
-          className="relative h-full"
+          className="relative h-full w-full origin-left"
           initial={false}
-          animate={{ width: `${pct}%` }}
+          animate={{ scaleX: pct / 100 }}
           transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 120, damping: 20 }}
           style={{ background: fillVar }}
         />
