@@ -11,7 +11,11 @@ import { useMotionCtx } from "@/src/motion/MotionProvider";
 /** Once-a-day guard so the streak only celebrates on the first menu after a play. */
 const CELEB_KEY = "lifepatch.streakCelebrated";
 
-/** Loss-aversion habit cue: the player's current daily streak. Hidden at zero. */
+/**
+ * Loss-aversion habit cue: the player's current daily streak. At zero it renders an
+ * invisible copy of itself rather than `null`, so ModeSelect doesn't jump a whole row
+ * the first time a streak lands.
+ */
 export function StreakChip() {
   const { streak } = useProfile();
   const { accent, started } = useAudio();
@@ -39,10 +43,18 @@ export function StreakChip() {
     return () => clearTimeout(t);
   }, [current, playedToday, started, accent]);
 
-  if (current <= 0) return null;
+  if (current <= 0) {
+    return (
+      <span aria-hidden className="invisible inline-flex items-center gap-1.5 border border-transparent px-3 py-1 text-sm">
+        <FlameIcon size={14} />
+        <span className="display-caps tracking-[0.1em]">0</span>
+        <span>days</span>
+      </span>
+    );
+  }
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-ink/40 bg-bg2/70 px-3 py-1 text-sm shadow-[0_6px_18px_-12px_rgba(0,0,0,0.85)]">
+    <span className="inline-flex items-center gap-1.5 border border-ink/40 bg-bg2/70 px-3 py-1 text-sm">
       <motion.span
         aria-hidden
         animate={pulse && !reduce ? { scale: [1, 1.55, 1], rotate: [0, -12, 10, 0] } : { scale: 1 }}

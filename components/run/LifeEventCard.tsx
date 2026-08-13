@@ -119,6 +119,9 @@ export function LifeEventCard({
         })}
       </ul>
 
+      {/* The wrapper is always mounted so the swap from "outcome hidden" to the reveal
+          is a content change *inside* a live region — an added region isn't announced. */}
+      <div aria-live="polite">
       {!answered ? (
         <p className="mt-4 flex items-center justify-center gap-2 text-secondary">
           <LockIcon size={14} />
@@ -148,6 +151,7 @@ export function LifeEventCard({
           </motion.div>
         )
       )}
+      </div>
     </motion.div>
     {showBeat && chosenChoice && outcome && runState && (
       <ConsequenceBeat

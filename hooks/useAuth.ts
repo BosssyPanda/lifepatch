@@ -46,14 +46,20 @@ export function useAuth() {
     };
   }, []);
 
+  /**
+   * Throws on failure. It used to discard the Supabase error and set `linkSent`
+   * unconditionally, so a rate-limited or rejected address showed "check your inbox"
+   * forever — the caller now owns surfacing it.
+   */
   const signIn = useCallback(async (email: string) => {
     const clean = email.trim().toLowerCase();
-    if (!clean) return;
+    if (!clean) throw new Error("Enter an email address.");
     if (isCloud && supabase) {
-      await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signInWithOtp({
         email: clean,
         options: { emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined },
       });
+      if (error) throw error;
       setLinkSent(true);
       return;
     }
@@ -64,6 +70,9 @@ export function useAuth() {
     setUser(u);
   }, []);
 
+  /** Back to the form — "that wasn't the address I meant". */
+  const clearLinkSent = useCallback(() => setLinkSent(false), []);
+
   const signOut = useCallback(async () => {
     if (isCloud && supabase) await supabase.auth.signOut();
     try {
@@ -73,5 +82,5 @@ export function useAuth() {
     setLinkSent(false);
   }, []);
 
-  return { user, loading, linkSent, isCloud, signIn, signOut };
+  return { user, loading, linkSent, isCloud, signIn, signOut, clearLinkSent };
 }

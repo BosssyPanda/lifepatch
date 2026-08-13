@@ -16,15 +16,19 @@ export function ConceptToast({ conceptId }: { conceptId: string | null }) {
   return (
     <Toast show={!!conceptId}>
       {/* .concept-toast: hidden while a ceremony owns the screen (body[data-ceremony]) */}
-      <div className="concept-toast pointer-events-none flex items-center gap-3 border border-hairline bg-bg2 px-4 py-2.5">
+      <div className="concept-toast pointer-events-none flex items-center gap-3 border border-hairline bg-bg2 px-4 py-2.5" aria-live="polite">
+        {/* The chip exists to tell you something was filed — say it in words rather
+            than leaving a screen reader to assemble "Noted" + a bare title. */}
+        <span className="sr-only">Concept noted: {concept?.title ?? conceptId}</span>
         <span
+          aria-hidden
           className="eyebrow text-secondary"
           style={{ fontSize: "0.55rem", letterSpacing: "0.24em" }}
         >
           Noted
         </span>
-        <span className="h-3.5 w-px bg-hairline" />
-        <span className="display-caps text-sm text-ink">{concept?.title ?? conceptId}</span>
+        <span aria-hidden className="h-3.5 w-px bg-hairline" />
+        <span aria-hidden className="display-caps text-sm text-ink">{concept?.title ?? conceptId}</span>
       </div>
     </Toast>
   );

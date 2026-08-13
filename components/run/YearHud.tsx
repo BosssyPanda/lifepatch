@@ -66,10 +66,15 @@ export function YearHud({
         <Stat label="Cash" animated={run.cash} fmt={currency} />
         <div className="flex flex-1 flex-col">
           <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>Net worth</p>
-          <p className="num text-lg sm:text-xl" style={{ color: nwVar }}>
-            <FlashValue value={nw}>
-              <AnimatedNumber value={nw} format={currency} />
-            </FlashValue>
+          {/* The live region carries the settled figure only — the count-up itself is
+              hidden, or every rAF frame would be announced. */}
+          <p className="num text-lg sm:text-xl" style={{ color: nwVar }} aria-live="polite" aria-atomic="true">
+            <span aria-hidden>
+              <FlashValue value={nw}>
+                <AnimatedNumber value={nw} format={currency} />
+              </FlashValue>
+            </span>
+            <span className="sr-only">Net worth {currency(nw)}</span>
           </p>
         </div>
 
@@ -138,14 +143,24 @@ export function YearHud({
 }
 
 function Stat({ label, value, animated, fmt }: { label: string; value?: string; animated?: number; fmt?: (n: number) => string }) {
+  const live = animated !== undefined && !!fmt;
   return (
     <div className="flex flex-col">
       <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>{label}</p>
-      <p className="num text-base sm:text-lg text-ink">
-        {animated !== undefined && fmt ? (
-          <FlashValue value={animated}>
-            <AnimatedNumber value={animated} format={fmt} />
-          </FlashValue>
+      <p
+        className="num text-base sm:text-lg text-ink"
+        aria-live={live ? "polite" : undefined}
+        aria-atomic={live ? true : undefined}
+      >
+        {live ? (
+          <>
+            <span aria-hidden>
+              <FlashValue value={animated!}>
+                <AnimatedNumber value={animated!} format={fmt!} />
+              </FlashValue>
+            </span>
+            <span className="sr-only">{label} {fmt!(animated!)}</span>
+          </>
         ) : (
           value
         )}

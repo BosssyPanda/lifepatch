@@ -1,9 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { BrainIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
+import { ShareCard } from "@/components/share/ShareCard";
+import { useShareUrlFor } from "@/components/share/useShareUrl";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
@@ -13,7 +15,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { conceptTitle } from "@/lib/concepts";
 import { getDream } from "@/lib/cashflow/dreams";
 import { getProfession } from "@/lib/cashflow/professions";
-import { netWorth, passiveIncome } from "@/lib/cashflow/selectors";
+import { hasEscaped, netWorth, passiveIncome } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
 import type { CashflowState } from "@/lib/cashflow/types";
 import { STAGGER } from "@/src/motion/tokens";
@@ -36,6 +38,31 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
   const arch = archetype(s);
   const { mastery } = useProfile();
   const { runGains } = useConceptLearn();
+  const [shareOpen, setShareOpen] = useState(false);
+
+  // The Rat Race row is ranked by passive income, so that is what resolves its /r/{id}.
+  const passive = passiveIncome(s);
+  const nw = netWorth(s);
+  const shareUrl = useShareUrlFor("cashflow", passive);
+
+  const shareData = useMemo(
+    () => ({
+      // same verdict string the leaderboard row carries (lib/cloud/buildResult)
+      verdict: hasEscaped(s) ? "Escaped the Rat Race" : "Still Racing",
+      verdictHex: "#2bd576", // gain — escaping is the win
+      netWorth: nw,
+      netWorthText: currency(nw),
+      years: s.escapedOnTurn ?? s.turn,
+      yearsLabel: "Turns to escape",
+      runId: `cashflow-${s.seed}`,
+      // the board keeps no per-turn net-worth series; the card degrades to no sparkline
+      history: [] as number[],
+      statLabel: "Passive income",
+      statValue: `${currency(passive)}/mo`,
+      url: shareUrl,
+    }),
+    [s, nw, passive, shareUrl],
+  );
 
   useEffect(() => {
     audio.setPhase("recapGood", 1.4);
@@ -81,8 +108,8 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
         {/* statement — dot-leader ledger rows */}
         <motion.section variants={item}>
           <SectionLabel>Final statement</SectionLabel>
-          <LedgerRow label="Net worth" strong value={<AnimatedNumber value={netWorth(s)} format={(n) => currency(n)} />} />
-          <LedgerRow label="Passive income" tone="text-gain" size="0.95rem" value={<AnimatedNumber value={passiveIncome(s)} format={(n) => currency(n)} />} />
+          <LedgerRow label="Net worth" strong value={<AnimatedNumber value={nw} format={(n) => currency(n)} />} />
+          <LedgerRow label="Passive income" tone="text-gain" size="0.95rem" value={<AnimatedNumber value={passive} format={(n) => currency(n)} />} />
           <LedgerRow label="Escaped on turn" tone="text-gain" size="0.95rem" value={<AnimatedNumber value={s.escapedOnTurn ?? s.turn} format={(n) => String(Math.round(n))} />} />
           <LedgerRow label="Total turns" size="0.95rem" value={<AnimatedNumber value={s.turn} format={(n) => String(Math.round(n))} />} />
           <LedgerRow label="Deals bought" size="0.95rem" value={<AnimatedNumber value={s.dealsBought} format={(n) => String(Math.round(n))} />} />
@@ -117,9 +144,12 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
           <NeonButton variant="primary" size="lg" onClick={() => { audio.sfx("confirm"); onReplay(); }}>
             <ReplayIcon size={16} /> Play again
           </NeonButton>
+          <NeonButton variant="secondary" size="lg" onClick={() => setShareOpen(true)}>Share ↗</NeonButton>
           <NeonButton variant="secondary" size="md" onClick={onExit}>← Back to title</NeonButton>
         </motion.div>
       </motion.div>
+
+      {shareOpen && <ShareCard data={shareData} onClose={() => setShareOpen(false)} />}
     </div>
   );
 }

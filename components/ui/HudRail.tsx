@@ -26,14 +26,24 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
   const type = { fontSize: "0.6rem", letterSpacing: "0.16em" } as const;
 
   return (
-    <div className={`sticky top-0 z-50 flex items-stretch border-b border-hairline bg-bg ${className}`} aria-label="Run status">
+    // role="status": `aria-label` on a plain div is dropped by most screen readers, so
+    // the rail had no name and its counter never announced. `aria-atomic="false"` keeps
+    // it to the cell that actually changed (the turn/year counter) instead of re-reading
+    // the whole strip; the clock is ambient chrome and stays out of the tree entirely.
+    <div
+      className={`sticky top-0 z-50 flex items-stretch border-b border-hairline bg-bg ${className}`}
+      role="status"
+      aria-live="polite"
+      aria-atomic="false"
+      aria-label="Run status"
+    >
       <span className={`${cell} border-r border-hairline text-ink`} style={type}>
         {mode.toUpperCase()}
       </span>
       <span className={`${cell} border-r border-hairline text-secondary`} style={type}>
         {counter.toUpperCase()}
       </span>
-      <span className={`${cell} hidden text-tertiary sm:flex`} style={type}>
+      <span aria-hidden className={`${cell} hidden text-tertiary sm:flex`} style={type}>
         LOCAL {time ?? "--:--"}
       </span>
       <button

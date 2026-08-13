@@ -50,6 +50,7 @@ const sceneVariants: Variants = {
 
 export function CashflowShell({
   onExit,
+  onOpenAlmanac,
   onMasteryMap,
 }: {
   onExit: () => void;
@@ -111,7 +112,7 @@ export function CashflowShell({
       {view === "play" && s
         ? scene(
             "cf-play",
-            <CashflowGame s={s} apply={cf.apply} commit={cf.commit} onExit={onExit} />,
+            <CashflowGame s={s} apply={cf.apply} commit={cf.commit} onExit={onExit} onOpenAlmanac={onOpenAlmanac} />,
           )
         : view === "escape" && s
           ? scene(

@@ -1,13 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { NumberTicker } from "@/components/cinematic/landing/NumberTicker";
 import { CloseIcon } from "@/components/icons";
 import { Avatar } from "@/components/social/Avatar";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { LedgerButton } from "@/components/ui/LedgerButton";
 import { LedgerDialog } from "@/components/ui/LedgerDialog";
+import { LedgerTabs, tabId } from "@/components/ui/LedgerTabs";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
@@ -64,7 +65,12 @@ export function Leaderboard({
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
+  /** The fetch failed. Distinct from "no rows" — telling a player the board is empty
+   *  when the network dropped is a lie the old try/finally told every time. */
+  const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
   const rankCelebrated = useRef(false);
+  const panelId = useId();
 
   useEffect(() => {
     if (open) {
@@ -79,6 +85,7 @@ export function Leaderboard({
     if (!open) return;
     let active = true;
     setLoading(true);
+    setFailed(false);
     void (async () => {
       try {
         const friendIds =
@@ -93,6 +100,10 @@ export function Leaderboard({
           rankCelebrated.current = true;
           sfx("rankUp");
         }
+      } catch {
+        if (!active) return;
+        setRows([]);
+        setFailed(true);
       } finally {
         if (active) setLoading(false);
       }
@@ -100,7 +111,7 @@ export function Leaderboard({
     return () => {
       active = false;
     };
-  }, [open, mode, scope, profileId, sfx]);
+  }, [open, mode, scope, profileId, sfx, retry]);
 
   const metric = MODE_TABS.find((t) => t.id === mode)?.metric ?? "score";
 
@@ -136,48 +147,41 @@ export function Leaderboard({
               </button>
             </header>
 
-            <div className="flex gap-1 px-5 pt-4">
-              {MODE_TABS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setMode(t.id)}
-                  data-radius=""
-                  className={`display-caps flex-1 px-2 py-2 text-sm tracking-[0.08em] transition-colors ${
-                    mode === t.id
-                      ? "bg-ink text-bg"
-                      : "text-ink/60 hover:bg-ink/10"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex gap-4 px-5 pt-3 text-xs">
-              {SCOPE_TABS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setScope(t.id)}
-                  className={`border-b-2 pb-1 font-body transition-colors ${
-                    scope === t.id
-                      ? "border-ink text-ink"
-                      : "border-transparent text-ink/50 hover:text-ink"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
+            {/* one tab treatment for both axes — they used to be filled pills over
+                underlined text, two visual languages inside one overlay */}
+            <LedgerTabs
+              items={MODE_TABS}
+              value={mode}
+              onChange={setMode}
+              label="Leaderboard mode"
+              panelId={panelId}
+              className="px-5 pt-4"
+            />
+            <LedgerTabs
+              items={SCOPE_TABS}
+              value={scope}
+              onChange={setScope}
+              label="Leaderboard range"
+              panelId={panelId}
+              size="sm"
+              className="px-5 pt-2"
+            />
 
             <p className="px-5 pt-3 font-body text-xs italic text-secondary">
               Best run per player, ranked by {metric}.
             </p>
 
-            <div className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3" data-lenis-prevent>
+            <div
+              className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3"
+              id={panelId}
+              role="tabpanel"
+              aria-labelledby={tabId(panelId, mode)}
+              data-lenis-prevent
+            >
               {loading ? (
                 <p className="py-10 text-center"><TerminalOp label="Fetching ledger" center /></p>
+              ) : failed ? (
+                <FailedState reduced={reduced} onRetry={() => setRetry((n) => n + 1)} />
               ) : rows.length === 0 ? (
                 <EmptyState scope={scope} reduced={reduced} />
               ) : (
@@ -273,6 +277,29 @@ function EmptyState({ scope, reduced }: { scope: LeaderboardScope; reduced: bool
       <div className="border border-ink/25 px-4 py-6">
         <p className="font-anton text-xl leading-tight tracking-[0.06em] text-ink">NO ENTRIES — BE THE FIRST</p>
         <p className="mt-2 font-body text-xs text-secondary">{msg}</p>
+      </div>
+    </motion.div>
+  );
+}
+
+/** The board could not be read — same stamped plate, loss-red, and a way back. */
+function FailedState({ reduced, onRetry }: { reduced: boolean; onRetry: () => void }) {
+  return (
+    <motion.div
+      role="alert"
+      initial={reduced ? false : { scale: 1.28, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.26, ease: EASE }}
+      className="mx-auto my-10 max-w-xs border-2 border-loss/50 p-1.5 text-center"
+    >
+      <div className="border border-loss/40 px-4 py-6">
+        <p className="font-anton text-xl leading-tight tracking-[0.06em] text-loss">COULD NOT REACH THE BOARD</p>
+        <p className="mt-2 font-body text-xs text-secondary">
+          The standings did not come back. This is a connection problem, not an empty board.
+        </p>
+        <div className="mt-4 flex justify-center">
+          <LedgerButton variant="secondary" size="sm" onClick={onRetry}>Retry</LedgerButton>
+        </div>
       </div>
     </motion.div>
   );

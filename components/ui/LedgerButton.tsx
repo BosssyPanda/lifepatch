@@ -62,6 +62,7 @@ const HIT: Record<Size, string> = {
 export function LedgerButton({
   children,
   onClick,
+  onBlur,
   variant = "primary",
   size = "md",
   className = "",
@@ -70,9 +71,12 @@ export function LedgerButton({
   inverted = false,
   loading = false,
   "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
 }: {
   children: ReactNode;
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+  /** Leaving the control — used by `useArmedAction` to cancel an armed confirm. */
+  onBlur?: () => void;
   variant?: Variant;
   size?: Size;
   className?: string;
@@ -83,6 +87,8 @@ export function LedgerButton({
   /** Blinking caret + disabled, for an action that is in flight. */
   loading?: boolean;
   "aria-label"?: string;
+  /** Points at the text explaining *why* the button is disabled. */
+  "aria-describedby"?: string;
 }) {
   const { reduced } = useMotionCtx();
   const legacy = variant in LEGACY ? LEGACY[variant as LegacyVariant] : null;
@@ -94,8 +100,10 @@ export function LedgerButton({
     <motion.button
       type={type}
       onClick={onClick}
+      onBlur={onBlur}
       disabled={inert}
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
       aria-busy={loading || undefined}
       data-radius=""
       whileHover={inert || reduced ? undefined : { y: -1 }}

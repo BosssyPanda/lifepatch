@@ -147,9 +147,12 @@ function ModePreview({ id, reduced }: { id: ModeId; reduced: boolean }) {
 /** Rat Race — the Phase G board orbit, muted, playing only while on screen. */
 function BoardPreview({ reduced }: { reduced: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
+  // Without this a missing/404 webm painted a black rectangle inside the card, with no
+  // hint that it was ever meant to be anything. Same fallback as BoardBackdrop.
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    if (reduced) return;
+    if (reduced || failed) return;
     const el = ref.current;
     if (!el) return;
     const io = new IntersectionObserver(
@@ -161,14 +164,14 @@ function BoardPreview({ reduced }: { reduced: boolean }) {
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [reduced]);
+  }, [reduced, failed]);
 
-  if (reduced) {
+  if (reduced || failed) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src="/board3d/board-poster.jpg" alt="" className="h-full w-full object-cover" />;
   }
   return (
-    <video ref={ref} muted loop playsInline preload="none" poster="/board3d/board-poster.jpg" aria-hidden className="h-full w-full object-cover">
+    <video ref={ref} muted loop playsInline preload="none" poster="/board3d/board-poster.jpg" aria-hidden onError={() => setFailed(true)} className="h-full w-full object-cover">
       <source src="/board3d/board-orbit.webm" type="video/webm" />
       <source src="/board3d/board-orbit.mp4" type="video/mp4" />
     </video>

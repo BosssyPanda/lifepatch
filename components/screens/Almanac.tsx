@@ -1,10 +1,11 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { GlyphMatrix } from "@/components/cinematic/landing/GlyphMatrix";
 import { CloseIcon } from "@/components/icons";
 import { LedgerDialog } from "@/components/ui/LedgerDialog";
+import { LedgerTabs, tabId } from "@/components/ui/LedgerTabs";
 import { Reveal } from "@/components/ui/Reveal";
 import { useAudio } from "@/hooks/useAudio";
 import {
@@ -25,6 +26,7 @@ type Verdict = MythFact["verdict"];
 
 export function Almanac({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [section, setSection] = useState<AlmanacSectionId>("wealth");
+  const panelId = useId();
   // terms type-in runs once per overlay visit (survives tab switches, re-arms per open)
   const termsTyped = useRef(false);
   useEffect(() => {
@@ -49,23 +51,25 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
                 </button>
               </div>
             </div>
-            <div className="mx-auto flex max-w-3xl gap-1 overflow-x-auto px-5 pb-2 thin-scroll">
-              {ALMANAC_SECTIONS.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSection(s.id)}
-                  data-radius=""
-                  className={`shrink-0 border px-3 py-1.5 eyebrow transition-colors ${section === s.id ? "border-ink bg-ink text-bg" : "border-hairline-strong text-ink-dim hover:text-ink"}`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
+            <LedgerTabs
+              items={ALMANAC_SECTIONS}
+              value={section}
+              onChange={setSection}
+              label="Almanac sections"
+              panelId={panelId}
+              size="sm"
+              className="mx-auto max-w-3xl overflow-x-auto px-5 pb-2 thin-scroll"
+            />
           </div>
 
           {/* content */}
-          <div className="thin-scroll flex-1 overflow-y-auto" data-lenis-prevent>
+          <div
+            className="thin-scroll flex-1 overflow-y-auto"
+            id={panelId}
+            role="tabpanel"
+            aria-labelledby={tabId(panelId, section)}
+            data-lenis-prevent
+          >
             <div className="mx-auto max-w-3xl px-5 py-8">
               {section === "wealth" && (
                 <Section title="Ways to build wealth" sub="Every path has a price. Here's the honest trade-off on each.">

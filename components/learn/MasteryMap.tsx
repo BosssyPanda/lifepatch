@@ -6,6 +6,7 @@ import { CloseIcon, LockIcon } from "@/components/icons";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { LedgerButton } from "@/components/ui/LedgerButton";
 import { LedgerDialog } from "@/components/ui/LedgerDialog";
+import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
 import { MAX_MASTERY_LEVEL } from "@/lib/cloud/mastery";
@@ -27,7 +28,7 @@ function nodeState(level: number, seen: boolean): NodeState {
  * (proven through correct application). Same overlay pattern as the Leaderboard.
  */
 export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { mastery } = useProfile();
+  const { mastery, loading } = useProfile();
   const { setBrainGlow } = useAudio();
   const [selected, setSelected] = useState<string | null>(null);
   const [seen, setSeen] = useState<string[]>([]);
@@ -89,14 +90,22 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
               <div className="mt-3">
                 <MoneyBrainMeter mastery={mastery} />
                 <p className="mt-1.5 font-body text-xs italic text-secondary">
-                  {masteredCount} of {CONCEPTS.length} concepts mastered · master by applying them
-                  well, not just seeing them.
+                  {loading
+                    ? "Reading your record…"
+                    : `${masteredCount} of ${CONCEPTS.length} concepts mastered · master by applying them well, not just seeing them.`}
                 </p>
               </div>
             </header>
 
             <div className="thin-scroll flex-1 overflow-y-auto px-5 py-4" data-lenis-prevent>
-              {ORDER.map((cat) => {
+              {/* While the profile is in flight every concept resolves to "Locked", which is
+                  indistinguishable from a genuine zero — say we're still reading instead. */}
+              {loading ? (
+                <div className="grid place-items-center py-16">
+                  <TerminalOp label="Reading your record" center />
+                </div>
+              ) : (
+              ORDER.map((cat) => {
                 const concepts = CONCEPTS.filter((c) => c.category === cat);
                 const meta = CATEGORY_META[cat];
                 return (
@@ -119,7 +128,8 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                     </div>
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
 
             <footer className="border-t-2 border-hairline px-5 py-3">

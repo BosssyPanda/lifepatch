@@ -3,8 +3,10 @@
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { BankIcon, FreedomIcon, InfoIcon } from "@/components/icons";
+import { BankIcon, BrainIcon, FreedomIcon, InfoIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
+import { TerminalOp } from "@/components/ui/TerminalOp";
+import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { conceptsForText } from "@/lib/concepts";
@@ -18,7 +20,13 @@ import { EASE } from "@/src/motion/tokens";
 // It self-falls-back to the flat 2D <Board> when WebGL is unavailable.
 const Board3D = dynamic(() => import("@/components/cashflow/board/Board3D").then((m) => m.Board3D), {
   ssr: false,
-  loading: () => <div className="mx-auto aspect-square w-full max-w-[560px]" />,
+  // A bare empty box read as "the board area is broken" on first load — a hairline
+  // frame + terminal caret, same grammar as AppShell's screen fallback.
+  loading: () => (
+    <div className="mx-auto grid aspect-square w-full max-w-[560px] place-items-center border border-hairline bg-bg2">
+      <TerminalOp label="Setting the board" center />
+    </div>
+  ),
 });
 
 // Physics roll overlay (Addendum §13 #10) — three/R3F/Rapier stay out of every
@@ -146,11 +154,13 @@ export function CashflowGame({
   apply,
   commit,
   onExit,
+  onOpenAlmanac,
 }: {
   s: CashflowState;
   apply: (fn: (s: CashflowState) => CashflowState) => void;
   commit: (fn: (s: CashflowState) => CashflowState) => void;
   onExit: () => void;
+  onOpenAlmanac?: () => void;
 }) {
   const audio = useAudio();
   const { learn } = useConceptLearn();
@@ -427,6 +437,14 @@ export function CashflowGame({
 
   const rollLabel = s.skipTurns > 0 ? `Skip turn · downsized ×${s.skipTurns}` : turnPhase === "idle" ? "Roll" : "…";
 
+  // Leaving destroys the in-memory session; the save on disk survives, so say so.
+  const exit = useArmedAction({
+    label: "Exit",
+    armedLabel: "Tap again — run is saved",
+    onArm: () => audio.sfx("uitick"),
+    onConfirm: onExit,
+  });
+
   return (
     <div className="relative isolate mx-auto min-h-[100svh] w-full max-w-6xl px-3 py-4 sm:px-5">
       <BoardBackdrop />
@@ -458,19 +476,34 @@ export function CashflowGame({
           <span className="hidden rounded-full border border-ink/15 bg-bg2 px-3 py-1.5 num text-sm text-ink sm:inline">
             Cash <Money n={s.cash} className="text-gain" />
           </span>
-          <button onClick={() => { audio.sfx("modal"); setGlossaryOpen(true); }} aria-label="Glossary" className="grid h-9 w-9 place-items-center rounded-full border border-ink/15 bg-bg2 text-ink-dim hover:text-ink">
+          {onOpenAlmanac && (
+            <button
+              onClick={() => { audio.sfx("modal"); onOpenAlmanac(); }}
+              aria-label="Open the Almanac"
+              className="grid h-11 w-11 place-items-center border border-hairline-strong bg-bg2 text-ink-dim transition-colors hover:text-ink"
+            >
+              <BrainIcon size={18} />
+            </button>
+          )}
+          <button onClick={() => { audio.sfx("modal"); setGlossaryOpen(true); }} aria-label="Glossary" className="grid h-11 w-11 place-items-center border border-hairline-strong bg-bg2 text-ink-dim transition-colors hover:text-ink">
             <InfoIcon size={18} />
           </button>
-          <NeonButton variant="ghost" size="sm" onClick={onExit}>
-            Exit
+          <NeonButton
+            variant={exit.armed ? "danger" : "ghost"}
+            size="sm"
+            onClick={exit.onClick}
+            onBlur={exit.onBlur}
+          >
+            <ArmedLabel armed={exit.armed}>{exit.label}</ArmedLabel>
           </NeonButton>
         </div>
       </div>
 
-      {/* main layout */}
+      {/* main layout — board first everywhere. It used to sit *below* a ~30-row
+          statement on mobile, so reaching Roll meant scrolling past it every turn. */}
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         {/* board column */}
-        <div className="order-2 lg:order-1">
+        <div>
           <motion.div animate={boardPulse}>
           <Board3D
             squares={isFast ? FAST_BOARD : RAT_BOARD}
@@ -493,7 +526,9 @@ export function CashflowGame({
                   Charity: roll {twoDice ? "2 dice" : "1 die"} ({s.charityRolls} left)
                 </button>
               )}
-              <NeonButton variant="brass" size="md" disabled={busy} onClick={handleRoll}>
+              {/* min-w: the busy "…" label used to collapse the button to ~40px and
+                  reflow the whole hub under the board on every roll. */}
+              <NeonButton variant="brass" size="md" disabled={busy} onClick={handleRoll} className="min-w-[7rem]">
                 {rollLabel}
               </NeonButton>
               {isFast && (
@@ -528,7 +563,7 @@ export function CashflowGame({
         </div>
 
         {/* statement column */}
-        <div className="order-1 lg:order-2">
+        <div>
           <FinancialStatement s={s} />
         </div>
       </div>

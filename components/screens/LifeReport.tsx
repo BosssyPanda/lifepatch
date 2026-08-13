@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { ShareCard } from "@/components/share/ShareCard";
 import { useShareUrl } from "@/components/share/useShareUrl";
@@ -84,19 +84,28 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
   const lastYear = hist[hist.length - 1]?.year ?? run.startYear;
   const best = [...hist].sort((a, b) => b.portfolioDelta - a.portfolioDelta)[0];
   const worst = [...hist].sort((a, b) => a.portfolioDelta - b.portfolioDelta)[0];
+  // A run whose worst year still finished green has no "hit" — clamping it to zero
+  // printed "−$0" in loss red, which is both wrong and unearned drama.
+  const tookAHit = !!worst && worst.portfolioDelta < 0;
+  const bestUp = !!best && best.portfolioDelta > 0;
 
-  const shareData = {
-    verdict: klass.title,
-    verdictHex: klass.hex,
-    netWorth: nw,
-    netWorthText: currency(nw),
-    years: hist.length,
-    runId: `${run.mode}-${run.seed}`,
-    history: hist.map((h) => h.netWorth),
-    statLabel: "Biggest hit",
-    statValue: worst ? `−${currency(Math.abs(Math.min(0, worst.portfolioDelta)))}` : "—",
-    url: shareUrl,
-  };
+  // Rebuilt every render, this redrew ShareCard's whole 1080×1920 canvas on every
+  // parent tick — and this screen has running counters.
+  const shareData = useMemo(
+    () => ({
+      verdict: klass.title,
+      verdictHex: klass.hex,
+      netWorth: nw,
+      netWorthText: currency(nw),
+      years: hist.length,
+      runId: `${run.mode}-${run.seed}`,
+      history: hist.map((h) => h.netWorth),
+      statLabel: "Biggest hit",
+      statValue: tookAHit ? `−${currency(Math.abs(worst.portfolioDelta))}` : "None",
+      url: shareUrl,
+    }),
+    [klass.title, klass.hex, nw, hist, run.mode, run.seed, tookAHit, worst, shareUrl],
+  );
 
   const ledger = [
     { label: "Net worth", value: currency(nw) },
@@ -156,15 +165,23 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
         {/* best / worst — named market years */}
         {best && worst && (
           <motion.div variants={item} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="border border-hairline border-l-2 border-l-gain bg-bg2 p-4">
-              <p className="eyebrow text-gain">Best year · {best.year}</p>
-              <p className="num text-lg text-gain">+{currency(Math.max(0, best.portfolioDelta))}</p>
-              <p className="voice mt-1 text-[0.92rem] text-secondary">{macroEvent(best.year)?.title ?? "A quiet, green year."}</p>
+            <div className={`border border-hairline border-l-2 bg-bg2 p-4 ${bestUp ? "border-l-gain" : "border-l-hairline-strong"}`}>
+              <p className={`eyebrow ${bestUp ? "text-gain" : "text-secondary"}`}>Best year · {best.year}</p>
+              <p className={`num text-lg ${bestUp ? "text-gain" : "text-loss"}`}>
+                {bestUp ? `+${currency(best.portfolioDelta)}` : `−${currency(Math.abs(best.portfolioDelta))}`}
+              </p>
+              <p className="voice mt-1 text-[0.92rem] text-secondary">
+                {bestUp ? macroEvent(best.year)?.title ?? "A quiet, green year." : "Even your best year lost money."}
+              </p>
             </div>
-            <div className="border border-hairline border-l-2 border-l-loss bg-bg2 p-4">
-              <p className="eyebrow text-loss">Worst year · {worst.year}</p>
-              <p className="num text-lg text-loss">−{currency(Math.abs(Math.min(0, worst.portfolioDelta)))}</p>
-              <p className="voice mt-1 text-[0.92rem] text-secondary">{macroEvent(worst.year)?.title ?? "The market just shrugged."}</p>
+            <div className={`border border-hairline border-l-2 bg-bg2 p-4 ${tookAHit ? "border-l-loss" : "border-l-hairline-strong"}`}>
+              <p className={`eyebrow ${tookAHit ? "text-loss" : "text-secondary"}`}>Worst year · {worst.year}</p>
+              <p className={`num text-lg ${tookAHit ? "text-loss" : "text-gain"}`}>
+                {tookAHit ? `−${currency(Math.abs(worst.portfolioDelta))}` : `+${currency(worst.portfolioDelta)}`}
+              </p>
+              <p className="voice mt-1 text-[0.92rem] text-secondary">
+                {tookAHit ? macroEvent(worst.year)?.title ?? "The market just shrugged." : "You never had a down year."}
+              </p>
             </div>
           </motion.div>
         )}

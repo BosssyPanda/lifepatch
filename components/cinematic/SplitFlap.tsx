@@ -71,7 +71,7 @@ export function SplitFlap({ text, hex, active, reduced = false, className = "" }
   if (!active && !reduced) {
     // pre-roll: hold a row of blanks so layout is stable (no CLS)
     return (
-      <span className={`inline-flex gap-[0.12em] ${className}`} aria-label={text}>
+      <span className={`inline-flex gap-[0.12em] ${className}`} role="img" aria-label={text}>
         {chars.map((_, i) => (
           <span key={i} className="inline-flex border border-hairline bg-bg2" style={{ width: "0.86em", height: "1.2em" }} aria-hidden />
         ))}
@@ -79,8 +79,10 @@ export function SplitFlap({ text, hex, active, reduced = false, className = "" }
     );
   }
 
+  // role="img" + aria-label, not role="text": the latter was dropped from ARIA and only
+  // Safari implements it, so everywhere else the verdict read as loose letters or nothing.
   return (
-    <span className={`inline-flex gap-[0.12em] ${className}`} role="text" aria-label={text}>
+    <span className={`inline-flex gap-[0.12em] ${className}`} role="img" aria-label={text}>
       {chars.map((ch, i) => (
         <Flap key={i} target={ch} index={i} hex={hex} reduced={reduced} onSettle={onSettle} />
       ))}

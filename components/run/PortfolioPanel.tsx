@@ -8,6 +8,9 @@ import { lastAssetReturn, portfolioValue, priceSeries, type RunState } from "@/l
 import { AssetRow } from "./AssetRow";
 import { PortfolioPresets } from "./PortfolioPresets";
 
+/** 18px of visual button, 44px of hit box — vertical only, so neighbours don't overlap. */
+const DEBT_HIT = "relative before:absolute before:inset-x-0 before:-inset-y-[13px] before:content-['']";
+
 export function PortfolioPanel({
   run,
   onTrade,
@@ -57,10 +60,14 @@ export function PortfolioPanel({
         <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">
           <div className="flex items-center justify-between">
             <p className="eyebrow text-loss">Debt</p>
+            {/* The smallest targets in the app (~28×18) — vertical hit expansion to 44px,
+                no horizontal bleed so the two never steal each other's taps. And the hover
+                fill is `enabled:` scoped: a disabled MAX used to go solid red under the
+                cursor while still refusing the click. */}
             {run.debt > 0 && (
-              <div className="flex gap-1">
-                <button type="button" disabled={run.cash < 1000} onClick={() => handlePayDebt(1000)} className="num rounded-[2px] border border-loss/60 px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 hover:bg-loss hover:text-bg">−$1k</button>
-                <button type="button" disabled={run.cash <= 0} onClick={() => handlePayDebt(Math.min(run.cash, run.debt))} className="num rounded-[2px] border border-loss/60 px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 hover:bg-loss hover:text-bg">MAX</button>
+              <div className="flex gap-1.5">
+                <button type="button" data-radius="" disabled={run.cash < 1000} onClick={() => handlePayDebt(1000)} className={`num border border-loss/60 px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 enabled:hover:bg-loss enabled:hover:text-bg ${DEBT_HIT}`}>−$1k</button>
+                <button type="button" data-radius="" disabled={run.cash <= 0} onClick={() => handlePayDebt(Math.min(run.cash, run.debt))} className={`num border border-loss/60 px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 enabled:hover:bg-loss enabled:hover:text-bg ${DEBT_HIT}`}>MAX</button>
               </div>
             )}
           </div>

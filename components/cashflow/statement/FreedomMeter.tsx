@@ -38,8 +38,17 @@ export function FreedomMeter({ s, compact = false }: { s: CashflowState; compact
         </motion.span>
       </div>
 
-      {/* flat gauge track — hairline groove, ink/gain fill, milestone tick notches */}
-      <div className="relative mt-2 h-4 overflow-hidden border border-hairline bg-bg">
+      {/* flat gauge track — hairline groove, ink/gain fill, milestone tick notches.
+          This is the win condition, so it carries real gauge semantics. */}
+      <div
+        className="relative mt-2 h-4 overflow-hidden border border-hairline bg-bg"
+        role="progressbar"
+        aria-label="Freedom"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuetext={`${pct}% — ${currency(passive)} passive income against ${currency(expenses)} monthly expenses`}
+      >
         {MILESTONES.map((m) => (
           <span key={m} aria-hidden className="absolute inset-y-[2px] w-px" style={{ left: `${m}%`, background: "var(--color-hairline)" }} />
         ))}

@@ -118,12 +118,17 @@ export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone
   );
 }
 
-/** A short-lived floating toast (payday collected, etc.). */
+/**
+ * A short-lived floating toast (payday collected, etc.). `role="status"` — it is
+ * `pointer-events-none`, so being announced is the only way a screen-reader user
+ * ever learns a payday landed.
+ */
 export function Toast({ show, children }: { show: boolean; children: ReactNode }) {
   return (
     <AnimatePresence>
       {show && (
         <motion.div
+          role="status"
           initial={{ opacity: 0, y: 24, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: -16, scale: 0.95 }}

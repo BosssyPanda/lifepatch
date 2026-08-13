@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@/components/icons";
+import { LedgerButton } from "@/components/ui/LedgerButton";
 import { useDialog } from "@/components/ui/LedgerDialog";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { drawShareCard, FORMATS, type ShareCardData, type ShareFormat } from "./drawShareCard";
@@ -11,9 +12,19 @@ import { drawShareCard, FORMATS, type ShareCardData, type ShareFormat } from "./
  * an offscreen canvas on open, shows a preview, and offers Download (PNG) + Web Share
  * (with a download fallback). Story (1080×1920) / Card (1200×630) formats.
  */
+/** Some browsers cancel an object-URL download if the URL is revoked in the same tick. */
+const REVOKE_DELAY_MS = 60_000;
+
+/** The native share sheet reports a user dismissal as one of these — not a failure to fall back from. */
+function isUserCancel(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.name === "NotAllowedError");
+}
+
 export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () => void }) {
   const [format, setFormat] = useState<ShareFormat>("story");
   const [preview, setPreview] = useState<string | null>(null);
+  const [drawFailed, setDrawFailed] = useState(false);
+  const [redraw, setRedraw] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   // Focus trap / Escape / focus restore / scroll lock — it already claimed role="dialog".
   const dialogRef = useDialog<HTMLDivElement>({ open: true, onClose });
@@ -21,13 +32,22 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
   useEffect(() => {
     let alive = true;
     setPreview(null);
-    void drawShareCard(format, data).then((cv) => {
-      if (!alive) return;
-      canvasRef.current = cv;
-      setPreview(cv.toDataURL("image/png"));
-    });
+    setDrawFailed(false);
+    drawShareCard(format, data)
+      .then((cv) => {
+        if (!alive) return;
+        canvasRef.current = cv;
+        setPreview(cv.toDataURL("image/png"));
+      })
+      // Without this a failed render left "PRINTING STATEMENT…" up forever, both
+      // buttons disabled, with no way to tell that anything had gone wrong.
+      .catch(() => {
+        if (!alive) return;
+        canvasRef.current = null;
+        setDrawFailed(true);
+      });
     return () => { alive = false; };
-  }, [format, data]);
+  }, [format, data, redraw]);
 
   const toBlob = () => new Promise<Blob | null>((res) => {
     const cv = canvasRef.current;
@@ -39,10 +59,11 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
     const blob = await toBlob();
     if (!blob) return;
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    const href = URL.createObjectURL(blob);
+    a.href = href;
     a.download = `lifepatch-${data.runId}-${format}.png`;
     a.click();
-    URL.revokeObjectURL(a.href);
+    window.setTimeout(() => URL.revokeObjectURL(href), REVOKE_DELAY_MS);
   };
 
   const share = async () => {
@@ -54,7 +75,11 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
       try {
         await nav.share({ files: [file], title: "LIFEPATCH", text: `My verdict: ${data.verdict}` });
         return;
-      } catch { /* user cancelled or unsupported — fall through */ }
+      } catch (err) {
+        // Dismissing the share sheet is a decision, not an error — downloading the
+        // file anyway is the opposite of what the player just asked for.
+        if (isUserCancel(err)) return;
+      }
     }
     void download();
   };
@@ -96,6 +121,13 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
         >
           {preview ? (
             <img src={preview} alt="Share card preview" className="h-full w-full object-contain" />
+          ) : drawFailed ? (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-5 text-center" role="alert">
+              <p className="display-caps text-[0.8rem] tracking-[0.14em] text-loss">Could not print the statement</p>
+              <LedgerButton variant="secondary" size="sm" onClick={() => setRedraw((n) => n + 1)}>
+                Try again
+              </LedgerButton>
+            </div>
           ) : (
             <div className="flex h-full w-full items-center justify-center">
               <TerminalOp label="Printing statement" center />

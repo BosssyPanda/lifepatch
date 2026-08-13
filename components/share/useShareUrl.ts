@@ -19,12 +19,19 @@ const ATTEMPTS = 5;
 const RETRY_MS = 1200;
 
 export function useShareUrl(run: RunState): string {
+  return useShareUrlFor(run.mode, netWorth(run));
+}
+
+/**
+ * The mode-agnostic form. The Rat Race recap has no `RunState` — its result row is
+ * keyed on passive income — so it resolves its statement URL through this directly.
+ */
+export function useShareUrlFor(mode: string, score: number): string {
   const auth = useAuth();
   const origin = typeof window !== "undefined" ? window.location.origin : "https://lifepatch.app";
   const [url, setUrl] = useState(origin);
 
   const playerId = resolvePlayerId(auth.user?.id ?? null);
-  const score = netWorth(run);
 
   useEffect(() => {
     if (!isCloud || !supabase || !playerId) return;
@@ -35,7 +42,7 @@ export function useShareUrl(run: RunState): string {
         .from("results")
         .select("id")
         .eq("user_id", playerId)
-        .eq("mode", run.mode)
+        .eq("mode", mode)
         .eq("score", score)
         .order("created_at", { ascending: false })
         .limit(1);
@@ -52,7 +59,7 @@ export function useShareUrl(run: RunState): string {
     return () => {
       cancelled = true;
     };
-  }, [playerId, run.mode, score, origin]);
+  }, [playerId, mode, score, origin]);
 
   return url;
 }

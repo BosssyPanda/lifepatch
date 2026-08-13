@@ -127,6 +127,10 @@ export function CashflowSetup({
             This is what you&apos;ll chase on the Fast Track once you&apos;re free. Pick the one that makes the grind worth it.
           </p>
 
+          {/* Same field, same label, same size as Setup — it used to be a `w-36` afterthought
+              wedged next to the CTA, so the two flows named the same player differently. */}
+          <NameField value={name} onChange={setName} className="mt-6 w-full max-w-sm" />
+
           <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {DREAMS.map((d, i) => {
               const active = dream === d.id;
@@ -152,7 +156,6 @@ export function CashflowSetup({
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
-            <NameField value={name} onChange={setName} label="Name" className="w-44" />
             <NeonButton
               variant="primary"
               size="lg"

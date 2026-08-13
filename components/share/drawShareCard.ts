@@ -21,6 +21,8 @@ export type ShareCardData = {
   netWorth: number;
   netWorthText: string;
   years: number;
+  /** What `years` counts — the Rat Race measures turns, not years. */
+  yearsLabel?: string;
   runId: string;
   history: number[]; // net-worth series
   statLabel: string;
@@ -179,7 +181,7 @@ export async function drawShareCard(format: ShareFormat, data: ShareCardData): P
       ctx.stroke();
       ctx.setLineDash([]);
     };
-    drawRow("Years survived", String(data.years), rowY);
+    drawRow(data.yearsLabel ?? "Years survived", String(data.years), rowY);
     drawRow(data.statLabel, data.statValue, rowY + 60);
 
     const qr = 300;

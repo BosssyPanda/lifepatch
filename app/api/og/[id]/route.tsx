@@ -54,6 +54,16 @@ function verdictHex(title: string): string {
   return INK;
 }
 
+/**
+ * Anton at 118px fills the 1056px usable width at about 14 characters. The old two-step
+ * ramp dropped straight to 88px, which still ran long for the longest verdict in the
+ * game — "Escaped the Rat Race" (20) — so there is a third step for those.
+ */
+function verdictSize(verdict: string): number {
+  const n = verdict.length;
+  return n > 18 ? 72 : n > 14 ? 88 : 118;
+}
+
 const MODE_LABEL: Record<Row["mode"], string> = {
   story: "STORY RUN",
   infinite: "INFINITE RUN",
@@ -98,7 +108,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     { name: "Anton", data: anton, style: "normal" as const, weight: 400 as const },
     { name: "PlexMono", data: plex, style: "normal" as const, weight: 400 as const },
   ];
+  // A real row never changes, so it can be cached forever.
   const headers = { "cache-control": "public, immutable, no-transform, max-age=31536000" };
+  // The fallback must not be: a link shared in the window between the share URL being
+  // minted and its row landing would otherwise pin the WRONG card at every CDN and
+  // scraper for a year. A short TTL lets the real statement replace it.
+  const fallbackHeaders = { "cache-control": "public, no-transform, max-age=0, s-maxage=60" };
 
   // Unknown/missing run → generic wordmark card (never an error image).
   if (!row) {
@@ -122,7 +137,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           </span>
         </div>
       ),
-      { width: 1200, height: 630, fonts, headers },
+      { width: 1200, height: 630, fonts, headers: fallbackHeaders },
     );
   }
 
@@ -160,7 +175,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         <span
           style={{
             fontFamily: "Anton",
-            fontSize: row.verdict.length > 14 ? 88 : 118,
+            fontSize: verdictSize(row.verdict),
             color: hex,
             letterSpacing: 2,
             marginTop: 10,

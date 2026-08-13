@@ -55,35 +55,37 @@ function statRows(row: ResultRow): { label: string; value: string }[] {
  * falls through to localStorage — which does not exist on the server, so every /r/{id} threw
  * and rendered the bare 404. A deployment with no cloud records says so, in house grammar.
  */
+/**
+ * `my-auto` rather than `justify-center` on the page: a tall statement under
+ * `justify-center` clips its own top off on a short viewport, with no way to scroll to it.
+ */
+const PAGE = "mx-auto flex min-h-[100svh] w-full max-w-xl flex-col px-5 py-14";
+
+const CTA =
+  "num inline-flex items-center gap-2 border border-ink px-5 py-3 text-sm text-ink hover:bg-ink hover:text-bg";
+
 function NoRecords() {
   return (
-    <main className="mx-auto flex min-h-[100svh] w-full max-w-xl flex-col justify-center px-5 py-14">
-      <div className="flex items-baseline justify-between border-b border-hairline pb-3">
-        <span className="display-caps text-xl text-ink">LIFEPATCH</span>
-        <span className="num text-tertiary" style={{ fontSize: "0.62rem", letterSpacing: "0.18em" }}>
-          NO CENTRAL LEDGER
-        </span>
-      </div>
+    <main className={PAGE}>
+      <div className="my-auto w-full">
+        <div className="flex items-baseline justify-between border-b border-hairline pb-3">
+          <span className="display-caps text-xl text-ink">LIFEPATCH</span>
+          <span className="eyebrow text-tertiary">No central ledger</span>
+        </div>
 
-      <p className="eyebrow mt-10 text-secondary" style={{ fontSize: "0.6rem", letterSpacing: "0.3em" }}>
-        Record lookup · Unavailable
-      </p>
-      <h1 className="display-caps mt-2 text-4xl leading-none text-ink sm:text-5xl">
-        STATEMENT NOT ON FILE
-      </h1>
-      <p className="mt-4 max-w-md font-body text-[0.95rem] leading-relaxed text-ink-dim">
-        This deployment keeps no cloud records — every run is filed in the player&apos;s own browser,
-        so there is nothing here to look up.
-      </p>
+        <p className="eyebrow mt-10 text-secondary">Record lookup · Unavailable</p>
+        <h1 className="display-caps mt-2 text-4xl leading-none text-ink sm:text-5xl">
+          STATEMENT NOT ON FILE
+        </h1>
+        <p className="mt-4 max-w-md font-body text-[0.95rem] leading-relaxed text-ink-dim">
+          This deployment keeps no cloud records — every run is filed in the player&apos;s own browser,
+          so there is nothing here to look up.
+        </p>
 
-      <div className="mt-12 border-t border-hairline pt-6">
-        <p className="voice text-[1.02rem] text-ink/85">Your ledger is the only one that counts anyway.</p>
-        <Link
-          href="/"
-          className="num mt-5 inline-flex items-center gap-2 border border-ink px-5 py-3 text-sm text-ink hover:bg-ink hover:text-bg"
-        >
-          [ BEGIN A RUN → ]
-        </Link>
+        <div className="mt-12 border-t border-hairline pt-6">
+          <p className="voice text-[1.02rem] text-ink/85">Your ledger is the only one that counts anyway.</p>
+          <Link href="/" className={`${CTA} mt-5`}>[ BEGIN A RUN → ]</Link>
+        </div>
       </div>
     </main>
   );
@@ -124,60 +126,64 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
       : null;
 
   return (
-    <main className="mx-auto flex min-h-[100svh] w-full max-w-xl flex-col justify-center px-5 py-14">
-      {/* rail */}
-      <div className="flex items-baseline justify-between border-b border-hairline pb-3">
-        <span className="display-caps text-xl text-ink">LIFEPATCH</span>
-        <span className="num text-tertiary" style={{ fontSize: "0.62rem", letterSpacing: "0.18em" }}>
-          STATEMENT NO. {row.id.slice(0, 8).toUpperCase()}
-        </span>
-      </div>
+    <main className={PAGE}>
+      <div className="my-auto w-full">
+        {/* rail */}
+        <div className="flex items-baseline justify-between border-b border-hairline pb-3">
+          <span className="display-caps text-xl text-ink">LIFEPATCH</span>
+          <span className="eyebrow text-tertiary">Statement no. {row.id.slice(0, 8).toUpperCase()}</span>
+        </div>
 
-      {/* verdict */}
-      <p className="eyebrow mt-10 text-secondary" style={{ fontSize: "0.6rem", letterSpacing: "0.3em" }}>
-        Run closed · {MODE_LABEL[row.mode] ?? row.mode} · Final verdict
-      </p>
-      <h1 className="display-caps mt-2 text-5xl leading-none sm:text-6xl" style={{ color: hex }}>
-        {row.verdict}
-      </h1>
+        {/* verdict */}
+        <p className="eyebrow mt-10 text-secondary">
+          Run closed · {MODE_LABEL[row.mode] ?? row.mode} · Final verdict
+        </p>
+        <h1 className="display-caps mt-2 text-5xl leading-none sm:text-6xl" style={{ color: hex }}>
+          {row.verdict}
+        </h1>
 
-      {/* statement rows */}
-      <div className="mt-9 flex flex-col gap-3">
-        {statRows(row).map((s, i) => (
-          <div key={s.label} className="flex items-baseline gap-3">
-            <span className="num text-secondary" style={{ fontSize: "0.78rem" }}>{s.label}</span>
-            <span className="grow border-b border-dotted border-dotted" aria-hidden />
-            <span
-              className={i === 0 ? "num text-lg" : "num text-[0.82rem] text-ink"}
-              style={i === 0 ? { color: good ? "var(--color-gain)" : "var(--color-loss)" } : undefined}
-            >
-              {s.value}
-            </span>
+        {/* statement rows — `.rule-dotted`, the same dot leader the in-app statement uses.
+            The old `border-dotted border-dotted` collided with Tailwind's border-style
+            utility and printed a heavier leader than anywhere else in the product. */}
+        <div className="mt-9 flex flex-col gap-3">
+          {statRows(row).map((s, i) => (
+            <div key={s.label} className="flex items-baseline gap-3">
+              <span className="eyebrow text-secondary">{s.label}</span>
+              <span className="rule-dotted h-px grow" aria-hidden />
+              <span
+                className={i === 0 ? "num text-lg" : "num text-[0.82rem] text-ink"}
+                style={i === 0 ? { color: good ? "var(--color-gain)" : "var(--color-loss)" } : undefined}
+              >
+                {s.value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* annotated life line (when the run shipped its history) */}
+        {chartPoints && (
+          <div className="mt-9">
+            <p className="eyebrow text-secondary">Net worth · year by year</p>
+            <div className="mt-2">
+              <AnnotatedLifeChart points={chartPoints} />
+            </div>
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* annotated life line (when the run shipped its history) */}
-      {chartPoints && (
-        <div className="mt-9">
-          <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem", letterSpacing: "0.2em" }}>
-            Net worth · year by year
-          </p>
-          <div className="mt-2">
-            <AnnotatedLifeChart points={chartPoints} />
+        {/* CTA */}
+        <div className="mt-12 border-t border-hairline pt-6">
+          <p className="voice text-[1.02rem] text-ink/85">Could you do better? The market doesn&apos;t care. Prove it anyway.</p>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Link href="/" className={CTA}>[ BEGIN A RUN → ]</Link>
+            {/* a second exit, so a shared statement isn't a one-way door */}
+            <Link
+              href="/leaderboard"
+              className="eyebrow text-secondary underline underline-offset-4 transition-colors hover:text-ink"
+            >
+              See the standings →
+            </Link>
           </div>
         </div>
-      )}
-
-      {/* CTA */}
-      <div className="mt-12 border-t border-hairline pt-6">
-        <p className="voice text-[1.02rem] text-ink/85">Could you do better? The market doesn&apos;t care. Prove it anyway.</p>
-        <Link
-          href="/"
-          className="num mt-5 inline-flex items-center gap-2 border border-ink px-5 py-3 text-sm text-ink hover:bg-ink hover:text-bg"
-        >
-          [ BEGIN A RUN → ]
-        </Link>
       </div>
     </main>
   );
