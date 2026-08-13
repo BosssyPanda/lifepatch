@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAudio } from "@/hooks/useAudio";
+import { VolumePopover, useVolumePopover } from "./VolumeControl";
 
 /**
  * Phase M2 — the persistent chrome strip over both game modes (phantom.land
@@ -13,6 +14,7 @@ import { useAudio } from "@/hooks/useAudio";
 export function HudRail({ mode, counter, className = "" }: { mode: string; counter: string; className?: string }) {
   const audio = useAudio();
   const [time, setTime] = useState<string | null>(null);
+  const vol = useVolumePopover();
 
   useEffect(() => {
     const tick = () =>
@@ -46,18 +48,43 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
       <span aria-hidden className={`${cell} hidden text-tertiary sm:flex`} style={type}>
         LOCAL {time ?? "--:--"}
       </span>
-      <button
-        type="button"
-        onClick={() => audio.setMuted(!audio.muted)}
-        aria-pressed={!audio.muted}
-        aria-label={audio.muted ? "Turn sound on" : "Turn sound off"}
-        className={`${cell} ml-auto border-l border-hairline transition-colors hover:bg-ink hover:text-bg ${
-          audio.muted ? "text-tertiary" : "text-ink"
-        }`}
-        style={type}
-      >
-        SOUND {audio.muted ? "OFF" : "ON"}
-      </button>
+      {/* Sound cell: the mute toggle stays a one-click control, and the level
+          lives in a small popover next to it (the rail has no room for a fader
+          and the mixer is not a thing you reach for every turn). */}
+      {/* aria-live="off": the rail is a live region for the turn counter, and a
+          popover opening is not a status change worth announcing. */}
+      <div aria-live="off" className="relative ml-auto flex items-stretch border-l border-hairline">
+        <button
+          type="button"
+          onClick={() => audio.setMuted(!audio.muted)}
+          aria-pressed={!audio.muted}
+          aria-label={audio.muted ? "Turn sound on" : "Turn sound off"}
+          className={`${cell} transition-colors hover:bg-ink hover:text-bg ${
+            audio.muted ? "text-tertiary" : "text-ink"
+          }`}
+          style={type}
+        >
+          SOUND {audio.muted ? "OFF" : "ON"}
+        </button>
+        <button
+          type="button"
+          onClick={vol.toggle}
+          {...vol.triggerProps}
+          aria-label="Volume"
+          className={`${cell} border-l border-hairline px-2 transition-colors hover:bg-ink hover:text-bg ${
+            vol.open ? "bg-ink text-bg" : "text-tertiary"
+          }`}
+          style={type}
+        >
+          VOL {Math.round(audio.volume * 100)}
+        </button>
+        <VolumePopover
+          open={vol.open}
+          onClose={vol.close}
+          muted={audio.muted}
+          onToggleMute={() => audio.setMuted(!audio.muted)}
+        />
+      </div>
     </div>
   );
 }

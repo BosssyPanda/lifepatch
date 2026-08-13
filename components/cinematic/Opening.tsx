@@ -63,10 +63,14 @@ export function Opening({ onStart, onAlmanac }: { onStart: () => void; onAlmanac
         {stage === "title" && (
           <motion.div key="title" {...wipe}>
             <Intro onBegin={onStart} onAlmanac={onAlmanac} />
+            {/* Clears the hero's top rail (~41px) instead of sitting on top of it — at top-4
+                this covered the LIFEPATCH cell at every breakpoint. */}
             <button
               type="button"
               onClick={replay}
-              className="fixed left-4 top-4 z-30 flex items-center gap-1.5 border border-ink/25 bg-bg px-2.5 py-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink"
+              aria-label="Replay the intro film"
+              data-radius=""
+              className="fixed left-4 top-14 z-30 flex min-h-11 items-center gap-1.5 border border-hairline-strong bg-bg px-3 py-2 text-ink-dim transition-colors hover:border-ink hover:text-ink"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 4l13 8-13 8z" /></svg>
               <span className="eyebrow" style={{ fontSize: "0.56rem" }}>Intro</span>

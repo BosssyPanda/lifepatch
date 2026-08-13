@@ -8,6 +8,10 @@ import { useState } from "react";
  * ink-colored bill rectangles fall once (≤1.5s) as the verdict lands — a dry,
  * printed-money flourish, NOT a particle field: fixed count, one shot, no loop,
  * transform/opacity only. Suppressed under reduced motion (parent gates it).
+ *
+ * `count` lets an impact size its own shower (`juiceTier().bills`) — it is read
+ * once, at mount, and never re-read: the one-shot contract above is the point of
+ * this component, and a count that could change mid-fall would break it.
  */
 
 const BILL_COUNT = 18;
@@ -15,9 +19,9 @@ const FALL_S = 1.4;
 
 type Bill = { left: number; delay: number; drift: number; spin: number; w: number };
 
-function makeBills(): Bill[] {
-  return Array.from({ length: BILL_COUNT }, (_, i) => ({
-    left: (i * 100) / BILL_COUNT + (Math.random() * 4 - 2),
+function makeBills(n: number): Bill[] {
+  return Array.from({ length: n }, (_, i) => ({
+    left: (i * 100) / n + (Math.random() * 4 - 2),
     delay: Math.random() * 0.45,
     drift: Math.random() * 40 - 20,
     spin: Math.random() * 240 - 120,
@@ -25,9 +29,9 @@ function makeBills(): Bill[] {
   }));
 }
 
-export function MoneyFall() {
+export function MoneyFall({ count = BILL_COUNT }: { count?: number }) {
   // positions fixed once per mount — a single deterministic shower, then done
-  const [bills] = useState<Bill[]>(makeBills);
+  const [bills] = useState<Bill[]>(() => makeBills(Math.max(1, Math.round(count))));
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-[60] overflow-hidden">

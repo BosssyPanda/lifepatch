@@ -52,10 +52,20 @@ export function Leaderboard({
   open,
   onClose,
   initialMode = "story",
+  chrome = "dialog",
+  /** Rendered in the page masthead's right cell — e.g. a link back to the ledger. */
+  pageAction,
 }: {
   open: boolean;
   onClose: () => void;
   initialMode?: GameMode;
+  /**
+   * `dialog` — the in-game overlay. `page` — the standalone /leaderboard route, which is a
+   * destination rather than something opened over the game, and so gets a masthead and a
+   * folio rail instead of a card floating on a scrim. Same board, same data, same tabs.
+   */
+  chrome?: "dialog" | "page";
+  pageAction?: React.ReactNode;
 }) {
   const { profile } = useProfile();
   const { sfx } = useAudio();
@@ -114,6 +124,127 @@ export function Leaderboard({
   }, [open, mode, scope, profileId, sfx, retry]);
 
   const metric = MODE_TABS.find((t) => t.id === mode)?.metric ?? "score";
+  const isPage = chrome === "page";
+  // The page breathes at the section rhythm the rest of the site uses; the dialog stays tight
+  // because it is a card, not a document.
+  const gutter = isPage ? "px-5 sm:px-8" : "px-5";
+
+  const board = (
+    <>
+      <LedgerTabs
+        items={MODE_TABS}
+        value={mode}
+        onChange={setMode}
+        label="Leaderboard mode"
+        panelId={panelId}
+        className={`${gutter} pt-4`}
+      />
+      <LedgerTabs
+        items={SCOPE_TABS}
+        value={scope}
+        onChange={setScope}
+        label="Leaderboard range"
+        panelId={panelId}
+        size="sm"
+        className={`${gutter} pt-2`}
+      />
+
+      <p className={`${gutter} pt-3 font-body text-xs italic text-secondary`}>
+        Best run per player, ranked by {metric}.
+      </p>
+    </>
+  );
+
+  const body = loading ? (
+    <p className="py-10 text-center"><TerminalOp label="Fetching ledger" center /></p>
+  ) : failed ? (
+    <FailedState reduced={reduced} onRetry={() => setRetry((n) => n + 1)} />
+  ) : rows.length === 0 ? (
+    <EmptyState scope={scope} reduced={reduced} />
+  ) : (
+    <motion.ol
+      key={`${mode}-${scope}`}
+      className="flex flex-col gap-1.5"
+      variants={listContainer}
+      initial="hidden"
+      animate="show"
+    >
+      {rows.map((r, i) => {
+        const p = profiles[r.userId];
+        const isMe = profile?.id === r.userId;
+        const name = p?.username ?? "anonymous";
+        return (
+          <motion.li
+            key={r.id}
+            variants={reduced ? listItemReduced : listItem}
+            style={{ transformPerspective: 640, transformOrigin: "center top" }}
+            className={`flex items-center gap-3 border px-3 py-2 transition-colors ${
+              isMe
+                ? "border-ink bg-ink/10"
+                : i % 2
+                  ? "border-transparent bg-ink/[0.03] hover:bg-ink/[0.06]"
+                  : "border-transparent hover:bg-ink/[0.04]"
+            }`}
+          >
+            <RankBadge rank={i + 1} />
+            <Avatar seed={p?.avatarSeed ?? r.userId} username={name} size={34} />
+            <span className="min-w-0 flex-1 truncate font-body text-ink">
+              {name}
+              {isMe && <span className="ml-1.5 text-xs text-ink">you</span>}
+            </span>
+            <span className="text-right">
+              <span className="display-caps block text-sm text-ink">
+                <AnimatedNumber value={r.score} format={(n) => formatScore(mode, n)} />
+              </span>
+              <span className="block text-[0.65rem] uppercase tracking-wide text-secondary">
+                {r.verdict}
+              </span>
+            </span>
+          </motion.li>
+        );
+      })}
+    </motion.ol>
+  );
+
+  if (isPage) {
+    return (
+      <main id="main" className="mx-auto flex min-h-[100svh] w-full max-w-3xl flex-col">
+        {/* the house masthead rail, same grammar as the hero and the /r/[id] statement */}
+        <div className="flex items-stretch border-b border-hairline">
+          <div className="flex items-center gap-2 border-r border-hairline px-4 py-3 sm:px-6">
+            <span className="eyebrow text-ink" style={{ fontSize: "0.62rem", letterSpacing: "0.2em" }}>
+              LIFEPATCH
+            </span>
+            <span className="eyebrow text-tertiary" style={{ fontSize: "0.62rem" }}>
+              / Compete
+            </span>
+          </div>
+          <div className="ml-auto flex items-center px-4 py-3 sm:px-6">{pageAction}</div>
+        </div>
+
+        <header className={`${gutter} border-b-2 border-hairline-strong pb-6 pt-10`}>
+          <p className="eyebrow text-ink">Form 02 — Standing</p>
+          <h1 className="display-caps mt-3 text-4xl text-ink sm:text-6xl">Leaderboards</h1>
+          <div className="mt-5 h-px w-24 bg-ink" />
+        </header>
+
+        {board}
+
+        <div className={`${gutter} flex-1 pb-10 pt-2`} id={panelId} role="tabpanel" aria-labelledby={tabId(panelId, mode)}>
+          {body}
+        </div>
+
+        <footer className={`${gutter} mt-auto flex items-center justify-between border-t border-hairline py-4`}>
+          <span className="eyebrow text-tertiary" style={{ fontSize: "0.55rem" }}>
+            Lifepatch · Form 02
+          </span>
+          <span className="eyebrow text-tertiary" style={{ fontSize: "0.55rem" }}>
+            Best run per player
+          </span>
+        </footer>
+      </main>
+    );
+  }
 
   return (
     <AnimatePresence>
@@ -149,27 +280,7 @@ export function Leaderboard({
 
             {/* one tab treatment for both axes — they used to be filled pills over
                 underlined text, two visual languages inside one overlay */}
-            <LedgerTabs
-              items={MODE_TABS}
-              value={mode}
-              onChange={setMode}
-              label="Leaderboard mode"
-              panelId={panelId}
-              className="px-5 pt-4"
-            />
-            <LedgerTabs
-              items={SCOPE_TABS}
-              value={scope}
-              onChange={setScope}
-              label="Leaderboard range"
-              panelId={panelId}
-              size="sm"
-              className="px-5 pt-2"
-            />
-
-            <p className="px-5 pt-3 font-body text-xs italic text-secondary">
-              Best run per player, ranked by {metric}.
-            </p>
+            {board}
 
             <div
               className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3"
@@ -178,56 +289,7 @@ export function Leaderboard({
               aria-labelledby={tabId(panelId, mode)}
               data-lenis-prevent
             >
-              {loading ? (
-                <p className="py-10 text-center"><TerminalOp label="Fetching ledger" center /></p>
-              ) : failed ? (
-                <FailedState reduced={reduced} onRetry={() => setRetry((n) => n + 1)} />
-              ) : rows.length === 0 ? (
-                <EmptyState scope={scope} reduced={reduced} />
-              ) : (
-                <motion.ol
-                  key={`${mode}-${scope}`}
-                  className="flex flex-col gap-1.5"
-                  variants={listContainer}
-                  initial="hidden"
-                  animate="show"
-                >
-                  {rows.map((r, i) => {
-                    const p = profiles[r.userId];
-                    const isMe = profile?.id === r.userId;
-                    const name = p?.username ?? "anonymous";
-                    return (
-                      <motion.li
-                        key={r.id}
-                        variants={reduced ? listItemReduced : listItem}
-                        style={{ transformPerspective: 640, transformOrigin: "center top" }}
-                        className={`flex items-center gap-3 border px-3 py-2 transition-colors ${
-                          isMe
-                            ? "border-ink bg-ink/10"
-                            : i % 2
-                              ? "border-transparent bg-ink/[0.03] hover:bg-ink/[0.06]"
-                              : "border-transparent hover:bg-ink/[0.04]"
-                        }`}
-                      >
-                        <RankBadge rank={i + 1} />
-                        <Avatar seed={p?.avatarSeed ?? r.userId} username={name} size={34} />
-                        <span className="min-w-0 flex-1 truncate font-body text-ink">
-                          {name}
-                          {isMe && <span className="ml-1.5 text-xs text-ink">you</span>}
-                        </span>
-                        <span className="text-right">
-                          <span className="display-caps block text-sm text-ink">
-                            <AnimatedNumber value={r.score} format={(n) => formatScore(mode, n)} />
-                          </span>
-                          <span className="block text-[0.65rem] uppercase tracking-wide text-secondary">
-                            {r.verdict}
-                          </span>
-                        </span>
-                      </motion.li>
-                    );
-                  })}
-                </motion.ol>
-              )}
+              {body}
             </div>
 
             <footer className="border-t-2 border-hairline px-5 py-3">

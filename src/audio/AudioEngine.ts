@@ -2,6 +2,7 @@
 
 import * as Tone from "tone";
 import type { AmbienceId, SfxName, StingTone } from "./sfxBank";
+import { SCORE_BPM } from "./tempo";
 
 /**
  * LifePatch adaptive score — one continuous "tense lo-fi documentary" piece in
@@ -26,7 +27,9 @@ export type AccentKind =
 type StemId = "sub" | "pad" | "rhodes" | "tick" | "crackle" | "tension" | "warmth" | "lead";
 
 // --- musical material (A minor, 76 BPM, 8-bar / 4-segment cycle) ---
-const BPM = 76;
+// The tempo is shared with the visual beat grid (src/audio/tempo.ts) so the
+// ceremonies can land their phase boundaries on the same instants as the score.
+const BPM = SCORE_BPM;
 // chord voicings per 2-bar segment: Am(add9) → Fmaj7 → Cmaj7 → G6/B
 const CHORDS: string[][] = [
   ["A3", "C4", "E4", "B4"],
@@ -89,6 +92,26 @@ export class AudioEngine {
 
   get isStarted() {
     return this.started;
+  }
+
+  /**
+   * Where the score's beat 1 sits on the `performance.now()` clock, so a visual
+   * timeline can quantize to the grid the accents actually land on. Returns null
+   * when the Transport isn't running — there is no grid to borrow yet, and the
+   * caller falls back to its own performance.now()-anchored one (same tempo, so
+   * the pacing is identical; only the phase differs).
+   */
+  transportAnchorMs(): number | null {
+    if (!this.started || typeof performance === "undefined") return null;
+    try {
+      const t = Tone.getTransport();
+      if (t.state !== "started") return null;
+      const pos = t.seconds;
+      if (!Number.isFinite(pos)) return null;
+      return performance.now() - pos * 1000;
+    } catch {
+      return null;
+    }
   }
 
   /** Build the graph + start the Transport. Must be called after a user gesture. */
@@ -392,15 +415,23 @@ export class AudioEngine {
   // mute + fades apply uniformly and nothing ever hard-cuts.
   // ===========================================================================
 
-  /** One-shot UI / foley effect. */
-  playSfx(name: SfxName): void {
+  /**
+   * One-shot UI / foley effect.
+   *
+   * `transpose` (semitones) shifts the FILTER of the tick foley only — it is
+   * band-limited noise with no pitch class, so a brighter tick reads as "this
+   * one matters more" without adding a note to the score. `juiceTier().pitch`
+   * is what drives it. Every other effect ignores it.
+   */
+  playSfx(name: SfxName, transpose = 0): void {
     if (!this.started) return;
     const at = Tone.now() + 0.01;
     const bus = this.sfxBus;
+    const shift = transpose ? Math.pow(2, transpose / 12) : 1;
     switch (name) {
       case "click": this.noiseBurst(at, 0.012, 4000, "highpass", -16); break;
       case "hover": this.blip(at, 2100, "sine", 0.03, -28); break;
-      case "uitick": this.noiseBurst(at, 0.01, 5000, "highpass", -22); break;
+      case "uitick": this.noiseBurst(at, 0.01, Math.min(12000, 5000 * shift), "highpass", -22); break;
       case "paper":
         this.noiseBurst(at, 0.05, 2600, "bandpass", -12, 1.2);
         this.noiseBurst(at + 0.06, 0.045, 3400, "bandpass", -14, 1.2);

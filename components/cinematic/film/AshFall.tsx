@@ -8,6 +8,9 @@ import { useState } from "react";
  * fall as ash: darker tones, slower drift, a touch more of them. Same
  * contract as MoneyFall: fixed count, one shot, transform/opacity only, no
  * loop; the parent gates it away under reduced motion and on skip.
+ *
+ * `count` (from `juiceTier().bills`) is read once at mount, exactly like
+ * MoneyFall's — the fall is a single deterministic event, not a live system.
  */
 
 const ASH_COUNT = 26;
@@ -15,9 +18,9 @@ const FALL_S = 2.2;
 
 type Flake = { left: number; delay: number; drift: number; spin: number; w: number; dim: boolean };
 
-function makeFlakes(): Flake[] {
-  return Array.from({ length: ASH_COUNT }, (_, i) => ({
-    left: (i * 100) / ASH_COUNT + (Math.random() * 4 - 2),
+function makeFlakes(n: number): Flake[] {
+  return Array.from({ length: n }, (_, i) => ({
+    left: (i * 100) / n + (Math.random() * 4 - 2),
     delay: Math.random() * 0.8,
     drift: Math.random() * 70 - 35,
     spin: Math.random() * 320 - 160,
@@ -26,9 +29,9 @@ function makeFlakes(): Flake[] {
   }));
 }
 
-export function AshFall() {
+export function AshFall({ count = ASH_COUNT }: { count?: number }) {
   // positions fixed once per mount — a single deterministic fall, then done
-  const [flakes] = useState<Flake[]>(makeFlakes);
+  const [flakes] = useState<Flake[]>(() => makeFlakes(Math.max(1, Math.round(count))));
 
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 z-[60] overflow-hidden">

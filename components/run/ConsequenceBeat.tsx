@@ -1,13 +1,17 @@
 "use client";
 
 import { animate, AnimatePresence, motion, useMotionValue, useMotionValueEvent } from "framer-motion";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAudio } from "@/hooks/useAudio";
+import { ACCENT_PREROLL_MS, useBeatClock } from "@/hooks/useBeatClock";
+import { AshFall } from "@/components/cinematic/film/AshFall";
+import { MoneyFall } from "@/components/cinematic/MoneyFall";
 import { conceptsForText, conceptTitle } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEvent, Outcome } from "@/lib/lifeEvents";
 import { buzz, BUZZ } from "@/src/motion/haptics";
-import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
+import { juiceTier } from "@/src/motion/juice";
+import { DUR, EASE, HITSTOP, STAGGER } from "@/src/motion/tokens";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { beatFor } from "./consequenceBeats";
@@ -23,10 +27,39 @@ import { beatFor } from "./consequenceBeats";
  * net worth; otherwise a MINOR (trimmed) version. Reduced-motion renders the
  * final state with no motion/ceremony. Any input skips to the final state — via
  * the global input-skip (useSkippable), the plumbing later ceremonies share.
+ *
+ * ── beat-lock (see hooks/useBeatClock) ───────────────────────────────────────
+ * The ladder below used to be raw milliseconds (140 / 470 / 1010 + an 1100ms
+ * count) while the score runs at 76 BPM and quantizes its accents to the
+ * transport's 8ths — so the picture and the music agreed by luck. Each boundary
+ * now SNAPS to the nearest beat (or 8th) of that same grid: same shape, same
+ * feel, but the landing is a downbeat and the `consequence` accent detonates on
+ * it. The count-up's duration falls out of the snap as a whole number of beats.
+ * A silent or muted player gets the identical ladder on a locally-anchored grid.
+ *
+ * ── impact (see src/motion/juice) ────────────────────────────────────────────
+ * How hard the landing hits is one decision — `juiceTier(|Δ| as % of net worth)`
+ * — feeding the shake amplitude, the bill/ash count, the stamp's entry scale and
+ * the tick's brightness together, plus a HITSTOP freeze between the impact and
+ * its follow-through.
  */
 
 const FULL_MONEY = 1000;
 const FULL_NW_FRACTION = 0.1;
+
+/** The pre-quantization ladder, in ms from mount — the shape being preserved. */
+const LADDER = {
+  full: { riser: 140, hold: 470, count: 1010, land: 2110 },
+  minor: { count: 300, land: 1000 },
+} as const;
+
+/** Post-landing beats (from the land instant), kept on the existing ms feel. */
+const ROWS_MS = 420;
+const JOLT_MS = 360;
+const FLASH_MS = 900;
+const MINOR_FLASH_MS = 700;
+const ROW_PRINT_MS = 140;
+const ROWS_TAIL_MS = 260;
 
 type Phase = "stamp" | "hold" | "count" | "land" | "rows" | "done";
 type RowTone = "loss" | "gain" | "muted";
@@ -61,6 +94,7 @@ export function ConsequenceBeat({
 }) {
   const audio = useAudio();
   const { reduced } = useMotionCtx();
+  const clock = useBeatClock();
   const beat = beatFor(event.id);
 
   const effect = outcome.effect;
@@ -77,6 +111,14 @@ export function ConsequenceBeat({
     (netWorthBefore !== 0 && Math.abs(nwDelta) >= FULL_NW_FRACTION * Math.abs(netWorthBefore))
       ? "full"
       : "minor";
+
+  // How hard this lands. |Δ| as a share of what the player had — floored at
+  // FULL_MONEY so a run with (near-)zero net worth can't divide its way to an
+  // infinite tier on a $40 swing.
+  const juice = useMemo(
+    () => juiceTier((Math.abs(nwDelta) / Math.max(Math.abs(netWorthBefore), FULL_MONEY)) * 100),
+    [nwDelta, netWorthBefore],
+  );
 
   // the "why": name the concept this outcome teaches; a good (applied) outcome is
   // what raises mastery, so mark it. Display-only — learn() records in LifeEventCard.
@@ -107,7 +149,11 @@ export function ConsequenceBeat({
   const [count, setCount] = useState(reduced ? Math.abs(primary) : 0);
   const [jolt, setJolt] = useState(false);
   const [flash, setFlash] = useState(false);
+  /** The one-shot bill/ash shower, armed by the landing's follow-through. */
+  const [fall, setFall] = useState(false);
   const timers = useRef<number[]>([]);
+  /** Count-up length in seconds — a whole number of beats, set when the ladder is laid. */
+  const countSeconds = useRef((tier === "full" ? 1100 : 700) / 1000);
   const done = phase === "done";
 
   const figureRef = useRef<HTMLSpanElement>(null);
@@ -143,19 +189,53 @@ export function ConsequenceBeat({
     };
   }, []);
 
-  // opening sequence: stamp → (hold) → count
+  // opening sequence: stamp → (hold) → count, quantized onto the score's grid.
   useEffect(() => {
     if (reduced) {
       audio.sting(isLoss ? "bad" : isGain ? "good" : "neutral");
       return;
     }
+    // The stamp is the ceremony's own downbeat: it fires the instant the overlay
+    // mounts and, when nothing is playing, the beat grid anchors right here. It
+    // is deliberately NOT delayed onto the transport's next 8th — up to 395ms of
+    // dead screen before the first frame reads as lag, not as rhythm.
     audio.sfx("stamp");
+
+    // Accents are quantized by the engine to the next 8th, so a request has to
+    // arrive slightly BEFORE the boundary it should sound on.
+    const accentAt = (ms: number) => Math.max(0, ms - ACCENT_PREROLL_MS);
+
     if (tier === "full") {
-      at(140, () => audio.accent("riser"));
-      at(470, () => setPhase("hold"));
-      at(1010, () => setPhase("count"));
+      const L = LADDER.full;
+      const riserAt = clock.snap(L.riser, "8n");
+      const holdAt = clock.snap(L.hold, "8n", riserAt + 1);
+      const countAt = clock.snap(L.count, "beat", holdAt + 1);
+      // the landing is the ceremony's payoff — it gets the downbeat
+      const landAt = clock.snap(L.land, "beat", countAt + 1);
+      countSeconds.current = (landAt - countAt) / 1000;
+
+      at(accentAt(riserAt), () => audio.accent("riser"));
+      at(holdAt, () => setPhase("hold"));
+      at(countAt, () => setPhase("count"));
+      // pre-rolled so the stamp accents detonate ON the landing beat, not after it
+      at(accentAt(landAt), () => {
+        if (isGain) audio.accent("stampGood");
+        else if (isLoss) audio.accent("stampBad");
+        audio.accent("consequence");
+      });
     } else {
-      at(300, () => setPhase("count"));
+      // A minor beat is trimmed and quick; locking it to whole beats would
+      // stretch it by up to 40%, so it rides the 8th grid instead.
+      const L = LADDER.minor;
+      const countAt = clock.snap(L.count, "8n");
+      const landAt = clock.snap(L.land, "8n", countAt + 1);
+      countSeconds.current = (landAt - countAt) / 1000;
+
+      at(countAt, () => setPhase("count"));
+      at(accentAt(landAt), () => {
+        if (isGain) audio.accent("stampGood");
+        else if (isLoss) audio.accent("stampBad");
+      });
     }
     return clearTimers;
     // run once on mount
@@ -164,14 +244,15 @@ export function ConsequenceBeat({
 
   // count-up; hands off to "land" when the figure lands. Driven by a MotionValue
   // (one DOM textContent write per frame) instead of setState-per-rAF-frame.
+  // Its duration is the gap between two grid boundaries, so the figure settles
+  // exactly as the landing beat arrives.
   useEffect(() => {
     if (phase !== "count") return;
     const to = Math.abs(primary);
-    const seconds = (tier === "full" ? 1100 : 700) / 1000;
-    audio.sfx("uitick");
+    audio.sfx("uitick", juice.pitch); // brighter tick the bigger the swing
     countMV.jump(0);
     const controls = animate(countMV, to, {
-      duration: seconds,
+      duration: Math.max(0.2, countSeconds.current),
       ease: EASE,
       onComplete: () => {
         setCount(to);
@@ -183,32 +264,37 @@ export function ConsequenceBeat({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // landing: money cue + invert stamp + frame jolt + HUD-rail flash, then rows
+  // Landing. The impact instant is bare: foley + haptic + the DEBIT/CREDIT stamp,
+  // and then everything holds still for HITSTOP before the follow-through (shake,
+  // rail flash, bill/ash fall) starts. Those few frames of stillness are what make
+  // the hit read as a hit rather than as a wobble — the accents already fired,
+  // quantized onto this exact beat by the pre-roll above.
   useEffect(() => {
     if (phase !== "land") return;
     if (isGain) {
       audio.sfx("cash");
       audio.sting("good");
-      audio.accent("stampGood");
     } else if (isLoss) {
       audio.sting(outcome.tone === "bad" ? "bad" : "warning");
-      audio.accent("stampBad");
     } else {
       audio.sting("neutral");
     }
+    const freeze = HITSTOP * 1000;
     if (tier === "full") {
-      at(60, () => audio.accent("consequence"));
       buzz(BUZZ.land, audio.muted); // §13 #11 — impact haptic with the stamp
-      setJolt(true);
-      setFlash(true);
-      at(360, () => setJolt(false));
-      at(900, () => setFlash(false));
+      at(freeze, () => {
+        setJolt(true);
+        setFlash(true);
+        setFall(true);
+      });
+      at(freeze + JOLT_MS, () => setJolt(false));
+      at(freeze + FLASH_MS, () => setFlash(false));
     } else {
-      setFlash(true);
-      at(700, () => setFlash(false));
+      at(freeze, () => setFlash(true));
+      at(freeze + MINOR_FLASH_MS, () => setFlash(false));
     }
-    at(420, () => setPhase("rows"));
-    at(420 + rows.length * 140 + 260, () => setPhase("done"));
+    at(clock.snap(freeze + ROWS_MS, "8n", freeze + 1), () => setPhase("rows"));
+    at(freeze + ROWS_MS + rows.length * ROW_PRINT_MS + ROWS_TAIL_MS, () => setPhase("done"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -233,6 +319,14 @@ export function ConsequenceBeat({
   const showFigure = reduced || phase === "count" || phase === "land" || phase === "rows" || done;
   const showRows = reduced || phase === "rows" || done;
   const figureText = fmtFigure(count);
+
+  // The frame jolt, scaled by the tier. `shakePx` 6 reproduces the amplitude
+  // this ceremony used to hardcode, so a mid-sized hit is unchanged.
+  const a = juice.shakePx;
+  const shake = {
+    x: [0, -a, a * 0.83, -a * 0.5, a * 0.33, 0],
+    y: [0, a / 3, -a / 3, a / 6, 0, 0],
+  };
 
   return (
     <motion.div
@@ -287,7 +381,7 @@ export function ConsequenceBeat({
       {/* main block */}
       <motion.div
         className="flex flex-1 flex-col justify-center px-5 py-10 sm:px-12 lg:px-20"
-        animate={jolt ? { x: [0, -6, 5, -3, 2, 0], y: [0, 2, -2, 1, 0, 0] } : { x: 0, y: 0 }}
+        animate={jolt ? shake : { x: 0, y: 0 }}
         transition={{ duration: DUR.fast, ease: "easeOut" }}
       >
         {/* choice stamp */}
@@ -331,7 +425,7 @@ export function ConsequenceBeat({
           <AnimatePresence>
             {(phase === "land" || phase === "rows" || done) && (
               <motion.span
-                initial={reduced ? undefined : { opacity: 0, scale: 1.3, rotate: -6 }}
+                initial={reduced ? undefined : { opacity: 0, scale: juice.stampScale, rotate: -6 }}
                 animate={{ opacity: 1, scale: 1, rotate: -3 }}
                 className="mb-3 border px-2.5 py-1 display-caps"
                 style={{
@@ -418,6 +512,14 @@ export function ConsequenceBeat({
           </motion.p>
         )}
       </motion.div>
+
+      {/* The landing's one-shot shower — bills when you gained, ash when you lost,
+          count straight from the tier. ONE SHOT by contract (see MoneyFall): it
+          never loops and never re-arms, and it only exists on the natural
+          full-tier landing, so a skipped or reduced-motion ceremony never sees it. */}
+      {fall && tier === "full" && !reduced && (
+        isGain ? <MoneyFall count={juice.bills} /> : <AshFall count={juice.bills} />
+      )}
 
       {/* bottom rail — continue affordance */}
       <div className="flex items-stretch border-t border-hairline">

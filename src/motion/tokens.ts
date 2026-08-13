@@ -32,6 +32,20 @@ export const STAGGER = {
 } as const;
 
 /**
+ * How many items may actually stagger. Past roughly a dozen the effect stops
+ * reading as choreography and starts reading as a slow page: the last rows of a
+ * 20-row statement arrive seconds after the first, and the user has already
+ * looked at them. Cap the ramp and let the tail arrive together — the sequence
+ * then always finishes inside ~800ms.
+ */
+export const STAGGER_CAP = 12;
+
+/** Stagger delay for item `i`, flattened past `STAGGER_CAP`. */
+export function stepDelay(i: number, step: number, cap: number = STAGGER_CAP): number {
+  return Math.min(i, cap) * step;
+}
+
+/**
  * The house springs (framer-motion `Transition` spring shape).
  *
  * `pop`/`soft` are the original stiffness/damping pair. The three added below are spelled in
