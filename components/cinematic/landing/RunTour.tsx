@@ -162,11 +162,17 @@ export function RunTour() {
   const { reduced } = useMotionCtx();
   const ref = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState(0);
-  const [narrow, setNarrow] = useState(false);
+  // Probed synchronously, not in an effect, for the same reason BoardDiorama does it: this
+  // tree is `ssr: false`, so the first render IS the first client render. Read in an effect,
+  // every phone painted the pinned h-[380svh] branch first and then swapped to the stacked
+  // document — collapsing roughly three viewport-heights of scroll height mid-load and
+  // yanking everything below it on the landing page.
+  const [narrow, setNarrow] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 1023.98px)").matches,
+  );
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] });
 
-  // Safe to read matchMedia in an effect with no SSR fallback to reconcile: Intro
-  // mounts this with `ssr: false`, the same way BoardDiorama probes its capabilities.
+  // Keep following the query so a rotate or resize still swaps branches.
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1023.98px)"); // below Tailwind `lg`
     const sync = () => setNarrow(mq.matches);

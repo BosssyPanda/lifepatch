@@ -545,7 +545,14 @@ export function CashflowGame({
 
       {/* payday toast */}
       <Toast show={paydayToast !== null}>
-        <div className={`rounded-full px-5 py-2 display-caps text-lg shadow-xl ${(paydayToast ?? 0) >= 0 ? "bg-gain text-bg" : "bg-loss text-bg"}`}>
+        {/* A toast is a floating surface, which is exactly what amendment B sanctions — but it
+            was asking with `shadow-xl`/`rounded-full`, which the reset eats, so it rendered as
+            a flat hard-edged block over the board. */}
+        <div
+          data-radius=""
+          data-elevated=""
+          className={`px-5 py-2 display-caps text-lg ${(paydayToast ?? 0) >= 0 ? "bg-gain text-bg" : "bg-loss text-bg"}`}
+        >
           {(paydayToast ?? 0) >= 0 ? "Payday +" : "Payday "}
           {currency(paydayToast ?? 0)}
         </div>
