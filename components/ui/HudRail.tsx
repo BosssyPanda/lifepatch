@@ -26,6 +26,13 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
 
   const cell = "flex h-8 items-center px-3 num";
   const type = { fontSize: "0.6rem", letterSpacing: "0.16em" } as const;
+  // Touch target: the rail is 32px by design (three read-only cells share its dividers, so
+  // growing the buttons would break the hairlines), so a `::before` layer expands the *hit*
+  // box to 44px instead — same trick as cinematic/Controls.tsx. `relative` is part of the
+  // string because the buttons' only positioned ancestor is the whole sound group, where the
+  // expander would size to the group and SOUND's hit box would swallow VOL. Vertical only
+  // (`inset-x-0`), because the two buttons are horizontally adjacent.
+  const HIT = "relative before:absolute before:inset-x-0 before:-inset-y-[6px] before:content-['']";
 
   return (
     // role="status": `aria-label` on a plain div is dropped by most screen readers, so
@@ -57,9 +64,12 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
         <button
           type="button"
           onClick={() => audio.setMuted(!audio.muted)}
+          // No aria-label: the visible "SOUND ON" / "SOUND OFF" text is the name, so the
+          // name is state-phrased and agrees with aria-pressed (pressed = sound is on). An
+          // action-phrased label ("Turn sound off") announced the opposite of the state and
+          // broke voice control (WCAG 2.5.3), since the spoken words weren't in the name.
           aria-pressed={!audio.muted}
-          aria-label={audio.muted ? "Turn sound on" : "Turn sound off"}
-          className={`${cell} transition-colors hover:bg-ink hover:text-bg ${
+          className={`${cell} ${HIT} transition-colors hover:bg-ink hover:text-bg ${
             audio.muted ? "text-tertiary" : "text-ink"
           }`}
           style={type}
@@ -71,7 +81,7 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
           onClick={vol.toggle}
           {...vol.triggerProps}
           aria-label="Volume"
-          className={`${cell} border-l border-hairline transition-colors hover:bg-ink hover:text-bg ${
+          className={`${cell} ${HIT} border-l border-hairline transition-colors hover:bg-ink hover:text-bg ${
             vol.open ? "bg-ink text-bg" : "text-tertiary"
           }`}
           style={type}

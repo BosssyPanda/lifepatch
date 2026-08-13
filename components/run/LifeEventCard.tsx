@@ -10,6 +10,8 @@ import { conceptsForText } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEffect, LifeEvent } from "@/lib/lifeEvents";
 import { netWorth, type RunState } from "@/lib/runEngine";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { DUR, EASE } from "@/src/motion/tokens";
 import { ConsequenceBeat } from "./ConsequenceBeat";
 import { beatFor } from "./consequenceBeats";
 
@@ -45,6 +47,7 @@ export function LifeEventCard({
 }) {
   const audio = useAudio();
   const { learn } = useConceptLearn();
+  const { reduced } = useMotionCtx();
   const [chosenId, idxStr] = chosen ? chosen.split("|") : [undefined, undefined];
   const answered = Boolean(chosenId);
   const chosenChoice = event.choices.find((c) => c.id === chosenId);
@@ -55,6 +58,8 @@ export function LifeEventCard({
   const beat = beatFor(event.id);
   const answeredAtMount = useRef(answered);
   const [showBeat, setShowBeat] = useState(false);
+  /** Where a keyboard player lands when the beat closes — see the beat's onDone. */
+  const outcomeRef = useRef<HTMLDivElement>(null);
 
   // reveal sting once, keyed to the outcome's tone
   const stungRef = useRef(false);
@@ -78,12 +83,10 @@ export function LifeEventCard({
 
   return (
     <>
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 200, damping: 22 }}
-      className="paper mx-auto max-w-3xl px-5 py-5 sm:px-6"
-    >
+    {/* No entrance of its own: YearLoop's only call site already wraps this card in
+        <Reveal>, which is reduced-motion aware. The wrapper that used to live here
+        double-faded the card and stacked ~40px of travel on top of Reveal's. */}
+    <div className="paper mx-auto max-w-3xl px-5 py-5 sm:px-6">
       <div className="flex items-center justify-between border-b border-ink/30 pb-2">
         <span className="eyebrow text-secondary">{event.tag}</span>
         <span className="eyebrow text-secondary">Life event</span>
@@ -102,11 +105,12 @@ export function LifeEventCard({
                 type="button"
                 disabled={answered}
                 onClick={() => { audio.sfx("paper"); onChoose(event.id, c); }}
-                className={`group flex w-full items-start gap-2.5 rounded-[3px] border px-3.5 py-2.5 text-left transition-all ${
-                  isChosen ? "border-ink bg-ink/10" : dim ? "border-ink/10 opacity-45" : "border-ink/25 hover:border-ink hover:bg-ink/[0.04]"
+                data-radius=""
+                className={`group flex w-full items-start gap-2.5 border px-3.5 py-2.5 text-left transition-all ${
+                  isChosen ? "border-ink bg-ink/10" : dim ? "border-ink/10 opacity-45" : "border-hairline-strong hover:border-ink hover:bg-ink/[0.04]"
                 } ${answered ? "cursor-default" : "cursor-pointer"}`}
               >
-                <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border ${isChosen ? "border-ink bg-ink text-bg" : "border-ink/40 text-transparent"}`}>
+                <span data-radius="round" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center border ${isChosen ? "border-ink bg-ink text-bg" : "border-ink/40 text-transparent"}`}>
                   <CheckIcon size={12} />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -121,15 +125,23 @@ export function LifeEventCard({
 
       {/* The wrapper is always mounted so the swap from "outcome hidden" to the reveal
           is a content change *inside* a live region — an added region isn't announced. */}
-      <div aria-live="polite">
+      <div aria-live="polite" ref={outcomeRef} tabIndex={-1}>
       {!answered ? (
         <p className="mt-4 flex items-center justify-center gap-2 text-secondary">
           <LockIcon size={14} />
           <span className="eyebrow">Outcome hidden — choose to find out</span>
         </p>
       ) : (
+        // Keep the fade under reduced motion — it is the visual counterpart of the
+        // aria-live announcement above; only the travel is dropped.
         outcome && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-4 border-l-2 pl-4 pr-1 py-3" style={{ borderColor: TONE_HEX[outcome.tone] }}>
+          <motion.div
+            initial={reduced ? { opacity: 0 } : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? DUR.instant : DUR.fast, ease: EASE }}
+            className="mt-4 border-l-2 pl-4 pr-1 py-3"
+            style={{ borderColor: TONE_HEX[outcome.tone] }}
+          >
             {outcome.note && (
               <p className="display-caps text-base" style={{ color: TONE_HEX[outcome.tone] }}>
                 {outcome.note}
@@ -152,14 +164,21 @@ export function LifeEventCard({
         )
       )}
       </div>
-    </motion.div>
+    </div>
     {showBeat && chosenChoice && outcome && runState && (
       <ConsequenceBeat
         event={event}
         choice={chosenChoice}
         outcome={outcome}
         netWorthAfter={netWorth(runState)}
-        onDone={() => setShowBeat(false)}
+        onDone={() => {
+          setShowBeat(false);
+          // The beat's focus trap restores to whatever was focused when it opened —
+          // <body>, since the choice button was disabled a tick earlier and can never
+          // be refocused. Land the player on the outcome the ceremony just explained,
+          // in the frame *after* that restore has run.
+          requestAnimationFrame(() => outcomeRef.current?.focus({ preventScroll: true }));
+        }}
       />
     )}
     </>

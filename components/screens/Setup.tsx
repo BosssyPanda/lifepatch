@@ -28,11 +28,12 @@ export function Setup({
   const onSpot = useSpotlightHandler<HTMLButtonElement>();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string>(BACKGROUNDS[0].id);
+  const chosen = BACKGROUNDS.find((b) => b.id === picked);
 
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-5xl flex-col justify-center px-5 py-14">
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
-        <p className="eyebrow text-ink">{MODES[mode].name} · starts at age {BACKGROUNDS.find((b) => b.id === picked)?.startAge}</p>
+        <p className="eyebrow text-ink">{MODES[mode].name} · starts at age {chosen?.startAge}</p>
         <h1 className="display-caps mt-3 text-4xl text-ink sm:text-5xl">Who do you become?</h1>
       </motion.div>
 
@@ -46,8 +47,12 @@ export function Setup({
               key={b.id}
               type="button"
               onClick={() => setPicked(b.id)}
+              aria-pressed={active}
               initial={{ opacity: 0, y: 24, rotate: i % 2 ? 1 : -1 }}
-              animate={{ opacity: active ? 1 : picked ? 0.5 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
+              // No dim on the unpicked cards: one is pre-picked on mount, so dimming would
+              // hold the other two below the contrast floor for the whole screen. Selection
+              // already reads from the outline, the ink wash, the check badge and the scale.
+              animate={{ opacity: 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
               transition={{ ...SPRING.pop, delay: i * STAGGER.base }}
               whileHover={reduced ? undefined : { y: -5 }}
               data-radius=""
@@ -84,7 +89,14 @@ export function Setup({
 
       <div className="mt-9 flex items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back</NeonButton>
-        <NeonButton variant="primary" size="lg" onClick={() => { audio.sfx("confirm"); onStart(picked, playerName(name)); }}>
+        <NeonButton
+          variant="primary"
+          size="lg"
+          // The CTA copy never changes, and a card is already picked on mount — so the
+          // accessible name has to carry which one, the way ModeSelect's visible label does.
+          aria-label={chosen ? `Start your life as ${chosen.name}` : undefined}
+          onClick={() => { audio.sfx("confirm"); onStart(picked, playerName(name)); }}
+        >
           Start your life →
         </NeonButton>
       </div>

@@ -7,7 +7,9 @@ import { currency } from "@/lib/format";
 import type { AssetId } from "@/lib/markets";
 import { Sparkline } from "./Sparkline";
 
-const RISK_HEX: Record<string, string> = {
+/** Palette token references, never literal hex — alpha comes from `color-mix`, because a
+ *  `var()` with a hex suffix glued on is invalid CSS the browser silently drops. */
+const RISK_TINT: Record<string, `var(--color-${string})`> = {
   low: "var(--color-gain)",
   med: "var(--color-secondary)",
   high: "var(--color-secondary)",
@@ -32,7 +34,7 @@ export function AssetRow({
   onTrade: (id: AssetId, dollars: number) => void;
 }) {
   const Icon = asset.Icon;
-  const riskHex = RISK_HEX[asset.risk];
+  const riskTint = RISK_TINT[asset.risk];
 
   // This asset's ceiling = what it already holds + the shared free cash on hand.
   // The slider allocates LIVE: moving it buys/sells against real cash immediately,
@@ -49,7 +51,7 @@ export function AssetRow({
   };
 
   return (
-    <div className="rounded-[4px] border border-ink/12 bg-bg p-3">
+    <div className="border border-hairline bg-bg p-3">
       <div className="flex items-start gap-2.5">
         <span className="mt-0.5 shrink-0 text-ink-dim">
           <Icon size={20} />
@@ -60,8 +62,8 @@ export function AssetRow({
               {asset.short}
             </span>
             <span
-              className="eyebrow rounded-[2px] border px-1 py-0.5"
-              style={{ color: riskHex, borderColor: `${riskHex}55`, fontSize: "0.52rem" }}
+              className="eyebrow border px-1 py-0.5"
+              style={{ color: riskTint, borderColor: `color-mix(in srgb, ${riskTint} 33%, transparent)`, fontSize: "0.52rem" }}
             >
               {asset.risk}
             </span>
@@ -106,7 +108,7 @@ export function AssetRow({
             className="allocator flex-1 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             style={
               {
-                "--accent": riskHex,
+                "--accent": riskTint,
                 "--fill": `${heldPct}%`,
               } as CSSProperties
             }

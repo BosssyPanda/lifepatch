@@ -110,7 +110,12 @@ export function VolumePopover({
         type="button"
         onClick={onToggleMute}
         aria-pressed={muted}
-        className="eyebrow border border-hairline-strong px-2 py-1 text-ink-dim transition-colors hover:bg-ink hover:text-bg"
+        // ~20px tall by design; a `::before` layer takes the *hit* box to ~40px without
+        // changing the look (same trick as cinematic/Controls.tsx). 10px is exactly the
+        // popover's own py-2.5, so the expander fills the padding and stops at the panel
+        // edge: near-misses land on Mute instead of leaking to the dismiss handler, and it
+        // never steals a tap aimed outside the popover.
+        className="eyebrow relative border border-hairline-strong px-2 py-1 text-ink-dim transition-colors hover:bg-ink hover:text-bg before:absolute before:inset-x-0 before:-inset-y-[10px] before:content-['']"
         style={{ fontSize: "0.52rem", letterSpacing: "0.16em" }}
       >
         {muted ? "Unmute" : "Mute"}

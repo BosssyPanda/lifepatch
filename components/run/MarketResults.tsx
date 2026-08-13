@@ -10,7 +10,7 @@ export function MarketResults({ run }: { run: RunState }) {
 
   return (
     <section aria-label="Market results" className="mx-auto max-w-3xl px-5 py-2">
-      <div className="rounded-[5px] border border-ink/12 bg-bg2 p-4">
+      <div className="border border-hairline bg-bg2 p-4">
         <p className="eyebrow text-ink-dim">How each market moved last year</p>
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
           {assets.map((a) => {

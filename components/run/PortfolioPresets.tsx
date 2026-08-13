@@ -16,7 +16,9 @@ type Preset = {
   tagline: string;
   /** Target mix as % of free cash. Must sum to 100 (before crypto fold). */
   mix: Mix;
-  hex: string;
+  /** A palette token reference, never a literal hex — alpha comes from `color-mix`,
+   *  because a `var()` with a hex suffix glued on is invalid CSS the browser drops. */
+  tint: `var(--color-${string})`;
   risk: string;
 };
 
@@ -27,7 +29,7 @@ const PRESETS: Preset[] = [
     label: "Safe",
     tagline: "Sleep at night. Barely keep up with inflation.",
     mix: { savings: 50, bonds: 30, index: 20 },
-    hex: "var(--color-gain)",
+    tint: "var(--color-gain)",
     risk: "low risk",
   },
   {
@@ -35,7 +37,7 @@ const PRESETS: Preset[] = [
     label: "Balanced",
     tagline: "Spread the bets. Grow without the heart attacks.",
     mix: { index: 40, realEstate: 20, bonds: 20, gold: 10, savings: 10 },
-    hex: "var(--color-secondary)",
+    tint: "var(--color-secondary)",
     risk: "medium risk",
   },
   {
@@ -43,7 +45,7 @@ const PRESETS: Preset[] = [
     label: "Bold",
     tagline: "Swing for growth. Stomach the drawdowns.",
     mix: { index: 45, realEstate: 20, crypto: 20, gold: 15 },
-    hex: "var(--color-loss)",
+    tint: "var(--color-loss)",
     risk: "high risk",
   },
 ];
@@ -130,20 +132,21 @@ export function PortfolioPresets({
             transition={{ duration: DUR.base, ease: EASE, delay: reduce ? 0 : i * STAGGER.tight }}
             whileHover={reduce || !canInvest ? undefined : { y: -2 }}
             whileTap={reduce || !canInvest ? undefined : { y: 0, scale: 0.99 }}
-            className="group relative overflow-hidden rounded-[5px] border bg-bg2 px-3.5 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-            style={{ borderColor: `${preset.hex}40` }}
+            data-radius=""
+            className="group relative overflow-hidden border bg-bg2 px-3.5 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+            style={{ borderColor: `color-mix(in srgb, ${preset.tint} 25%, transparent)` }}
           >
             {/* risk wash that warms on hover */}
             <span
               aria-hidden
               className="absolute inset-x-0 top-0 h-[3px]"
-              style={{ background: preset.hex }}
+              style={{ background: preset.tint }}
             />
             <span className="flex items-baseline justify-between">
-              <span className="display-caps text-base" style={{ color: preset.hex }}>
+              <span className="display-caps text-base" style={{ color: preset.tint }}>
                 {preset.label}
               </span>
-              <span className="eyebrow" style={{ color: `${preset.hex}cc`, fontSize: "0.5rem" }}>
+              <span className="eyebrow" style={{ color: `color-mix(in srgb, ${preset.tint} 80%, transparent)`, fontSize: "0.5rem" }}>
                 {preset.risk}
               </span>
             </span>

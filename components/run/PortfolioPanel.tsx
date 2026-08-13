@@ -43,26 +43,26 @@ export function PortfolioPanel({
 
   return (
     <section aria-label="Portfolio" className="mx-auto max-w-3xl px-5 py-4">
-      <div className="flex items-center justify-between border-b border-ink/12 pb-2">
+      <div className="flex items-center justify-between border-b border-hairline pb-2">
         <h3 className="display-caps text-xl text-ink">Your money</h3>
         <span className="num text-sm text-ink-dim">invested {currency(port)}</span>
       </div>
 
       {/* cash-left readout + debt tile */}
       <div className="mt-3 grid grid-cols-2 gap-2.5">
-        <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">
+        <div className="border border-hairline bg-bg px-3 py-2.5">
           <p className="eyebrow text-gain">Cash left to invest</p>
           <p className="num text-xl text-ink">{currency(run.cash)}</p>
           {/* fixed-size track + scaling fill: `transition-[width]` was a layout tween
               on a bar that moves on every trade (DESIGN.md § Motion). Same 300ms. */}
-          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-ink/12" aria-hidden>
+          <div className="mt-1.5 h-1 overflow-hidden bg-ink/12" aria-hidden>
             <div
-              className="h-full w-full origin-left rounded-full bg-gain transition-transform duration-300"
+              className="h-full w-full origin-left bg-gain transition-transform duration-300"
               style={{ transform: `scaleX(${Math.max(0, Math.min(100, cashPct)) / 100})` }}
             />
           </div>
         </div>
-        <div className="rounded-[4px] border border-ink/12 bg-bg px-3 py-2.5">
+        <div className="border border-hairline bg-bg px-3 py-2.5">
           <div className="flex items-center justify-between">
             <p className="eyebrow text-loss">Debt</p>
             {/* The smallest targets in the app (~28×18) — vertical hit expansion to 44px,

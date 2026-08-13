@@ -248,7 +248,9 @@ export function Board({
   }, [position, path.steps, reduce, dur]);
 
   return (
-    <div ref={boardRef} className="relative mx-auto aspect-square w-full max-w-[560px]">
+    /* `containerType` so the chip labels size off the *board* (366px at a 390px
+       viewport, capped at 560px) rather than off the page. */
+    <div ref={boardRef} className="relative mx-auto aspect-square w-full max-w-[560px]" style={{ containerType: "inline-size" }}>
       {/* flat board field — a terminal ledger spread, hairline double-rule frame */}
       <div className="absolute inset-[2%] border border-hairline bg-bg" />
       <div aria-hidden className="absolute inset-[3.6%] border border-hairline" />
@@ -304,8 +306,12 @@ export function Board({
           >
             <TileIcon type={sq.type} className="h-[38%] w-auto" style={{ color: active ? "var(--color-bg)" : tint }} />
             <span
-              className="num leading-none"
-              style={{ color: active ? "var(--color-bg)" : "var(--color-secondary)", fontSize: "0.4rem", letterSpacing: "0.04em" }}
+              className="num leading-none whitespace-nowrap"
+              style={{
+                color: active ? "var(--color-bg)" : "var(--color-secondary)",
+                fontSize: "clamp(0.62rem, 2.7cqi, 0.78rem)",
+                letterSpacing: "0.04em",
+              }}
             >
               {labelFor(sq.type)}
             </span>

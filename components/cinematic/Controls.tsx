@@ -13,6 +13,13 @@ import { VolumePopover, useVolumePopover } from "@/components/ui/VolumeControl";
  * cheap escape from a loud film is never more than one press away.
  */
 const HIT = "before:absolute before:-inset-x-[8px] before:-inset-y-[9px] before:content-['']";
+/**
+ * The shared shell for all three cells. Hoisted because the border token drifted
+ * once already: the Vol cell was hand-written against `border-ink/25` (~2.1:1)
+ * after the rest had moved on, and an operable control's boundary owes 3:1
+ * (WCAG 1.4.11 / DESIGN.md § Palette — `hairline-strong`). One string, no drift.
+ */
+const CHROME = `relative flex items-center border border-hairline-strong transition-colors hover:border-ink hover:text-ink ${HIT}`;
 
 function Speaker({ muted }: { muted: boolean }) {
   return (
@@ -41,7 +48,7 @@ export function MuteButton({
         onClick={onToggle}
         aria-label={muted ? "Unmute" : "Mute"}
         aria-pressed={muted}
-        className={`relative flex items-center gap-1.5 border border-ink/25 bg-bg px-2.5 py-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink ${HIT}`}
+        className={`${CHROME} gap-1.5 bg-bg px-2.5 py-1.5 text-ink-dim`}
       >
         <Speaker muted={muted} />
         <span className="eyebrow" style={{ fontSize: "0.56rem" }}>{muted ? "Muted" : "Sound"}</span>
@@ -53,9 +60,9 @@ export function MuteButton({
             onClick={vol.toggle}
             {...vol.triggerProps}
             aria-label="Volume"
-            className={`relative flex items-center border border-l-0 border-ink/25 px-2 py-1.5 transition-colors hover:border-ink hover:text-ink ${
+            className={`${CHROME} border-l-0 px-2 py-1.5 ${
               vol.open ? "bg-ink text-bg" : "bg-bg text-ink-dim"
-            } ${HIT}`}
+            }`}
           >
             <span className="eyebrow" style={{ fontSize: "0.56rem" }}>Vol</span>
           </button>
@@ -72,7 +79,7 @@ export function SkipButton({ onSkip }: { onSkip: () => void }) {
       type="button"
       onClick={onSkip}
       aria-label="Skip ahead"
-      className={`pointer-events-auto relative flex items-center gap-1.5 border border-ink/25 bg-bg px-3 py-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink ${HIT}`}
+      className={`pointer-events-auto ${CHROME} gap-1.5 bg-bg px-3 py-1.5 text-ink-dim`}
     >
       <span className="eyebrow" style={{ fontSize: "0.56rem" }}>Skip</span>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

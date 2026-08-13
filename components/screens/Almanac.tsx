@@ -29,8 +29,14 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
   const panelId = useId();
   // terms type-in runs once per overlay visit (survives tab switches, re-arms per open)
   const termsTyped = useRef(false);
+  // Myth calls live here for the same reason: the section unmounts on every tab switch, so
+  // owning the answers below it silently threw away the run of the quiz.
+  const [calls, setCalls] = useState<Record<number, Verdict>>({});
   useEffect(() => {
-    if (open) termsTyped.current = false;
+    if (open) {
+      termsTyped.current = false;
+      setCalls({});
+    }
   }, [open]);
 
   return (
@@ -68,6 +74,9 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
             id={panelId}
             role="tabpanel"
             aria-labelledby={tabId(panelId, section)}
+            // no focusable content in 3 of 4 sections — the pane itself must take focus or
+            // the keyboard cannot scroll it (and the dialog's Tab cycle dead-ends on the tabs)
+            tabIndex={0}
             data-lenis-prevent
           >
             <div className="mx-auto max-w-3xl px-5 py-8">
@@ -88,7 +97,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
                 </Section>
               )}
 
-              {section === "myths" && <MythSection />}
+              {section === "myths" && <MythSection calls={calls} setCalls={setCalls} />}
 
               {section === "geo" && (
                 <Section title="Geopolitics & the economy" sub="How a crisis on one side of the world reaches your wallet on the other.">
@@ -172,11 +181,16 @@ function LeaderList({ label, hex, items }: { label: string; hex: string; items: 
 
 /* ---------------- Myth or Fact — guess-then-reveal flip cards ---------------- */
 
-function MythSection() {
+/** `calls` is per-open session state — owned by Almanac so a tab switch can't discard it. */
+function MythSection({
+  calls,
+  setCalls,
+}: {
+  calls: Record<number, Verdict>;
+  setCalls: React.Dispatch<React.SetStateAction<Record<number, Verdict>>>;
+}) {
   const { reduced } = useMotionCtx();
   const audio = useAudio();
-  // per-open session state: which cards were called, and with what
-  const [calls, setCalls] = useState<Record<number, Verdict>>({});
   const correct = MYTH_FACTS.reduce((n, m, i) => n + (calls[i] === m.verdict ? 1 : 0), 0);
   const answered = Object.keys(calls).length;
 

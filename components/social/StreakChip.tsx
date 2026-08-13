@@ -63,6 +63,8 @@ export function StreakChip() {
       >
         <FlameIcon size={14} />
       </motion.span>
+      {/* the outer span is role=generic, where ARIA forbids a name — so the label is text */}
+      <span className="sr-only">Daily streak: </span>
       <span className="display-caps tracking-[0.1em] text-ink">{current}</span>
       <span className="text-ink-dim">day{current === 1 ? "" : "s"}</span>
     </span>

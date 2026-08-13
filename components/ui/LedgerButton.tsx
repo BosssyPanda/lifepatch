@@ -72,6 +72,7 @@ export function LedgerButton({
   loading = false,
   "aria-label": ariaLabel,
   "aria-describedby": ariaDescribedBy,
+  "aria-pressed": ariaPressed,
 }: {
   children: ReactNode;
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
@@ -89,6 +90,8 @@ export function LedgerButton({
   "aria-label"?: string;
   /** Points at the text explaining *why* the button is disabled. */
   "aria-describedby"?: string;
+  /** Toggle state — pair it with `inverted` so the pressed look and the a11y state agree. */
+  "aria-pressed"?: boolean;
 }) {
   const { reduced } = useMotionCtx();
   const legacy = variant in LEGACY ? LEGACY[variant as LegacyVariant] : null;
@@ -104,6 +107,7 @@ export function LedgerButton({
       disabled={inert}
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
+      aria-pressed={ariaPressed}
       aria-busy={loading || undefined}
       data-radius=""
       whileHover={inert || reduced ? undefined : { y: -1 }}

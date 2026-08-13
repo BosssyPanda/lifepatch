@@ -320,8 +320,12 @@ export function CashflowGame({
     const coach = SQUARE_COACH[type];
     const key = `sq-${type}`;
     if (state.track === "rat" && coach && !state.seenLessons.includes(key)) {
-      commit((st) => markLessonSeen(st, key));
-      setPending({ kind: "coach", title: coach.title, body: coach.body, then: () => openResolution(state, type) });
+      // `state` is the post-move snapshot every later handler builds on, so the
+      // "seen" mark has to travel forward with it — committing a functional update
+      // against the store would be overwritten by the next snapshot commit.
+      const marked = markLessonSeen(state, key);
+      commit(() => marked);
+      setPending({ kind: "coach", title: coach.title, body: coach.body, then: () => openResolution(marked, type) });
       return;
     }
     openResolution(state, type);
@@ -482,15 +486,20 @@ export function CashflowGame({
             paydayFlash={paydayFlash}
             onTileHover={() => audio.sfx("hover")}
           >
-            <div className="mt-2 flex flex-col items-center gap-2">
+            {/* gap-3, not gap-2: `sm`'s hit layer reaches 8px past its box and `md`'s
+                reaches 3px, so an 8px gap would let the toggle's target overlap Roll's. */}
+            <div className="mt-2 flex flex-col items-center gap-3">
               <Dice values={dice} rolling={turnPhase === "rolling"} />
               {!isFast && s.charityRolls > 0 && (
-                <button
-                  onClick={() => setTwoDice((v) => !v)}
-                  className="rounded-full border border-ink/50 bg-ink/10 px-2.5 py-0.5 num text-[0.66rem] text-ink"
+                <NeonButton
+                  size="sm"
+                  variant="secondary"
+                  inverted={twoDice}
+                  aria-pressed={twoDice}
+                  onClick={() => { audio.sfx("uitick"); setTwoDice((v) => !v); }}
                 >
                   Charity: roll {twoDice ? "2 dice" : "1 die"} ({s.charityRolls} left)
-                </button>
+                </NeonButton>
               )}
               {/* min-w: the busy "…" label used to collapse the button to ~40px and
                   reflow the whole hub under the board on every roll. */}

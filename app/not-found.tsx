@@ -7,7 +7,7 @@ import Link from "next/link";
  */
 export default function NotFound() {
   return (
-    <main className="mx-auto flex min-h-[100svh] w-full max-w-xl flex-col justify-center px-5 py-14">
+    <main id="main" className="mx-auto flex min-h-[100svh] w-full max-w-xl flex-col justify-center px-5 py-14">
       <div className="flex items-baseline justify-between border-b border-hairline pb-3">
         <span className="display-caps text-xl text-ink">LIFEPATCH</span>
         <span className="num text-tertiary" style={{ fontSize: "0.62rem", letterSpacing: "0.18em" }}>

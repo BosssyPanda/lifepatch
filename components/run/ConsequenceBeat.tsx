@@ -6,6 +6,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { ACCENT_PREROLL_MS, useBeatClock } from "@/hooks/useBeatClock";
 import { AshFall } from "@/components/cinematic/film/AshFall";
 import { MoneyFall } from "@/components/cinematic/MoneyFall";
+import { useDialog } from "@/components/ui/LedgerDialog";
 import { conceptsForText, conceptTitle } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEvent, Outcome } from "@/lib/lifeEvents";
@@ -180,15 +181,6 @@ export function ConsequenceBeat({
     countAnim.current = null;
   }, []);
 
-  // lock body scroll while the overlay owns the screen
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, []);
-
   // opening sequence: stamp → (hold) → count, quantized onto the score's grid.
   useEffect(() => {
     if (reduced) {
@@ -317,6 +309,11 @@ export function ConsequenceBeat({
   // skips the animation but never advances — the Continue control below owns that.
   useSkippable(!done, skip);
 
+  // Focus trap + Escape + body scroll lock, from the house dialog hook. `onClose: skip`
+  // (not `onDone`) keeps Escape on the same two stages as the tap-anywhere handler below:
+  // it fast-forwards while the ceremony runs, and dismisses once it has settled.
+  const dialogRef = useDialog<HTMLDivElement>({ open: true, onClose: skip });
+
   const showFigure = reduced || phase === "count" || phase === "land" || phase === "rows" || done;
   const showRows = reduced || phase === "rows" || done;
   const figureText = fmtFigure(count);
@@ -331,6 +328,7 @@ export function ConsequenceBeat({
 
   return (
     <motion.div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Consequence"

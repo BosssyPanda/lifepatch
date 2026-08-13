@@ -39,7 +39,7 @@ export function AdvanceBar({
   });
 
   return (
-    <div className="sticky bottom-0 z-30 border-t border-ink/12 bg-bg">
+    <div className="sticky bottom-0 z-30 border-t border-hairline bg-bg">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-5 py-3">
         <div className="flex items-center gap-5">
           <button

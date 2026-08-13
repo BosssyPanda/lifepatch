@@ -16,7 +16,7 @@ import { conceptTitle } from "@/lib/concepts";
 import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
-import { netWorth, portfolioValue, type RunState } from "@/lib/runEngine";
+import { netWorth, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { STAGGER } from "@/src/motion/tokens";
 
@@ -31,20 +31,30 @@ const REASON: Record<string, { label: string; Icon: typeof TrophyIcon }> = {
 };
 
 function PortfolioBreakdown({ run }: { run: RunState }) {
-  const total = portfolioValue(run) + run.cash;
-  if (total <= 0) return null;
   const rows = [
     ...ASSETS.map((a) => ({ key: a.id, label: a.short, Icon: a.Icon, value: run.holdings[a.id] ?? 0 })),
     { key: "cash", label: "Cash", Icon: CashIcon, value: run.cash },
   ]
     .filter((r) => r.value > 0)
     .sort((a, b) => b.value - a.value);
+  // Divide by what's actually listed: an overdrawn cash balance makes the true total smaller
+  // than the holdings, and every share would print over 100% beside a full bar.
+  const shown = rows.reduce((t, r) => t + r.value, 0);
+
+  // The header above is the question, so the panel always answers it — even with nothing left.
+  if (rows.length === 0) {
+    return (
+      <div className="border border-hairline bg-bg2 p-4">
+        <LedgerRow label="Nothing left" value={currency(0)} />
+      </div>
+    );
+  }
 
   return (
     <div className="border border-hairline bg-bg2 p-4">
       <ul className="space-y-2">
         {rows.map((r) => {
-          const pct = (r.value / total) * 100;
+          const pct = (r.value / shown) * 100;
           const Icon = r.Icon;
           return (
             <li key={r.key} className="flex items-center gap-2.5">

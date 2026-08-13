@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { Tone } from "@/lib/types";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 
 export type MascotMood = "idle" | "smug" | "gloating" | "rattled" | "defeated";
 
@@ -43,6 +44,9 @@ export function Mascot({
   className?: string;
   bob?: boolean;
 }) {
+  const { reduced } = useMotionCtx();
+  const idle = bob && !reduced;
+
   return (
     <motion.svg
       viewBox="0 0 200 250"
@@ -50,8 +54,12 @@ export function Mascot({
       role="img"
       aria-label="The System, a top-hat money baron"
       initial={false}
-      animate={bob ? { y: [0, -4, 0], rotate: [0, -0.6, 0] } : undefined}
-      transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+      // `reduced` is false through first paint (MotionProvider's hydration gate) and
+      // promotes after mount, so the loop is already running by then. Dropping to
+      // `undefined` would only abandon it, freezing a residual transform mid-bob —
+      // an explicit rest target is what the promote animates back to.
+      animate={idle ? { y: [0, -4, 0], rotate: [0, -0.6, 0] } : { y: 0, rotate: 0 }}
+      transition={idle ? { duration: 5, repeat: Infinity, ease: "easeInOut" } : { duration: 0 }}
     >
       {/* shoulders / suit */}
       <path
@@ -130,14 +138,15 @@ export function Mascot({
       {(mood === "smug" || mood === "gloating") && (
         <rect x="96" y="150" width="6" height="6" fill="var(--color-secondary)" />
       )}
-      {/* sweat when rattled */}
+      {/* sweat when rattled — the only visual tell for this mood, so reduced motion
+          settles it in place rather than removing it. */}
       {mood === "rattled" && (
         <motion.path
           d="M140 120c0 6-4 8-4 12a4 4 0 0 0 8 0c0-4-4-6-4-12z"
           fill="var(--color-tertiary)"
-          initial={{ y: -4, opacity: 0 }}
-          animate={{ y: 4, opacity: 1 }}
-          transition={{ repeat: Infinity, repeatType: "reverse", duration: 1 }}
+          initial={reduced ? { y: 0, opacity: 1 } : { y: -4, opacity: 0 }}
+          animate={reduced ? { y: 0, opacity: 1 } : { y: 4, opacity: 1 }}
+          transition={reduced ? { duration: 0 } : { repeat: Infinity, repeatType: "reverse", duration: 1 }}
         />
       )}
     </motion.svg>

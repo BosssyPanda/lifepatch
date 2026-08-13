@@ -153,11 +153,21 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
   const first = pts[0];
   const last = pts[pts.length - 1];
   const up = last.netWorth >= 0;
-  // Keep a label's centre far enough from the edges that its own width can't overflow the
-  // viewBox. Compact labels are shorter, so they need a smaller inset than the wide ones.
-  const inset = compact ? 48 : 70;
-  const clampX = (x: number) => Math.min(W - inset, Math.max(inset, x));
+  // A centred label must keep its own half-width clear of the viewBox, or the SVG's
+  // overflow:hidden eats the front of it. Mono advance is 0.6em and `.num` zeroes
+  // letter-spacing, so the width is exact — a constant inset cannot be, because type is
+  // sized in real pixels (TARGET_PX) while the inset would be in viewBox units.
+  const halfW = (text: string, size: number) => (text.length * 0.6 * size) / 2;
+  const clampX = (x: number, text: string, size = fs) => {
+    const h = Math.min(halfW(text, size), W / 2); // wider than the frame → centre, don't push
+    return Math.min(W - h, Math.max(h, x));
+  };
   const clampY = (y: number) => Math.min(H - 10, Math.max(fs + 2, y));
+
+  // Built once each so the clamp measures exactly the string that gets drawn.
+  const bestLabel = best ? `BEST ${best.year} +${currency(bestDelta)}` : "";
+  const worstLabel = worst ? `WORST ${worst.year} −${currency(Math.abs(worstDelta))}` : "";
+  const finalLabel = `${last.netWorth < 0 ? "−" : ""}${currency(Math.abs(last.netWorth))}`;
 
   const anno = { initial: reduced ? false : { opacity: 0 }, whileInView: { opacity: 1 }, viewport: { once: true, amount: 0.4 } } as const;
 
@@ -192,16 +202,19 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
           const e = macroEvent(p.year)!;
           const tone = e.tone === "bad" ? "var(--color-loss)" : e.tone === "good" ? "var(--color-gain)" : "var(--color-ink-dim)";
           const labelY = fs + 4 + (i % 2) * row;
+          // The event title is what overflows; the year and the market's actual move are the
+          // part that carries meaning, so the title is what goes. Dropping it is width-driven
+          // (a long title outgrows the wide frame too), with the phone column always short —
+          // one callout there is meant to read at a glance, not to span the chart.
+          const move = `${sp500Return(p.year) > 0 ? "+" : "−"}${Math.abs(sp500Return(p.year)).toFixed(0)}%`;
+          const long = `${p.year} — ${e.title.toUpperCase()} · ${move}`;
+          const label = !compact && halfW(long, fs) <= W / 2 ? long : `${p.year} · ${move}`;
           return (
             <motion.g key={p.year} {...anno} transition={{ delay: reduced ? 0 : 0.7 + i * 0.15 }}>
               <line x1={p.x} y1={labelY + 6} x2={p.x} y2={p.y - 5} stroke={tone} strokeDasharray="1 4" opacity="0.8" />
               <circle cx={p.x} cy={p.y} r="3.5" fill={tone} />
-              <text x={clampX(p.x)} y={labelY} textAnchor="middle" className="num" fontSize={fs} fill={tone} letterSpacing="0.08em">
-                {/* The event title is what overflows a phone column; the year and the market's
-                    actual move are the part that carries meaning, so the title is what goes. */}
-                {compact
-                  ? `${p.year} · ${sp500Return(p.year) > 0 ? "+" : "−"}${Math.abs(sp500Return(p.year)).toFixed(0)}%`
-                  : `${p.year} — ${e.title.toUpperCase()} · ${sp500Return(p.year) > 0 ? "+" : "−"}${Math.abs(sp500Return(p.year)).toFixed(0)}%`}
+              <text x={clampX(p.x, label)} y={labelY} textAnchor="middle" className="num" fontSize={fs} fill={tone} letterSpacing="0.08em">
+                {label}
               </text>
             </motion.g>
           );
@@ -212,16 +225,16 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
         {best && bestDelta > 0 && best.year !== last.year && (
           <motion.g {...anno} transition={{ delay: reduced ? 0 : 1.0 }}>
             <circle cx={best.x} cy={best.y} r="4" fill="var(--color-gain)" />
-            <text x={clampX(best.x)} y={clampY(best.y - 12)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-gain)" letterSpacing="0.08em">
-              BEST {best.year} +{currency(bestDelta)}
+            <text x={clampX(best.x, bestLabel)} y={clampY(best.y - 12)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-gain)" letterSpacing="0.08em">
+              {bestLabel}
             </text>
           </motion.g>
         )}
         {worst && worstDelta < 0 && worst.year !== last.year && (
           <motion.g {...anno} transition={{ delay: reduced ? 0 : 1.1 }}>
             <circle cx={worst.x} cy={worst.y} r="4" fill="var(--color-loss)" />
-            <text x={clampX(worst.x)} y={clampY(worst.y + fs + 8)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-loss)" letterSpacing="0.08em">
-              WORST {worst.year} −{currency(Math.abs(worstDelta))}
+            <text x={clampX(worst.x, worstLabel)} y={clampY(worst.y + fs + 8)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-loss)" letterSpacing="0.08em">
+              {worstLabel}
             </text>
           </motion.g>
         )}
@@ -235,8 +248,8 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
           <text x={W - PAD.right} y={H - PAD.bottom + fsAxis + 10} textAnchor="end" className="num" fontSize={fsAxis} fill="var(--color-tertiary)" letterSpacing="0.08em">
             {last.year}
           </text>
-          <text x={clampX(last.x)} y={Math.max(fsFinal + 8, last.y - 14)} textAnchor="middle" className="num" fontSize={fsFinal} fontWeight="700" fill={up ? "var(--color-gain)" : "var(--color-loss)"}>
-            {last.netWorth < 0 ? "−" : ""}{currency(Math.abs(last.netWorth))}
+          <text x={clampX(last.x, finalLabel, fsFinal)} y={Math.max(fsFinal + 8, last.y - 14)} textAnchor="middle" className="num" fontSize={fsFinal} fontWeight="700" fill={up ? "var(--color-gain)" : "var(--color-loss)"}>
+            {finalLabel}
           </text>
         </motion.g>
       </svg>

@@ -52,6 +52,14 @@ export function DealChooser({
   );
 }
 
+/**
+ * The share stepper's ± keys stay visually 28px (the row has to fit beside the count and
+ * MAX at 390px) and buy the 44px target with an invisible `::before` layer — the same
+ * trick `LedgerButton`'s `HIT` map uses, expanded on both axes rather than just vertically.
+ */
+const STEP_HIT =
+  "relative grid h-7 w-7 place-items-center bg-ink text-bg before:absolute before:-inset-2 before:content-['']";
+
 function StatLine({ label, value, tone }: { label: string; value: string; tone?: "good" | "bad" }) {
   return (
     <div className="flex items-center justify-between border-b border-ink/10 py-1.5 last:border-0">
@@ -176,10 +184,53 @@ function StockDealView({
           <div className="mt-4 flex items-center justify-between gap-3">
             <span className="font-body text-[0.84rem] text-ink/70">Shares</span>
             <div className="flex items-center gap-2">
-              <button onClick={() => setShares((n) => Math.max(0, n - 10))} className="grid h-7 w-7 place-items-center rounded-[4px] bg-ink text-bg">−</button>
-              <span className="num w-14 text-center text-lg font-bold text-ink">{shares}</span>
-              <button onClick={() => setShares((n) => Math.min(maxShares, n + 10))} className="grid h-7 w-7 place-items-center rounded-[4px] bg-ink text-bg">+</button>
-              <button onClick={() => setShares(maxShares)} className="ml-1 rounded-[4px] border border-ink/30 px-2 py-1 num text-[0.7rem] text-ink/70">MAX</button>
+              <button
+                type="button"
+                onClick={() => setShares((n) => Math.max(0, n - 10))}
+                disabled={shares <= 0}
+                aria-label="Ten fewer shares"
+                className={`${STEP_HIT} disabled:opacity-40`}
+              >
+                −
+              </button>
+              {/* A spinbutton, not a bare number: the count is the only thing a press
+                  changes, and this makes screen readers announce the new value without
+                  a live region wrapping the buttons that caused it. */}
+              <span
+                role="spinbutton"
+                tabIndex={0}
+                aria-label="Shares"
+                aria-valuenow={shares}
+                aria-valuemin={0}
+                aria-valuemax={maxShares}
+                aria-valuetext={`${shares} shares`}
+                onKeyDown={(e) => {
+                  const d = e.key === "ArrowUp" || e.key === "ArrowRight" ? 10 : e.key === "ArrowDown" || e.key === "ArrowLeft" ? -10 : 0;
+                  if (!d) return;
+                  e.preventDefault();
+                  setShares((n) => Math.min(maxShares, Math.max(0, n + d)));
+                }}
+                className="num w-14 text-center text-lg font-bold text-ink"
+              >
+                {shares}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShares((n) => Math.min(maxShares, n + 10))}
+                disabled={shares >= maxShares}
+                aria-label="Ten more shares"
+                className={`${STEP_HIT} disabled:opacity-40`}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => setShares(maxShares)}
+                aria-label="Buy the maximum number of shares"
+                className="relative ml-1 border border-ink/30 px-2 py-1 num text-[0.7rem] text-ink/70 before:absolute before:-inset-x-1 before:-inset-y-[11px] before:content-['']"
+              >
+                MAX
+              </button>
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between font-body text-[0.82rem] text-ink/70">

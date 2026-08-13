@@ -57,6 +57,13 @@ export function ColdOpen({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cueRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doneRef = useRef(false);
+  const startedRef = useRef(false);
+  // Both of these mint a new identity on every mute/volume change (the api object
+  // embeds those values; `onDone` closes over it) — see the effect's tail.
+  const audioRef = useRef(audio);
+  audioRef.current = audio;
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
   // WebGL support check happens client-side only (this tree never SSRs).
   const [webgl] = useState(
     () => typeof window !== "undefined" && typeof window.WebGLRenderingContext !== "undefined",
@@ -70,27 +77,29 @@ export function ColdOpen({
     // equivalent. The film's phrases are printed at once and the user leaves when
     // they're ready. One quiet accent stands in for the escalating bed.
     if (reduced) {
-      audio.setIntensity(0.3);
-      try { audio.accent("riser"); } catch {}
+      if (startedRef.current) return;
+      startedRef.current = true;
+      audioRef.current.setIntensity(0.3);
+      try { audioRef.current.accent("riser"); } catch {}
       return;
     }
     const beat = COLD_OPEN[i];
     if (!beat) {
-      if (!doneRef.current) { doneRef.current = true; onDone(); }
+      if (!doneRef.current) { doneRef.current = true; onDoneRef.current(); }
       return;
     }
     // escalate the bed phrase-by-phrase, accent the slam-in
-    audio.setIntensity(Math.min(1, 0.3 + (i / Math.max(1, COLD_OPEN.length - 1)) * 0.7));
+    audioRef.current.setIntensity(Math.min(1, 0.3 + (i / Math.max(1, COLD_OPEN.length - 1)) * 0.7));
     // beat 0 has nothing to sync against — it IS the film's downbeat. Every
     // later beat's accent was pre-rolled by the beat before it.
-    if (i === 0) { try { audio.accent(beat.accent); } catch {} }
+    if (i === 0) { try { audioRef.current.accent(beat.accent); } catch {} }
 
     // hold at least as long as the authored reading floor, then to the next beat
     const hold = clock.ceil(beat.ms, "beat");
     const nextBeat = COLD_OPEN[i + 1];
     if (nextBeat) {
       cueRef.current = setTimeout(() => {
-        try { audio.accent(nextBeat.accent); } catch {}
+        try { audioRef.current.accent(nextBeat.accent); } catch {}
       }, Math.max(0, hold - ACCENT_PREROLL_MS));
     }
     timerRef.current = setTimeout(() => setI((n) => n + 1), hold);
@@ -98,7 +107,11 @@ export function ColdOpen({
       if (timerRef.current) clearTimeout(timerRef.current);
       if (cueRef.current) clearTimeout(cueRef.current);
     };
-  }, [i, audio, clock, onDone, reduced]);
+    // the film's timeline is a one-shot ladder: mute / volume mint a new audio
+    // api object, and restarting the effect would re-grant the current line a
+    // full fresh hold. Same reason Outro pins its timeline to [].
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [i, clock, reduced]);
 
   const skip = () => {
     if (timerRef.current) clearTimeout(timerRef.current);

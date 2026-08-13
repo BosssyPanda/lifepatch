@@ -102,8 +102,14 @@ export function GlossaryModal({ onClose }: { onClose: () => void }) {
     <div className="paper rounded-[6px]">
       <div className="sticky top-0 flex items-center justify-between border-b-2 border-ink bg-bg px-5 py-3">
         <h3 className="display-caps text-xl text-ink">Money Glossary</h3>
-        <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-ink/70 hover:bg-ink/10">
-          <CloseIcon size={18} />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close glossary"
+          data-radius="round"
+          className="grid h-11 w-11 place-items-center border-2 border-hairline-strong text-ink-dim transition-colors hover:border-ink hover:text-ink"
+        >
+          <CloseIcon size={16} />
         </button>
       </div>
       <div className="space-y-3 p-5">

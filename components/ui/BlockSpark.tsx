@@ -24,12 +24,16 @@ export function BlockSpark({ values, className = "" }: { values: number[]; class
   if (values.length < 2) return null;
   const up = values[values.length - 1] >= values[0];
   return (
+    // role="img" is what makes the aria-label count — on a bare span the label is dropped and
+    // the block glyphs get read out one by one. The inner aria-hidden span covers the
+    // long-standing Safari/VoiceOver bug where text inside role="img" leaks anyway.
     <span
+      role="img"
       className={`num ${className}`}
       style={{ color: up ? "var(--color-gain)" : "var(--color-loss)", letterSpacing: "0.05em", fontSize: "0.8rem", lineHeight: 1 }}
       aria-label={`Net worth trend, ${up ? "up" : "down"}`}
     >
-      {sparkGlyphs(values)}
+      <span aria-hidden>{sparkGlyphs(values)}</span>
     </span>
   );
 }

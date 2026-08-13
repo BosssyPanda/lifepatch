@@ -2,7 +2,6 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useId, useRef, useState } from "react";
-import { NumberTicker } from "@/components/cinematic/landing/NumberTicker";
 import { CloseIcon } from "@/components/icons";
 import { Avatar } from "@/components/social/Avatar";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
@@ -282,11 +281,15 @@ export function Leaderboard({
                 underlined text, two visual languages inside one overlay */}
             {board}
 
+            {/* keyboard-reachable because the rows hold no focusable children; the ring is
+                pulled inward since the card clips at its own edge and a 2px outward offset
+                would render as two floating bars */}
             <div
-              className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3"
+              className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3 [&:focus-visible]:[outline-offset:-2px]"
               id={panelId}
               role="tabpanel"
               aria-labelledby={tabId(panelId, mode)}
+              tabIndex={0}
               data-lenis-prevent
             >
               {body}
@@ -304,19 +307,22 @@ export function Leaderboard({
 }
 
 function RankBadge({ rank }: { rank: number }) {
+  // A rank is a static ordinal — there is nothing for a count-up to reveal, and a
+  // scroll-gated ticker would paint "0" for every row below the fold of a 25-row
+  // board. The row's split-flap landing (listItem) is the ceremony.
   if (rank <= 3) {
     return (
       <span
         className="grid h-6 w-6 shrink-0 place-items-center text-[0.72rem] font-bold text-bg"
         style={{ background: MEDALS[rank - 1] }}
       >
-        <NumberTicker value={rank} durationMs={450} />
+        <span className="num">{rank}</span>
       </span>
     );
   }
   return (
-    <span className="w-6 shrink-0 text-right font-body text-sm text-secondary">
-      <NumberTicker value={rank} durationMs={450} />
+    <span className="w-6 shrink-0 text-right text-sm text-secondary">
+      <span className="num">{rank}</span>
     </span>
   );
 }

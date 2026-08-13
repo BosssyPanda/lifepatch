@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { MascotLine } from "@/components/story/MascotLine";
 import { currency } from "@/lib/format";
 import { playHeadline, type RunState } from "@/lib/runEngine";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { DUR, EASE, SPRING } from "@/src/motion/tokens";
 
 const TONE_HEX: Record<string, string> = {
   good: "var(--color-gain)",
@@ -19,6 +21,8 @@ function taunt(indexReturn: number, delta: number): { line: string; mood: "gloat
 }
 
 export function MarketTicker({ run }: { run: RunState }) {
+  // read before the early return, so hook order is stable across both branches
+  const { reduced } = useMotionCtx();
   const last = run.history[run.history.length - 1];
 
   if (!last) {
@@ -39,7 +43,7 @@ export function MarketTicker({ run }: { run: RunState }) {
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-6">
-      <div className="rounded-[5px] border border-ink/12 bg-bg2 p-5">
+      <div className="border border-hairline bg-bg2 p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="eyebrow text-ink-dim">The market did this</p>
@@ -49,10 +53,13 @@ export function MarketTicker({ run }: { run: RunState }) {
           </div>
           <div className="text-right">
             <p className="eyebrow text-ink-dim">Your portfolio</p>
+            {/* Reduced motion keeps the feedback and drops the pop (same trade as
+                YearHud's FlashValue): the figure fades in instead of punching in. */}
             <motion.p
               key={last.portfolioDelta}
-              initial={{ scale: 1.2 }}
-              animate={{ scale: 1 }}
+              initial={reduced ? { opacity: 0 } : { scale: 1.2 }}
+              animate={reduced ? { opacity: 1 } : { scale: 1 }}
+              transition={reduced ? { duration: DUR.instant, ease: EASE } : SPRING.reward}
               className="num text-2xl sm:text-3xl"
               style={{ color: up ? "var(--color-gain)" : "var(--color-loss)" }}
             >
@@ -63,7 +70,7 @@ export function MarketTicker({ run }: { run: RunState }) {
 
         {headline && (
           <p
-            className="mt-3 border-t border-ink/10 pt-3 font-mono text-sm uppercase tracking-wide"
+            className="mt-3 border-t border-hairline pt-3 font-mono text-sm uppercase tracking-wide"
             style={{ color: TONE_HEX[headline.tone] }}
           >
             {headline.text}

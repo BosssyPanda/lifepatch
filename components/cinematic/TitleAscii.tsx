@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { familyOf } from "@/components/cinematic/canvasFont";
 
 /**
  * ASCII-render title layer (Addendum §13 #6). The Phase G board-orbit loop,
@@ -20,22 +21,6 @@ const INK = "#f2f1ea";
 const LOSS = "#ff3b30";
 const GAIN = "#2bd576";
 
-/** Resolve the loaded mono font's concrete family for canvas use. */
-function monoFamily(): string {
-  try {
-    const probe = document.createElement("span");
-    probe.className = "num";
-    probe.style.position = "absolute";
-    probe.style.visibility = "hidden";
-    document.body.appendChild(probe);
-    const fam = getComputedStyle(probe).fontFamily;
-    probe.remove();
-    return fam || "monospace";
-  } catch {
-    return "monospace";
-  }
-}
-
 export function TitleAscii() {
   const { reduced } = useMotionCtx();
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -49,7 +34,7 @@ export function TitleAscii() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const font = monoFamily();
+    const font = familyOf("num", "monospace");
     const sample = document.createElement("canvas");
     const sctx = sample.getContext("2d", { willReadFrequently: true });
     if (!sctx) return;

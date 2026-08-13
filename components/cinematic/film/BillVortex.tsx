@@ -1,8 +1,9 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { familyOf } from "@/components/cinematic/canvasFont";
 import { percent } from "@/lib/format";
 import { FIRST_YEAR, LAST_YEAR, sp500Return } from "@/lib/markets";
 
@@ -101,31 +102,66 @@ function Bills() {
   );
 }
 
+type Plate = {
+  tex: THREE.CanvasTexture;
+  x: number; y: number; z: number;
+  drift: number;
+  key: string;
+};
+
+/**
+ * 118px condensed display numerals — DESIGN.md § Typography gives that role to
+ * Anton, at the one weight layout.tsx loads (400; asking for 700 makes the browser
+ * synthesize a fake bold). The family name is hashed by next/font, so it has to be
+ * probed off the DOM rather than spelled. `percent()` prints U+2212, which Anton's
+ * latin subset covers, so the sign matches the digits.
+ */
+function buildPlates(): Plate[] {
+  const r = rng(1929);
+  const anton = familyOf("font-anton", "sans-serif");
+  return worstReturns(6).map((txt, i) => {
+    const c = document.createElement("canvas");
+    c.width = 512; c.height = 160;
+    const x = c.getContext("2d")!;
+    x.fillStyle = BG; x.fillRect(0, 0, 512, 160);
+    x.font = `400 118px ${anton}`;
+    x.textAlign = "center"; x.textBaseline = "middle";
+    x.fillStyle = INK_DIM;
+    x.fillText(txt, 256, 86);
+    return {
+      tex: new THREE.CanvasTexture(c),
+      x: (r() - 0.5) * 16,
+      y: (r() - 0.5) * 9,
+      z: -9 - r() * 6,
+      drift: 0.12 + r() * 0.2,
+      key: `${txt}-${i}`,
+    };
+  });
+}
+
 /** Faint numeral plates of the real worst returns, drifting in the deep. */
 function ReturnGhosts() {
   const group = useRef<THREE.Group>(null);
-  const plates = useMemo(() => {
-    const texts = worstReturns(6);
-    const r = rng(1929);
-    return texts.map((txt, i) => {
-      const c = document.createElement("canvas");
-      c.width = 512; c.height = 160;
-      const x = c.getContext("2d")!;
-      x.fillStyle = BG; x.fillRect(0, 0, 512, 160);
-      x.font = "700 118px Arial Narrow, Impact, sans-serif";
-      x.textAlign = "center"; x.textBaseline = "middle";
-      x.fillStyle = INK_DIM;
-      x.fillText(txt, 256, 86);
-      const tex = new THREE.CanvasTexture(c);
-      return {
-        tex,
-        x: (r() - 0.5) * 16,
-        y: (r() - 0.5) * 9,
-        z: -9 - r() * 6,
-        drift: 0.12 + r() * 0.2,
-        key: `${txt}-${i}`,
-      };
-    });
+  const [plates, setPlates] = useState<Plate[]>([]);
+
+  // A CanvasTexture is painted once and never repaints, so painting during render —
+  // before next/font has actually delivered Anton — would freeze the fallback face
+  // in permanently. Wait for the font first, exactly as drawShareCard does.
+  useEffect(() => {
+    let live = true;
+    let made: Plate[] = [];
+    const build = () => {
+      if (!live) return;
+      made = buildPlates();
+      setPlates(made);
+    };
+    const ready = typeof document !== "undefined" ? document.fonts?.ready : null;
+    if (ready) ready.then(build, build);
+    else build();
+    return () => {
+      live = false;
+      for (const p of made) p.tex.dispose();
+    };
   }, []);
 
   useFrame(({ clock }) => {
@@ -134,6 +170,7 @@ function ReturnGhosts() {
     const t = clock.getElapsedTime();
     g.children.forEach((ch, i) => {
       const p = plates[i];
+      if (!p) return; // children only exist for built plates, but the frame loop is not React
       ch.position.y = p.y + Math.sin(t * p.drift + i * 2.1) * 0.8;
     });
   });

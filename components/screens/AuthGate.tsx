@@ -101,13 +101,9 @@ export function AuthGate({
               <div className="space-y-3">
                 <p className="font-body text-sm text-gain">Check your inbox for a magic link.</p>
                 <p className="font-body text-xs text-secondary">Sent to {email.trim().toLowerCase()}.</p>
-                <button
-                  type="button"
-                  onClick={() => { clearLinkSent(); setSignInError(null); }}
-                  className="eyebrow text-ink-dim underline transition-colors hover:text-ink"
-                >
+                <NeonButton variant="ghost" size="sm" className="underline" onClick={() => { clearLinkSent(); setSignInError(null); }}>
                   Use a different email
-                </button>
+                </NeonButton>
               </div>
             ) : (
               <form onSubmit={submit} className="space-y-3">
@@ -179,9 +175,11 @@ export function AuthGate({
                   Begin a new life →
                 </NeonButton>
               )}
-              <button type="button" onClick={signOut} className="w-full eyebrow text-ink-dim hover:text-ink">
-                Sign out
-              </button>
+              {/* Out of the stack and behind a rule: a 44px hit layer sitting directly under
+                  the primary CTA would butt against it and make the mis-tap likelier, not rarer. */}
+              <div className="mt-5 border-t border-hairline pt-4 text-center">
+                <NeonButton variant="ghost" size="sm" onClick={signOut}>Sign out</NeonButton>
+              </div>
             </div>
           )}
         </div>

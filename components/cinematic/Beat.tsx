@@ -89,7 +89,7 @@ export function Beat({ beat }: { beat: ColdBeat }) {
           initial={reduced ? false : { opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: reduced ? 0 : 0.4 }}
-          className="mt-2 font-body text-xl italic text-ink/70 sm:text-2xl"
+          className="voice mt-2 text-xl text-ink/70 sm:text-2xl"
         >
           Survive the Internet Economy
         </motion.p>

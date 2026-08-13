@@ -50,8 +50,11 @@ export function ModeSelect({
               key={id}
               type="button"
               onClick={() => { audio.sfx("click"); setPicked(id); }}
+              aria-pressed={active}
               initial={{ opacity: 0, y: 26, rotate: i % 2 ? 1 : -1 }}
-              animate={{ opacity: picked && !active ? 0.55 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
+              // 0.8 is the floor for the recede: the blurb's faintest text is text-ink/60,
+              // which starts near 4.5:1, so anything lower drops it through the contrast floor.
+              animate={{ opacity: picked && !active ? 0.8 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
               transition={{ ...SPRING.pop, delay: i * 0.1 }}
               whileHover={reduced ? undefined : { y: -6 }}
               data-radius=""

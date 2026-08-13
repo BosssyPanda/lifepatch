@@ -128,7 +128,10 @@ export function CompoundToy() {
         <div className="flex flex-col justify-between bg-bg2 p-6 sm:p-8">
           <div>
             <p className="eyebrow text-secondary">After {years} years</p>
-            <p className="font-anton mt-2 text-5xl leading-none text-ink sm:text-7xl" key={`${monthly}-${years}-${asset}`}>
+            {/* No remount key: the ticker re-targets its own MotionValue on every
+                slider step, so the figure tracks the drag instead of restarting
+                the reveal count-up from $0 each time. */}
+            <p className="font-anton mt-2 text-5xl leading-none text-ink sm:text-7xl">
               <NumberTicker value={Math.round(fv)} prefix="$" durationMs={700} />
             </p>
           </div>

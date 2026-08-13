@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { RAT_BOARD, RAT_SQUARE_META } from "@/lib/cashflow/board";
 import type { RatSquareType } from "@/lib/cashflow/types";
+import { familyOf } from "@/components/cinematic/canvasFont";
 
 /**
  * The live 3D Rat Race diorama (spectacle Phase L) — the heavy half behind
@@ -56,22 +57,6 @@ function ringPosition(i: number): [number, number] {
     case 2: return [-u, -EDGE]; // back, right→left
     default: return [-EDGE, u]; // left, back→front
   }
-}
-
-/** next/font hashes family names — read the real one off a probe element. */
-const familyCache = new Map<string, string>();
-function familyOf(className: string, fallback: string): string {
-  const hit = familyCache.get(className);
-  if (hit) return hit;
-  const el = document.createElement("span");
-  el.className = className;
-  el.style.position = "absolute";
-  el.style.visibility = "hidden";
-  document.body.appendChild(el);
-  const fam = getComputedStyle(el).fontFamily || fallback;
-  el.remove();
-  familyCache.set(className, fam);
-  return fam;
 }
 
 function plateCanvas(size: number): CanvasRenderingContext2D {

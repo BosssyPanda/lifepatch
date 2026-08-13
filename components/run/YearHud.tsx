@@ -35,6 +35,14 @@ function barVar(v: number) {
  */
 const FLASH_TINT = { gain: "rgba(43,213,118,0.16)", loss: "rgba(255,59,48,0.16)" } as const;
 
+/**
+ * 44px of hit box without changing how big either control looks. Both expanders stay
+ * inside the header's own `py-2.5`, so neither bleeds into the sticky rail above or the
+ * page below; the chevron's horizontal 7px lands on the net-worth column, which is text.
+ */
+const ICON_HIT = "relative before:absolute before:-inset-[7px] before:content-['']";
+const TEXT_HIT = "relative before:absolute before:inset-x-0 before:-inset-y-[8px] before:content-['']";
+
 function FlashValue({ value, children }: { value: number; children: ReactNode }) {
   const { reduced } = useMotionCtx();
   const prev = useRef(value);
@@ -111,7 +119,8 @@ export function YearHud({
         <button
           type="button"
           onClick={onOpenAlmanac}
-          className="hidden shrink-0 items-center gap-1 border border-ink/25 px-2.5 py-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink sm:flex"
+          data-radius=""
+          className={`${TEXT_HIT} hidden shrink-0 items-center gap-1 border border-hairline-strong px-2.5 py-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink sm:flex`}
         >
           <InfoIcon size={14} /><span className="eyebrow" style={{ fontSize: "0.58rem" }}>Learn</span>
         </button>
@@ -128,7 +137,8 @@ export function YearHud({
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           aria-label="Toggle full stats"
-          className="shrink-0 border border-ink/25 p-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink"
+          data-radius=""
+          className={`${ICON_HIT} shrink-0 border border-hairline-strong p-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink`}
         >
           <motion.span animate={{ rotate: open ? 180 : 0 }} className="block"><ChevronDown size={16} /></motion.span>
         </button>

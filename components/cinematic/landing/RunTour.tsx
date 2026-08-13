@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useMotionValueEvent, useScroll } from "framer-motion";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SplitFlap } from "@/components/cinematic/SplitFlap";
 import { sp500Return, macroEvent } from "@/lib/markets";
 import { PROFESSIONS } from "@/lib/cashflow/professions";
@@ -162,7 +162,18 @@ export function RunTour() {
   const { reduced } = useMotionCtx();
   const ref = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState(0);
+  const [narrow, setNarrow] = useState(false);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end end"] });
+
+  // Safe to read matchMedia in an effect with no SSR fallback to reconcile: Intro
+  // mounts this with `ssr: false`, the same way BoardDiorama probes its capabilities.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023.98px)"); // below Tailwind `lg`
+    const sync = () => setNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   useMotionValueEvent(scrollYProgress, "change", (p) => {
     setStep(Math.min(3, Math.floor(p * 4)));
@@ -175,8 +186,12 @@ export function RunTour() {
     <PanelVerdict key="verdict" live={live} reduced={reduced} />,
   ];
 
-  // Reduced motion: the four beats as a plain stacked document, no pinning.
-  if (reduced) {
+  // Reduced motion — or any viewport below `lg`: the four beats as a plain stacked
+  // document, no pinning. The pin is a ≥lg affordance on purpose: the two-column
+  // stage cannot hold heading + the 4-step rail + a full panel card inside 100svh
+  // at 390px, so the bottom of the active card was simply clipped off. Do not
+  // re-pin this below lg without shrinking the rail to a one-line strip first.
+  if (reduced || narrow) {
     return (
       <section className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="runtour-heading">
         <p className="eyebrow text-secondary">002 — The Loop</p>

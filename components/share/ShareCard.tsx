@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@/components/icons";
 import { LedgerButton } from "@/components/ui/LedgerButton";
 import { useDialog } from "@/components/ui/LedgerDialog";
+import { LedgerTabs, tabId } from "@/components/ui/LedgerTabs";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { drawShareCard, FORMATS, type ShareCardData, type ShareFormat } from "./drawShareCard";
 
@@ -19,6 +20,12 @@ const REVOKE_DELAY_MS = 60_000;
 function isUserCancel(err: unknown): boolean {
   return err instanceof Error && (err.name === "AbortError" || err.name === "NotAllowedError");
 }
+
+const PANEL_ID = "share-preview";
+const FORMAT_TABS = [
+  { id: "story", label: "Story 9:16" },
+  { id: "og", label: "Card 1.91:1" },
+] as const satisfies readonly { id: ShareFormat; label: string }[];
 
 export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () => void }) {
   const [format, setFormat] = useState<ShareFormat>("story");
@@ -101,21 +108,20 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
 
       <div className="flex flex-1 flex-col items-center justify-center gap-5 overflow-y-auto px-5 py-8">
         {/* format toggle */}
-        <div className="flex items-stretch border border-hairline">
-          {(["story", "og"] as ShareFormat[]).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFormat(f)}
-              className={`display-caps px-4 py-2 text-[0.7rem] tracking-[0.12em] transition-colors ${format === f ? "bg-ink text-bg" : "bg-transparent text-ink-dim hover:text-ink"}`}
-            >
-              {f === "story" ? "Story 9:16" : "Card 1.91:1"}
-            </button>
-          ))}
-        </div>
+        <LedgerTabs
+          items={FORMAT_TABS}
+          value={format}
+          onChange={setFormat}
+          label="Share card format"
+          panelId={PANEL_ID}
+          size="sm"
+        />
 
         {/* preview */}
         <div
+          id={PANEL_ID}
+          role="tabpanel"
+          aria-labelledby={tabId(PANEL_ID, format)}
           className="w-full max-w-[min(88vw,420px)] border border-hairline"
           style={{ aspectRatio: String(aspect), maxHeight: "58svh" }}
         >

@@ -173,6 +173,7 @@ function ConceptNode({
   return (
     <motion.button
       type="button"
+      aria-expanded={expanded}
       onClick={onToggle}
       data-radius=""
       layout={reduced ? false : true}
@@ -199,7 +200,8 @@ function ConceptNode({
             <span
               key={i}
               className="h-1.5 flex-1"
-              style={{ background: "var(--color-gain)", opacity: i < level ? 1 : 0.14 }}
+              // ink-scale, not gain-green: mastery is not money
+              style={{ background: i < level ? "var(--color-ink)" : "var(--color-hairline)" }}
             />
           ))}
         </span>
@@ -208,17 +210,18 @@ function ConceptNode({
           {state === "introduced" ? "Introduced" : "Locked"}
         </span>
       )}
+      {/* span, not p: a <button> takes phrasing content only */}
       <AnimatePresence initial={false}>
         {expanded && (
-          <motion.p
+          <motion.span
             initial={reduced ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: DUR.exitFast } }}
             transition={{ duration: DUR.fast, ease: EASE }}
-            className="mt-2 font-body text-[0.82rem] italic leading-snug text-ink/75"
+            className="mt-2 block font-body text-[0.82rem] italic leading-snug text-ink/75"
           >
             {concept.def}
-          </motion.p>
+          </motion.span>
         )}
       </AnimatePresence>
     </motion.button>

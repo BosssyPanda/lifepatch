@@ -28,16 +28,24 @@ const TALLY = RAT_BOARD.reduce<{ type: RatSquareType; n: number }[]>((acc, sq) =
   return acc;
 }, []);
 
-function supportsWebgl(): boolean {
+/**
+ * Cached so React StrictMode's double-invoked state initializer doesn't mint two
+ * throwaway GL contexts. Same probe CashflowGame uses for its dice overlay.
+ */
+let webglProbe: boolean | null = null;
+function hasWebGL(): boolean {
+  if (webglProbe !== null) return webglProbe;
   try {
     const c = document.createElement("canvas");
-    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+    webglProbe = !!(c.getContext("webgl2") || c.getContext("webgl"));
   } catch {
-    return false;
+    webglProbe = false;
   }
+  return webglProbe;
 }
 
-function Header() {
+/** `live` = a scene will actually run; the poster branch must not promise motion. */
+function Header({ live }: { live: boolean }) {
   return (
     <div>
       <p className="eyebrow text-secondary">003 — The Arena</p>
@@ -46,7 +54,7 @@ function Header() {
       </h2>
       <p className="mt-3 max-w-xl font-body text-sm leading-relaxed text-ink-dim">
         The real Rat Race ring, rebuilt live from the engine&apos;s board data — nothing staged.
-        Scroll walks the camera.
+        {live ? "Scroll walks the camera." : ""}
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {TALLY.map(({ type, n }) => (
@@ -65,13 +73,16 @@ export function BoardDiorama() {
   const [near, setNear] = useState(false);
   const [onScreen, setOnScreen] = useState(false);
   const [docVisible, setDocVisible] = useState(true);
-  const [webgl, setWebgl] = useState(false);
+  // Probed synchronously, not in an effect: this tree is `ssr: false`, so the first
+  // render IS the first client render. A false-then-true flip would take the poster
+  // branch first, leaving `sectionRef` unattached — and the observer effect below
+  // (deps `[reduced]`) would never re-run, so the scene would load for nobody.
+  const [webgl] = useState(() => hasWebGL());
   const [hoverCapable, setHoverCapable] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [hover, setHover] = useState<Hover>(null);
 
   useEffect(() => {
-    setWebgl(supportsWebgl());
     setHoverCapable(window.matchMedia("(hover: hover) and (pointer: fine)").matches);
     const onVisibility = () => setDocVisible(!document.hidden);
     document.addEventListener("visibilitychange", onVisibility);
@@ -97,11 +108,15 @@ export function BoardDiorama() {
 
   const showScene = near && webgl && !reduced;
 
-  // Reduced motion (or no WebGL at all): the framed poster as a plain document.
-  if (reduced) {
+  // Reduced motion, or no WebGL at all: the framed poster as a plain document.
+  // Reserving 220svh of pinned scroll for a still that will never move — under a
+  // "[ Scroll to orbit ]" hint pointing at nothing — is the affordance without the
+  // thing. DESIGN.md § Motion asks for the motion to be REPLACED, not for its shell
+  // to be left standing.
+  if (reduced || !webgl) {
     return (
       <section className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="arena-heading">
-        <Header />
+        <Header live={false} />
         <div className="relative mt-8 border border-hairline">
           <img
             src="/board3d/board-poster.jpg"
@@ -119,7 +134,7 @@ export function BoardDiorama() {
   return (
     <section ref={sectionRef} className="relative h-[220svh] border-t border-hairline" aria-labelledby="arena-heading">
       <div className="sticky top-0 flex h-[100svh] flex-col overflow-hidden px-5 py-10 sm:px-10 lg:px-16">
-        <Header />
+        <Header live />
 
         {/* the stage — dice-overlay frame language */}
         <div className="relative mt-6 min-h-0 flex-1 border border-hairline bg-bg">

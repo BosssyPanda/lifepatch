@@ -49,10 +49,10 @@ function nextCongruent(min: number, target: number): number {
 function Pip({ red }: { red: boolean }) {
   return (
     <span
+      data-radius="round"
       style={{
         width: "26%",
         height: "26%",
-        borderRadius: "50%",
         background: red
           ? "var(--color-loss)"
           : "var(--color-bg)",
@@ -77,7 +77,6 @@ function Face({ v, transform }: { v: number; transform: string }) {
         height: SIZE,
         transform,
         backfaceVisibility: "hidden",
-        borderRadius: 13,
         border: "1px solid var(--color-hairline)",
         background: "var(--color-ink)",
         overflow: "hidden",
@@ -126,7 +125,6 @@ function Burst() {
               height: 4,
               marginLeft: -2,
               marginTop: -2,
-              borderRadius: "50%",
               background: i % 2 ? "var(--color-ink)" : "var(--color-secondary)",
             }}
           />
@@ -205,7 +203,6 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
                   bottom: "30%",
                   left: `calc(50% + ${dx}px)`,
                   width: 2,
-                  borderRadius: 2,
                   background: "var(--color-ink)",
                 }}
               />

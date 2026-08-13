@@ -20,7 +20,10 @@ export function LeaderboardPage() {
       pageAction={
         <Link
           href="/"
-          className="eyebrow text-ink-dim transition-colors hover:text-ink"
+          // 0.62rem keeps it level with the wordmark it sits beside; the ::before expander
+          // buys the 44px hit box out of the masthead cell's own padding, so the only exit
+          // from this route is tappable without growing the rail.
+          className="eyebrow relative text-ink-dim transition-colors before:absolute before:-inset-x-4 before:-inset-y-[15px] before:content-[''] hover:text-ink sm:before:-inset-x-6"
           style={{ fontSize: "0.62rem" }}
         >
           ← The ledger
