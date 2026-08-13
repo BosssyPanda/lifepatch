@@ -107,6 +107,10 @@ function Die({
   const fromPos = useRef(new THREE.Vector3());
   const captured = useRef(false);
 
+  // Six canvas textures + six materials per die, per roll. Nothing disposed them, so
+  // every roll leaked 12 textures and 12 materials into the GPU for the life of the
+  // session (BoardScene does this correctly — see its texture cleanup). They are
+  // released on unmount, which is the end of each roll since the overlay unmounts.
   const materials = useMemo(
     () =>
       FACE_VALUES.map(
@@ -118,6 +122,15 @@ function Die({
           }),
       ),
     [],
+  );
+  useEffect(
+    () => () => {
+      for (const m of materials) {
+        m.map?.dispose();
+        m.dispose();
+      }
+    },
+    [materials],
   );
 
   const spawn = useMemo(() => {

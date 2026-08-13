@@ -153,13 +153,18 @@ export function MarketSection() {
         <div className="bg-bg p-5 sm:p-6">
           <p className="eyebrow text-secondary">Crashes survived</p>
           <p className="font-anton mt-2 text-4xl text-loss sm:text-5xl">
-            <NumberTicker value={CALLOUT_YEARS.length} />
+            <NumberTicker value={CALLOUT_YEARS.length} className="tabular-nums" />
           </p>
         </div>
         <div className="bg-bg p-5 sm:p-6">
           <p className="eyebrow text-secondary">Worth · {LAST_YEAR}</p>
           <p className="font-anton mt-2 text-4xl text-gain sm:text-5xl">
-            <NumberTicker value={Math.round(final)} prefix="$" durationMs={1600} />
+            {/* explicit tabular figures: this ticker counts to ~7 digits inside a
+                `font-anton` block, and a proportional digit set makes it shuffle
+                horizontally for the whole 1.6s. (`.num` already forces tabular here —
+                it also wins the font over the parent's `font-anton` — but the class is
+                stated so the guarantee doesn't depend on that cascade accident.) */}
+            <NumberTicker value={Math.round(final)} prefix="$" durationMs={1600} className="tabular-nums" />
           </p>
         </div>
       </div>

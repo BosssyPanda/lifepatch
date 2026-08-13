@@ -32,9 +32,8 @@ export function Marquee({
 
   return (
     <div className={`group relative overflow-hidden ${className}`} role="marquee" aria-label={ariaLabel}>
-      <style>{`
-        @keyframes ledger-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-      `}</style>
+      {/* `@keyframes ledger-marquee` lives in app/globals.css — it used to be injected
+          here as a per-instance <style> tag, i.e. once per mounted marquee. */}
       <div
         className="flex w-max items-stretch will-change-transform group-hover:[animation-play-state:paused]"
         style={{ animation: `ledger-marquee ${seconds}s linear infinite` }}

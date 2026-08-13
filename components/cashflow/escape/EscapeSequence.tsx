@@ -73,7 +73,11 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
 
   return (
     <div className="relative grid min-h-[100svh] place-items-center overflow-hidden px-5 text-center">
-      {/* particles */}
+      {/* Particles — ONE shot, matching the house contract MoneyFall documents
+          (fixed count, one shot, no loop, transform/opacity only). These used to
+          run on `repeat: Infinity` in a transition screen, so the loop outlived the
+          ceremony it was celebrating and kept a compositor job alive underneath the
+          settled recap for as long as the player sat there. */}
       {!reduce &&
         Array.from({ length: 18 }).map((_, i) => (
           <motion.span
@@ -83,7 +87,7 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
             style={{ left: `${(i * 53) % 100}%`, top: "60%" }}
             initial={{ y: 0, opacity: 0 }}
             animate={{ y: [-20, -260 - (i % 5) * 40], opacity: [0, 1, 0], x: [0, (i % 2 ? 1 : -1) * (30 + i * 4)] }}
-            transition={{ duration: 2.2 + (i % 4) * 0.4, delay: 0.3 + i * 0.06, repeat: Infinity, repeatDelay: 1.2 }}
+            transition={{ duration: 2.2 + (i % 4) * 0.4, delay: 0.3 + i * 0.06 }}
           />
         ))}
 

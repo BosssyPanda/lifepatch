@@ -22,6 +22,7 @@ const CompoundToy = dynamic(() => import("@/components/cinematic/landing/Compoun
 const VerdictWall = dynamic(() => import("@/components/cinematic/landing/VerdictWall").then((m) => m.VerdictWall), { ssr: false, loading: sectionFallback });
 const StatBand = dynamic(() => import("@/components/cinematic/landing/StatBand").then((m) => m.StatBand), { ssr: false, loading: sectionFallback });
 import { useAudio } from "@/hooks/useAudio";
+import { useLenis } from "@/hooks/useLenis";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { useScramble } from "@/src/motion/useScramble";
@@ -48,6 +49,13 @@ function Cell({ children, className = "" }: { children: React.ReactNode; classNa
 export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: () => void }) {
   const audio = useAudio();
   const { reduced } = useMotionCtx();
+  // Smooth scrolling belongs HERE — this is the long scroll story, with pinned
+  // sections, scroll-linked WebGL set pieces and a scroll-progress rail. It was
+  // only ever mounted on YearLoop (an app-like screen with no scroll narrative).
+  // The hook no-ops under prefers-reduced-motion; overlays that can open above the
+  // landing (Almanac, Leaderboard, Money Brain) carry `data-lenis-prevent` on their
+  // scroll containers so their inner scrolling is never hijacked.
+  useLenis(true);
 
   const [stage, setStage] = useState(reduced ? 5 : 0);
   const [settled, setSettled] = useState(reduced);
@@ -98,7 +106,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
   const showMid = reduced || stage >= 4;
   const showCta = reduced || stage >= 5;
 
-  const tagline = useScramble(TAGLINE, taglineOn, { reduced: reduced || settled, durationMs: 850 });
+  const { ref: taglineRef, text: tagline } = useScramble(TAGLINE, taglineOn, { reduced: reduced || settled, durationMs: 850 });
 
   const beginWithSfx = () => { try { audio.sfx("confirm"); } catch {} onBegin(); };
 
@@ -160,10 +168,19 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             animate={{ opacity: stamped ? 0.95 : 0 }}
             transition={reduced ? { duration: 0 } : { duration: DUR.slow, ease: EASE, delay: 0.25 }}
           >
+            {/* 597KB of unoptimised PNG became a 92KB WebP (q85, alpha kept; SSIM
+                0.978 against the original over the near-black ground — the halftone
+                engraving is indistinguishable at 1:1, and it renders through
+                grayscale() anyway). Intrinsic dimensions are declared so the bay
+                reserves its box, and it decodes off the main thread. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/img/atlas-engraving.png"
+              src="/img/atlas-engraving.webp"
               alt=""
+              width={473}
+              height={958}
+              loading="lazy"
+              decoding="async"
               draggable={false}
               className="h-[70svh] max-h-[760px] w-auto"
               style={{ filter: "grayscale(1) brightness(0.95)" }}
@@ -225,6 +242,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
 
           {/* tagline resolves via scramble (fixed height so no CLS) */}
           <p
+            ref={taglineRef as React.RefObject<HTMLParagraphElement>}
             className="num mt-4 text-ink"
             style={{ letterSpacing: "0.24em", fontSize: "0.82rem", minHeight: "1.2em", opacity: taglineOn ? 1 : 0 }}
           >

@@ -46,6 +46,17 @@ export function ColdOpen({
   );
 
   useEffect(() => {
+    // Reduced motion gets the static equivalent below, not a 20-second wait with the
+    // visuals switched off: the timed chain used to keep running regardless, so the
+    // whole point of the ceremony (its lines) went by invisibly while the user sat
+    // through it. DESIGN.md § Motion — every ceremony owes a static or instant
+    // equivalent. The film's phrases are printed at once and the user leaves when
+    // they're ready. One quiet accent stands in for the escalating bed.
+    if (reduced) {
+      audio.setIntensity(0.3);
+      try { audio.accent("riser"); } catch {}
+      return;
+    }
     const beat = COLD_OPEN[i];
     if (!beat) {
       if (!doneRef.current) { doneRef.current = true; onDone(); }
@@ -56,12 +67,52 @@ export function ColdOpen({
     try { audio.accent(beat.accent); } catch {}
     timerRef.current = setTimeout(() => setI((n) => n + 1), beat.ms);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [i, audio, onDone]);
+  }, [i, audio, onDone, reduced]);
 
   const skip = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!doneRef.current) { doneRef.current = true; onDone(); }
   };
+
+  if (reduced) {
+    // The whole film as one printed page — same copy, same act structure, no timeline.
+    return (
+      <div className="relative flex min-h-[100svh] w-full flex-col justify-center overflow-hidden bg-bg px-5 py-16 sm:px-10">
+        <div className="absolute right-4 top-4 z-30">
+          <MuteButton muted={muted} onToggle={onToggleMute} />
+        </div>
+        <div className="mx-auto w-full max-w-3xl">
+          <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem", letterSpacing: "0.3em" }}>
+            The Cold Open — in full
+          </p>
+          <div className="mt-6 border-t border-hairline">
+            {COLD_OPEN.filter((b) => b.act !== 3).map((b, idx, all) => (
+              <div key={b.id} className="border-b border-hairline py-4">
+                {(idx === 0 || all[idx - 1].act !== b.act) && (
+                  <p className="eyebrow mb-2 text-secondary" style={{ fontSize: "0.55rem", letterSpacing: "0.3em" }}>
+                    {ACT_LABELS[b.act as 1 | 2]}
+                  </p>
+                )}
+                <p className="display-caps text-2xl leading-tight text-ink sm:text-4xl">{b.text}</p>
+              </div>
+            ))}
+          </div>
+          <h1 className="display-caps mt-8 text-5xl leading-none text-ink sm:text-7xl">Lifepatch</h1>
+          <p className="voice mt-2 text-lg text-ink-dim">Survive the Internet Economy</p>
+          <button
+            type="button"
+            onClick={skip}
+            className="mt-8 flex items-center gap-2 border-2 border-hairline-strong px-6 py-3 text-ink transition-colors hover:border-ink"
+          >
+            <span className="display-caps text-base tracking-[0.18em]">Continue</span>
+            <span aria-hidden>→</span>
+          </button>
+        </div>
+        {/* FilmLayer still collapses itself to a single static faint frame here */}
+        <FilmLayer grain={0.65} flicker={0.55} vignette={0.75} className="z-20" />
+      </div>
+    );
+  }
 
   const beat = COLD_OPEN[i];
   const act = beat?.act;

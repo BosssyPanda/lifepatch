@@ -56,7 +56,7 @@ export function MarketTicker({ run }: { run: RunState }) {
               className="num text-2xl sm:text-3xl"
               style={{ color: up ? "var(--color-gain)" : "var(--color-loss)" }}
             >
-              {up ? "+" : "−"}{currency(Math.abs(last.portfolioDelta)).replace("$", "$")}
+              {up ? "+" : "−"}{currency(Math.abs(last.portfolioDelta))}
             </motion.p>
           </div>
         </div>

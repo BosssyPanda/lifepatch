@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { animate, useMotionValue, useMotionValueEvent } from "framer-motion";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { EASE } from "@/src/motion/tokens";
 
 /**
- * LEDGER number ticker — counts up (rAF, ease-out) the first time it scrolls
- * into view. Tabular numerals; static final value under reduced motion.
- * Compositor-free by design: text swaps only, no layout animation.
+ * LEDGER number ticker — counts up (ease-out) the first time it scrolls into view.
+ * Tabular numerals; static final value under reduced motion.
+ *
+ * The count used to `setState` every rAF frame. It drives a MotionValue and writes
+ * `textContent` directly now, so the surrounding section (a landing set piece, or a
+ * Leaderboard row among 25) never re-renders during the tween — React only sees the
+ * settled figure. Text swaps only: still no layout animation anywhere in here.
  */
 export function NumberTicker({
   value,
@@ -25,39 +31,53 @@ export function NumberTicker({
 }) {
   const { reduced } = useMotionCtx();
   const ref = useRef<HTMLSpanElement>(null);
-  const [display, setDisplay] = useState(reduced ? value : 0);
+  const mv = useMotionValue(reduced ? value : 0);
+  /** The last settled figure — the only thing React renders. */
+  const [settled, setSettled] = useState(reduced ? value : 0);
   const started = useRef(false);
 
+  const digits = useRef(fractionDigits);
+  digits.current = fractionDigits;
+  const fmt = useCallback(
+    (n: number) =>
+      n.toLocaleString("en-US", {
+        minimumFractionDigits: digits.current,
+        maximumFractionDigits: digits.current,
+      }),
+    [],
+  );
+
+  useMotionValueEvent(mv, "change", (n) => {
+    const el = ref.current;
+    if (el) el.textContent = `${prefix}${fmt(n)}${suffix}`;
+  });
+
   useEffect(() => {
-    if (reduced) { setDisplay(value); return; }
+    if (reduced) {
+      mv.jump(value);
+      setSettled(value);
+      return;
+    }
     const el = ref.current;
     if (!el) return;
-    let raf = 0;
+    let controls: { stop: () => void } | null = null;
     const io = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting || started.current) return;
       started.current = true;
-      const t0 = performance.now();
-      const tick = (t: number) => {
-        const p = Math.min(1, (t - t0) / durationMs);
-        const eased = 1 - Math.pow(1 - p, 3);
-        setDisplay(value * eased);
-        if (p < 1) raf = requestAnimationFrame(tick);
-      };
-      raf = requestAnimationFrame(tick);
       io.disconnect();
+      controls = animate(mv, value, {
+        duration: durationMs / 1000,
+        ease: EASE,
+        onComplete: () => setSettled(value),
+      });
     }, { threshold: 0.4 });
     io.observe(el);
-    return () => { io.disconnect(); cancelAnimationFrame(raf); };
-  }, [value, durationMs, reduced]);
-
-  const text = display.toLocaleString("en-US", {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  });
+    return () => { io.disconnect(); controls?.stop(); };
+  }, [value, durationMs, reduced, mv]);
 
   return (
     <span ref={ref} className={`num ${className}`} aria-label={`${prefix}${value.toLocaleString("en-US")}${suffix}`}>
-      {prefix}{text}{suffix}
+      {prefix}{fmt(settled)}{suffix}
     </span>
   );
 }

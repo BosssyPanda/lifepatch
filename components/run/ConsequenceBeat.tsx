@@ -322,6 +322,7 @@ export function ConsequenceBeat({
         {/* the money figure + DEBIT/CREDIT stamp */}
         <div className={`flex flex-wrap items-end gap-x-5 gap-y-2 ${beat?.headline ? "mt-2" : "mt-8"}`}>
           <span
+            ref={figureRef}
             className="font-anton leading-[0.82] tabular-nums"
             style={{ fontSize: "clamp(3.25rem, 13vw, 8.5rem)", color: showFigure ? moneyColor : "var(--color-tertiary)" }}
           >

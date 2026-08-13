@@ -8,7 +8,6 @@ export type { BoardSquareView };
 type Board3DProps = {
   squares: BoardSquareView[];
   position: number;
-  colorFor: (type: string) => string;
   labelFor: (type: string) => string;
   tokenLabel: string;
   title: string;
@@ -26,12 +25,11 @@ type Board3DProps = {
  * editorial 2D board) is now the only renderer. Kept as a thin pass-through so
  * the `CashflowGame` call site (and its dynamic import) stay unchanged.
  */
-export function Board3D({ squares, position, colorFor, labelFor, tokenLabel, title, onLand, paydayFlash, children }: Board3DProps) {
+export function Board3D({ squares, position, labelFor, tokenLabel, title, onLand, paydayFlash, children }: Board3DProps) {
   return (
     <Board
       squares={squares}
       position={position}
-      colorFor={colorFor}
       labelFor={labelFor}
       tokenLabel={tokenLabel}
       title={title}

@@ -111,43 +111,10 @@ type Pending =
   | { kind: "ftloss" }
   | { kind: "quiz"; q: QuizT };
 
-const ratColor = (t: string) =>
-  ({
-    deal: "border-secondary/50 bg-secondary/20 text-secondary",
-    doodad: "border-loss/50 bg-loss/20 text-loss",
-    charity: "border-tertiary/50 bg-tertiary/25 text-tertiary",
-    payday: "border-gain/50 bg-gain/20 text-gain",
-    market: "border-ink/50 bg-ink/20 text-ink",
-    baby: "border-secondary/50 bg-secondary/20 text-secondary",
-    downsized: "border-loss/70 bg-loss/40 text-bg",
-  })[t] ?? "border-ink/20 bg-bg3 text-ink";
-
-const fastColor = (t: string) =>
-  ({
-    ftdeal: "border-secondary/50 bg-secondary/20 text-secondary",
-    cashflowday: "border-gain/50 bg-gain/20 text-gain",
-    dream: "border-ink/70 bg-ink/40 text-bg",
-    ftloss: "border-loss/50 bg-loss/20 text-loss",
-  })[t] ?? "border-ink/20 bg-bg3 text-ink";
-
-/** Map a pending modal to its emotional tone, driving the Modal's aura color. */
-function modalTone(kind: Pending["kind"]): "accent" | "brick" | "neutral" {
-  switch (kind) {
-    case "deal-choose":
-    case "deal":
-    case "ftdeal":
-    case "cashflowday":
-    case "charity":
-    case "dream":
-      return "accent"; // opportunity
-    case "doodad":
-    case "downsized":
-    case "ftloss":
-      return "brick"; // loss / penalty
-    default:
-      return "neutral"; // coach, market, baby, quiz
-  }
-}
+// `ratColor` / `fastColor` (per-tile chip palettes) and `modalTone` (the modal aura
+// tone) were computed here, threaded through props, and then discarded on the other
+// side — `Board` did `void colorFor`, `Modal` did `void tone`. The LEDGER tint map in
+// `Board` and the flat scrim in `Modal` superseded both. All three are gone.
 
 export function CashflowGame({
   s,
@@ -508,7 +475,6 @@ export function CashflowGame({
           <Board3D
             squares={isFast ? FAST_BOARD : RAT_BOARD}
             position={s.position}
-            colorFor={isFast ? fastColor : ratColor}
             labelFor={(t) => (isFast ? FAST_SQUARE_META[t as keyof typeof FAST_SQUARE_META] : RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META])?.short ?? "?"}
             tokenLabel={s.playerName.charAt(0).toUpperCase()}
             title={isFast ? `Dream: ${dream.title}` : "Escape the Rat Race"}
@@ -598,7 +564,7 @@ export function CashflowGame({
         )}
 
         {pending && (
-          <Modal key={`p-${pending.kind}`} tone={modalTone(pending.kind)} label={pending.kind === "coach" ? pending.title : "Your turn"}>
+          <Modal key={`p-${pending.kind}`} label={pending.kind === "coach" ? pending.title : "Your turn"}>
             {pending.kind === "coach" && (
               <CoachCard title={pending.title} body={pending.body} onOk={() => { audio.sfx("confirm"); const then = pending.then; setPending(null); then(); }} />
             )}

@@ -73,7 +73,6 @@ function perimeterPoints(n: number, pad: number) {
 export function Board({
   squares,
   position,
-  colorFor,
   labelFor,
   tokenLabel,
   title,
@@ -83,7 +82,6 @@ export function Board({
 }: {
   squares: BoardSquareView[];
   position: number;
-  colorFor: (type: string) => string;
   labelFor: (type: string) => string;
   tokenLabel: string;
   title: string;
@@ -101,7 +99,6 @@ export function Board({
   const [moving, setMoving] = useState(false);
   const onLandRef = useRef(onLand);
   onLandRef.current = onLand;
-  void colorFor; // superseded by the LEDGER tint map; kept for call-site compatibility
 
   // Build the hop path from the previous square to the current one.
   const path = useMemo(() => {

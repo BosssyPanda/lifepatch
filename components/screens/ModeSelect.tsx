@@ -168,7 +168,7 @@ function BoardPreview({ reduced }: { reduced: boolean }) {
 
   if (reduced || failed) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src="/board3d/board-poster.jpg" alt="" className="h-full w-full object-cover" />;
+    return <img src="/board3d/board-poster.jpg" alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />;
   }
   return (
     <video ref={ref} muted loop playsInline preload="none" poster="/board3d/board-poster.jpg" aria-hidden onError={() => setFailed(true)} className="h-full w-full object-cover">

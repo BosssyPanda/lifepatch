@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useMotionValue, useTransform, type MotionValue } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR } from "@/src/motion/tokens";
 
@@ -77,10 +77,38 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
   const glowX = useTransform(mx, [-0.5, 0.5], [-90, 90]);
   const glowY = useTransform(my, [-0.5, 0.5], [-70, 70]);
 
+  // Live stat panel. The interval re-maps the whole array (a full re-render of this
+  // fairly large SVG) every 1.4s, so it is gated: it only runs while the illustration
+  // is actually on screen AND the tab is visible. Off-screen or backgrounded it stops
+  // entirely rather than burning renders nobody can see (DESIGN.md § Motion — heavy
+  // things freeze off-screen and on hidden tabs).
+  const svgRef = useRef<SVGSVGElement>(null);
   useEffect(() => {
     if (reduce) return;
-    const id = setInterval(() => setStats((p) => p.map((s) => ({ ...s, v: Math.max(0.1, s.v + (Math.random() - 0.5) * 0.07) }))), 1400);
-    return () => clearInterval(id);
+    let onScreen = true;
+    let id = 0;
+    const tick = () =>
+      setStats((p) => p.map((s) => ({ ...s, v: Math.max(0.1, s.v + (Math.random() - 0.5) * 0.07) })));
+    const sync = () => {
+      const live = onScreen && document.visibilityState === "visible";
+      if (live && !id) id = window.setInterval(tick, 1400);
+      else if (!live && id) { window.clearInterval(id); id = 0; }
+    };
+
+    let io: IntersectionObserver | null = null;
+    const el = svgRef.current;
+    if (el && typeof IntersectionObserver !== "undefined") {
+      onScreen = false;
+      io = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; sync(); }, { threshold: 0.01 });
+      io.observe(el);
+    }
+    document.addEventListener("visibilitychange", sync);
+    sync();
+    return () => {
+      io?.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+      if (id) window.clearInterval(id);
+    };
   }, [reduce]);
 
   const draw = (delay: number, dur = 1.6) =>
@@ -89,7 +117,7 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
       : { initial: { pathLength: 0, opacity: 0 }, animate: { pathLength: 1, opacity: 1 }, transition: { pathLength: { duration: dur, delay, ease: "easeInOut" as const }, opacity: { duration: DUR.base, delay } } };
 
   return (
-    <svg viewBox="0 0 600 1200" className={className} role="img" aria-label="Atlas holding a globe of market data" preserveAspectRatio="xMidYMid meet">
+    <svg ref={svgRef} viewBox="0 0 600 1200" className={className} role="img" aria-label="Atlas holding a globe of market data" preserveAspectRatio="xMidYMid meet">
       <defs>
         <pattern id="da-grid" width="6.4" height="6.4" patternUnits="userSpaceOnUse">
           <rect x="1.2" y="1.2" width="1.7" height="1.7" fill="var(--color-secondary)" />
@@ -109,7 +137,16 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
           <stop offset="0%" stopColor="var(--color-ink)" stopOpacity="0.10" />
           <stop offset="100%" stopColor="var(--color-ink)" stopOpacity="0" />
         </radialGradient>
-        <filter id="da-blur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="34" /></filter>
+        {/* The cursor glow used to be an ellipse behind `feGaussianBlur stdDeviation=34`
+            — the single most expensive filter in the app, re-rasterised on every
+            pointer move, and a DESIGN.md violation besides (blur is banned outside
+            FilmLayer's canvas vocabulary). It is a plain radial falloff now: same
+            soft ink wash, composited instead of filtered. */}
+        <radialGradient id="da-cursorGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="var(--color-ink)" stopOpacity="0.13" />
+          <stop offset="55%" stopColor="var(--color-ink)" stopOpacity="0.05" />
+          <stop offset="100%" stopColor="var(--color-ink)" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
       {/* ---------- layer C: blueprint frame (parallax most) ---------- */}
@@ -117,11 +154,11 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
 
       {/* ---------- layer A: figure (parallax least) + breathing ---------- */}
       <motion.g style={{ x: figX, y: figY }}>
-        {/* cursor-following warm glow */}
-        <motion.ellipse cx={300} cy={660} rx={150} ry={210} fill="var(--color-ink)" opacity="0.12" filter="url(#da-blur)" style={{ x: glowX, y: glowY }} />
+        {/* cursor-following warm glow (pre-shaped falloff — no filter, see defs) */}
+        <motion.ellipse cx={300} cy={660} rx={240} ry={330} fill="url(#da-cursorGlow)" style={{ x: glowX, y: glowY }} />
         <rect x="120" y="520" width="360" height="560" fill="url(#da-figGlow)" />
         <motion.g animate={reduce ? undefined : { y: [0, -5, 0] }} transition={{ duration: 6.5, repeat: Infinity, ease: "easeInOut" }}>
-          <image href="/img/atlas-engraving.png" x={-53} y={48} width={569} height={1153} preserveAspectRatio="xMidYMid meet" style={{ filter: "grayscale(1) brightness(1.08) contrast(1.02)" }} />
+          <image href="/img/atlas-engraving.webp" x={-53} y={48} width={569} height={1153} preserveAspectRatio="xMidYMid meet" style={{ filter: "grayscale(1) brightness(1.08) contrast(1.02)" }} />
         </motion.g>
       </motion.g>
 

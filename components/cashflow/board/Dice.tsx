@@ -107,18 +107,8 @@ function Burst() {
       transition={{ duration: 0.6 }}
       style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 5 }}
     >
-      {/* glow ring */}
-      <motion.span
-        initial={{ scale: 0.3, opacity: 0.75 }}
-        animate={{ scale: 1.7, opacity: 0 }}
-        transition={{ duration: DUR.scene, ease: "easeOut" }}
-        style={{
-          position: "absolute",
-          inset: "10%",
-          borderRadius: "50%",
-          background: "transparent",
-        }}
-      />
+      {/* (the LEDGER pass stripped this burst's "glow ring" to `transparent` — an
+          invisible element that still animated scale+opacity on every roll. Deleted.) */}
       {/* dust particles */}
       {Array.from({ length: 7 }).map((_, i) => {
         const a = (i / 7) * Math.PI * 2;
@@ -151,7 +141,6 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
   const acc = useRef({ x: -22, y: 26 });
   const wasRolling = useRef(false);
   const [rot, setRot] = useState(acc.current);
-  const [airborne, setAirborne] = useState(false);
   const [burst, setBurst] = useState(0);
   const bounce = useAnimationControls();
 
@@ -166,7 +155,6 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
         y: acc.current.y + 1080 + Math.random() * 540,
       };
       setRot(acc.current);
-      setAirborne(true);
       wasRolling.current = true;
       bounce.start({ y: -26, scaleX: 1, scaleY: 1 }, { duration: DUR.instant, ease: "easeOut" });
     } else {
@@ -176,7 +164,6 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
         y: nextCongruent(acc.current.y + 360, rest.y),
       };
       setRot(acc.current);
-      setAirborne(false);
       if (wasRolling.current) {
         bounce.start(
           {
@@ -195,21 +182,8 @@ function Die({ value, rolling, index }: { value: number; rolling: boolean; index
 
   return (
     <div style={{ position: "relative", width: SIZE, height: SIZE + 16, perspective: 620 }}>
-      {/* contact shadow */}
-      <motion.span
-        animate={airborne ? { scaleX: 0.62, opacity: 0.22 } : { scaleX: 1, opacity: 0.5 }}
-        transition={{ type: "spring", stiffness: 200, damping: 18 }}
-        style={{
-          position: "absolute",
-          left: "8%",
-          right: "8%",
-          bottom: 0,
-          height: 12,
-          borderRadius: "50%",
-          background: "transparent",
-  
-        }}
-      />
+      {/* (same story as the glow ring: the "contact shadow" was a `transparent` span
+          running a spring on every throw and landing. Deleted — LEDGER has no shadows.) */}
 
       {/* speed lines while spinning */}
       <AnimatePresence>

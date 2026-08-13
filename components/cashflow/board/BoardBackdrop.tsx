@@ -18,17 +18,31 @@ export function BoardBackdrop() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [failed, setFailed] = useState(false);
 
-  // spare the decoder while the tab is hidden
+  // Spare the decoder whenever nobody can see the loop: the tab being hidden was
+  // already handled, but the board scrolls off screen constantly on mobile (the
+  // statement column is taller than the viewport) and the video kept decoding the
+  // whole time. Both conditions now feed one gate.
   useEffect(() => {
     if (reduced || failed) return;
-    const onVisibility = () => {
-      const v = videoRef.current;
-      if (!v) return;
-      if (document.hidden) v.pause();
-      else void v.play().catch(() => {});
+    const v = videoRef.current;
+    if (!v) return;
+    let onScreen = true;
+    const sync = () => {
+      if (onScreen && document.visibilityState === "visible") void v.play().catch(() => {});
+      else v.pause();
     };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
+    let io: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver !== "undefined") {
+      onScreen = false;
+      io = new IntersectionObserver(([entry]) => { onScreen = entry.isIntersecting; sync(); }, { threshold: 0.05 });
+      io.observe(v);
+    }
+    document.addEventListener("visibilitychange", sync);
+    sync();
+    return () => {
+      io?.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+    };
   }, [reduced, failed]);
 
   return (

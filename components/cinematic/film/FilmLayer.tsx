@@ -34,6 +34,14 @@ export function FilmLayer({
   const { reduced } = useMotionCtx();
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Intensities are READ, never depended on. This effect owns the whole canvas
+  // pipeline (noise tile, vignette pre-render, rAF loop), and Outro flips `grain`
+  // from 0.6 → 0.22 the moment the recap settles — which used to tear the entire
+  // pipeline down and rebuild it mid-transition. Through a ref, a level change is
+  // just a different number on the next frame.
+  const levels = useRef({ grain, flicker, vignette });
+  levels.current = { grain, flicker, vignette };
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -59,40 +67,61 @@ export function FilmLayer({
     };
 
     let vig: HTMLCanvasElement | null = null;
+    /** Vignette level the current pre-render was built for (−1 = none built yet). */
+    let vigFor = -1;
+
+    const buildVignette = (w: number, h: number, level: number) => {
+      vigFor = level;
+      if (level <= 0) { vig = null; return; }
+      vig = document.createElement("canvas");
+      vig.width = w;
+      vig.height = h;
+      const vctx = vig.getContext("2d")!;
+      const r = Math.hypot(w, h) / 2;
+      const g = vctx.createRadialGradient(w / 2, h / 2, r * 0.45, w / 2, h / 2, r);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, `rgba(0,0,0,${Math.min(0.6, level * 0.55)})`);
+      vctx.fillStyle = g;
+      vctx.fillRect(0, 0, w, h);
+    };
+
     const resize = () => {
       const w = canvas.clientWidth || 1;
       const h = canvas.clientHeight || 1;
+      if (canvas.width === w && canvas.height === h) return;
       canvas.width = w;
       canvas.height = h;
-      if (vignette > 0) {
-        vig = document.createElement("canvas");
-        vig.width = w;
-        vig.height = h;
-        const vctx = vig.getContext("2d")!;
-        const r = Math.hypot(w, h) / 2;
-        const g = vctx.createRadialGradient(w / 2, h / 2, r * 0.45, w / 2, h / 2, r);
-        g.addColorStop(0, "rgba(0,0,0,0)");
-        g.addColorStop(1, `rgba(0,0,0,${Math.min(0.6, vignette * 0.55)})`);
-        vctx.fillStyle = g;
-        vctx.fillRect(0, 0, w, h);
-      }
+      buildVignette(w, h, levels.current.vignette);
+    };
+
+    // Debounced: a ResizeObserver on a full-bleed canvas fires continuously through
+    // a mobile URL-bar collapse, and each fire used to re-run the whole radial
+    // pre-render. Re-sizing the backing store also clears it, so the loop repaints
+    // on the next frame anyway; a settle window costs nothing visible.
+    let resizeTimer = 0;
+    const scheduleResize = () => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(resize, 120);
     };
 
     const drawFrame = () => {
       const w = canvas.width;
       const h = canvas.height;
+      const { grain: g, flicker: f, vignette: v } = levels.current;
+      // level changes are picked up here instead of remounting the pipeline
+      if (v !== vigFor) buildVignette(w, h, v);
       ctx.clearRect(0, 0, w, h);
-      if (grain > 0) {
+      if (g > 0) {
         rollTile();
-        ctx.globalAlpha = Math.min(0.14, grain * 0.11);
+        ctx.globalAlpha = Math.min(0.14, g * 0.11);
         ctx.globalCompositeOperation = "overlay";
         const pat = ctx.createPattern(tile, "repeat");
         if (pat) { ctx.fillStyle = pat; ctx.fillRect(0, 0, w, h); }
         ctx.globalCompositeOperation = "source-over";
       }
-      if (flicker > 0) {
+      if (f > 0) {
         // per-frame random dim — reads as projector flutter
-        ctx.globalAlpha = Math.random() * flicker * 0.07;
+        ctx.globalAlpha = Math.random() * f * 0.07;
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, w, h);
       }
@@ -104,12 +133,12 @@ export function FilmLayer({
     };
 
     resize();
-    const ro = new ResizeObserver(resize);
+    const ro = new ResizeObserver(scheduleResize);
     ro.observe(canvas);
 
     if (reduced) {
       drawFrame(); // one static faint frame
-      return () => ro.disconnect();
+      return () => { window.clearTimeout(resizeTimer); ro.disconnect(); };
     }
 
     let raf = 0;
@@ -130,10 +159,14 @@ export function FilmLayer({
     return () => {
       running = false;
       cancelAnimationFrame(raf);
+      window.clearTimeout(resizeTimer);
       document.removeEventListener("visibilitychange", onVis);
       ro.disconnect();
     };
-  }, [grain, flicker, vignette, reduced]);
+    // grain / flicker / vignette are read from `levels` per frame — depending on them
+    // here would rebuild the entire canvas pipeline mid-transition (see above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduced]);
 
   return (
     <div aria-hidden className={`pointer-events-none absolute inset-0 ${className}`}>

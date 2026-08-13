@@ -292,6 +292,19 @@ body[data-ceremony] .concept-toast {
   cursor: not-allowed;
 }
 
+/* ---------------- Keyframes ---------------- */
+/* The marquee translate loop. It used to be injected by `<Marquee>` as a per-instance
+   <style> tag, so every marquee on the page re-declared the same global @keyframes
+   (and re-parsed it on every mount). Declared once, here. */
+@keyframes ledger-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
 /* ---------------- Reduced motion ---------------- */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -30,22 +30,23 @@ export function Money({
  * The scrim used to be a full-screen `<button aria-label="Close">`, which put an unlabeled
  * page-sized control in the tab order ahead of the card's real contents. It is a plain div
  * now; `useDialog` owns Escape, the focus trap, focus restore, and the scroll lock.
- * `tone` is retained for caller compatibility.
+ *
+ * (There used to be a `tone` prop — "accent" / "brick" / "neutral" — computed per pending
+ * modal in CashflowGame, threaded through here, and then thrown away with `void tone`: it
+ * drove the pre-LEDGER coloured aura, which the flat scrim replaced. Prop and producer
+ * are both gone.)
  */
 export function Modal({
   children,
   onClose,
   maxWidth = "max-w-lg",
-  tone = "neutral",
   label = "Dialog",
 }: {
   children: ReactNode;
   onClose?: () => void;
   maxWidth?: string;
-  tone?: "accent" | "brick" | "neutral";
   label?: string;
 }) {
-  void tone;
   const { reduced: reduce } = useMotionCtx();
   const noop = useCallback(() => {}, []);
   const ref = useDialog<HTMLDivElement>({ open: true, onClose: onClose ?? noop });
@@ -101,20 +102,6 @@ export function LessonBox({ children }: { children: ReactNode }) {
     >
       <p className="voice text-[1rem] leading-snug text-ink/90">{children}</p>
     </motion.div>
-  );
-}
-
-export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone?: "good" | "bad" | "neutral" }) {
-  const cls =
-    tone === "good"
-      ? "text-gain border-gain/50"
-      : tone === "bad"
-        ? "text-loss border-loss/50"
-        : "text-ink/70 border-ink/25";
-  return (
-    <span className={`inline-flex items-center gap-1 border px-2 py-0.5 num text-[0.7rem] ${cls}`}>
-      {children}
-    </span>
   );
 }
 
