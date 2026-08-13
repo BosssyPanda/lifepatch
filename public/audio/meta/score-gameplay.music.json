@@ -35,10 +35,11 @@
   "transitions": [
     { "from": "*", "to": "menu", "quantize": "bar", "type": "crossfade", "fadeBars": 1 },
     { "from": "*", "to": "recapGood", "quantize": "bar", "type": "crossfade", "fadeBars": 1 },
-    { "from": "*", "to": "recapBad", "quantize": "bar", "type": "crossfade", "fadeBars": 1 }
+    { "from": "*", "to": "recapBad", "quantize": "bar", "type": "crossfade", "fadeBars": 1 },
+    { "from": "*", "to": "*", "quantize": "beat", "type": "stinger", "stingerId": "consequence" }
   ],
   "licenseNotes": "Original. Generic tonal voicings (i-VI-III-VII in A minor); no sampled or transcribed third-party material.",
-  "sourceNotes": "Procedural Tone.js engine (src/audio/AudioEngine.ts). Intensity driven by debt/health/mood/macro-tone. See .claude/audio/qc/cue-plan.md.",
+  "sourceNotes": "Procedural; phase `menu`/`gameplay` of src/audio/AudioEngine.ts. Intensity driven by debt/health/mood/macro-tone. WIRED: components/run/ConsequenceBeat.tsx snaps its ceremony ladder onto this grid via hooks/useBeatClock — stamp on the ceremony's downbeat, count-up spanning a whole number of beats (the gap between two snapped boundaries), impact landing ON the beat with the `consequence` + stampGood/stampBad stingers requested ACCENT_PREROLL_MS (120ms) early so the engine's 8th-note quantization resolves them onto that same instant. An 80ms HITSTOP separates the impact from its follow-through. Minor-tier beats ride the 8th grid instead (a whole-beat lock would stretch them ~40%). The count-up tick is transposed by juiceTier().pitch (a filter shift on band-limited noise — no note is added to the score). Muted and not-yet-unlocked players get the identical ladder on a local performance.now() grid at the same tempo. See .claude/audio/qc/cue-plan.md.",
   "generatedBy": "AudioEngine.ts (Tone.js)",
   "humanReviewRequired": true
 }

@@ -2,7 +2,12 @@
  * Cold-open intro film — a ~20s three-act cinematic (CINEMA plan, Phase P).
  * Each beat's accent fires a synced audio hit; `film` names a looping clip in
  * public/film/ (Act I backdrops), `scene` names a live WebGL backdrop (Act II).
+ *
+ * The `ms` values below are FLOORS, not exact holds: the players quantize each
+ * boundary up onto the score's grid (see ColdOpen / Outro), never down — a
+ * reading-time floor that a grid snap could shorten would defeat its purpose.
  */
+import { MS_PER_BEAT } from "@/src/audio/tempo";
 
 export type AccentKind = "thump" | "hit" | "stab" | "riser" | "title";
 
@@ -68,7 +73,17 @@ export const RECAP_SCENES: RecapScene[] = [
   { kind: "verdict", ms: 4200 }, // giant split-flap → settle into receipt
 ];
 
-/** Scene-2 pacing atoms (flip-all-years, pause-on-milestones — director's pick). */
-export const YEARS_FLIP_MS = 140;
-export const YEARS_HOLD_MS = 600;
+/**
+ * Scene-2 pacing atoms (flip-all-years, pause-on-milestones — director's pick).
+ *
+ * Both are beat subdivisions of the score rather than round numbers: one 16th
+ * per year (197ms, was 140) and a dotted-8th dwell on a milestone (592ms, was
+ * 600), so a replay that fits its slot lands every digit flip on the grid with
+ * no snapping at all — the cumulative offsets are whole 16ths by construction.
+ * Long runs still get compressed proportionally to fit the scene cap (see
+ * Outro's YearsScene); at ~90ms per year nothing is perceptibly on a grid
+ * anyway, so that path stays as it was.
+ */
+export const YEARS_FLIP_MS = MS_PER_BEAT / 4;
+export const YEARS_HOLD_MS = MS_PER_BEAT * 0.75;
 export const YEARS_MIN_MS = 1600;

@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { NeonButton } from "@/components/ui/LedgerButton";
-import { useAudio } from "@/hooks/useAudio";
 import { MODES } from "@/lib/modes";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { SPRING } from "@/src/motion/tokens";
@@ -15,12 +14,17 @@ export const STORY_SEEN_KEY = "lp_storySeen";
 /**
  * The finale that closes the title page (spectacle Phase K5, "behold" rev):
  * a full-viewport set piece where the CTA *is* the display type — a
- * wordmark-scale BEGIN A RUN that stamps in (invert flash + thud, the hero
- * wordmark's own entrance) the first time it scrolls into view. Reduced
- * motion renders it settled. The colophon rails close the document below.
+ * wordmark-scale BEGIN A RUN that stamps in (invert flash, the hero wordmark's
+ * own entrance) the first time it scrolls into view. Reduced motion renders it
+ * settled. The colophon rails close the document below.
+ *
+ * The stamp used to fire `accent("title")` from `onViewportEnter` — i.e. the act
+ * of SCROLLING produced a full cinematic hit, unprompted, from a page the user
+ * was only reading. Scrolling is not an interaction the user is asking to hear;
+ * a title accent belongs to a title, not to a scroll position. The visual stamp
+ * (which the scroll legitimately triggers) stays exactly as it was.
  */
 export function FooterColophon({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: () => void }) {
-  const audio = useAudio();
   const { reduced } = useMotionCtx();
   const [stamped, setStamped] = useState(reduced);
   const [flash, setFlash] = useState(false);
@@ -30,7 +34,6 @@ export function FooterColophon({ onBegin, onAlmanac }: { onBegin: () => void; on
     setStamped(true);
     setFlash(true);
     window.setTimeout(() => setFlash(false), 180);
-    try { audio.accent("title"); } catch {}
     try { sessionStorage.setItem(STORY_SEEN_KEY, "1"); } catch {}
   };
 

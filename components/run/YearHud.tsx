@@ -1,13 +1,15 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { BlockSpark } from "@/components/ui/BlockSpark";
 import { ChevronDown, InfoIcon } from "@/components/icons";
 import { currency } from "@/lib/format";
 import { netWorth, type RunState, yearIndex } from "@/lib/runEngine";
-import { DUR, EASE } from "@/src/motion/tokens";
+import { juiceTier } from "@/src/motion/juice";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { DUR, EASE, SPRING } from "@/src/motion/tokens";
 
 // LEDGER: meters read gain (green) high, secondary (grey) mid, loss (red) low.
 function barVar(v: number) {
@@ -24,21 +26,37 @@ function barVar(v: number) {
  * It is now the OPACITY of a pre-tinted, absolutely-positioned overlay: the fill
  * colour is static, only opacity moves, so the whole flash stays on the
  * compositor (DESIGN.md § Motion). Same colours, same ≤600ms window.
+ *
+ * A tint alone is easy to miss on a HUD you aren't looking at, so the figure also
+ * POPS: scale 1 → `juiceTier().popScale` → 1, sized by how big the change was
+ * relative to where the number stood. Transform + opacity only — the pop rides
+ * the same compositor path as the tint and never touches the overlay's contract.
+ * Reduced motion keeps the tint (feedback is never deleted) and drops the pop.
  */
 const FLASH_TINT = { gain: "rgba(43,213,118,0.16)", loss: "rgba(255,59,48,0.16)" } as const;
 
 function FlashValue({ value, children }: { value: number; children: ReactNode }) {
+  const { reduced } = useMotionCtx();
   const prev = useRef(value);
   const [flash, setFlash] = useState<"gain" | "loss" | null>(null);
+  const pop = useAnimationControls();
   useEffect(() => {
     if (value === prev.current) return;
+    const magnitudePct = (Math.abs(value - prev.current) / Math.max(Math.abs(prev.current), 1)) * 100;
     setFlash(value > prev.current ? "gain" : "loss");
     prev.current = value;
+    if (!reduced) {
+      const { popScale } = juiceTier(magnitudePct);
+      void pop
+        .start({ scale: popScale }, SPRING.press)
+        .then(() => pop.start({ scale: 1 }, SPRING.lift))
+        .catch(() => {});
+    }
     const id = window.setTimeout(() => setFlash(null), 650);
     return () => window.clearTimeout(id);
-  }, [value]);
+  }, [value, reduced, pop]);
   return (
-    <span className="relative -mx-1 inline-block px-1">
+    <motion.span className="relative -mx-1 inline-block px-1" animate={pop} style={{ originX: 0.5, originY: 0.5 }}>
       <motion.span
         aria-hidden
         className="pointer-events-none absolute inset-0"
@@ -48,7 +66,7 @@ function FlashValue({ value, children }: { value: number; children: ReactNode })
         transition={{ duration: DUR.scene }}
       />
       <span className="relative">{children}</span>
-    </span>
+    </motion.span>
   );
 }
 

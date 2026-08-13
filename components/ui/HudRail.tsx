@@ -71,7 +71,7 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
           onClick={vol.toggle}
           {...vol.triggerProps}
           aria-label="Volume"
-          className={`${cell} border-l border-hairline px-2 transition-colors hover:bg-ink hover:text-bg ${
+          className={`${cell} border-l border-hairline transition-colors hover:bg-ink hover:text-bg ${
             vol.open ? "bg-ink text-bg" : "text-tertiary"
           }`}
           style={type}

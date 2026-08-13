@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { useAudio } from "@/hooks/useAudio";
+import { ACCENT_PREROLL_MS, useBeatClock } from "@/hooks/useBeatClock";
 import { ACT_LABELS, COLD_OPEN } from "@/lib/cinematic";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { Beat } from "./Beat";
@@ -25,6 +26,20 @@ const BillVortex = dynamic(
  * sanctioned grain/flicker/flash vocabulary; every beat stays skippable and
  * reduced motion keeps the old text-only pacing with posters instead of
  * motion. Audio escalates per beat exactly as before (accents + intensity).
+ *
+ * ── quantized cuts, with the reading floor intact ────────────────────────────
+ * Each beat's hold is extended to the next BEAT of the score (789ms at 76 BPM),
+ * never shortened: the authored `ms` in lib/cinematic are reading-time floors,
+ * and rounding to the *nearest* boundary would happily cut a line short — the
+ * one thing those floors exist to prevent. Snapping up to a whole BAR was the
+ * first instinct and it is wrong here: with the floors in play a bar-ceiling
+ * adds up to 3.1s of dead screen per line (the whole film grows ~40%), which is
+ * precisely the dead beat this trade-off is supposed to avoid. A beat-ceiling
+ * costs ~400ms a line and still puts every cut on the grid.
+ *
+ * The next beat's accent is also requested a pre-roll BEFORE its cut, so the
+ * engine's 8th-note quantization resolves it onto the cut instead of up to a
+ * half-beat after it — the slam and the hit are one event now.
  */
 export function ColdOpen({
   muted,
@@ -36,9 +51,11 @@ export function ColdOpen({
   onDone: () => void;
 }) {
   const audio = useAudio();
+  const clock = useBeatClock();
   const { reduced } = useMotionCtx();
   const [i, setI] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cueRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const doneRef = useRef(false);
   // WebGL support check happens client-side only (this tree never SSRs).
   const [webgl] = useState(
@@ -64,13 +81,28 @@ export function ColdOpen({
     }
     // escalate the bed phrase-by-phrase, accent the slam-in
     audio.setIntensity(Math.min(1, 0.3 + (i / Math.max(1, COLD_OPEN.length - 1)) * 0.7));
-    try { audio.accent(beat.accent); } catch {}
-    timerRef.current = setTimeout(() => setI((n) => n + 1), beat.ms);
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [i, audio, onDone, reduced]);
+    // beat 0 has nothing to sync against — it IS the film's downbeat. Every
+    // later beat's accent was pre-rolled by the beat before it.
+    if (i === 0) { try { audio.accent(beat.accent); } catch {} }
+
+    // hold at least as long as the authored reading floor, then to the next beat
+    const hold = clock.ceil(beat.ms, "beat");
+    const nextBeat = COLD_OPEN[i + 1];
+    if (nextBeat) {
+      cueRef.current = setTimeout(() => {
+        try { audio.accent(nextBeat.accent); } catch {}
+      }, Math.max(0, hold - ACCENT_PREROLL_MS));
+    }
+    timerRef.current = setTimeout(() => setI((n) => n + 1), hold);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (cueRef.current) clearTimeout(cueRef.current);
+    };
+  }, [i, audio, clock, onDone, reduced]);
 
   const skip = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
+    if (cueRef.current) clearTimeout(cueRef.current);
     if (!doneRef.current) { doneRef.current = true; onDone(); }
   };
 
@@ -129,7 +161,7 @@ export function ColdOpen({
             key={beat.film}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 0, transition: { duration: DUR.exitFast } }}
             transition={{ duration: DUR.base }}
             className="absolute inset-0"
           >
@@ -149,7 +181,7 @@ export function ColdOpen({
             key="vortex"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 0, transition: { duration: DUR.exitFast } }}
             transition={{ duration: DUR.slow }}
             className="absolute inset-0"
           >
@@ -170,7 +202,7 @@ export function ColdOpen({
             key={act}
             initial={reduced ? false : { opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 0, transition: { duration: DUR.exitFast } }}
             transition={{ duration: DUR.base }}
             className="eyebrow absolute top-7 left-1/2 z-10 -translate-x-1/2 text-ink-dim"
             style={{ fontSize: "0.6rem", letterSpacing: "0.3em" }}

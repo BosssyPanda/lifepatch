@@ -293,8 +293,9 @@ export function ConsequenceBeat({
       at(freeze, () => setFlash(true));
       at(freeze + MINOR_FLASH_MS, () => setFlash(false));
     }
-    at(clock.snap(freeze + ROWS_MS, "8n", freeze + 1), () => setPhase("rows"));
-    at(freeze + ROWS_MS + rows.length * ROW_PRINT_MS + ROWS_TAIL_MS, () => setPhase("done"));
+    const rowsAt = clock.snap(freeze + ROWS_MS, "8n", freeze + 1);
+    at(rowsAt, () => setPhase("rows"));
+    at(rowsAt + rows.length * ROW_PRINT_MS + ROWS_TAIL_MS, () => setPhase("done"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 

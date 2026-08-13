@@ -4,11 +4,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { useAudio } from "@/hooks/useAudio";
+import { ACCENT_PREROLL_MS, useBeatClock } from "@/hooks/useBeatClock";
 import { currency } from "@/lib/format";
 import { macroEvent, sp500Return } from "@/lib/markets";
 import { netWorth, type RunState, type YearRecord } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { RECAP_SCENES, YEARS_FLIP_MS, YEARS_HOLD_MS, YEARS_MIN_MS } from "@/lib/cinematic";
+import { MS_PER_BEAT } from "@/src/audio/tempo";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
@@ -30,6 +32,15 @@ import { YearFlap } from "./film/YearFlap";
  * (useSkippable). All data from run.history / deriveVerdict / macroEvent —
  * nothing invented. Film vocabulary (grain/flash/shake/ash) per DESIGN.md
  * § Film Exception; falls fire only from the natural timeline.
+ *
+ * ── cut on the downbeat ──────────────────────────────────────────────────────
+ * The scene ladder is quantized: every cut lands on a BAR of the running score
+ * (3.158s at 76 BPM) and each scene's accent is requested a pre-roll early so the
+ * engine's 8th-note quantization resolves it onto that same downbeat instead of
+ * the 8th after it. The authored durations were already within half a bar of one
+ * (2200 / 3000 / 3800 / 4200), so the film's total length is unchanged — the cuts
+ * simply stop landing between beats. Boundaries are snapped CUMULATIVELY, so
+ * rounding never accumulates into drift.
  */
 
 type Scene = "closed" | "years" | "swing" | "line" | "verdict" | "receipt";
@@ -42,8 +53,12 @@ function yearsSceneMs(hist: YearRecord[], milestones: Map<number, string>): numb
   return Math.max(YEARS_MIN_MS, Math.min(sceneMs("years"), raw));
 }
 
+/** The digit cadence's grid unit — one 16th of the score's beat. */
+const SIXTEENTH_MS = MS_PER_BEAT / 4;
+
 export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
   const audio = useAudio();
+  const clock = useBeatClock();
   const { reduced } = useMotionCtx();
 
   const verdict = deriveVerdict(run);
@@ -99,46 +114,56 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
   // the film's timeline — scene transitions + per-scene audio cues
   useEffect(() => {
     if (reduced) return;
-    const at = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(fn, ms));
-    type Step = { kind: Scene; ms: number; enter?: () => void };
+    const at = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(fn, Math.max(0, ms)));
+    // `cue` is the quantized accent (fired a pre-roll ahead of the cut so it lands
+    // ON it); `enter` is everything that belongs to the visible frame itself.
+    type Step = { kind: Scene; ms: number; cue?: () => void; enter?: () => void };
     const steps: Step[] = [{
       kind: "closed", ms: sceneMs("closed"),
-      enter: () => { try { audio.accent("thump"); } catch {} },
+      cue: () => { try { audio.accent("thump"); } catch {} },
     }];
     if (hist.length > 0) steps.push({
       kind: "years", ms: yearsMs,
-      enter: () => { try { audio.accent("rise"); } catch {} },
+      cue: () => { try { audio.accent("rise"); } catch {} },
     });
     if (swing) steps.push({
       kind: "swing", ms: sceneMs("swing"),
+      cue: () => { try { audio.accent(isWin ? "stampGood" : "stampBad"); } catch {} },
       enter: () => {
-        try { audio.accent(isWin ? "stampGood" : "stampBad"); } catch {}
         buzz(BUZZ.verdict, audio.muted);
         if (isWin) audio.swellWarmth();
       },
     });
     if (nwSeries.length > 1) steps.push({
       kind: "line", ms: sceneMs("line"),
-      enter: () => { try { audio.accent("rise"); } catch {} },
+      cue: () => { try { audio.accent("rise"); } catch {} },
     });
     steps.push({
       kind: "verdict", ms: sceneMs("verdict"),
+      cue: () => { try { audio.accent(verdict.good ? "stampGood" : "stampBad"); } catch {} },
       enter: () => {
-        try { audio.accent(verdict.good ? "stampGood" : "stampBad"); } catch {}
         buzz(BUZZ.verdict, audio.muted);
         if (verdict.good) audio.swellWarmth();
       },
     });
-    let acc = 0;
+    let acc = 0;      // un-quantized cumulative time, so rounding never drifts
+    let last = 0;     // the previous snapped boundary (keeps the ladder ordered)
     steps.forEach((s, i) => {
-      if (i === 0) { at(250, () => s.enter?.()); return; }
+      if (i === 0) {
+        // scene 1 is already on screen; only its accent needs placing
+        at(clock.snap(250, "8n") - ACCENT_PREROLL_MS, () => s.cue?.());
+        return;
+      }
       acc += steps[i - 1].ms;
+      const boundary = clock.snap(acc, "bar", last + 1);
+      last = boundary;
       const kind = s.kind;
-      const enter = s.enter;
-      at(acc, () => { setScene(kind); enter?.(); });
+      const { cue, enter } = s;
+      if (cue) at(boundary - ACCENT_PREROLL_MS, cue);
+      at(boundary, () => { setScene(kind); enter?.(); });
     });
     acc += steps[steps.length - 1].ms;
-    at(acc, () => setScene("receipt"));
+    at(clock.snap(acc, "bar", last + 1), () => setScene("receipt"));
     return () => { timers.current.forEach(clearTimeout); timers.current = []; };
     // one-shot ceremony timeline
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -418,11 +443,22 @@ function YearsScene({ hist, milestones, totalMs }: { hist: YearRecord[]; milesto
     const holds = hist.map((h) => (milestones.has(h.year) ? YEARS_HOLD_MS + YEARS_FLIP_MS : YEARS_FLIP_MS));
     const raw = holds.reduce((a, b) => a + b, 0) || 1;
     const scale = totalMs / raw;
+    // The atoms are already 16ths (1 per year, 4 on a milestone), so an
+    // unscaled replay is on the grid for free. When the scene has to stretch or
+    // squeeze to fit its slot, snap the CUMULATIVE offset — never the step — so
+    // rounding can't accumulate into drift. Below one 16th per year the replay
+    // is a blur and quantizing it would only cost years their own frame, so
+    // that path keeps the plain scaled ladder.
+    const onGrid = YEARS_FLIP_MS * scale >= SIXTEENTH_MS;
     let acc = 0;
+    let prev = 0;
     hist.forEach((_, i) => {
       if (i === 0) return;
       acc += holds[i - 1] * scale;
-      timers.current.push(window.setTimeout(() => setIdx(i), acc));
+      const t = onGrid ? Math.round(acc / SIXTEENTH_MS) * SIXTEENTH_MS : acc;
+      prev = Math.max(prev + 1, t);
+      const idx = i;
+      timers.current.push(window.setTimeout(() => setIdx(idx), prev));
     });
     return () => { timers.current.forEach(clearTimeout); timers.current = []; };
     // one-shot replay

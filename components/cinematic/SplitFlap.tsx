@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAudio } from "@/hooks/useAudio";
+import { useBeatClock } from "@/hooks/useBeatClock";
 
 /**
  * Split-flap / Solari-board verdict display (Addendum A §7.1 / §13 #5) — prototype (b).
@@ -21,6 +22,18 @@ import { useAudio } from "@/hooks/useAudio";
  * batches the result into a single `setState` per tick instead of one per character,
  * gates the clack to at most one per TICK_MIN_MS across the whole word, and lifts
  * `will-change: transform` off each cell the moment it locks.
+ *
+ * ── locked to the grid ────────────────────────────────────────────────────────
+ * The glyph churn still runs at FLIP_MS (that blur is texture, not rhythm), but the
+ * moment each character LOCKS — the clack, the frame it comes to rest — is snapped
+ * onto the score's 16th-note grid. The cascade therefore reads as a Solari board
+ * ticking in time with the music rather than near it, and the clacks self-throttle
+ * to one per 16th. Where two characters round onto the same 16th they land
+ * together, which is exactly what a real board does.
+ *
+ * `silent` exists because this board is also a landing-page exhibit: RunTour drives
+ * it from SCROLL POSITION, and scrolling must never make noise (up to 16 ticks fired
+ * as the user swept past). Sound belongs to the verdict, not to the scrollbar.
  */
 
 const GLYPHS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -61,10 +74,28 @@ function Flap({ cell, target, hex, reduced }: { cell: Cell; target: string; hex:
   );
 }
 
-export function SplitFlap({ text, hex, active, reduced = false, className = "" }: { text: string; hex: string; active: boolean; reduced?: boolean; className?: string }) {
+export function SplitFlap({
+  text,
+  hex,
+  active,
+  reduced = false,
+  className = "",
+  silent = false,
+}: {
+  text: string;
+  hex: string;
+  active: boolean;
+  reduced?: boolean;
+  className?: string;
+  /** Suppress the mechanical clack (for boards armed by scroll, not by a beat). */
+  silent?: boolean;
+}) {
   const audio = useAudio();
+  const clock = useBeatClock();
   const chars = useMemo(() => text.toUpperCase().split(""), [text]);
   const running = active && !reduced;
+  const silentRef = useRef(silent);
+  silentRef.current = silent;
 
   const restingCells = useMemo(
     () => chars.map((ch) => ({ ch: reduced || ch === " " ? ch : GLYPHS[0], flip: 0, settled: reduced || ch === " " })),
@@ -87,14 +118,19 @@ export function SplitFlap({ text, hex, active, reduced = false, className = "" }
     cellsRef.current = restingCells;
     setCells(restingCells);
 
+    // Each cell's lock instant, snapped from its authored flip count onto the
+    // score's 16th grid. Computed once, before the frame clock starts, so every
+    // offset is measured from the same moment.
+    const settleAt = chars.map((_, i) => clock.snap(flipsFor(i) * FLIP_MS, "16n"));
     const start = performance.now();
     let lastClackAt = -Infinity; // last clack, shared by the whole board
     let lastStep = -1;
     let raf = 0;
 
     const loop = (now: number) => {
+      const elapsed = now - start;
       // one shared frame clock: which flip step every cell should be on by now
-      const step = Math.floor((now - start) / FLIP_MS);
+      const step = Math.floor(elapsed / FLIP_MS);
       if (step !== lastStep) {
         lastStep = step;
         const prev = cellsRef.current;
@@ -105,7 +141,7 @@ export function SplitFlap({ text, hex, active, reduced = false, className = "" }
         const next = prev.map((cell, i) => {
           const ch = chars[i];
           if (ch === " ") return cell;
-          if (step >= flipsFor(i)) {
+          if (elapsed >= settleAt[i]) {
             if (cell.settled) return cell;
             changed = true;
             settledNow = true;
@@ -122,7 +158,7 @@ export function SplitFlap({ text, hex, active, reduced = false, className = "" }
           setCells(next); // ONE render per shared tick, not one per character
         }
         // one clack per settle, throttled globally so 16 cells can't machine-gun
-        if (settledNow && now - lastClackAt >= TICK_MIN_MS) {
+        if (settledNow && !silentRef.current && now - lastClackAt >= TICK_MIN_MS) {
           lastClackAt = now;
           try { audioRef.current.sfx("uitick"); } catch {}
         }

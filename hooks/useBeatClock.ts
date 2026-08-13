@@ -66,6 +66,13 @@ export type BeatClockApi = {
    * previous one is pushed a whole unit later instead of collapsing onto it.
    */
   snap: (ms: number, grid?: BeatGrid, minMs?: number) => number;
+  /**
+   * Snap an offset UP to the next grid boundary at or after it. For boundaries
+   * whose authored value is a floor (a reading time, a minimum hold) — rounding
+   * those to the nearest boundary is allowed to shorten them, which is the one
+   * thing they exist to prevent.
+   */
+  ceil: (ms: number, grid?: BeatGrid) => number;
   /** Run `cb` on the grid. Returns a canceller; call it on skip/unmount. */
   schedule: (
     cb: () => void,
@@ -122,6 +129,14 @@ export function useBeatClock(): BeatClockApi {
       return delay;
     };
 
+    const ceil = (ms: number, grid: BeatGrid = "beat") => {
+      const c = clock();
+      const u = unitSec(grid);
+      const n = nowMs() / 1000;
+      const k = Math.ceil((n + ms / 1000 - c.startTime) / u - 1e-9);
+      return (c.startTime + k * u - n) * 1000;
+    };
+
     const schedule: BeatClockApi["schedule"] = (cb, at) => {
       const grid = at.grid ?? (at.bars !== undefined ? "bar" : "beat");
       const delay =
@@ -144,6 +159,7 @@ export function useBeatClock(): BeatClockApi {
       nextBar: () => next("bar"),
       after,
       snap,
+      ceil,
       schedule,
     };
   }, [clock]);

@@ -18,7 +18,7 @@ import {
   type MythFact,
 } from "@/lib/almanac";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
-import { EASE, STAGGER } from "@/src/motion/tokens";
+import { EASE, STAGGER, stepDelay } from "@/src/motion/tokens";
 
 const VERDICT_HEX: Record<string, string> = { Myth: "#ff3b30", Fact: "#2bd576", "It depends": "#8f8e85" };
 const VERDICTS = ["Myth", "Fact", "It depends"] as const;
@@ -74,7 +74,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
               {section === "wealth" && (
                 <Section title="Ways to build wealth" sub="Every path has a price. Here's the honest trade-off on each.">
                   {WEALTH_METHODS.map((m, i) => (
-                    <Reveal key={m.name} delay={i * 0.03}>
+                    <Reveal key={m.name} delay={stepDelay(i, 0.03)}>
                       <article className="border border-hairline bg-bg2 p-5">
                         <h3 className="display-caps text-xl text-ink">{m.name}</h3>
                         <p className="mt-1 font-body text-sm italic text-ink-dim">{m.how}</p>
@@ -93,7 +93,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
               {section === "geo" && (
                 <Section title="Geopolitics & the economy" sub="How a crisis on one side of the world reaches your wallet on the other.">
                   {GEOPOLITICS.map((g, i) => (
-                    <Reveal key={i} delay={i * 0.03}>
+                    <Reveal key={i} delay={stepDelay(i, 0.03)}>
                       <article className="border border-hairline bg-bg2 p-5">
                         <h3 className="display-caps text-lg text-ink">{g.situation}</h3>
                         <p className="mt-3 eyebrow text-ink-dim">The ripple</p>
@@ -196,7 +196,7 @@ function MythSection() {
       }
     >
       {MYTH_FACTS.map((m, i) => (
-        <Reveal key={i} delay={i * 0.03}>
+        <Reveal key={i} delay={stepDelay(i, 0.03)}>
           <MythCard item={m} call={calls[i]} onGuess={(v) => guess(i, v)} reduced={reduced} />
         </Reveal>
       ))}
@@ -281,9 +281,11 @@ function TermsSection({ typedRef }: { typedRef: React.MutableRefObject<boolean> 
     <Section title="Terms you should know" sub="The vocabulary that quietly runs your financial life.">
       <div className="grid gap-2.5 sm:grid-cols-2">
         {TERMS.map((t, i) => (
-          <Reveal key={t.term} delay={i * 0.02}>
+          <Reveal key={t.term} delay={stepDelay(i, 0.02)}>
             <div className="border border-hairline bg-bg2 p-4">
-              <TypeIn text={t.term} startDelay={i * TYPE_ROW_STEP_MS} enabled={shouldType} />
+              {/* capped ramp: past a dozen rows the last term would start typing
+                  a second after the first, long after the eye arrived */}
+              <TypeIn text={t.term} startDelay={stepDelay(i, TYPE_ROW_STEP_MS)} enabled={shouldType} />
               <p className="mt-1 font-body text-sm leading-snug text-ink/85">{t.def}</p>
             </div>
           </Reveal>

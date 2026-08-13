@@ -145,9 +145,12 @@ function PanelVerdict({ live, reduced }: { live: boolean; reduced: boolean }) {
         <span className="eyebrow text-secondary">Final verdict</span>
         <span className="eyebrow text-tertiary">Form 01</span>
       </div>
-      {/* 16 flap cells must fit the max-w-md card — cell width tracks font size */}
+      {/* 16 flap cells must fit the max-w-md card — cell width tracks font size.
+          `silent`: this board is armed by SCROLL POSITION, and scrolling past a
+          landing-page exhibit must never make noise. The clacks belong to the
+          real verdict at the end of a run. */}
       <div className="mt-5 text-lg lg:text-xl">
-        <SplitFlap text={v.title} hex={v.hex} active={live} reduced={reduced} />
+        <SplitFlap text={v.title} hex={v.hex} active={live} reduced={reduced} silent />
       </div>
       <p className="mt-4 font-body text-sm leading-relaxed text-ink-dim">{v.blurb}</p>
       <p className="voice mt-4 text-base text-ink">&ldquo;One of six ways this ends.&rdquo;</p>

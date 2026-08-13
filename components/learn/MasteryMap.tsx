@@ -69,7 +69,8 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
           card={{
             initial: { opacity: 0, y: 24, scale: 0.98 },
             animate: { opacity: 1, y: 0, scale: 1 },
-            exit: { opacity: 0, y: 16, scale: 0.98 },
+            // exits run ~30% faster than the enter they reverse
+            exit: { opacity: 0, y: 16, scale: 0.98, transition: { duration: DUR.exitFast, ease: EASE } },
             transition: { duration: DUR.base, ease: EASE },
           }}
         >

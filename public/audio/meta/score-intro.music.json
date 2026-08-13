@@ -14,6 +14,7 @@
     { "name": "title-resolve", "startBar": 7, "endBar": 9, "startSec": 18.947368, "endSec": 25.263158 }
   ],
   "cuePoints": [
+    { "name": "downbeat", "bar": 1, "sec": 0 },
     { "name": "title-detonation", "bar": 7, "sec": 18.947368 }
   ],
   "stems": [
@@ -21,17 +22,21 @@
     { "id": "pad", "file": "procedural:Tone.PolySynth(fatsawtooth)", "role": "harmony", "defaultGain": 0.5 },
     { "id": "tick", "file": "procedural:Tone.Membrane+Noise", "role": "rhythm", "defaultGain": 0.4 },
     { "id": "tension", "file": "procedural:detuned-saw-cluster", "role": "tension", "defaultGain": 0.5 },
-    { "id": "crackle", "file": "procedural:Tone.Noise(pink)", "role": "ambience", "defaultGain": 0.06 }
+    { "id": "crackle", "file": "procedural:Tone.Noise(pink)", "role": "ambience", "defaultGain": 0.06 },
+    { "id": "lead", "file": "procedural:Tone.Synth(triangle)+FeedbackDelay(8n.)", "role": "melody", "defaultGain": 0.0 },
+    { "id": "rhodes", "file": "procedural:Tone.FMSynth", "role": "melody", "defaultGain": 0.0 },
+    { "id": "warmth", "file": "procedural:major6-shimmer", "role": "harmony", "defaultGain": 0.0 }
   ],
   "intensityLayers": [
     { "level": 0, "activeStems": ["crackle", "pad", "sub"] },
     { "level": 1, "activeStems": ["crackle", "pad", "sub", "tick", "tension"] }
   ],
   "transitions": [
+    { "from": "tension-build", "to": "tension-build", "quantize": "beat", "type": "stinger", "stingerId": "beat-accent" },
     { "from": "title-resolve", "to": "menu", "quantize": "bar", "type": "crossfade", "fadeBars": 1, "stingerId": "title" }
   ],
   "licenseNotes": "Original. Per-phrase accents (thump/hit/stab/riser/title) over an A-minor tension bed; no third-party material.",
-  "sourceNotes": "Procedural; cold-open beats in lib/cinematic.ts each fire AudioEngine.accent(). Reading-time-floored pacing.",
+  "sourceNotes": "Procedural; phase `intro`/`title` of src/audio/AudioEngine.ts. WIRED: components/cinematic/ColdOpen.tsx holds each beat of lib/cinematic.COLD_OPEN to the next BEAT boundary of this grid (hooks/useBeatClock `ceil`), never shorter than the beat's authored reading-time floor — bar-quantizing the cuts was rejected because the floors turn it into up to 3.1s of dead screen per line. Each beat's accent is requested ACCENT_PREROLL_MS (120ms) before its cut so AudioEngine.accent()'s own 8th-note quantization resolves it onto the cut. Visual pacing is identical when muted or before unlock (silent performance.now() grid at the same tempo).",
   "generatedBy": "AudioEngine.ts (Tone.js)",
   "humanReviewRequired": true
 }

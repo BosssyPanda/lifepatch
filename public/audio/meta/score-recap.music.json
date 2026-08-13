@@ -14,6 +14,7 @@
     { "name": "verdict-stamp", "startBar": 7, "endBar": 9, "startSec": 18.947368, "endSec": 25.263158 }
   ],
   "cuePoints": [
+    { "name": "scene-cut", "bar": 1, "sec": 0 },
     { "name": "verdict", "bar": 7, "sec": 18.947368 }
   ],
   "stems": [
@@ -29,10 +30,12 @@
     { "level": 1, "activeStems": ["crackle", "pad", "sub", "tension"] }
   ],
   "transitions": [
+    { "from": "recap", "to": "recap", "quantize": "bar", "type": "stinger", "stingerId": "scene-cut" },
+    { "from": "recap", "to": "verdict-stamp", "quantize": "bar", "type": "stinger", "stingerId": "verdict" },
     { "from": "verdict-stamp", "to": "menu", "quantize": "bar", "type": "crossfade", "fadeBars": 1 }
   ],
   "licenseNotes": "Original. Warm major-6 extension (good) or minor tension (bad) over the shared A-minor cycle; no third-party material.",
-  "sourceNotes": "Procedural; recap beats in lib/cinematic.ts fire AudioEngine.accent() + swellWarmth on a good verdict.",
+  "sourceNotes": "Procedural; phase `recapGood`/`recapBad` of src/audio/AudioEngine.ts. WIRED: components/cinematic/Outro.tsx quantizes the recap film onto this grid via hooks/useBeatClock — every scene cut lands on a BAR (3.157895s), snapped cumulatively so rounding cannot drift, with each scene's accent requested ACCENT_PREROLL_MS (120ms) early so it detonates on the cut. The authored scene lengths (2200/3000/3800/4200ms plus the years replay) were already within half a bar of one, so the film's total runtime is unchanged. The year replay's atoms are beat subdivisions (a 16th per year, a dotted 8th of extra dwell on a milestone), so an uncompressed replay is on the grid by construction; runs long enough to need compressing fall back to proportional scaling. The verdict split-flap locks each character on the 16th grid (the glyph churn stays at 55ms — that blur is texture, not rhythm), which also self-throttles the mechanical clacks to one per 16th.",
   "generatedBy": "AudioEngine.ts (Tone.js)",
   "humanReviewRequired": true
 }

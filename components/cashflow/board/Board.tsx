@@ -1,6 +1,6 @@
 "use client";
 
-import { animate, motion, useMotionValue, useMotionValueEvent } from "framer-motion";
+import { animate, motion, useAnimationControls, useMotionValue, useMotionValueEvent } from "framer-motion";
 import {
   useCallback,
   useEffect,
@@ -13,7 +13,24 @@ import {
 } from "react";
 import { TileIcon } from "./TileIcon";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
-import { DUR } from "@/src/motion/tokens";
+import { DUR, EASE } from "@/src/motion/tokens";
+
+/**
+ * The token's landing: squash-and-stretch, the same shape the dice already use
+ * when they come to rest (`scaleX` opposed to `scaleY`, settling over four
+ * decreasing rebounds). A thing that stops moving without deforming reads as a
+ * thing that was never moving.
+ *
+ * It runs on the token's INNER element. The outer node's `transform` is written
+ * by hand every frame by `writeToken` below (that is how the hop stays
+ * compositor-only), so anything that also wanted the transform would be
+ * overwritten mid-flight — the squash composes with it instead of fighting it.
+ */
+const LAND_SQUASH = {
+  scaleX: [1, 1.14, 0.96, 1.05, 0.99, 1],
+  scaleY: [1, 0.82, 1.06, 0.95, 1.02, 1],
+};
+const LAND_TIMES = [0, 0.32, 0.52, 0.72, 0.88, 1];
 
 export type BoardSquareView = { index: number; type: string };
 
@@ -186,6 +203,33 @@ export function Board({
     return () => ro.disconnect();
   }, [progress, writeToken]);
 
+  // ── token bob + landing squash ─────────────────────────────────────────────
+  const hop = useAnimationControls();
+  const wasMoving = useRef(false);
+
+  useEffect(() => {
+    if (reduce) {
+      hop.set({ y: 0, scaleX: 1, scaleY: 1 });
+      wasMoving.current = false;
+      return;
+    }
+    if (moving) {
+      wasMoving.current = true;
+      void hop.start(
+        { y: [0, -10, 0], scaleX: [1, 1.12, 1], scaleY: [1, 1.12, 1] },
+        { duration: 0.33, repeat: Infinity, ease: EASE },
+      ).catch(() => {});
+      return;
+    }
+    if (!wasMoving.current) return;
+    wasMoving.current = false;
+    // plant it, then let the squash play out from a settled y
+    hop.set({ y: 0 });
+    void hop
+      .start(LAND_SQUASH, { duration: DUR.slow, times: LAND_TIMES, ease: "easeOut" })
+      .catch(() => {});
+  }, [moving, reduce, hop]);
+
   // The hop itself. Reduced motion keeps its old duty: jump straight to the end.
   useEffect(() => {
     const steps = path.steps;
@@ -289,8 +333,8 @@ export function Board({
       >
         <motion.div
           className="grid h-7 w-7 place-items-center border border-ink bg-ink"
-          animate={moving && !reduce ? { y: [0, -10, 0], scale: [1, 1.12, 1] } : {}}
-          transition={{ duration: 0.33, repeat: moving ? Infinity : 0 }}
+          animate={hop}
+          style={{ transformOrigin: "center bottom" }}
         >
           <span className="display-caps" style={{ color: "var(--color-bg)", fontSize: "0.7rem" }}>
             {tokenLabel}
