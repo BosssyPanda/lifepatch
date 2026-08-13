@@ -226,7 +226,10 @@ export function ConsequenceBeat({
       initial={reduced ? undefined : { opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: DUR.instant }}
-      onClick={skip}
+      // Tap-anywhere fast-forwards the ceremony, but only while it is still running. Once it
+      // has settled, the surface goes inert and the Continue button is the only way out —
+      // otherwise a stray tap dismisses the lesson the beat exists to teach.
+      onClick={done ? undefined : skip}
     >
       {/* top rail — event tag + net-worth before → after (after flashes on land) */}
       <div className="flex items-stretch border-b border-hairline">

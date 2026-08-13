@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { GlyphMatrix } from "@/components/cinematic/landing/GlyphMatrix";
 import { CloseIcon } from "@/components/icons";
+import { LedgerDialog } from "@/components/ui/LedgerDialog";
 import { Reveal } from "@/components/ui/Reveal";
 import { useAudio } from "@/hooks/useAudio";
 import {
@@ -33,9 +34,9 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <AnimatePresence>
       {open && (
-        <motion.div className="fixed inset-0 z-50 flex flex-col bg-bg" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+        <LedgerDialog open={open} onClose={onClose} label="The Almanac" fullBleed>
           {/* header + tabs */}
-          <div className="sticky top-0 z-10 border-b border-ink/12 bg-bg">
+          <div className="sticky top-0 z-10 border-b border-hairline bg-bg">
             <div className="relative overflow-hidden">
               <GlyphMatrix className="absolute inset-0 h-full w-full" />
               <div className="relative mx-auto flex max-w-3xl items-center justify-between px-5 py-3">
@@ -43,7 +44,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
                   <p className="eyebrow text-ink">The Almanac</p>
                   <h1 className="display-caps text-2xl text-ink">Know the game</h1>
                 </div>
-                <button type="button" onClick={onClose} aria-label="Close almanac" className="rounded-[3px] border border-ink/20 bg-bg p-2 text-ink-dim transition-colors hover:border-ink hover:text-ink">
+                <button type="button" onClick={onClose} aria-label="Close almanac" data-radius="" className="border border-hairline-strong bg-bg p-2 text-ink-dim transition-colors hover:border-ink hover:text-ink">
                   <CloseIcon size={18} />
                 </button>
               </div>
@@ -54,7 +55,8 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
                   key={s.id}
                   type="button"
                   onClick={() => setSection(s.id)}
-                  className={`shrink-0 rounded-[3px] border px-3 py-1.5 eyebrow transition-colors ${section === s.id ? "border-ink bg-ink text-bg" : "border-ink/20 text-ink-dim hover:text-ink"}`}
+                  data-radius=""
+                  className={`shrink-0 border px-3 py-1.5 eyebrow transition-colors ${section === s.id ? "border-ink bg-ink text-bg" : "border-hairline-strong text-ink-dim hover:text-ink"}`}
                 >
                   {s.label}
                 </button>
@@ -88,7 +90,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
                 <Section title="Geopolitics & the economy" sub="How a crisis on one side of the world reaches your wallet on the other.">
                   {GEOPOLITICS.map((g, i) => (
                     <Reveal key={i} delay={i * 0.03}>
-                      <article className="rounded-[5px] border border-ink/12 bg-bg2 p-5">
+                      <article className="border border-hairline bg-bg2 p-5">
                         <h3 className="display-caps text-lg text-ink">{g.situation}</h3>
                         <p className="mt-3 eyebrow text-ink-dim">The ripple</p>
                         <ol className="mt-1 space-y-1">
@@ -116,7 +118,7 @@ export function Almanac({ open, onClose }: { open: boolean; onClose: () => void 
               </p>
             </div>
           </div>
-        </motion.div>
+        </LedgerDialog>
       )}
     </AnimatePresence>
   );

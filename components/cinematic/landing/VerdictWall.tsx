@@ -6,8 +6,8 @@ import { Marquee } from "./Marquee";
 /**
  * Landing set piece 006 — "SIX WAYS THIS ENDS" (spectacle Phase K4a).
  * The six real end-of-run archetypes from lib/verdict, dealt as split-flap
- * style plates on an infinite marquee. Each keeps its sanctioned seal hex
- * (the one archetype-color exception to the LEDGER palette).
+ * style plates on an infinite marquee. Plate colors come straight from the
+ * verdict palette — money hues for the two money endings, ink tiers between.
  */
 
 const ENTRIES = Object.entries(VERDICTS);

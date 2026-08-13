@@ -48,6 +48,8 @@ function Slider({ label, value, min, max, step, format, onChange }: {
         <span className="eyebrow text-secondary">{label}</span>
         <span className="num text-ink" style={{ fontSize: "0.9rem" }}>{format(value)}</span>
       </span>
+      {/* the house allocator slider — a 1px bespoke track here was both a second slider
+          design and a sub-pixel drag target. `--fill` paints the two-tone progress. */}
       <input
         type="range"
         min={min}
@@ -55,12 +57,8 @@ function Slider({ label, value, min, max, step, format, onChange }: {
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="mt-3 h-px w-full cursor-ew-resize appearance-none bg-hairline outline-none
-          [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none
-          [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-ink [&::-webkit-slider-thumb]:bg-bg
-          [&::-webkit-slider-thumb]:hover:bg-ink
-          [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:w-2.5 [&::-moz-range-thumb]:rounded-none
-          [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-ink [&::-moz-range-thumb]:bg-bg"
+        className="allocator mt-3 w-full cursor-ew-resize"
+        style={{ "--fill": `${((value - min) / (max - min)) * 100}%` } as React.CSSProperties}
         aria-label={label}
       />
     </label>

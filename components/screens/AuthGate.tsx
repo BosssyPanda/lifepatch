@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { MailIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import type { useAuth } from "@/hooks/useAuth";
 import { MODES, type ModeId } from "@/lib/modes";

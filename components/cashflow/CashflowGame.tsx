@@ -1,16 +1,17 @@
 "use client";
 
-import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { BankIcon, FreedomIcon, InfoIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { conceptsForText } from "@/lib/concepts";
 import { Dice } from "@/components/cashflow/board/Dice";
 import { BoardBackdrop } from "@/components/cashflow/board/BoardBackdrop";
 import { HudRail } from "@/components/ui/HudRail";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { EASE } from "@/src/motion/tokens";
 
 // WebGL board is loaded only inside the cashflow shell (never the landing bundle).
@@ -153,7 +154,7 @@ export function CashflowGame({
 }) {
   const audio = useAudio();
   const { learn } = useConceptLearn();
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const isFast = s.track === "fast";
 
   const [turnPhase, setTurnPhase] = useState<"idle" | "rolling" | "moving" | "resolve">("idle");
@@ -543,7 +544,7 @@ export function CashflowGame({
       {/* modals */}
       <AnimatePresence>
         {tutorialOpen && (
-          <Modal key="tut">
+          <Modal key="tut" label="How to play">
             <Tutorial
               steps={TUTORIAL_STEPS}
               onDone={() => {
@@ -556,13 +557,13 @@ export function CashflowGame({
         )}
 
         {glossaryOpen && (
-          <Modal key="glo" onClose={() => setGlossaryOpen(false)} maxWidth="max-w-xl">
+          <Modal key="glo" onClose={() => setGlossaryOpen(false)} maxWidth="max-w-xl" label="Glossary">
             <GlossaryModal onClose={() => setGlossaryOpen(false)} />
           </Modal>
         )}
 
         {pending && (
-          <Modal key={`p-${pending.kind}`} tone={modalTone(pending.kind)}>
+          <Modal key={`p-${pending.kind}`} tone={modalTone(pending.kind)} label={pending.kind === "coach" ? pending.title : "Your turn"}>
             {pending.kind === "coach" && (
               <CoachCard title={pending.title} body={pending.body} onOk={() => { audio.sfx("confirm"); const then = pending.then; setPending(null); then(); }} />
             )}
@@ -618,7 +619,7 @@ export function CashflowGame({
 // ── small fast-track modal cards (local) ──
 function FtSimpleCard({ title, body, action, tone, onOk }: { title: string; body: string; action: string; tone?: "bad"; onOk: () => void }) {
   return (
-    <div className="paper rounded-[6px] p-5">
+    <div className="panel">
       <h3 className={`display-caps text-xl ${tone === "bad" ? "text-loss" : "text-ink"}`}>{title}</h3>
       <p className="mt-2 font-body text-[0.9rem] text-ink/80">{body}</p>
       <div className="mt-4 flex justify-end">
@@ -633,7 +634,7 @@ function FtSimpleCard({ title, body, action, tone, onOk }: { title: string; body
 function FtDealCard({ deal, cash, onBuy, onPass }: { deal: FastTrackDeal; cash: number; onBuy: () => void; onPass: () => void }) {
   const afford = cash >= deal.price;
   return (
-    <div className="paper rounded-[6px] p-5">
+    <div className="panel">
       <div className="flex items-center gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-secondary text-bg">
           <BankIcon size={22} />
@@ -671,7 +672,7 @@ function FtDreamCard({ s, onBuy, onPass }: { s: CashflowState; onBuy: () => void
   const dream = getDream(s.dreamId);
   const afford = s.cash >= dream.cost;
   return (
-    <div className="paper rounded-[6px] p-5">
+    <div className="panel">
       <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
         Your Dream
       </p>

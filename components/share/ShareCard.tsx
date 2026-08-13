@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { CloseIcon } from "@/components/icons";
+import { useDialog } from "@/components/ui/LedgerDialog";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { drawShareCard, FORMATS, type ShareCardData, type ShareFormat } from "./drawShareCard";
 
@@ -14,6 +15,8 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
   const [format, setFormat] = useState<ShareFormat>("story");
   const [preview, setPreview] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Focus trap / Escape / focus restore / scroll lock — it already claimed role="dialog".
+  const dialogRef = useDialog<HTMLDivElement>({ open: true, onClose });
 
   useEffect(() => {
     let alive = true;
@@ -59,7 +62,7 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
   const aspect = FORMATS[format].w / FORMATS[format].h;
 
   return (
-    <div className="fixed inset-0 z-[96] flex flex-col bg-bg text-ink" role="dialog" aria-modal="true" aria-label="Share your statement">
+    <div ref={dialogRef} className="fixed inset-0 z-[96] flex flex-col bg-bg text-ink" role="dialog" aria-modal="true" aria-label="Share your statement">
       <div className="flex items-stretch border-b border-hairline">
         <div className="flex items-center gap-2.5 px-4 py-3 sm:px-6">
           <span className="eyebrow text-ink" style={{ fontSize: "0.6rem", letterSpacing: "0.2em" }}>Statement</span>

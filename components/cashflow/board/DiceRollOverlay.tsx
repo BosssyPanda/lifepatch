@@ -266,7 +266,14 @@ export default function DiceRollOverlay({ values, onDone }: { values: number[]; 
   const total = values.reduce((a, b) => a + b, 0);
 
   return (
-    <div className="fixed inset-0 z-[95] flex items-center justify-center" style={{ backgroundColor: "rgba(14,14,12,0.9)" }}>
+    // Announced as a dialog, but deliberately no focus trap: it holds no controls, it is
+    // self-dismissing, and trapping focus in a 3-second animation would strand a keyboard user.
+    <div
+      role="dialog"
+      aria-label="Rolling the dice"
+      className="fixed inset-0 z-[95] flex items-center justify-center"
+      style={{ backgroundColor: "rgba(14,14,12,0.9)" }}
+    >
       <div className="relative h-full max-h-[560px] w-full max-w-[720px]">
         <Canvas
           dpr={[1, 2]}

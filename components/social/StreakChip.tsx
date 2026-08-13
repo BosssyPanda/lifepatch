@@ -1,11 +1,12 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { FlameIcon } from "@/components/icons";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
 import { todayStr } from "@/lib/cloud/streaks";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 
 /** Once-a-day guard so the streak only celebrates on the first menu after a play. */
 const CELEB_KEY = "lifepatch.streakCelebrated";
@@ -14,7 +15,7 @@ const CELEB_KEY = "lifepatch.streakCelebrated";
 export function StreakChip() {
   const { streak } = useProfile();
   const { accent, started } = useAudio();
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const [pulse, setPulse] = useState(false);
 
   const current = streak?.current ?? 0;

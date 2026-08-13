@@ -3,12 +3,15 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { CheckIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
+import { NameField, playerName } from "@/components/ui/NameField";
 import { useAudio } from "@/hooks/useAudio";
 import { DREAMS } from "@/lib/cashflow/dreams";
 import { PROFESSIONS } from "@/lib/cashflow/professions";
 import { currency } from "@/lib/format";
 import type { Profession } from "@/lib/cashflow/types";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { useSpotlightHandler } from "@/src/motion/useSpotlight";
 import { SPRING, STAGGER } from "@/src/motion/tokens";
 
 function profExpenses(p: Profession): number {
@@ -17,7 +20,7 @@ function profExpenses(p: Profession): number {
 
 const DOTS = (n: number) =>
   Array.from({ length: 5 }).map((_, i) => (
-    <span key={i} className={`h-1.5 w-1.5 rounded-full ${i < n ? "bg-ink" : "bg-ink/20"}`} />
+    <span key={i} data-radius="round" className={`h-1.5 w-1.5 ${i < n ? "bg-ink" : "bg-ink/25"}`} />
   ));
 
 export function CashflowSetup({
@@ -32,6 +35,8 @@ export function CashflowSetup({
   onExit: () => void;
 }) {
   const audio = useAudio();
+  const { reduced } = useMotionCtx();
+  const onSpot = useSpotlightHandler<HTMLButtonElement>();
   const [step, setStep] = useState<"profession" | "dream">("profession");
   const [prof, setProf] = useState<string | null>(null);
   const [dream, setDream] = useState<string | null>(null);
@@ -74,13 +79,21 @@ export function CashflowSetup({
                   initial={{ opacity: 0, y: 22 }}
                   animate={{ opacity: 1, y: 0, scale: active ? 1.02 : 1 }}
                   transition={{ delay: i * STAGGER.tight, ...SPRING.pop }}
-                  whileHover={{ y: -4 }}
-                  className={`paper relative overflow-hidden rounded-[6px] p-4 text-left ${active ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""}`}
+                  whileHover={reduced ? undefined : { y: -4 }}
+                  data-radius=""
+                  // `ring-*` is box-shadow, which the LEDGER reset kills — a real inset outline.
+                  style={active ? { outline: "2px solid var(--color-ink)", outlineOffset: "-2px" } : undefined}
+                  onPointerMove={onSpot}
+                  className="paper spotlight relative overflow-hidden p-4 text-left"
                 >
                   {active && (
-                    <span className="absolute right-3 top-3 grid h-6 w-6 place-items-center rounded-full bg-ink text-bg">
-                      <CheckIcon size={13} />
-                    </span>
+                    <>
+                      {/* the ink wash the other two pickers already had */}
+                      <span className="pointer-events-none absolute inset-0 z-[1] bg-ink/15" />
+                      <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-6 w-6 place-items-center bg-ink text-bg">
+                        <CheckIcon size={13} />
+                      </span>
+                    </>
                   )}
                   <h2 className="display-caps text-xl text-ink">{p.title}</h2>
                   <p className="mt-1 font-body text-[0.82rem] leading-snug text-ink/70">{p.blurb}</p>
@@ -124,8 +137,11 @@ export function CashflowSetup({
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0, scale: active ? 1.03 : 1 }}
                   transition={{ delay: i * 0.04, type: "spring", stiffness: 240, damping: 20 }}
-                  whileHover={{ y: -4 }}
-                  className={`rounded-[6px] border p-4 text-left ${active ? "border-ink bg-ink/15" : "border-ink/15 bg-bg2 hover:border-ink/35"}`}
+                  whileHover={reduced ? undefined : { y: -4 }}
+                  data-radius=""
+                  style={active ? { outline: "2px solid var(--color-ink)", outlineOffset: "-2px" } : undefined}
+                  onPointerMove={onSpot}
+                  className={`spotlight relative overflow-hidden border p-4 text-left ${active ? "border-ink bg-ink/15" : "border-hairline-strong bg-bg2 hover:border-ink"}`}
                 >
                   <h3 className="display-caps text-base text-ink">{d.title}</h3>
                   <p className="mt-1 font-body text-[0.78rem] leading-snug text-ink-dim">{d.blurb}</p>
@@ -136,21 +152,12 @@ export function CashflowSetup({
           </div>
 
           <div className="mt-8 flex flex-wrap items-center justify-end gap-3">
-            <label className="flex items-center gap-2 font-body text-[0.85rem] text-ink-dim">
-              Name
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Player"
-                maxLength={16}
-                className="w-36 rounded-[4px] border border-ink/20 bg-bg2 px-3 py-1.5 num text-ink outline-none focus:border-ink"
-              />
-            </label>
+            <NameField value={name} onChange={setName} label="Name" className="w-44" />
             <NeonButton
               variant="primary"
               size="lg"
               disabled={!dream}
-              onClick={() => { audio.sfx("confirm"); audio.unlock("gameplay"); onBegin(prof!, dream!, name); }}
+              onClick={() => { audio.sfx("confirm"); audio.unlock("gameplay"); onBegin(prof!, dream!, playerName(name)); }}
             >
               Enter the Rat Race →
             </NeonButton>

@@ -19,6 +19,8 @@ export const DUR = {
   base: 0.4,
   slow: 0.5,
   scene: 0.55,
+  /** House exit speed — an exit runs ~30% faster than the enter it reverses. */
+  exitFast: 0.24,
 } as const;
 
 /** Per-item stagger / delay steps (seconds). `list` = staggerChildren default. */
@@ -29,11 +31,29 @@ export const STAGGER = {
   list: 0.06,
 } as const;
 
-/** The two house springs (framer-motion `Transition` spring shape). */
+/**
+ * The house springs (framer-motion `Transition` spring shape).
+ *
+ * `pop`/`soft` are the original stiffness/damping pair. The three added below are spelled in
+ * `visualDuration` + `bounce` instead — the perceptual parameterization, so "how long it looks
+ * like it takes" stays fixed no matter what travel distance a surface gives it:
+ *   press  — a control acknowledging a tap: fast, zero overshoot.
+ *   lift   — hover/settle: gentle overshoot, still calm.
+ *   reward — a payoff landing: the only spring allowed to be springy.
+ */
 export const SPRING = {
   pop: { type: "spring", stiffness: 220, damping: 20 },
   soft: { type: "spring", stiffness: 150, damping: 18 },
+  press: { type: "spring", visualDuration: 0.18, bounce: 0 },
+  lift: { type: "spring", visualDuration: 0.25, bounce: 0.15 },
+  reward: { type: "spring", visualDuration: 0.35, bounce: 0.45 },
 } as const;
 
 /** Travel distances (px) for screen/element wipes. */
 export const SHIFT = { wipe: 16 } as const;
+
+/**
+ * Hit-stop (seconds) — the beat of held stillness before an impact's follow-through.
+ * Game-feel literature puts the readable window at 50–100ms; the house uses 80ms.
+ */
+export const HITSTOP = 0.08;

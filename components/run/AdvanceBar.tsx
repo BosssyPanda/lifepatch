@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDown, TrophyIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { useAudio } from "@/hooks/useAudio";
 import { allEventsResolved, type RunState } from "@/lib/runEngine";
 

@@ -1,9 +1,11 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import type { ReactNode } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useCallback, type ReactNode } from "react";
+import { useDialog } from "@/components/ui/LedgerDialog";
 import { currency } from "@/lib/format";
 
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { EASE } from "@/src/motion/tokens";
 
 /** Money in tabular display numerals, optionally signed/colored. */
@@ -22,22 +24,31 @@ export function Money({
 
 /**
  * A modal scaffold: a flat darkening scrim + a card that rises and settles.
- * LEDGER: no aura, no backdrop-blur, no glow — depth comes from the scrim and
- * the card's own hairline frame. `tone` is retained for caller compatibility.
+ * LEDGER: no aura, no backdrop-blur, no glow — depth comes from the scrim, the card's own
+ * hairline frame, and (amendment B) the one sanctioned neutral float shadow.
+ *
+ * The scrim used to be a full-screen `<button aria-label="Close">`, which put an unlabeled
+ * page-sized control in the tab order ahead of the card's real contents. It is a plain div
+ * now; `useDialog` owns Escape, the focus trap, focus restore, and the scroll lock.
+ * `tone` is retained for caller compatibility.
  */
 export function Modal({
   children,
   onClose,
   maxWidth = "max-w-lg",
   tone = "neutral",
+  label = "Dialog",
 }: {
   children: ReactNode;
   onClose?: () => void;
   maxWidth?: string;
   tone?: "accent" | "brick" | "neutral";
+  label?: string;
 }) {
   void tone;
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
+  const noop = useCallback(() => {}, []);
+  const ref = useDialog<HTMLDivElement>({ open: true, onClose: onClose ?? noop });
   return (
     <motion.div
       className="fixed inset-0 z-[80] grid place-items-center p-4"
@@ -47,23 +58,27 @@ export function Modal({
       transition={{ duration: 0.22, ease: EASE }}
     >
       {/* flat scrim — darkens the board so the card reads as lifted */}
-      <motion.button
-        type="button"
-        aria-label="Close"
+      <motion.div
+        aria-hidden
         onClick={onClose}
         className="absolute inset-0 bg-black/80"
-        disabled={!onClose}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.26, ease: EASE }}
       />
       <motion.div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        data-elevated=""
         initial={reduce ? { opacity: 0 } : { opacity: 0, y: 40, scale: 0.96 }}
         animate={reduce ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
         exit={reduce ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.98 }}
         transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 260, damping: 24, mass: 0.9 }}
         className={`relative w-full ${maxWidth} thin-scroll max-h-[88svh] overflow-y-auto`}
+        data-lenis-prevent
       >
         {children}
       </motion.div>
@@ -76,7 +91,7 @@ export function Modal({
  * no badge — it renders as one quiet serif voice line under a hairline.
  */
 export function LessonBox({ children }: { children: ReactNode }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   return (
     <motion.div
       initial={reduce ? false : { opacity: 0, y: 8 }}

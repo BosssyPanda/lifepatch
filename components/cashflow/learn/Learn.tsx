@@ -3,15 +3,13 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 import { CheckIcon, CloseIcon, InfoIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { GLOSSARY } from "@/lib/cashflow/glossary";
 import type { QuizQuestion, TutorialStep } from "@/lib/cashflow/lessons";
 
-const PANEL = "paper rounded-[6px] p-5";
-
 export function CoachCard({ title, body, onOk }: { title: string; body: string; onOk: () => void }) {
   return (
-    <div className={PANEL}>
+    <div className="panel">
       <div className="flex items-center gap-2">
         <span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-bg">
           <InfoIcon size={18} />
@@ -37,7 +35,7 @@ export function QuizCard({ q, onDone }: { q: QuizQuestion; onDone: (correct: boo
   const correct = answered && q.options[picked].correct;
 
   return (
-    <div className={PANEL}>
+    <div className="panel">
       <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
         Pop quiz · {q.concept}
       </p>
@@ -125,7 +123,7 @@ export function Tutorial({
   const last = i === steps.length - 1;
 
   return (
-    <div className={PANEL}>
+    <div className="panel">
       <div className="flex items-center justify-between">
         <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
           Lesson {i + 1} / {steps.length}

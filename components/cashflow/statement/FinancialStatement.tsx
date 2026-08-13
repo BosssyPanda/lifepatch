@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import {
@@ -73,7 +74,7 @@ function SectionLabel({ children }: { children: string }) {
 }
 
 export function FinancialStatement({ s, className = "" }: { s: CashflowState; className?: string }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const passive = passiveIncome(s);
   const expenses = totalExpenses(s);
   const pay = payday(s);

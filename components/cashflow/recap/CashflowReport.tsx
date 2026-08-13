@@ -1,10 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { BrainIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
+import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
@@ -26,30 +27,6 @@ function archetype(s: CashflowState): { title: string; line: string } {
   if (s.dealsBought >= 8) return { title: "The Asset Stacker", line: "Brick by brick, deal by deal — you built an income machine." };
   if (s.liabilities.bankLoan === 0) return { title: "The Disciplined Investor", line: "You escaped without ever leaning on the bank. Clean run." };
   return { title: "The Freedom Builder", line: "You turned a salary into assets and assets into freedom." };
-}
-
-/** A ledger section header — eyebrow with a dotted rule running to the margin. */
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <div className="mb-1.5 mt-7 flex items-center gap-2">
-      <span aria-hidden className="h-2 w-[2px]" style={{ background: "var(--color-secondary)" }} />
-      <span className="eyebrow text-secondary" style={{ fontSize: "0.6rem", letterSpacing: "0.2em" }}>
-        {children}
-      </span>
-      <span className="rule-dotted h-px flex-1" />
-    </div>
-  );
-}
-
-/** A statement line: label — dot leader — figure. */
-function LedgerRow({ label, children, tone = "text-ink", strong = false }: { label: string; children: ReactNode; tone?: string; strong?: boolean }) {
-  return (
-    <div className="flex items-baseline gap-2.5 py-[3px]">
-      <span className={strong ? "display-caps text-[0.82rem] text-ink" : "text-[0.84rem] text-ink/80"}>{label}</span>
-      <span className="rule-dotted h-px flex-1" />
-      <span className={`num ${strong ? "text-[1.05rem] font-bold" : "text-[0.95rem]"} ${tone}`}>{children}</span>
-    </div>
-  );
 }
 
 export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: CashflowState; onReplay: () => void; onExit: () => void; onMasteryMap?: () => void }) {
@@ -104,25 +81,13 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
         {/* statement — dot-leader ledger rows */}
         <motion.section variants={item}>
           <SectionLabel>Final statement</SectionLabel>
-          <LedgerRow label="Net worth" strong>
-            <AnimatedNumber value={netWorth(s)} format={(n) => currency(n)} />
-          </LedgerRow>
-          <LedgerRow label="Passive income" tone="text-gain">
-            <AnimatedNumber value={passiveIncome(s)} format={(n) => currency(n)} />
-          </LedgerRow>
-          <LedgerRow label="Escaped on turn" tone="text-gain">
-            <AnimatedNumber value={s.escapedOnTurn ?? s.turn} format={(n) => String(Math.round(n))} />
-          </LedgerRow>
-          <LedgerRow label="Total turns">
-            <AnimatedNumber value={s.turn} format={(n) => String(Math.round(n))} />
-          </LedgerRow>
-          <LedgerRow label="Deals bought">
-            <AnimatedNumber value={s.dealsBought} format={(n) => String(Math.round(n))} />
-          </LedgerRow>
-          <LedgerRow label="Quizzes passed">
-            <AnimatedNumber value={s.quizzesPassed} format={(n) => String(Math.round(n))} />
-          </LedgerRow>
-          <LedgerRow label="Started as">{prof.title}</LedgerRow>
+          <LedgerRow label="Net worth" strong value={<AnimatedNumber value={netWorth(s)} format={(n) => currency(n)} />} />
+          <LedgerRow label="Passive income" tone="text-gain" size="0.95rem" value={<AnimatedNumber value={passiveIncome(s)} format={(n) => currency(n)} />} />
+          <LedgerRow label="Escaped on turn" tone="text-gain" size="0.95rem" value={<AnimatedNumber value={s.escapedOnTurn ?? s.turn} format={(n) => String(Math.round(n))} />} />
+          <LedgerRow label="Total turns" size="0.95rem" value={<AnimatedNumber value={s.turn} format={(n) => String(Math.round(n))} />} />
+          <LedgerRow label="Deals bought" size="0.95rem" value={<AnimatedNumber value={s.dealsBought} format={(n) => String(Math.round(n))} />} />
+          <LedgerRow label="Quizzes passed" size="0.95rem" value={<AnimatedNumber value={s.quizzesPassed} format={(n) => String(Math.round(n))} />} />
+          <LedgerRow label="Started as" size="0.95rem" value={prof.title} />
         </motion.section>
 
         {/* the lesson — one quiet voice line */}

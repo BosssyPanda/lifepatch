@@ -1,7 +1,7 @@
 "use client";
 
 import { HeartIcon, ScamIcon, VampireIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { LessonBox, Money } from "@/components/cashflow/shared";
 import { businessSalePrice, charityCost } from "@/lib/cashflow/engine";
 import { CHARITY_STRATEGY_NOTE, EXPENSE_FREEDOM_NOTE } from "@/lib/cashflow/messages";
@@ -9,12 +9,10 @@ import { totalExpenses } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
 import type { CashflowState, DoodadCard as DoodadT, MarketCard as MarketT } from "@/lib/cashflow/types";
 
-const PANEL = "paper rounded-[6px] p-5";
-
 export function DoodadCard({ card, cash, onPay }: { card: DoodadT; cash: number; onPay: () => void }) {
   const needLoan = cash < card.cost;
   return (
-    <div className={PANEL}>
+    <div className="panel">
       <div className="flex items-center gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-loss text-bg">
           <VampireIcon size={22} />
@@ -46,7 +44,7 @@ export function DoodadCard({ card, cash, onPay }: { card: DoodadT; cash: number;
 export function CharityCard({ s, onDonate, onSkip }: { s: CashflowState; onDonate: () => void; onSkip: () => void }) {
   const cost = charityCost(s);
   return (
-    <div className={PANEL}>
+    <div className="panel">
       <div className="flex items-center gap-3">
         <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-tertiary text-bg">
           <HeartIcon size={22} />
@@ -92,7 +90,7 @@ export function MarketCardView({
   if (card.kind === "windfall") {
     const good = card.cash >= 0;
     return (
-      <div className={PANEL}>
+      <div className="panel">
         <p className="eyebrow text-secondary" style={{ fontSize: "0.58rem" }}>
           The Market
         </p>
@@ -118,7 +116,7 @@ export function MarketCardView({
       : s.businesses;
 
   return (
-    <div className={PANEL}>
+    <div className="panel">
       <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-ink text-bg">
         <ScamIcon size={22} />
       </span>
@@ -188,7 +186,7 @@ export function MarketCardView({
 export function BabyCard({ s, onOk }: { s: CashflowState; onOk: () => void }) {
   const maxed = s.children >= 3;
   return (
-    <div className={PANEL}>
+    <div className="panel">
       <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-secondary text-bg">
         <HeartIcon size={22} />
       </span>
@@ -210,7 +208,7 @@ export function BabyCard({ s, onOk }: { s: CashflowState; onOk: () => void }) {
 
 export function DownsizedCard({ s, onOk }: { s: CashflowState; onOk: () => void }) {
   return (
-    <div className={PANEL}>
+    <div className="panel">
       <span className="grid h-10 w-10 place-items-center rounded-[5px] bg-loss text-bg">
         <ScamIcon size={22} />
       </span>

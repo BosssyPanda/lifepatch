@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 
 /**
  * Bracketed terminal-prompt CTA (Addendum A §6 / §13 #6). `[ LABEL ····· → ]` in
@@ -19,7 +20,7 @@ export function BracketCTA({
   className?: string;
   caret?: boolean;
 }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
 
   return (
     <button

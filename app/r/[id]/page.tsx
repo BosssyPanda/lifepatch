@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { getResult } from "@/lib/cloud/results";
+import { isCloud } from "@/lib/supabase";
 import type { ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
 import { VERDICTS } from "@/lib/verdict";
@@ -49,9 +50,48 @@ function statRows(row: ResultRow): { label: string; value: string }[] {
   ];
 }
 
+/**
+ * Statements only exist where results are stored. Without Supabase env keys, `getResult`
+ * falls through to localStorage — which does not exist on the server, so every /r/{id} threw
+ * and rendered the bare 404. A deployment with no cloud records says so, in house grammar.
+ */
+function NoRecords() {
+  return (
+    <main className="mx-auto flex min-h-[100svh] w-full max-w-xl flex-col justify-center px-5 py-14">
+      <div className="flex items-baseline justify-between border-b border-hairline pb-3">
+        <span className="display-caps text-xl text-ink">LIFEPATCH</span>
+        <span className="num text-tertiary" style={{ fontSize: "0.62rem", letterSpacing: "0.18em" }}>
+          NO CENTRAL LEDGER
+        </span>
+      </div>
+
+      <p className="eyebrow mt-10 text-secondary" style={{ fontSize: "0.6rem", letterSpacing: "0.3em" }}>
+        Record lookup · Unavailable
+      </p>
+      <h1 className="display-caps mt-2 text-4xl leading-none text-ink sm:text-5xl">
+        STATEMENT NOT ON FILE
+      </h1>
+      <p className="mt-4 max-w-md font-body text-[0.95rem] leading-relaxed text-ink-dim">
+        This deployment keeps no cloud records — every run is filed in the player&apos;s own browser,
+        so there is nothing here to look up.
+      </p>
+
+      <div className="mt-12 border-t border-hairline pt-6">
+        <p className="voice text-[1.02rem] text-ink/85">Your ledger is the only one that counts anyway.</p>
+        <Link
+          href="/"
+          className="num mt-5 inline-flex items-center gap-2 border border-ink px-5 py-3 text-sm text-ink hover:bg-ink hover:text-bg"
+        >
+          [ BEGIN A RUN → ]
+        </Link>
+      </div>
+    </main>
+  );
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const row = await getResult(id).catch(() => null);
+  const row = isCloud ? await getResult(id).catch(() => null) : null;
   if (!row) return { title: "LifePatch — Survive the Internet Economy" };
   const title = `LIFEPATCH — ${row.verdict}`;
   const description = `Run closed: ${row.verdict}. ${
@@ -67,6 +107,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function RunStatementPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!isCloud) return <NoRecords />;
   const row = await getResult(id).catch(() => null);
   if (!row) notFound();
 

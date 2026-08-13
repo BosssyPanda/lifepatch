@@ -49,8 +49,20 @@ export function MotionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const fire = () => {
+    // "Any input skips the ceremony" must not mean "any input, including the controls the
+    // ceremony itself puts on screen". Reaching for Mute during the cold open used to end the
+    // film, because this listener runs in the capture phase and fires before the button's own
+    // handler. Anything operable — or anything that opts out with data-no-skip — is exempt.
+    const fromControl = (e: Event) => {
+      const t = e.target;
+      return (
+        t instanceof Element &&
+        t.closest("button,a,input,select,textarea,[role='button'],[data-no-skip]") !== null
+      );
+    };
+    const fire = (e: Event) => {
       if (skips.current.size === 0) return;
+      if (fromControl(e)) return;
       // snapshot: a handler may unregister itself (via its `active` flag) mid-flush.
       for (const fn of Array.from(skips.current)) fn();
     };

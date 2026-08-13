@@ -1,17 +1,18 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { currency } from "@/lib/format";
 import { freedomRatio, passiveIncome, totalExpenses } from "@/lib/cashflow/selectors";
 import type { CashflowState } from "@/lib/cashflow/types";
 
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 /** Progress milestones — each is a notch the fill crosses on the way to free. */
 const MILESTONES = [25, 50, 75] as const;
 
 /** Passive income vs. expenses. At 100% the player is free. A flat LEDGER gauge. */
 export function FreedomMeter({ s, compact = false }: { s: CashflowState; compact?: boolean }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const passive = passiveIncome(s);
   const expenses = totalExpenses(s);
   const ratio = freedomRatio(s);

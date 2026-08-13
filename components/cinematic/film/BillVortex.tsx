@@ -3,6 +3,7 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
+import { percent } from "@/lib/format";
 import { FIRST_YEAR, LAST_YEAR, sp500Return } from "@/lib/markets";
 
 /**
@@ -41,7 +42,7 @@ function worstReturns(n: number): string[] {
   return rs
     .sort((a, b) => a - b)
     .slice(0, n)
-    .map((r) => `${r.toFixed(1)}%`.replace("-", "−"));
+    .map((r) => percent(r));
 }
 
 function Bills() {

@@ -4,7 +4,7 @@ import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { TitleAscii } from "@/components/cinematic/TitleAscii";
 import { FilmLayer } from "@/components/cinematic/film/FilmLayer";
 import { TitleTicker } from "@/components/cinematic/TitleTicker";

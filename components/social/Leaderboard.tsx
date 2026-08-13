@@ -6,7 +6,8 @@ import { NumberTicker } from "@/components/cinematic/landing/NumberTicker";
 import { CloseIcon } from "@/components/icons";
 import { Avatar } from "@/components/social/Avatar";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { LedgerButton } from "@/components/ui/LedgerButton";
+import { LedgerDialog } from "@/components/ui/LedgerDialog";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
@@ -106,22 +107,20 @@ export function Leaderboard({
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/85 p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
+        <LedgerDialog
+          open={open}
+          onClose={onClose}
+          label="Leaderboards"
+          dismissOnScrimClick
+          className="max-h-[88svh] overflow-hidden"
+          card={{
+            initial: { opacity: 0, y: 24, scale: 0.98 },
+            animate: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: 16, scale: 0.98 },
+            transition: { duration: DUR.base, ease: EASE },
+          }}
         >
-          <motion.section
-            className="paper relative flex max-h-[88svh] w-full max-w-lg flex-col overflow-hidden rounded-[6px]"
-            initial={{ opacity: 0, y: 24, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            transition={{ duration: DUR.base, ease: EASE }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="flex items-center justify-between border-b-2 border-ink/15 px-5 py-4">
+            <header className="flex items-center justify-between border-b-2 border-hairline-strong px-5 py-4">
               <div>
                 <p className="eyebrow text-ink">Compete</p>
                 <h2 className="display-caps text-3xl text-ink">Leaderboards</h2>
@@ -130,7 +129,8 @@ export function Leaderboard({
                 type="button"
                 onClick={onClose}
                 aria-label="Close leaderboards"
-                className="grid h-9 w-9 place-items-center rounded-full border-2 border-ink/25 text-ink/70 transition-colors hover:bg-ink/10"
+                data-radius="round"
+                className="grid h-11 w-11 place-items-center border-2 border-hairline-strong text-ink-dim transition-colors hover:border-ink hover:text-ink"
               >
                 <CloseIcon size={16} />
               </button>
@@ -142,7 +142,8 @@ export function Leaderboard({
                   key={t.id}
                   type="button"
                   onClick={() => setMode(t.id)}
-                  className={`display-caps flex-1 rounded-[4px] px-2 py-2 text-sm tracking-[0.08em] transition-colors ${
+                  data-radius=""
+                  className={`display-caps flex-1 px-2 py-2 text-sm tracking-[0.08em] transition-colors ${
                     mode === t.id
                       ? "bg-ink text-bg"
                       : "text-ink/60 hover:bg-ink/10"
@@ -174,7 +175,7 @@ export function Leaderboard({
               Best run per player, ranked by {metric}.
             </p>
 
-            <div className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3">
+            <div className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3" data-lenis-prevent>
               {loading ? (
                 <p className="py-10 text-center"><TerminalOp label="Fetching ledger" center /></p>
               ) : rows.length === 0 ? (
@@ -225,13 +226,12 @@ export function Leaderboard({
               )}
             </div>
 
-            <footer className="border-t-2 border-ink/10 px-5 py-3">
-              <NeonButton variant="ghost" size="sm" onClick={onClose}>
+            <footer className="border-t-2 border-hairline px-5 py-3">
+              <LedgerButton variant="ghost" size="sm" onClick={onClose}>
                 Close
-              </NeonButton>
+              </LedgerButton>
             </footer>
-          </motion.section>
-        </motion.div>
+        </LedgerDialog>
       )}
     </AnimatePresence>
   );

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Hover affordances that must never fire on touch (where :hover sticks after a tap).
+   Tailwind v4 has no built-in `pointer-fine:`, so the class was silently dead — the mode
+   cards' bracket corners had been written but never rendered. */
+@custom-variant pointer-fine (@media (hover: hover) and (pointer: fine));
+
 /* ================================================================
    LEDGER design system — a printed financial statement / terminal.
    Flat ink, hard structure, tabular figures. No shadows, no gradients,
@@ -21,13 +26,19 @@
   --color-bg3: #191714;
   --color-ink: #f2f1ea; /* primary */
   --color-ink-dim: #8f8e85; /* secondary */
-  --color-secondary: #8f8e85;
-  --color-tertiary: #5c5b53; /* faint */
-  --color-hairline: #2a2a25;
-  --color-dotted: #3a3a33;
+  --color-secondary: #8f8e85; /* 5.87:1 on bg */
+  --color-tertiary: #818076; /* faint text — 4.86:1 bg / 4.71:1 bg2 / 4.50:1 bg3 (WCAG AA) */
+  --color-hairline: #4a4943; /* structural rules — 2.14:1 on bg */
+  --color-hairline-strong: #67665e; /* interactive component boundaries — 3.35:1 bg / 3.10:1 bg3 (WCAG 1.4.11) */
+  --color-dotted: #54534a; /* dot leaders — 2.50:1 on bg */
   --color-loss: #ff3b30; /* flat red — losses */
   --color-gain: #2bd576; /* flat green — gains */
   --color-ink-bright: #ffffff; /* brightest ink — primary/button hover, atlas hairline */
+
+  /* DESIGN.md amendment A — the only radius in the system, for operable controls */
+  --radius-control: 3px;
+  /* DESIGN.md amendment B — neutral black, floating surfaces only. Never colored, never glow. */
+  --shadow-float: 0 8px 28px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 :root {
@@ -39,13 +50,39 @@
 }
 
 /* LEDGER hard rule: enforce zero radius + zero shadow/glow everywhere.
-   Treated as a lint gate — no element may carry a shadow or a rounded corner. */
-*,
+   Treated as a lint gate — no element may carry a shadow or a rounded corner.
+
+   Exactly two attribute escape hatches exist (DESIGN.md amendments A + B), and an element
+   has to ask for them by name:
+     [data-radius]         an operable control — rounds to --radius-control
+     [data-radius="round"] an intrinsically circular micro-element — true circle
+     [data-elevated]       a floating surface (modal/toast/popover) — --shadow-float
+   `:not()` around a single attribute selector stays on the browser's fast path, so the gate
+   costs no more than the bare universal selector did. Pseudo-elements are never exempt. */
+*:not([data-radius]),
 *::before,
 *::after {
   border-radius: 0 !important;
+}
+*:not([data-elevated]),
+*::before,
+*::after {
   box-shadow: none !important;
+}
+* {
   text-shadow: none !important;
+}
+
+/* The opt-ins also *supply* the value, so there is one radius and one shadow in the system
+   and call sites never re-spell them. */
+[data-radius] {
+  border-radius: var(--radius-control);
+}
+[data-radius="round"] {
+  border-radius: 50%;
+}
+[data-elevated] {
+  box-shadow: var(--shadow-float);
 }
 
 html {
@@ -131,6 +168,49 @@ body {
 }
 .paper-rule {
   border-color: var(--color-hairline);
+}
+/* The standard content card: a `.paper` field at the house padding. One class so the
+   Rat Race event/coach/summary cards can't drift apart again. */
+.panel {
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  border: 1px solid var(--color-hairline);
+  padding: 1.25rem;
+}
+
+/* ---------------- Pointer spotlight (DESIGN.md amendment D) ----------------
+   The only sanctioned decorative gradient: a monochrome ink wash that follows the cursor
+   across an interactive card. White at ≤6%, no hue, no glow, opacity-only transition.
+   Coordinates come from src/motion/useSpotlight.ts; without it the wash simply never
+   opens (opacity 0), so the class is inert rather than wrong. */
+.spotlight {
+  position: relative;
+  --spot-x: 50%;
+  --spot-y: 50%;
+}
+.spotlight::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+  background: radial-gradient(
+    220px circle at var(--spot-x) var(--spot-y),
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.02) 45%,
+    rgba(255, 255, 255, 0) 72%
+  );
+}
+.spotlight:hover::after,
+.spotlight:focus-visible::after {
+  opacity: 1;
+}
+/* Touch has no hover to follow, and reduced motion gets no cursor-tracked anything. */
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .spotlight::after {
+    display: none;
+  }
 }
 
 /* ---------------- Focus ring ---------------- */

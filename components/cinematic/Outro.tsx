@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { useAudio } from "@/hooks/useAudio";
 import { currency } from "@/lib/format";
 import { macroEvent, sp500Return } from "@/lib/markets";

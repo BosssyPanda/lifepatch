@@ -3,12 +3,13 @@
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BrainIcon, CheckIcon, FreedomIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { StreakChip } from "@/components/social/StreakChip";
 import { useAudio } from "@/hooks/useAudio";
 import { FIRST_YEAR, LAST_YEAR, sp500Return } from "@/lib/markets";
 import { MODES, type ModeId } from "@/lib/modes";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { useSpotlightHandler } from "@/src/motion/useSpotlight";
 import { EASE, SPRING } from "@/src/motion/tokens";
 
 const ICON = { story: TrophyIcon, infinite: ReplayIcon, cashflow: FreedomIcon };
@@ -26,6 +27,7 @@ export function ModeSelect({
 }) {
   const audio = useAudio();
   const { reduced } = useMotionCtx();
+  const onSpot = useSpotlightHandler<HTMLButtonElement>();
   const modes: ModeId[] = ["story", "infinite", "cashflow"];
   const [picked, setPicked] = useState<ModeId | null>(null);
 
@@ -51,14 +53,19 @@ export function ModeSelect({
               initial={{ opacity: 0, y: 26, rotate: i % 2 ? 1 : -1 }}
               animate={{ opacity: picked && !active ? 0.55 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
               transition={{ ...SPRING.pop, delay: i * 0.1 }}
-              whileHover={{ y: -6 }}
-              className={`paper group relative overflow-hidden rounded-[5px] p-6 text-left ${active ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""}`}
+              whileHover={reduced ? undefined : { y: -6 }}
+              data-radius=""
+              // 2px inset ink outline: `ring-*` is box-shadow, which the LEDGER reset kills,
+              // so the "picked" card had no border treatment at all.
+              style={active ? { outline: "2px solid var(--color-ink)", outlineOffset: "-2px" } : undefined}
+              onPointerMove={onSpot}
+              className="paper spotlight group relative overflow-hidden p-6 text-left"
             >
               {/* darker overlay + check on the chosen card */}
               {active && (
                 <>
                   <span className="pointer-events-none absolute inset-0 bg-ink/15" />
-                  <span className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full border-2 border-bg bg-ink text-bg">
+                  <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center border-2 border-bg bg-ink text-bg">
                     <CheckIcon size={15} />
                   </span>
                 </>

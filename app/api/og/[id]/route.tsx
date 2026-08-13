@@ -15,8 +15,8 @@ export const runtime = "edge";
 const BG = "#0E0E0C";
 const INK = "#F2F1EA";
 const SECONDARY = "#8F8E85";
-const TERTIARY = "#5C5B53";
-const HAIRLINE = "#2A2A25";
+const TERTIARY = "#818076";
+const HAIRLINE = "#4A4943";
 const GAIN = "#2BD576";
 const LOSS = "#FF3B30";
 

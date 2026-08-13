@@ -1,9 +1,10 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { currency } from "@/lib/format";
 import { macroEvent, sp500Return } from "@/lib/markets";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import type { RunState } from "@/lib/runEngine";
 
 /**
@@ -60,7 +61,7 @@ function Row({ ticks }: { ticks: Tick[] }) {
 }
 
 export function RunTicker({ run }: { run: RunState }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(true);
   const ticks = buildTicks(run);

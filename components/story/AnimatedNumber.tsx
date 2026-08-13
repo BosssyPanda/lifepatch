@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 
 /** Count-up/down tween between value changes. */
 export function AnimatedNumber({
@@ -15,16 +16,16 @@ export function AnimatedNumber({
   const [display, setDisplay] = useState(value);
   const fromRef = useRef(value);
   const rafRef = useRef<number | null>(null);
+  // One source of truth for reduced motion (MotionProvider holds the server value through
+  // first paint) instead of a second, hydration-racing matchMedia read per instance.
+  const { reduced } = useMotionCtx();
 
   useEffect(() => {
     const from = fromRef.current;
     const to = value;
     if (from === to) return;
 
-    const reduce =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
+    if (reduced) {
       fromRef.current = to;
       setDisplay(to);
       return;
@@ -48,7 +49,7 @@ export function AnimatedNumber({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       fromRef.current = to;
     };
-  }, [value, duration]);
+  }, [value, duration, reduced]);
 
   return <>{format(display)}</>;
 }

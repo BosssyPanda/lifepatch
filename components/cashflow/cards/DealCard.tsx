@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { ApartmentIcon, FactoryIcon, MarketIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { LessonBox, Money } from "@/components/cashflow/shared";
 import { cashOnCash, dividendYield } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";

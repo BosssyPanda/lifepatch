@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { CloseIcon, LockIcon } from "@/components/icons";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { LedgerButton } from "@/components/ui/LedgerButton";
+import { LedgerDialog } from "@/components/ui/LedgerDialog";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
 import { MAX_MASTERY_LEVEL } from "@/lib/cloud/mastery";
@@ -55,22 +56,21 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <AnimatePresence>
       {open && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-bg/85 p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
+        <LedgerDialog
+          open={open}
+          onClose={onClose}
+          label="Money Brain"
+          dismissOnScrimClick
+          maxWidth="max-w-2xl"
+          className="max-h-[90svh] overflow-hidden"
+          card={{
+            initial: { opacity: 0, y: 24, scale: 0.98 },
+            animate: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: 16, scale: 0.98 },
+            transition: { duration: DUR.base, ease: EASE },
+          }}
         >
-          <motion.section
-            className="paper relative flex max-h-[90svh] w-full max-w-2xl flex-col overflow-hidden rounded-[6px]"
-            initial={{ opacity: 0, y: 24, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.98 }}
-            transition={{ duration: DUR.base, ease: EASE }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="border-b-2 border-ink/15 px-5 py-4">
+            <header className="border-b-2 border-hairline-strong px-5 py-4">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="eyebrow text-ink">Your progress</p>
@@ -80,7 +80,8 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                   type="button"
                   onClick={onClose}
                   aria-label="Close Money Brain"
-                  className="grid h-9 w-9 place-items-center rounded-full border-2 border-ink/25 text-ink/70 transition-colors hover:bg-ink/10"
+                  data-radius="round"
+                  className="grid h-11 w-11 place-items-center border-2 border-hairline-strong text-ink-dim transition-colors hover:border-ink hover:text-ink"
                 >
                   <CloseIcon size={16} />
                 </button>
@@ -94,14 +95,14 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
               </div>
             </header>
 
-            <div className="thin-scroll flex-1 overflow-y-auto px-5 py-4">
+            <div className="thin-scroll flex-1 overflow-y-auto px-5 py-4" data-lenis-prevent>
               {ORDER.map((cat) => {
                 const concepts = CONCEPTS.filter((c) => c.category === cat);
                 const meta = CATEGORY_META[cat];
                 return (
                   <div key={cat} className="mb-5 last:mb-0">
                     <div className="mb-2 flex items-center gap-2">
-                      <span className="h-3 w-3 rounded-[2px]" style={{ background: "var(--color-secondary)" }} />
+                      <span className="h-3 w-3" style={{ background: "var(--color-secondary)" }} />
                       <span className="eyebrow text-secondary">{meta.label}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -121,13 +122,12 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
               })}
             </div>
 
-            <footer className="border-t-2 border-ink/10 px-5 py-3">
-              <NeonButton variant="ghost" size="sm" onClick={onClose}>
+            <footer className="border-t-2 border-hairline px-5 py-3">
+              <LedgerButton variant="ghost" size="sm" onClick={onClose}>
                 Close
-              </NeonButton>
+              </LedgerButton>
             </footer>
-          </motion.section>
-        </motion.div>
+        </LedgerDialog>
       )}
     </AnimatePresence>
   );
@@ -152,10 +152,11 @@ function ConceptNode({
     <button
       type="button"
       onClick={onToggle}
-      className={`rounded-[4px] border px-3 py-2 text-left transition-all ${
+      data-radius=""
+      className={`border px-3 py-2 text-left transition-all ${
         locked
-          ? "border-ink/10 opacity-55"
-          : "border-ink/20 hover:border-ink/50 hover:bg-ink/[0.03]"
+          ? "border-hairline opacity-55"
+          : "border-hairline-strong hover:border-ink hover:bg-ink/[0.03]"
       } ${expanded ? "col-span-2 bg-ink/[0.04] sm:col-span-3" : ""}`}
       style={state === "mastering" ? { borderColor: "var(--color-secondary)" } : undefined}
     >
@@ -168,7 +169,7 @@ function ConceptNode({
           {Array.from({ length: MAX_MASTERY_LEVEL }).map((_, i) => (
             <span
               key={i}
-              className="h-1.5 flex-1 rounded-full"
+              className="h-1.5 flex-1"
               style={{ background: "var(--color-gain)", opacity: i < level ? 1 : 0.14 }}
             />
           ))}

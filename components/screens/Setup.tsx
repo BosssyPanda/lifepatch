@@ -4,11 +4,14 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { CheckIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
+import { NameField, playerName } from "@/components/ui/NameField";
 import { useAudio } from "@/hooks/useAudio";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { currency } from "@/lib/format";
 import { MODES, type ModeId } from "@/lib/modes";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { useSpotlightHandler } from "@/src/motion/useSpotlight";
 import { SPRING, STAGGER } from "@/src/motion/tokens";
 
 export function Setup({
@@ -21,6 +24,8 @@ export function Setup({
   onBack: () => void;
 }) {
   const audio = useAudio();
+  const { reduced } = useMotionCtx();
+  const onSpot = useSpotlightHandler<HTMLButtonElement>();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string>(BACKGROUNDS[0].id);
 
@@ -31,16 +36,7 @@ export function Setup({
         <h1 className="display-caps mt-3 text-4xl text-ink sm:text-5xl">Who do you become?</h1>
       </motion.div>
 
-      <div className="mx-auto mt-7 w-full max-w-sm">
-        <label htmlFor="name" className="eyebrow text-ink-dim">Your name</label>
-        <input
-          id="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Type a name"
-          className="mt-1.5 w-full rounded-[4px] border border-ink/20 bg-bg2 px-3 py-2.5 font-body text-ink outline-none focus:border-ink placeholder:text-ink-dim/60"
-        />
-      </div>
+      <NameField value={name} onChange={setName} className="mx-auto mt-7 w-full max-w-sm" />
 
       <div className="mt-8 grid gap-4 sm:grid-cols-3">
         {BACKGROUNDS.map((b, i) => {
@@ -53,13 +49,17 @@ export function Setup({
               initial={{ opacity: 0, y: 24, rotate: i % 2 ? 1 : -1 }}
               animate={{ opacity: active ? 1 : picked ? 0.5 : 1, y: 0, rotate: active ? 0 : i % 2 ? 1 : -1, scale: active ? 1.03 : 1 }}
               transition={{ ...SPRING.pop, delay: i * STAGGER.base }}
-              whileHover={{ y: -5 }}
-              className={`paper relative overflow-hidden rounded-[5px] p-5 text-left ${active ? "ring-2 ring-ink ring-offset-2 ring-offset-bg" : ""}`}
+              whileHover={reduced ? undefined : { y: -5 }}
+              data-radius=""
+              // `ring-*` is box-shadow, which the LEDGER reset kills — a real inset outline.
+              style={active ? { outline: "2px solid var(--color-ink)", outlineOffset: "-2px" } : undefined}
+              onPointerMove={onSpot}
+              className="paper spotlight relative overflow-hidden p-5 text-left"
             >
               {active && (
                 <>
                   <span className="pointer-events-none absolute inset-0 z-[1] bg-ink/15" />
-                  <span className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full border-2 border-bg bg-ink text-bg">
+                  <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center border-2 border-bg bg-ink text-bg">
                     <CheckIcon size={15} />
                   </span>
                 </>
@@ -84,7 +84,7 @@ export function Setup({
 
       <div className="mt-9 flex items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back</NeonButton>
-        <NeonButton variant="primary" size="lg" onClick={() => { audio.sfx("confirm"); onStart(picked, name); }}>
+        <NeonButton variant="primary" size="lg" onClick={() => { audio.sfx("confirm"); onStart(picked, playerName(name)); }}>
           Start your life →
         </NeonButton>
       </div>

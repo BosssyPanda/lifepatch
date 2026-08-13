@@ -1,7 +1,8 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { assetReturn, macroEvent, sp500Return } from "@/lib/markets";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 
 /**
  * Title attract ticker (Addendum A §6 / §13 #3). A hairline-bounded mono marquee
@@ -66,7 +67,7 @@ function Row() {
 }
 
 export function TitleTicker({ className = "" }: { className?: string }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
 
   return (
     <div

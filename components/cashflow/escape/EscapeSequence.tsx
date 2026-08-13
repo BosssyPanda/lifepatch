@@ -1,18 +1,19 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { FreedomIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
 import { useAudio } from "@/hooks/useAudio";
 import { passiveIncome, totalExpenses } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import type { CashflowState } from "@/lib/cashflow/types";
 
 export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => void }) {
   const audio = useAudio();
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
 
   useEffect(() => {
     audio.accent("stampGood");

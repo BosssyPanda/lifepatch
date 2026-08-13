@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { useEffect, type ReactNode } from "react";
 import { useAudio } from "@/hooks/useAudio";
 import { useCashflow } from "@/hooks/useCashflow";
@@ -14,6 +14,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromCashflow, submitRunOnce } from "@/lib/cloud/buildResult";
 
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 
 /**
@@ -58,7 +59,7 @@ export function CashflowShell({
   const cf = useCashflow();
   const auth = useAuth();
   const audio = useAudio();
-  const reduce = !!useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const s = cf.state;
 
   const view: "setup" | "play" | "escape" | "report" = !s

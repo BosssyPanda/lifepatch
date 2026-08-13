@@ -1,8 +1,9 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { TileIcon } from "./TileIcon";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR } from "@/src/motion/tokens";
 
 export type BoardSquareView = { index: number; type: string };
@@ -83,7 +84,7 @@ export function Board({
   paydayFlash?: number;
   children?: ReactNode;
 }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const size = squares.length;
   const pad = 6;
   const pts = useMemo(() => perimeterPoints(size, pad), [size]);

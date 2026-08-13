@@ -1,7 +1,8 @@
 "use client";
 
-import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR } from "@/src/motion/tokens";
 
 // ── pip layout (3×3 grid coordinates [col,row]) ──────────────────────────────
@@ -146,7 +147,7 @@ function Burst() {
 }
 
 function Die({ value, rolling, index }: { value: number; rolling: boolean; index: number }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const acc = useRef({ x: -22, y: 26 });
   const wasRolling = useRef(false);
   const [rot, setRot] = useState(acc.current);

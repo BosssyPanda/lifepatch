@@ -1,10 +1,11 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import type { AssetDef } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import type { AssetId } from "@/lib/markets";
 
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
 
 type Mix = Partial<Record<AssetId, number>>;
@@ -101,7 +102,7 @@ export function PortfolioPresets({
   cash: number;
   onApply: (orders: Array<[AssetId, number]>) => void;
 }) {
-  const reduce = useReducedMotion();
+  const { reduced: reduce } = useMotionCtx();
   const availableIds = new Set(availableAssets.map((a) => a.id));
   const canInvest = cash > 0;
 

@@ -6,7 +6,8 @@ import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { ShareCard } from "@/components/share/ShareCard";
 import { useShareUrl } from "@/components/share/useShareUrl";
 import { BrainIcon, CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
-import { NeonButton } from "@/components/ui/NeonButton";
+import { NeonButton } from "@/components/ui/LedgerButton";
+import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
@@ -28,30 +29,6 @@ const REASON: Record<string, { label: string; Icon: typeof TrophyIcon }> = {
   quit: { label: "You walked away", Icon: TrophyIcon },
   died: { label: "Your number came up", Icon: SkullIcon },
 };
-
-/** A ledger section header — eyebrow with a dotted rule running to the margin. */
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <div className="mb-1.5 mt-7 flex items-center gap-2">
-      <span aria-hidden className="h-2 w-[2px]" style={{ background: "var(--color-secondary)" }} />
-      <span className="eyebrow text-secondary" style={{ fontSize: "0.6rem", letterSpacing: "0.2em" }}>
-        {children}
-      </span>
-      <span className="rule-dotted h-px flex-1" />
-    </div>
-  );
-}
-
-/** A statement line: label — dot leader — figure. The printed-statement primitive. */
-function LedgerRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="flex items-baseline gap-2.5 py-[3px]">
-      <span className={strong ? "display-caps text-[0.82rem] text-ink" : "text-[0.84rem] text-ink/80"}>{label}</span>
-      <span className="rule-dotted h-px flex-1" />
-      <span className={`num ${strong ? "text-[1.05rem] font-bold text-ink" : "text-[0.9rem] text-ink"}`}>{value}</span>
-    </div>
-  );
-}
 
 function PortfolioBreakdown({ run }: { run: RunState }) {
   const total = portfolioValue(run) + run.cash;

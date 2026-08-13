@@ -31,7 +31,7 @@ export type ShareCardData = {
 const BG = "#0e0e0c";
 const INK = "#f2f1ea";
 const DIM = "#8f8e85";
-const HAIR = "#2a2a25";
+const HAIR = "#4a4943";
 const GAIN = "#2bd576";
 const LOSS = "#ff3b30";
 
@@ -170,7 +170,7 @@ export async function drawShareCard(format: ShareFormat, data: ShareCardData): P
       const lw = ctx.measureText(val).width;
       ctx.textAlign = "left";
       const lx = left + ctx.measureText(labU).width + 20;
-      ctx.strokeStyle = "#3a3a33";
+      ctx.strokeStyle = "#54534a";
       ctx.setLineDash([2, 8]);
       ctx.lineWidth = 2;
       ctx.beginPath();
