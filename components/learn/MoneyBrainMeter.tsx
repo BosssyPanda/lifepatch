@@ -30,13 +30,13 @@ export function MoneyBrainMeter({
       )}
       {/* currentColor track → works on both the paper map and the dark reports. */}
       <div
-        className="relative h-2.5 w-full overflow-hidden rounded-full"
+        className="relative h-2.5 w-full overflow-hidden"
         style={{ background: "color-mix(in srgb, currentColor 14%, transparent)" }}
       >
         {/* fixed-size track + scaling fill: `transition-[width]` was a layout tween.
             `scaleX` from the left edge is the same picture, on the compositor. */}
         <div
-          className="h-full w-full origin-left rounded-full bg-ink transition-transform duration-700 ease-out"
+          className="h-full w-full origin-left bg-ink transition-transform duration-700 ease-out"
           style={{ transform: `scaleX(${pct / 100})` }}
         />
         {/* faint quarter-marks so progress reads against milestones */}

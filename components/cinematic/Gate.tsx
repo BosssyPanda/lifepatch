@@ -192,7 +192,7 @@ export function Gate({
           {!reduce && (
             <span className="flex gap-1">
               {[0, 0.2, 0.4].map((d, i) => (
-                <motion.span key={i} className="h-1 w-1 rounded-full bg-ink/70"
+                <motion.span key={i} data-radius="round" className="h-1 w-1 bg-ink/70"
                   animate={{ opacity: [0.25, 1, 0.25] }} transition={{ duration: 1.4, repeat: Infinity, delay: d }} />
               ))}
             </span>
