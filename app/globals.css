@@ -219,8 +219,11 @@ body {
   outline-offset: 2px;
 }
 
-/* A running ceremony (outro recap film) owns the screen — game toasts wait. */
-body[data-ceremony] .concept-toast {
+/* A composed screen owns the display — game toasts wait. The recap film sets
+   data-ceremony; the printed statement sets data-statement (its masthead sits exactly where
+   the toast anchors, and it already prints every concept the run sharpened). */
+body[data-ceremony] .concept-toast,
+body[data-statement] .concept-toast {
   display: none;
 }
 

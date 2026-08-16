@@ -85,6 +85,16 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
   useEffect(() => {
     setBrainGlow(moneyBrainPct(mastery) / 100);
   }, [mastery, setBrainGlow]);
+
+  // The statement owns the screen. A concept chip fired by the run's last event was still
+  // in the queue when the recap settled, and the toast is anchored at top-24 to clear the
+  // in-run HUD — which this screen does not have, so it landed squarely on the masthead and
+  // covered the player's name. It is redundant here anyway: the report prints every concept
+  // the run sharpened, a few sections down.
+  useEffect(() => {
+    document.body.dataset.statement = "1";
+    return () => { delete document.body.dataset.statement; };
+  }, []);
   const reason = REASON[run.endReason ?? "quit"];
   const Icon = reason.Icon;
   const klass = deriveVerdict(run);
