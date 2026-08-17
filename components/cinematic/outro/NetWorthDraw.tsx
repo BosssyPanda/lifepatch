@@ -35,7 +35,7 @@ export function NetWorthDraw({ values, draw, reduced, tall = false }: { values: 
           <polyline
             points={pts.join(" ")}
             fill="none"
-            stroke={up ? "#2bd576" : "#ff3b30"}
+            stroke={up ? "var(--color-gain)" : "var(--color-loss)"}
             strokeWidth={tall ? 1.6 : 0.9}
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
