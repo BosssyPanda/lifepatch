@@ -12,10 +12,11 @@ import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEvent, Outcome } from "@/lib/lifeEvents";
 import { buzz, BUZZ } from "@/src/motion/haptics";
 import { juiceTier } from "@/src/motion/juice";
-import { DUR, EASE, HITSTOP, STAGGER } from "@/src/motion/tokens";
+import { DUR, EASE, HITSTOP } from "@/src/motion/tokens";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { beatFor } from "./consequenceBeats";
+import { buildRows, LedgerRows, TONE_VAR } from "./consequenceRows";
 
 /**
  * The Phase-2 flagship "consequence beat" — a full-screen ceremony that makes a
@@ -63,22 +64,6 @@ const ROW_PRINT_MS = 140;
 const ROWS_TAIL_MS = 260;
 
 type Phase = "stamp" | "hold" | "count" | "land" | "rows" | "done";
-type RowTone = "loss" | "gain" | "muted";
-type Row = { label: string; value: string; tone: RowTone; strong?: boolean; rule?: boolean };
-
-const TONE_VAR: Record<RowTone, string> = {
-  loss: "var(--color-loss)",
-  gain: "var(--color-gain)",
-  muted: "var(--color-secondary)",
-};
-
-function signedMoney(n: number): string {
-  const s = n < 0 ? "−" : n > 0 ? "+" : "";
-  return `${s}${currency(Math.abs(n))}`;
-}
-function signedInt(n: number): string {
-  return `${n < 0 ? "−" : "+"}${Math.abs(Math.round(n))}`;
-}
 
 export function ConsequenceBeat({
   event,
@@ -128,19 +113,7 @@ export function ConsequenceBeat({
   const applied = outcome.tone === "good";
 
   // ---- ledger rows (derivation first, then secondary effects) ---------------
-  const rows: Row[] = [];
-  const d = beat?.derivation;
-  const reconciled = !!d && Math.abs(cash) === d.monthly * d.months;
-  if (d && reconciled) {
-    rows.push({ label: d.unitLabel, value: `${cash < 0 ? "−" : "+"}${currency(d.monthly)} / mo`, tone: cash < 0 ? "loss" : "gain" });
-    rows.push({ label: "×", value: `${d.months} ${d.periodLabel}`, tone: "muted" });
-    rows.push({ label: d.totalLabel, value: signedMoney(cash), tone: cash < 0 ? "loss" : "gain", strong: true, rule: true });
-  }
-  if (effect.debt) rows.push({ label: "Debt", value: signedMoney(effect.debt), tone: effect.debt > 0 ? "loss" : "gain" });
-  if (effect.salaryTo !== undefined) rows.push({ label: "Salary", value: `→ ${currency(effect.salaryTo)}`, tone: "muted" });
-  if (effect.salaryPct) rows.push({ label: "Pay", value: `${effect.salaryPct > 0 ? "+" : "−"}${Math.abs(effect.salaryPct)}%`, tone: effect.salaryPct > 0 ? "gain" : "loss" });
-  if (effect.health) rows.push({ label: "Health", value: signedInt(effect.health), tone: effect.health > 0 ? "gain" : "loss" });
-  if (effect.happiness) rows.push({ label: "Mood", value: signedInt(effect.happiness), tone: effect.happiness > 0 ? "gain" : "loss" });
+  const rows = buildRows(effect, cash, beat);
 
   // ---- state machine --------------------------------------------------------
   const [phase, setPhase] = useState<Phase>(reduced ? "done" : "stamp");
@@ -451,31 +424,7 @@ export function ConsequenceBeat({
         </motion.p>
 
         {/* ledger rows print in */}
-        <div className="mt-6 max-w-lg">
-          {rows.map((r, i) => (
-            <motion.div
-              key={`${r.label}-${i}`}
-              className={`flex items-baseline gap-2 py-1.5 ${r.rule ? "mt-1 border-t border-hairline pt-2.5" : ""}`}
-              initial={reduced ? undefined : { opacity: 0, clipPath: "inset(0 0 100% 0)" }}
-              animate={showRows ? { opacity: 1, clipPath: "inset(0 0 0% 0)" } : { opacity: 0, clipPath: "inset(0 0 100% 0)" }}
-              transition={{ duration: DUR.fast, ease: EASE, delay: showRows && !reduced ? i * STAGGER.loose : 0 }}
-            >
-              <span
-                className={r.strong ? "display-caps text-ink" : "eyebrow text-secondary"}
-                style={{ fontSize: r.strong ? "0.72rem" : "0.62rem", letterSpacing: r.strong ? "0.08em" : "0.14em" }}
-              >
-                {r.label}
-              </span>
-              <span className="mt-1 flex-1 rule-dotted" />
-              <span
-                className="num"
-                style={{ fontSize: r.strong ? "0.92rem" : "0.76rem", color: TONE_VAR[r.tone] }}
-              >
-                {r.value}
-              </span>
-            </motion.div>
-          ))}
-        </div>
+        <LedgerRows rows={rows} show={showRows} reduced={reduced} />
 
         {/* the concept this outcome teaches — the "why", named and (if applied) banked */}
         {learnedConcept && (

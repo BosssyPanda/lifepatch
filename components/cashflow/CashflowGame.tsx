@@ -1,11 +1,9 @@
 "use client";
 
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
-import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { BankIcon, BrainIcon, FreedomIcon, InfoIcon } from "@/components/icons";
+import { BrainIcon, FreedomIcon, InfoIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
-import { TerminalOp } from "@/components/ui/TerminalOp";
 import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
@@ -16,35 +14,8 @@ import { HudRail } from "@/components/ui/HudRail";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { EASE } from "@/src/motion/tokens";
 
-// WebGL board is loaded only inside the cashflow shell (never the landing bundle).
-// It self-falls-back to the flat 2D <Board> when WebGL is unavailable.
-const Board3D = dynamic(() => import("@/components/cashflow/board/Board3D").then((m) => m.Board3D), {
-  ssr: false,
-  // A bare empty box read as "the board area is broken" on first load — a hairline
-  // frame + terminal caret, same grammar as AppShell's screen fallback.
-  loading: () => (
-    <div className="mx-auto grid aspect-square w-full max-w-[560px] place-items-center border border-hairline bg-bg2">
-      <TerminalOp label="Setting the board" center />
-    </div>
-  ),
-});
-
-// Physics roll overlay (Addendum §13 #10) — three/R3F/Rapier stay out of every
-// bundle until the first roll on this screen. Falls back to the classic timed
-// roll when WebGL is unavailable or reduced motion is on.
-const DiceRollOverlay = dynamic(() => import("@/components/cashflow/board/DiceRollOverlay"), { ssr: false });
-
-let webglProbe: boolean | null = null;
-function hasWebGL(): boolean {
-  if (webglProbe !== null) return webglProbe;
-  try {
-    const c = document.createElement("canvas");
-    webglProbe = !!(c.getContext("webgl2") || c.getContext("webgl"));
-  } catch {
-    webglProbe = false;
-  }
-  return webglProbe;
-}
+import { Board3D, DiceRollOverlay, hasWebGL } from "@/components/cashflow/board/lazy";
+import { FtDealCard, FtDreamCard, FtSimpleCard } from "@/components/cashflow/cards/FastTrackCards";
 import { DealCard, DealChooser } from "@/components/cashflow/cards/DealCard";
 import { BabyCard, CharityCard, DoodadCard, DownsizedCard, MarketCardView } from "@/components/cashflow/cards/EventCards";
 import { CoachCard, GlossaryModal, QuizCard, Tutorial } from "@/components/cashflow/learn/Learn";
@@ -629,85 +600,6 @@ export function CashflowGame({
           </Modal>
         )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-// ── small fast-track modal cards (local) ──
-function FtSimpleCard({ title, body, action, tone, onOk }: { title: string; body: string; action: string; tone?: "bad"; onOk: () => void }) {
-  return (
-    <div className="panel">
-      <h3 className={`display-caps text-xl ${tone === "bad" ? "text-loss" : "text-ink"}`}>{title}</h3>
-      <p className="mt-2 font-body text-[0.9rem] text-ink/80">{body}</p>
-      <div className="mt-4 flex justify-end">
-        <NeonButton variant="paper" size="md" onClick={onOk}>
-          {action}
-        </NeonButton>
-      </div>
-    </div>
-  );
-}
-
-function FtDealCard({ deal, cash, onBuy, onPass }: { deal: FastTrackDeal; cash: number; onBuy: () => void; onPass: () => void }) {
-  const afford = cash >= deal.price;
-  return (
-    <div className="panel">
-      <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center bg-secondary text-bg">
-          <BankIcon size={22} />
-        </span>
-        <div>
-          <p className="eyebrow text-secondary" style={{ fontSize: "0.58rem" }}>
-            Fast Track investment
-          </p>
-          <h3 className="display-caps text-xl text-ink">{deal.label}</h3>
-        </div>
-      </div>
-      <p className="mt-2 voice text-[0.86rem] text-ink/65">{deal.flavor}</p>
-      <div className="mt-3 flex items-center justify-between bg-bg2 px-3 py-2">
-        <span className="font-body text-[0.84rem] text-ink/70">Price (cash)</span>
-        <span className="num font-semibold text-ink">{currency(deal.price)}</span>
-      </div>
-      <div className="mt-1 flex items-center justify-between bg-gain/15 px-3 py-2">
-        <span className="font-body text-[0.84rem] text-ink/70">Adds monthly cash flow</span>
-        <span className="num font-bold text-gain">+{currency(deal.cashFlow)}</span>
-      </div>
-      {!afford && <p className="mt-3 font-body text-[0.82rem] text-loss">Not enough cash. Land on Cash Flow Days to build up, then return.</p>}
-      <div className="mt-4 flex items-center justify-end gap-2">
-        <NeonButton variant="outline" size="sm" onClick={onPass}>
-          Pass
-        </NeonButton>
-        <NeonButton variant="paper" size="md" disabled={!afford} onClick={onBuy}>
-          Buy · {currency(deal.price)}
-        </NeonButton>
-      </div>
-    </div>
-  );
-}
-
-function FtDreamCard({ s, onBuy, onPass }: { s: CashflowState; onBuy: () => void; onPass: () => void }) {
-  const dream = getDream(s.dreamId);
-  const afford = s.cash >= dream.cost;
-  return (
-    <div className="panel">
-      <p className="eyebrow text-ink" style={{ fontSize: "0.6rem" }}>
-        Your Dream
-      </p>
-      <h3 className="display-caps mt-1 text-2xl text-ink">{dream.title}</h3>
-      <p className="mt-1 font-body text-[0.9rem] text-ink/80">{dream.blurb}</p>
-      <div className="mt-3 flex items-center justify-between bg-bg2 px-3 py-2">
-        <span className="font-body text-[0.84rem] text-ink/70">Cost</span>
-        <span className="num text-lg font-bold text-ink">{currency(dream.cost)}</span>
-      </div>
-      {!afford && <p className="mt-3 font-body text-[0.82rem] text-loss">You have {currency(s.cash)}. Keep building cash flow and come back to claim it.</p>}
-      <div className="mt-4 flex items-center justify-end gap-2">
-        <NeonButton variant="outline" size="sm" onClick={onPass}>
-          Not yet
-        </NeonButton>
-        <NeonButton variant="paper" size="md" disabled={!afford} onClick={onBuy}>
-          Claim my dream
-        </NeonButton>
-      </div>
     </div>
   );
 }

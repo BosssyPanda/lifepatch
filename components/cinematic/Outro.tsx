@@ -2,7 +2,6 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { NeonButton } from "@/components/ui/LedgerButton";
 import { useAudio } from "@/hooks/useAudio";
 import { ACCENT_PREROLL_MS, useBeatClock } from "@/hooks/useBeatClock";
 import { currency } from "@/lib/format";
@@ -10,10 +9,9 @@ import { macroEvent, sp500Return } from "@/lib/markets";
 import { netWorth, type RunState, type YearRecord } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { RECAP_SCENES, YEARS_FLIP_MS, YEARS_HOLD_MS, YEARS_MIN_MS } from "@/lib/cinematic";
-import { MS_PER_BEAT } from "@/src/audio/tempo";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
-import { DUR, EASE, STAGGER } from "@/src/motion/tokens";
+import { DUR, EASE } from "@/src/motion/tokens";
 import { buzz, BUZZ } from "@/src/motion/haptics";
 import { NumberTicker } from "@/components/cinematic/landing/NumberTicker";
 import { MuteButton, SkipButton } from "./Controls";
@@ -21,7 +19,10 @@ import { MoneyFall } from "./MoneyFall";
 import { SplitFlap } from "./SplitFlap";
 import { AshFall } from "./film/AshFall";
 import { FilmLayer } from "./film/FilmLayer";
-import { YearFlap } from "./film/YearFlap";
+import { NetWorthDraw } from "./outro/NetWorthDraw";
+import { ReceiptScene } from "./outro/ReceiptScene";
+import { SceneFrame } from "./outro/SceneFrame";
+import { YearsScene } from "./outro/YearsScene";
 
 /**
  * Run-end recap film (CINEMA Phase Q). Five skippable scenes that SETTLE into
@@ -52,9 +53,6 @@ function yearsSceneMs(hist: YearRecord[], milestones: Map<number, string>): numb
   const raw = hist.reduce((t, h) => t + (milestones.has(h.year) ? YEARS_HOLD_MS + YEARS_FLIP_MS : YEARS_FLIP_MS), 0);
   return Math.max(YEARS_MIN_MS, Math.min(sceneMs("years"), raw));
 }
-
-/** The digit cadence's grid unit — one 16th of the score's beat. */
-const SIXTEENTH_MS = MS_PER_BEAT / 4;
 
 export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
   const audio = useAudio();
@@ -308,89 +306,19 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
 
         {/* ---------------- Settled receipt (the original outro frame) ---------------- */}
         {scene === "receipt" && (
-          <motion.div
+          <ReceiptScene
             key="receipt"
-            initial={reduced ? false : { scale: 1.045, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: DUR.slow, ease: EASE }}
-            className="relative flex min-h-[100svh] w-full flex-col px-5 py-10 sm:px-10"
-          >
-            {/* top rail */}
-            <div className="flex items-center justify-between border-b border-hairline pb-3">
-              <div className="flex items-center gap-2.5">
-                <span className="eyebrow text-loss" style={{ letterSpacing: "0.24em" }}>● Run Closed</span>
-                <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem" }}>{firstYear}–{lastYear}</span>
-              </div>
-              <span className="num text-secondary" style={{ fontSize: "0.7rem" }}>STATEMENT NO. {run.mode}-{run.seed}</span>
-            </div>
-
-            <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center py-8">
-              <p className="display-caps text-2xl text-ink sm:text-3xl">The life of {run.name}</p>
-
-              {/* statement rows print in on settle */}
-              <motion.div
-                className="mt-6"
-                variants={{ show: { transition: { staggerChildren: reduced ? 0 : STAGGER.loose } } }}
-                initial={reduced ? "show" : "hide"}
-                animate="show"
-              >
-                {receiptRows(run, nw, worst, hist).map((r) => (
-                  <motion.div
-                    key={r.label}
-                    variants={{ hide: { opacity: 0, clipPath: "inset(0 0 100% 0)" }, show: { opacity: 1, clipPath: "inset(0 0 0% 0)" } }}
-                    transition={{ duration: DUR.fast, ease: EASE }}
-                    className={`flex items-baseline gap-2.5 py-1.5 ${r.strong ? "border-b border-hairline" : ""}`}
-                  >
-                    <span className={r.strong ? "display-caps text-[0.82rem] text-ink" : "text-[0.84rem] text-ink/80"}>{r.label}</span>
-                    <span className="rule-dotted h-px flex-1" />
-                    <span
-                      className={`num ${r.strong ? "text-[1.15rem] font-bold" : "text-[0.92rem]"}`}
-                      style={{ color: r.tone === "gain" ? "var(--color-gain)" : r.tone === "loss" ? "var(--color-loss)" : "var(--color-ink)" }}
-                    >
-                      {r.value}
-                    </span>
-                  </motion.div>
-                ))}
-              </motion.div>
-
-              {/* net-worth sparkline */}
-              {nwSeries.length > 1 && (
-                <div className="mt-6">
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem" }}>Net worth · year by year</span>
-                    <span className="rule-dotted h-px flex-1" />
-                  </div>
-                  <div className="border border-hairline bg-bg2 p-3">
-                    <NetWorthDraw values={nwSeries} draw reduced={reduced} />
-                  </div>
-                </div>
-              )}
-
-              {/* verdict — already flipped in scene 5; rest instantly here */}
-              <div className="mt-8 flex flex-col items-start">
-                <span className="eyebrow text-secondary" style={{ fontSize: "0.56rem" }}>Final verdict</span>
-                <div className="mt-2">
-                  <SplitFlap text={verdict.title} hex={verdict.hex} active reduced className="text-4xl sm:text-6xl" />
-                </div>
-                {hist.length > 0 && (
-                  <p className="num mt-3 text-[0.7rem] text-secondary" style={{ letterSpacing: "0.18em" }}>
-                    YEARS LIVED — <NumberTicker value={hist.length} durationMs={reduced ? 0 : 700} className="text-ink" />
-                  </p>
-                )}
-              </div>
-
-              {/* serif-italic voice line + continue */}
-              <motion.div
-                initial={reduced ? false : { opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: DUR.slow, ease: EASE, delay: reduced ? 0 : 0.4 }}
-                className="mt-6"
-              >
-                <p className="voice max-w-md text-[1.06rem] leading-snug text-ink/85">{verdict.blurb}</p>
-                <NeonButton variant="primary" size="lg" className="mt-6" onClick={finish}>See the full report →</NeonButton>
-              </motion.div>
-            </div>
-          </motion.div>
+            run={run}
+            nw={nw}
+            worst={worst}
+            hist={hist}
+            nwSeries={nwSeries}
+            verdict={verdict}
+            reduced={reduced}
+            firstYear={firstYear}
+            lastYear={lastYear}
+            onFinish={finish}
+          />
         )}
       </AnimatePresence>
 
@@ -410,149 +338,6 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
 
       <div className="absolute right-4 top-4 z-40"><MuteButton muted={audio.muted} onToggle={() => audio.setMuted(!audio.muted)} /></div>
       <div className="absolute bottom-6 right-4 z-40"><SkipButton onSkip={settled ? finish : skipToEnd} /></div>
-    </div>
-  );
-}
-
-/** Full-bleed centered scene shell with a mono eyebrow up top. */
-function SceneFrame({ eyebrow, children }: { eyebrow: string; children: React.ReactNode }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: DUR.instant }}
-      className="absolute inset-0 z-10 flex flex-col items-center justify-center px-5"
-    >
-      {eyebrow && (
-        <span className="eyebrow absolute top-8 left-1/2 -translate-x-1/2 text-ink-dim" style={{ fontSize: "0.6rem", letterSpacing: "0.3em" }}>
-          {eyebrow.toUpperCase()}
-        </span>
-      )}
-      {children}
-    </motion.div>
-  );
-}
-
-/** Scene 2 — the giant year counter: flips every lived year, holds on milestones. */
-function YearsScene({ hist, milestones, totalMs }: { hist: YearRecord[]; milestones: Map<number, string>; totalMs: number }) {
-  const [idx, setIdx] = useState(0);
-  const timers = useRef<number[]>([]);
-
-  useEffect(() => {
-    const holds = hist.map((h) => (milestones.has(h.year) ? YEARS_HOLD_MS + YEARS_FLIP_MS : YEARS_FLIP_MS));
-    const raw = holds.reduce((a, b) => a + b, 0) || 1;
-    const scale = totalMs / raw;
-    // The atoms are already 16ths (1 per year, 4 on a milestone), so an
-    // unscaled replay is on the grid for free. When the scene has to stretch or
-    // squeeze to fit its slot, snap the CUMULATIVE offset — never the step — so
-    // rounding can't accumulate into drift. Below one 16th per year the replay
-    // is a blur and quantizing it would only cost years their own frame, so
-    // that path keeps the plain scaled ladder.
-    const onGrid = YEARS_FLIP_MS * scale >= SIXTEENTH_MS;
-    let acc = 0;
-    let prev = 0;
-    hist.forEach((_, i) => {
-      if (i === 0) return;
-      acc += holds[i - 1] * scale;
-      const t = onGrid ? Math.round(acc / SIXTEENTH_MS) * SIXTEENTH_MS : acc;
-      prev = Math.max(prev + 1, t);
-      const idx = i;
-      timers.current.push(window.setTimeout(() => setIdx(idx), prev));
-    });
-    return () => { timers.current.forEach(clearTimeout); timers.current = []; };
-    // one-shot replay
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const h = hist[idx];
-  const caption = milestones.get(h.year);
-  const delta = h.portfolioDelta;
-
-  return (
-    <div className="flex flex-col items-center text-center">
-      <YearFlap value={h.year} reduced={false} className="text-[15vw] sm:text-[8rem]" />
-      <span
-        key={h.year}
-        className="num mt-5 text-lg sm:text-2xl"
-        style={{ color: delta >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}
-      >
-        {delta >= 0 ? "+" : "−"}{currency(Math.abs(delta))}
-      </span>
-      <div className="mt-3 flex min-h-[1.4rem] items-center justify-center">
-        <AnimatePresence mode="wait">
-          {caption && (
-            <motion.p
-              key={caption}
-              initial={{ opacity: 0, scale: 1.2 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.16 }}
-              className="eyebrow text-ink"
-              style={{ fontSize: "0.62rem", letterSpacing: "0.22em" }}
-            >
-              {caption}
-            </motion.p>
-          )}
-        </AnimatePresence>
-      </div>
-      <span className="num absolute right-6 top-8 text-[0.7rem] text-secondary" style={{ letterSpacing: "0.18em" }}>
-        AGE {h.age}
-      </span>
-    </div>
-  );
-}
-
-/** The receipt's statement rows — same data as the pre-film outro. */
-function receiptRows(run: RunState, nw: number, worst: YearRecord | undefined, hist: YearRecord[]) {
-  return [
-    { label: "Net worth", value: currency(nw), strong: true, tone: nw >= 0 ? ("gain" as const) : ("loss" as const) },
-    { label: "Final salary", value: `${currency(run.salary)}/yr`, tone: undefined, strong: false },
-    { label: "Debt", value: currency(run.debt), tone: run.debt > 0 ? ("loss" as const) : undefined, strong: false },
-    { label: "Biggest single hit", value: worst ? `−${currency(Math.abs(Math.min(0, worst.portfolioDelta)))}` : "—", tone: "loss" as const, strong: false },
-    { label: "Months survived", value: `${hist.length * 12}`, tone: undefined, strong: false },
-  ];
-}
-
-/**
- * Net-worth line that draws left-to-right; `tall` = the full-bleed scene-4 cut.
- * Drawn via a clip-path reveal (not framer pathLength — its dasharray trick
- * fragments the stroke under preserveAspectRatio="none").
- */
-function NetWorthDraw({ values, draw, reduced, tall = false }: { values: number[]; draw: boolean; reduced: boolean; tall?: boolean }) {
-  const min = Math.min(...values, 0);
-  const max = Math.max(...values, 1);
-  const range = max - min || 1;
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * 100;
-    const y = 28 - ((v - min) / range) * 26;
-    return `${x.toFixed(2)},${y.toFixed(2)}`;
-  });
-  const zeroY = 28 - ((0 - min) / range) * 26;
-  const up = values[values.length - 1] >= (values[0] ?? 0);
-  const shown = reduced || draw;
-  return (
-    <div className={`relative w-full ${tall ? "h-[46svh]" : "h-16"}`} aria-hidden>
-      <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-        <line x1="0" y1={zeroY} x2="100" y2={zeroY} stroke="var(--color-ink-dim)" strokeWidth="0.3" strokeDasharray="1 1" opacity="0.5" />
-      </svg>
-      <motion.div
-        className="absolute inset-0"
-        initial={reduced ? false : { clipPath: "inset(0 100% 0 0)" }}
-        animate={{ clipPath: shown ? "inset(0 0% 0 0)" : "inset(0 100% 0 0)" }}
-        transition={{ duration: reduced ? 0 : tall ? 1.6 : 0.9, ease: EASE }}
-      >
-        <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="h-full w-full">
-          <polyline
-            points={pts.join(" ")}
-            fill="none"
-            stroke={up ? "#2bd576" : "#ff3b30"}
-            strokeWidth={tall ? 1.6 : 0.9}
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        </svg>
-      </motion.div>
     </div>
   );
 }
