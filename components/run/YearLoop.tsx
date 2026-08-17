@@ -58,6 +58,9 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
 
   return (
     <div className="min-h-[100svh] w-full pb-4">
+      {/* The run screen's title. It has no visible headline — the year sits in the HUD as a
+          figure, not a heading — so the document's h1 is carried here for assistive tech. */}
+      <h1 className="sr-only">{s.name}&rsquo;s life — year {s.year - s.startYear + 1}, age {s.age}</h1>
       {/* Phase M2 chrome rail — relative year only (calendar years are end-report spoilers) */}
       <HudRail mode={MODES[s.mode].name} counter={`Year ${s.year - s.startYear + 1} — Age ${s.age}`} />
       <YearHud run={s} saving={run.saving} onOpenAlmanac={onOpenAlmanac} />

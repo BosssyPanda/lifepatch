@@ -44,7 +44,9 @@ export function PortfolioPanel({
   return (
     <section aria-label="Portfolio" className="mx-auto max-w-3xl px-5 py-4">
       <div className="flex items-center justify-between border-b border-hairline pb-2">
-        <h3 className="display-caps text-xl text-ink">Your money</h3>
+        {/* h2, not h3: this is a top-level section of the run screen, and the screen's h1
+            lives in YearLoop — an h3 here skips a level in the document outline. */}
+        <h2 className="display-caps text-xl text-ink">Your money</h2>
         <span className="num text-sm text-ink-dim">invested {currency(port)}</span>
       </div>
 

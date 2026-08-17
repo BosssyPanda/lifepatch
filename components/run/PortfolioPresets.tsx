@@ -118,7 +118,7 @@ export function PortfolioPresets({
     <div>
       <div className="flex items-baseline justify-between">
         <p className="eyebrow text-ink-dim">Start with a mix</p>
-        <p className="eyebrow text-ink-dim/70">low → high risk</p>
+        <p className="eyebrow text-tertiary">low → high risk</p>
       </div>
       <div className="mt-2 grid gap-2 sm:grid-cols-3">
         {PRESETS.map((preset, i) => (
@@ -146,7 +146,7 @@ export function PortfolioPresets({
               <span className="display-caps text-base" style={{ color: preset.tint }}>
                 {preset.label}
               </span>
-              <span className="eyebrow" style={{ color: `color-mix(in srgb, ${preset.tint} 80%, transparent)`, fontSize: "0.5rem" }}>
+              <span className="eyebrow" style={{ color: preset.tint, fontSize: "0.5rem" }}>
                 {preset.risk}
               </span>
             </span>
@@ -156,7 +156,7 @@ export function PortfolioPresets({
           </motion.button>
         ))}
       </div>
-      <p className="voice mt-2 text-xs text-ink-dim/80">
+      <p className="voice mt-2 text-xs text-tertiary">
         {canInvest
           ? <>One tap splits your {currency(cash)} across a starter mix. Fine-tune below.</>
           : "Invested. Sell something below to free up cash, or advance the year."}

@@ -81,6 +81,10 @@ export function RunTicker({ run }: { run: RunState }) {
     <div
       ref={hostRef}
       className="relative flex w-full items-center overflow-hidden border-b border-hairline bg-bg py-1.5"
+      // A bare aria-label on a generic div is ignored by ARIA (and flagged by axe). The row
+      // is one glanceable object whose text is duplicated to make the marquee loop, so it
+      // gets the same role="img" + label treatment as SplitFlap: announced once, not walked.
+      role="img"
       aria-label="Market history ticker"
     >
       {reduce ? (

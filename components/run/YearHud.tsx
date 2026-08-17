@@ -124,14 +124,16 @@ export function YearHud({
         >
           <InfoIcon size={14} /><span className="eyebrow" style={{ fontSize: "0.58rem" }}>Learn</span>
         </button>
-        <motion.span
-          animate={saving ? { opacity: [0.4, 1, 0.4] } : { opacity: 0.5 }}
-          transition={saving ? { duration: 1, repeat: Infinity } : {}}
-          className="hidden shrink-0 eyebrow text-secondary md:inline"
+        {/* This used to rest at opacity 0.5 over `text-secondary` (≈2.6:1, unreadable) and
+            pulse on an unguarded `repeat: Infinity`. The word already says which state it is
+            in, so the animation was carrying nothing the text wasn't — it is gone, and the
+            colour is the token meant for faint-but-legible. */}
+        <span
+          className="hidden shrink-0 eyebrow text-tertiary md:inline"
           style={{ fontSize: "0.56rem" }}
         >
-          {saving ? "Saving" : "Saved"}
-        </motion.span>
+          {saving ? "Saving…" : "Saved"}
+        </span>
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}

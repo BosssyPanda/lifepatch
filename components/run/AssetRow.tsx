@@ -118,7 +118,7 @@ export function AssetRow({
           </span>
         </div>
         <div className="mt-1 h-3.5">
-          <span className="eyebrow text-ink-dim/70" style={{ fontSize: "0.55rem" }}>
+          <span className="eyebrow text-tertiary" style={{ fontSize: "0.55rem" }}>
             {cash > 0 ? `${currency(cash)} cash free to allocate` : "fully invested"}
           </span>
         </div>

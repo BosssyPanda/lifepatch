@@ -16,7 +16,8 @@ function receiptRows(run: RunState, nw: number, worst: YearRecord | undefined, h
     { label: "Net worth", value: currency(nw), strong: true, tone: nw >= 0 ? ("gain" as const) : ("loss" as const) },
     { label: "Final salary", value: `${currency(run.salary)}/yr`, tone: undefined, strong: false },
     { label: "Debt", value: currency(run.debt), tone: run.debt > 0 ? ("loss" as const) : undefined, strong: false },
-    { label: "Biggest single hit", value: worst ? `−${currency(Math.abs(Math.min(0, worst.portfolioDelta)))}` : "—", tone: "loss" as const, strong: false },
+    // A run that never had a losing year has no biggest hit — printing "−$0" claims one.
+    { label: "Biggest single hit", value: worst && worst.portfolioDelta < 0 ? `−${currency(Math.abs(worst.portfolioDelta))}` : "—", tone: "loss" as const, strong: false },
     { label: "Months survived", value: `${hist.length * 12}`, tone: undefined, strong: false },
   ];
 }
@@ -66,7 +67,8 @@ export function ReceiptScene({
       </div>
 
       <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-center py-8">
-        <p className="display-caps text-2xl text-ink sm:text-3xl">The life of {run.name}</p>
+        {/* the receipt's own title, and the page's only h1 while the film owns the screen */}
+        <h1 className="display-caps text-2xl text-ink sm:text-3xl">The life of {run.name}</h1>
 
         {/* statement rows print in on settle */}
         <motion.div

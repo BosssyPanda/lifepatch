@@ -154,7 +154,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
         {/* verdict — a left-aligned ink stamp, blurb as a voice line */}
         <motion.div variants={item} className="mt-6">
           <div className="inline-block border-2 px-5 py-2.5" style={{ borderColor: klass.hex, color: klass.hex }}>
-            <p className="eyebrow" style={{ opacity: 0.7, fontSize: "0.56rem" }}>Final verdict</p>
+            <p className="eyebrow" style={{ fontSize: "0.56rem" }}>Final verdict</p>
             <p className="display-caps text-3xl sm:text-4xl">{klass.title}</p>
           </div>
           <p className="voice mt-3 max-w-lg text-[1.05rem] leading-snug text-ink/80">{klass.blurb}</p>
