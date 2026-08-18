@@ -9,26 +9,63 @@ grainy, or Oswald-set is legacy and must not come back.)
 Tokens live in `app/globals.css` (Tailwind v4 `@theme`). Reuse them and the utility classes —
 never hardcode hex outside the sanctioned palette, never invent fonts.
 
-## Palette (near-black ledger; ink dominates, red/green only carry meaning)
+## Palette (RISOGRAPH — warm near-black paper, one orange signature, red/green for money)
 
-- **Ground:** `--color-bg` `#0E0E0C`, `--color-bg2` `#131211`, `--color-bg3` `#191714`.
-- **Ink:** `--color-ink` `#F2F1EA`; dim `--color-ink-dim` / secondary `#8F8E85` (5.9:1 on bg);
-  tertiary `#818076` (4.9:1 on bg, 4.7:1 on bg2 — folio numbers, fine print). Tertiary is the
-  floor for anything that is *text*: it must clear 4.5:1 on whatever ground it sits on.
-- **Hairline:** `--color-hairline` `#4A4943` (2.1:1) — the default border color, for rules,
+**Amendment E, approved 2026-08-18 — the press.** The earlier contract read "nothing else
+gets color", and it was right about *outcomes* and wrong about *identity*. A document with no
+signature colour reads as a spreadsheet, and this one is played by teenagers. The ground, the
+flatness, the hairlines and the money pair are unchanged; what changes is that the ledger is
+now printed on a **risograph press** rather than a laser printer. That buys exactly two hues,
+each with a job and a ceiling:
+
+- **`--color-accent` `#FF5A1F` (safety orange) — identity and interaction, never an outcome.**
+  The primary CTA, the square you are standing on, the player's stamp, section numerals, the
+  focused/armed state of a control. It says *here*, *you*, *do this*. It never says good or
+  bad — an orange number is not a gain and an orange panel is not a warning.
+- **`--color-highlight` `#D8E04B` (acid chartreuse) — a reward, spent sparingly.** Streaks,
+  mastery ticks, a dream square, the moment a lesson lands. If more than one chartreuse thing
+  is on screen at once, one of them is wrong. It is never a *state* (nothing is "in
+  chartreuse"), only a punctuation mark on something already earned.
+
+Red and green are untouched and still mean only money. Orange and chartreuse are not a third
+and fourth money colour and must never be used to grade a number.
+
+- **Ground:** `--color-bg` `#131110` (warm near-black paper), `--color-bg2` `#1A1714`,
+  `--color-bg3` `#211D19`.
+- **Ink:** `--color-ink` `#F4F0E6` (16.5:1 on bg); dim `--color-ink-dim` / secondary `#9A968C`
+  (6.4:1 bg / 6.1:1 bg2 / 5.7:1 bg3); tertiary `#8F8B81` (5.5:1 bg / 5.3:1 bg2 / 4.9:1 bg3 —
+  folio numbers, tile indices, fine print). Tertiary is the floor for anything that is *text*:
+  it must clear 4.5:1 on whatever ground it sits on, and it now does on all three.
+- **Hairline:** `--color-hairline` `#4C4B47` (2.2:1) — the default border color, for rules,
   frames, plates, dot-leader scaffolding. Decorative separation, not a component boundary.
-- **Hairline strong:** `--color-hairline-strong` `#67665E` (3.3:1 on bg, 3.1:1 on bg3) — the
+- **Hairline strong:** `--color-hairline-strong` `#6B6964` (3.4:1 on bg, 3.1:1 on bg3) — the
   border color for anything a user can *operate*: buttons, inputs, selection cards, tabs,
-  dialog frames. WCAG 1.4.11 requires 3:1 for a UI component's visual boundary, so an
-  interactive edge never uses the base hairline.
-- **Dotted:** `--color-dotted` `#54534A` (2.5:1) — dot leaders only.
-- **Semantic accents (never decorative):** loss `--color-loss` `#FF3B30`, gain `--color-gain`
-  `#2BD576`. Red means losing money; green means making it. Nothing else gets color.
+  dialog frames, and the board's 2px tile keylines. WCAG 1.4.11 requires 3:1 for a UI
+  component's visual boundary, so an interactive edge never uses the base hairline.
+- **Dotted:** `--color-dotted` `#55544F` (2.5:1) — dot leaders only.
+- **Semantic accents (never decorative):** loss `--color-loss` `#FE4030` (5.4:1 on bg), gain
+  `--color-gain` `#2FCC71` (9.0:1 on bg). Red means losing money; green means making it.
+  (`#E23B2E` was proposed during the riso pass and rejected — it measured 4.39:1 and failed.)
+- **Knockout is paper, never ink.** Text or a glyph sitting *on* an accent / highlight / gain /
+  loss fill is painted `--color-bg`. Ink on orange measures **2.74:1 and fails**; paper on
+  orange is 6.04:1. There is no exception to this and no fill is ever tinted to make one.
+- **Colour is never the only channel.** Every gain or loss also carries its sign, the debt
+  warning also carries `▲`, and a board tile also carries a glyph and a word. Strip the hue
+  out of any screen and it must still be readable — that is the test, and it is not optional.
+- **Board tile coding (`--color-tile-*`).** The one place colour is used as a *category* rather
+  than a meaning. Each token aliases one of the above — DEAL → accent, PAYDAY → gain,
+  EXPENSE / MARKET / LAID OFF → loss, DREAM → highlight — plus one new value,
+  `--color-tile-life` `#A9B04E` (8.1:1 on bg), a chartreuse pulled down to a printable ink so a
+  whole ring of CHARITY/BABY squares cannot out-shout the accent.
 - **Verdicts are not a palette.** End-of-run verdicts (`lib/verdict.ts`) read as money or as
   ink, never as a mood color: "Financially Free" = gain green, "Underwater" = loss red, every
-  intermediate verdict = an ink-scale tier (`#F2F1EA` / `#C9C8BF` / `#8F8E85`, brighter = better).
-  The old warm-brown/olive/amber seal hexes are SPENT-era legacy and must not come back.
-- No cool blues/purples, no warm browns, no gradients as decoration — flat fields only.
+  intermediate verdict = an ink-scale tier (`#F4F0E6` / `#CBC6BA` / `#9A968C`, brighter = better).
+  Orange is *not* a verdict tier. The old warm-brown/olive/amber seal hexes are SPENT-era
+  legacy and must not come back.
+- No cool blues/purples, no warm browns, no second orange, no gradients as decoration — flat
+  fields only. Every value above is audited: `node scratchpad/palette-audit.js` re-runs all 28
+  contrast checks, and a palette change means all three of `app/globals.css` (`@theme`),
+  `lib/palette.ts` and this section, in the same commit.
 
 ## Typography (four fonts, one job each)
 
@@ -43,10 +80,11 @@ never hardcode hex outside the sanctioned palette, never invent fonts.
 
 ## Surfaces & bans (the LEDGER law)
 
-The default is still flat, square, and shadowless. Four narrow amendments (A–D, approved
-2026-08-13) buy back mainstream comfort without buying the generic "AI slop" look. Each is a
-*permission with a gate*, not a new default: if an element does not opt in explicitly, the
-global reset in `app/globals.css` still forces `border-radius: 0` and `box-shadow: none`.
+The default is still flat, square, and shadowless. Six narrow amendments (A–D approved
+2026-08-13, E in § Palette and F below approved 2026-08-18) buy back mainstream comfort
+without buying the generic "AI slop" look. Each is a *permission with a gate*, not a new
+default: if an element does not opt in explicitly, the global reset in `app/globals.css`
+still forces `border-radius: 0` and `box-shadow: none`.
 
 **A — Micro-radius on interactive controls.** `--radius-control` (`3px`) is allowed on
 elements a user operates: buttons, inputs, selection/choice cards, tabs, chips. True circles
@@ -72,7 +110,17 @@ that a sighted user cannot find is a bug, not a style.
 wash (`.spotlight`): white ink at 4–6% max, fading to transparent, opacity 0 until hover,
 `pointer-events: none`, driven by `--spot-x`/`--spot-y` from `src/motion/useSpotlight.ts`.
 Disabled for touch pointers and reduced motion. **This is the only sanctioned decorative
-gradient in the system** — it is interaction feedback, not ornament.
+*ramp* in the system** — it is interaction feedback, not ornament.
+
+**F — The halftone screen.** A print dot screen (`.halftone` in `app/globals.css`) may be laid
+over a flat fill at **≤8% ink** (≤16% when knocked out of an accent fill). It is two offset
+radial-gradients, not a raster and not a noise texture: a flat ink at a fixed alpha, screened
+on a 4px lattice, with no colour ramp and nothing to interpolate. It exists because a riso
+print has a screen and a laser print does not. Rules: it is always `pointer-events: none`, it
+**never animates** (a moving texture is the one thing on a printed page that cannot happen), it
+never carries information, and it is never applied to a text-bearing surface large enough to
+cost legibility. Today the board tiles are its only caller. The generic "grain overlay" is
+still banned — a grain layer is noise over the whole page; this is a screen on one fill.
 
 Still banned, inside and outside the amendments — these are what make generated UI look
 generated:
@@ -84,7 +132,7 @@ generated:
 - **Shimmer / border-beam / spotlight-border / marching-ants effects** and the whole shadcn
   "aceternity"-style effect kit. Skeletons load with a `TerminalOp` caret, not a sweep.
 - Radius on structural surfaces, shadows on resting surfaces, decorative gradients anywhere
-  except amendment D.
+  except amendments D and F. Full-page grain/noise overlays remain banned outside § Film.
 
 Everything else holds:
 

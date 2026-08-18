@@ -29,19 +29,38 @@ const FAST_PATTERN: FastSquareType[] = [
 export const FAST_BOARD: FastSquare[] = FAST_PATTERN.map((type, index) => ({ index, type }));
 export const FAST_SIZE = FAST_BOARD.length;
 
+/**
+ * What a square is called, in two registers.
+ *
+ * `short` is the word STAMPED ON THE TILE, and it is a plain English word on
+ * purpose: the ring used to read `$$$ · MKT · GIVE · FIRED`, which a fourteen-
+ * year-old opening the game for the first time cannot decode. A code is only
+ * worth its ambiguity when the space genuinely runs out, and at 390px it does
+ * not — `BoardView` sizes the chip type off the board, so the longest of these
+ * ("LAID OFF", set one word per line) fits the smallest tile the layout draws.
+ *
+ * `label` is the full name for prose: the hover/settle readout, the landing
+ * page's per-type tally, the run log's `landedOn`, and the `title` a tile
+ * exposes on hover. It is allowed to be longer and more specific than `short`
+ * ("Opportunity" for a DEAL square) — that is the point of having two.
+ *
+ * The Cashflow-101 term "doodad" is still taught, by the card and the glossary
+ * that exist to teach it. It just isn't the first thing a new player has to
+ * translate to understand the board.
+ */
 export const RAT_SQUARE_META: Record<RatSquareType, { label: string; short: string }> = {
   deal: { label: "Opportunity", short: "DEAL" },
-  doodad: { label: "Doodad", short: "$$$" },
-  charity: { label: "Charity", short: "GIVE" },
-  payday: { label: "Payday", short: "PAY" },
-  market: { label: "The Market", short: "MKT" },
+  doodad: { label: "Expense", short: "EXPENSE" },
+  charity: { label: "Charity", short: "CHARITY" },
+  payday: { label: "Payday", short: "PAYDAY" },
+  market: { label: "The Market", short: "MARKET" },
   baby: { label: "New Baby", short: "BABY" },
-  downsized: { label: "Downsized", short: "FIRED" },
+  downsized: { label: "Laid Off", short: "LAID OFF" },
 };
 
 export const FAST_SQUARE_META: Record<FastSquareType, { label: string; short: string }> = {
-  ftdeal: { label: "Investment", short: "BUY" },
-  cashflowday: { label: "Cash Flow Day", short: "PAY" },
+  ftdeal: { label: "Investment", short: "INVEST" },
+  cashflowday: { label: "Cash Flow Day", short: "PAYDAY" },
   dream: { label: "Your Dream", short: "DREAM" },
-  ftloss: { label: "Setback", short: "LOSS" },
+  ftloss: { label: "Setback", short: "SETBACK" },
 };

@@ -12,29 +12,44 @@
  * — so the two must be edited together. A palette change is: this file, the
  * `@theme` block in `app/globals.css`, and the palette section of `DESIGN.md`.
  * Nothing else should ever carry a literal hex.
+ *
+ * The board's `--color-tile-*` category tokens are deliberately NOT mirrored
+ * here: they are aliases of the values below (plus one muted chartreuse) and are
+ * only ever read by the DOM, which can read a custom property.
  */
 
 export const PALETTE = {
-  /** Background ramp — paper, framed panel, raised panel. */
-  bg: "#0e0e0c",
-  bg2: "#131211",
-  bg3: "#191714",
+  /** Background ramp — warm near-black paper, framed panel, raised panel. */
+  bg: "#131110",
+  bg2: "#1a1714",
+  bg3: "#211d19",
 
   /** Ink ramp — primary through faint. */
-  ink: "#f2f1ea",
+  ink: "#f4f0e6",
   inkBright: "#ffffff",
-  inkDim: "#8f8e85",
-  secondary: "#8f8e85",
-  tertiary: "#818076",
+  inkDim: "#9a968c",
+  secondary: "#9a968c",
+  tertiary: "#8f8b81",
 
   /** Structure. */
-  hairline: "#4a4943",
-  hairlineStrong: "#67665e",
-  dotted: "#54534a",
+  hairline: "#4c4b47",
+  hairlineStrong: "#6b6964",
+  dotted: "#55544f",
+
+  /**
+   * Identity + reward — never an outcome.
+   *
+   * `accent` is the signature safety orange: CTAs, the active square, the player
+   * stamp, section numerals. `highlight` is the acid chartreuse, spent sparingly
+   * on a reward. Anything knocked out of either fill is painted in `bg` (paper),
+   * never in `ink` — ink on accent measures 2.74:1 and fails.
+   */
+  accent: "#ff5a1f",
+  highlight: "#d8e04b",
 
   /** Money, and only money. */
-  gain: "#2bd576",
-  loss: "#ff3b30",
+  gain: "#2fcc71",
+  loss: "#fe4030",
 } as const;
 
 export type PaletteKey = keyof typeof PALETTE;
@@ -45,7 +60,7 @@ export type PaletteKey = keyof typeof PALETTE;
  * material. Deliberately dimmer than `PALETTE.hairline` — not drift.
  */
 export const CANVAS = {
-  hairline: "#2a2a25",
+  hairline: "#2c2a26",
 } as const;
 
 /**
@@ -55,6 +70,6 @@ export const CANVAS = {
  */
 export const INK_TIER = {
   high: PALETTE.ink,
-  mid: "#c9c8bf",
+  mid: "#cbc6ba", /* 11.05:1 on bg — the warm mid rung between ink and secondary */
   low: PALETTE.secondary,
 } as const;

@@ -133,9 +133,12 @@ export function Toast({ show, children }: { show: boolean; children: ReactNode }
           role="status"
           initial={{ opacity: 0, y: 24, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -16, scale: 0.95, transition: { duration: DUR.exitFast, ease: EASE } }}
+          exit={{ opacity: 0, y: 16, scale: 0.95, transition: { duration: DUR.exitFast, ease: EASE } }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
-          className="pointer-events-none fixed left-1/2 top-24 z-[90] -translate-x-1/2"
+          /* Bottom, not top: at top-24 this landed exactly on the board's first
+             tile row, so a concept earned by landing on a square covered the
+             square that taught it. */
+          className="pointer-events-none fixed bottom-6 left-1/2 z-[90] -translate-x-1/2"
         >
           {children}
         </motion.div>

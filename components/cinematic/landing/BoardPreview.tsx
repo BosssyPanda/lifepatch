@@ -74,14 +74,15 @@ export function BoardPreview() {
        announce itself to a screen reader roughly once a second, forever. */
     <div ref={wrapRef} aria-hidden>
       {/* `activeIndex` is the square you're READING, not the one the token is on —
-          in the run those are the same square, here they are not. Inverting the
-          chip under the token would hide the token (both are ink-filled) and cost
-          the walk its only legible cue. */}
+          in the run those are the same square, here they are not. Flooding the
+          chip under the token with accent would swallow the token's own keyline
+          and cost the walk its only legible cue. */}
       <BoardView
         squares={RAT_BOARD}
         tokenIndex={pos}
         activeIndex={hovered}
         labelFor={(t) => RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META]?.short ?? "?"}
+        describeFor={(t) => RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META]?.label ?? t}
         // "P" for Player — the glyph an unnamed run actually stamps on its token
         // (`engine.ts` defaults `playerName` to "Player"). Blank, the token is a
         // featureless ink square and reads as a chip that failed to render.

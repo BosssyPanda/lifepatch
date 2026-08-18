@@ -52,12 +52,17 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
   // The only ceremony in the app that couldn't be skipped — any tap/key now lands it.
   const { reduced: reduce } = useSkippable(!settled, () => setSettled(true));
 
+  // Same shape, same fix as `CashflowReport`: depending on the context OBJECT
+  // re-ran the ceremony's stamp on every mute toggle and every volume-fader step.
+  // The methods themselves never change identity (see `useAudio`), so the escape
+  // is stamped exactly once, on mount.
+  const { accent, swellWarmth, setPhase, setIntensity } = audio;
   useEffect(() => {
-    audio.accent("stampGood");
-    audio.swellWarmth();
-    audio.setPhase("recapGood", 1.2);
-    audio.setIntensity(0.2);
-  }, [audio]);
+    accent("stampGood");
+    swellWarmth();
+    setPhase("recapGood", 1.2);
+    setIntensity(0.2);
+  }, [accent, swellWarmth, setPhase, setIntensity]);
 
   useEffect(() => {
     if (reduce) {

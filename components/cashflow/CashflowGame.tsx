@@ -158,10 +158,13 @@ export function CashflowGame({
             squares={isFast ? FAST_BOARD : RAT_BOARD}
             position={s.position}
             labelFor={(t) => (isFast ? FAST_SQUARE_META[t as keyof typeof FAST_SQUARE_META] : RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META])?.short ?? "?"}
+            // the full name, on hover — the tile itself only has room for the word
+            describeFor={(t) => (isFast ? FAST_SQUARE_META[t as keyof typeof FAST_SQUARE_META] : RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META])?.label ?? t}
             tokenLabel={s.playerName.charAt(0).toUpperCase()}
             title={isFast ? `Dream: ${dream.title}` : "Escape the Rat Race"}
             onLand={handleLand}
             paydayFlash={paydayFlash}
+            cash={s.cash}
           >
             {/* gap-3, not gap-2: `sm`'s hit layer reaches 8px past its box and `md`'s
                 reaches 3px, so an 8px gap would let the toggle's target overlap Roll's. */}

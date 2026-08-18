@@ -82,16 +82,23 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
     [s, nw, passive, shareUrl, verdict, lost],
   );
 
+  // The verdict stamp fires ONCE per verdict. It used to depend on the whole
+  // `audio` object, which is a fresh object on every mute toggle and on every
+  // step of a volume drag — so a player nudging the fader re-stamped the recap
+  // accent a dozen times over the score. `useAudio`'s own contract says the
+  // methods are referentially stable for the life of the provider, so pulling
+  // them out of the context is enough: only `muted`/`volume`/`started` churn.
+  const { setPhase, accent, swellWarmth } = audio;
   useEffect(() => {
     if (lost) {
-      audio.setPhase("recapBad", 1.4);
-      audio.accent("stampBad");
+      setPhase("recapBad", 1.4);
+      accent("stampBad");
       return;
     }
-    audio.setPhase("recapGood", 1.4);
-    audio.accent("stampGood");
-    audio.swellWarmth();
-  }, [audio, lost]);
+    setPhase("recapGood", 1.4);
+    accent("stampGood");
+    swellWarmth();
+  }, [setPhase, accent, swellWarmth, lost]);
 
   // warm the recap bed by how rich the Money Brain has become
   useEffect(() => {

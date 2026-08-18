@@ -148,7 +148,11 @@ export function FreedomMeter({ s, compact = false }: { s: CashflowState; compact
           <span aria-hidden className="mt-[1px]">▲</span>
           <span>
             Underwater by <span className="num font-semibold">{currency(underwater)}</span> more than you
-            started — debt is dragging your meter from {raw}% down to {pct}%.
+            started
+            {/* Both figures are rounded, so a small drag can leave them equal — and
+                "dragging your meter from 6% down to 6%" reads as a broken sentence.
+                Only name the fall when there is a fall to name. */}
+            {raw > pct ? <> — debt is dragging your meter from {raw}% down to {pct}%.</> : " — that debt is weight your meter has to lift."}
           </span>
         </p>
       )}

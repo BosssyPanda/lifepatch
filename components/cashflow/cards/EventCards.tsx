@@ -18,8 +18,11 @@ export function DoodadCard({ card, cash, onPay }: { card: DoodadT; cash: number;
           <VampireIcon size={22} />
         </span>
         <div>
+          {/* The square this card opens is stamped EXPENSE, so the card says
+              Expense. "Doodad" is still taught — by the lesson box below, which is
+              where a piece of jargon belongs, and by the glossary. */}
           <p className="eyebrow text-loss" style={{ fontSize: "0.58rem" }}>
-            Doodad — you must pay
+            Expense — you must pay
           </p>
           <h3 className="display-caps text-xl text-ink">{card.label}</h3>
         </div>
@@ -271,7 +274,7 @@ export function DownsizedCard({ s, onOk }: { s: CashflowState; onOk: () => void 
       <span className="grid h-10 w-10 place-items-center bg-loss text-bg">
         <ScamIcon size={22} />
       </span>
-      <h3 className="display-caps mt-2 text-xl text-ink">Downsized</h3>
+      <h3 className="display-caps mt-2 text-xl text-ink">Laid Off</h3>
       <p className="mt-1 font-body text-[0.88rem] text-ink/80">
         You lost your job. Pay one full month of expenses ({currency(totalExpenses(s))}) and skip your next 2 turns.
       </p>

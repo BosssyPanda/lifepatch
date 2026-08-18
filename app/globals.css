@@ -19,21 +19,47 @@
   --font-body: var(--font-archivo), "Archivo", system-ui, sans-serif; /* body / scenario prose */
 }
 
-/* ---------------- LEDGER color tokens ---------------- */
+/* ---------------- RISOGRAPH color tokens ----------------
+   The LEDGER ground stays; the ink gets a press behind it. Warm near-black
+   paper, one safety-orange signature, a sparing acid chartreuse, and print
+   red/green that still mean nothing but money. Contrast figures are measured,
+   not estimated — `scratchpad/palette-audit.js` re-runs all 28 checks, and
+   `lib/palette.ts` mirrors every value for the surfaces CSS cannot reach. */
 @theme {
-  --color-bg: #0e0e0c; /* background / paper */
-  --color-bg2: #131211; /* faint framed panel (structure still comes from 1px borders) */
-  --color-bg3: #191714;
-  --color-ink: #f2f1ea; /* primary */
-  --color-ink-dim: #8f8e85; /* secondary */
-  --color-secondary: #8f8e85; /* 5.87:1 on bg */
-  --color-tertiary: #818076; /* faint text — 4.86:1 bg / 4.71:1 bg2 / 4.50:1 bg3 (WCAG AA) */
-  --color-hairline: #4a4943; /* structural rules — 2.14:1 on bg */
-  --color-hairline-strong: #67665e; /* interactive component boundaries — 3.35:1 bg / 3.10:1 bg3 (WCAG 1.4.11) */
-  --color-dotted: #54534a; /* dot leaders — 2.50:1 on bg */
-  --color-loss: #ff3b30; /* flat red — losses */
-  --color-gain: #2bd576; /* flat green — gains */
+  --color-bg: #131110; /* warm near-black paper */
+  --color-bg2: #1a1714; /* framed panel */
+  --color-bg3: #211d19; /* raised panel */
+  --color-ink: #f4f0e6; /* primary — 16.54:1 on bg */
+  --color-ink-dim: #9a968c; /* secondary — 6.38:1 bg / 6.05:1 bg2 / 5.67:1 bg3 */
+  --color-secondary: #9a968c; /* 6.38:1 on bg */
+  --color-tertiary: #8f8b81; /* faint text — 5.54:1 bg / 5.25:1 bg2 / 4.92:1 bg3 (WCAG AA everywhere) */
+  --color-hairline: #4c4b47; /* structural rules — 2.16:1 on bg */
+  --color-hairline-strong: #6b6964; /* interactive component boundaries — 3.43:1 bg / 3.05:1 bg3 (WCAG 1.4.11) */
+  --color-dotted: #55544f; /* dot leaders — 2.48:1 on bg */
   --color-ink-bright: #ffffff; /* brightest ink — primary/button hover, atlas hairline */
+
+  /* Identity + reward. Neither one is ever an outcome — see DESIGN.md § Palette. */
+  --color-accent: #ff5a1f; /* safety orange — CTAs, active tile, player stamp, section numbers. 6.04:1 bg / 6.04:1 knockout */
+  --color-highlight: #d8e04b; /* acid chartreuse — streaks, mastery, hover ticks. 13.17:1 on bg. Sparing. */
+
+  /* Money, and only money. */
+  --color-gain: #2fcc71; /* flat green — gains. 8.96:1 on bg */
+  --color-loss: #fe4030; /* flat red — losses. 5.37:1 on bg */
+
+  /* ---- Board tile categories ----
+     The one place colour is used as *coding* rather than meaning, so every
+     entry resolves back to a token above and none of them invent a hue. A tile
+     also always carries a glyph and a word, so the coding is never load-bearing
+     on its own. `--color-tile-life` is the only new value: chartreuse pulled
+     down to a printable ink (8.08:1 bg / 7.66:1 bg2 / 7.18:1 bg3) so a whole
+     ring of it cannot out-shout the accent. */
+  --color-tile-deal: var(--color-accent); /* Opportunity */
+  --color-tile-payday: var(--color-gain); /* Payday / Cash Flow Day */
+  --color-tile-expense: var(--color-loss); /* Expense */
+  --color-tile-market: var(--color-loss); /* The Market */
+  --color-tile-setback: var(--color-loss); /* Laid Off / Setback */
+  --color-tile-life: #a9b04e; /* Charity / New Baby — muted chartreuse */
+  --color-tile-dream: var(--color-highlight); /* Your Dream — the one square that is a reward */
 
   /* DESIGN.md amendment A — the only radius in the system, for operable controls */
   --radius-control: 3px;
@@ -176,6 +202,29 @@ body {
   color: var(--color-ink);
   border: 1px solid var(--color-hairline);
   padding: 1.25rem;
+}
+
+/* ---------------- Riso halftone (print dot screen) ----------------
+   The overprint texture the board tiles wear. It is two offset radial-gradients,
+   not a raster: one dot lattice, plus the same lattice shifted half a cell — the
+   staggered grid a real halftone screen lays down. Zero bytes over the wire, one
+   paint, and it scales with the tile because the cell is a length not an image.
+
+   Callers set the ink and the strength; nothing else. It NEVER animates — a
+   moving texture would be the one thing on this board that isn't printed.
+   Not a decorative gradient in the amendment-D sense: there is no colour ramp,
+   only a flat ink at a fixed alpha, screened. */
+.halftone {
+  --halftone-ink: currentColor;
+  --halftone-alpha: 0.08;
+  --halftone-cell: 4px;
+  --halftone-dot: 0.55px;
+  background-image:
+    radial-gradient(var(--halftone-ink) var(--halftone-dot), transparent calc(var(--halftone-dot) + 0.45px)),
+    radial-gradient(var(--halftone-ink) var(--halftone-dot), transparent calc(var(--halftone-dot) + 0.45px));
+  background-size: var(--halftone-cell) var(--halftone-cell);
+  background-position: 0 0, calc(var(--halftone-cell) / 2) calc(var(--halftone-cell) / 2);
+  opacity: var(--halftone-alpha);
 }
 
 /* ---------------- Pointer spotlight (DESIGN.md amendment D) ----------------
