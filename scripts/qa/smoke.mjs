@@ -65,8 +65,17 @@ async function clearOverlays(run) {
   }
 }
 
-const CHROME = /^(sound|vol|exit|open the almanac|glossary|roll|…|skip to content|leaderboard|share|learn)/i;
+// Anything that would navigate, toggle chrome, or nudge a stepper. Clicking one
+// of these as a "fallback" is how the journey used to walk itself backwards out
+// of a run and report a phantom failure.
+const CHROME =
+  /^(sound|vol|exit|open the almanac|almanac|glossary|roll|…|skip to content|leaderboard|share|learn|back|← ?back|sign out|toggle|end run|replay|intro|max|[-−+]$)/i;
 
+/**
+ * Last resort for a blocker whose labels we do not know (pop quizzes, coach
+ * panels). Picks the most answer-shaped control: a real phrase, never a
+ * one-glyph stepper, never navigation.
+ */
 async function clickFirstNonChrome(run) {
   const buttons = run.page.locator("button:not([disabled])");
   const n = Math.min(await buttons.count(), 40);
@@ -74,8 +83,10 @@ async function clickFirstNonChrome(run) {
     const b = buttons.nth(i);
     if (!(await b.isVisible().catch(() => false))) continue;
     const label = ((await b.innerText().catch(() => "")) || "").trim().replace(/\s+/g, " ");
-    if (!label || CHROME.test(label)) continue;
-    await b.click({ timeout: 5000 }).catch(() => {});
+    if (label.length < 3 || CHROME.test(label)) continue;
+    let ok = true;
+    await b.click({ timeout: 5000 }).catch(() => { ok = false; });
+    if (!ok) continue;
     await run.page.waitForTimeout(800);
     return label.slice(0, 40);
   }
@@ -118,10 +129,16 @@ async function ratRace(run) {
 
   // three turns, resolving whatever card each landing throws up
   for (let turn = 1; turn <= 3; turn++) {
+    // a stray click that navigates out of the run would otherwise be reported as
+    // a gameplay failure on the next turn
+    if (!/the rat race/i.test(await run.text())) {
+      run.finding("HIGH", "rat-race", `left the board before turn ${turn} — a control navigated away`);
+      break;
+    }
     // the hub shows "…" while the previous turn is still resolving, and coach
     // toasts sit above the board until acknowledged
     let rolled = false;
-    for (let attempt = 0; attempt < 6 && !rolled; attempt++) {
+    for (let attempt = 0; attempt < 8 && !rolled; attempt++) {
       rolled = await run.click("^roll", { wait: 2600 });
       if (rolled) break;
       await clearOverlays(run);
