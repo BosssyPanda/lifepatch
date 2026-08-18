@@ -44,6 +44,11 @@ export function PortfolioPanel({
   // rows print "% of total" off the same figure, so two readouts can never disagree.
   const total = run.cash + port;
   const cashPct = total > 0 ? (run.cash / total) * 100 : 0;
+  // A mid-year choice can spend past the balance; the engine only converts that
+  // shortfall into debt when the year advances. Until then cash is genuinely
+  // negative, and printing it as a budget reads as "-$2,500 free to allocate".
+  // There is nothing free to allocate — say what is actually true instead.
+  const shortfall = run.cash < 0 ? -run.cash : 0;
 
   return (
     <section aria-label="Portfolio" className="mx-auto max-w-3xl px-5 py-4">
@@ -105,7 +110,15 @@ export function PortfolioPanel({
           rows, which read as six separate budgets when there is a single pool. */}
       <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-y border-hairline py-1.5">
         <p className="eyebrow text-tertiary">
-          <span className="num text-ink">{currency(run.cash)}</span> cash free to allocate
+          {shortfall > 0 ? (
+            <>
+              <span className="num text-loss">{currency(shortfall)}</span> overspent — becomes debt when the year advances
+            </>
+          ) : (
+            <>
+              <span className="num text-ink">{currency(run.cash)}</span> cash free to allocate
+            </>
+          )}
         </p>
         <p className="eyebrow text-tertiary">
           total <span className="num text-ink-dim">{currency(total)}</span>
