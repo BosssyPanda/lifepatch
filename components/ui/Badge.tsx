@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
+import { PALETTE } from "@/lib/palette";
 
 // LEDGER: gain/loss for good/bad, neutral ink/secondary for the rest (no amber).
 const TONE_HEX: Record<string, string> = {
-  good: "#2bd576",
-  bad: "#ff3b30",
-  warning: "#8f8e85",
-  neutral: "#8f8e85",
-  accent: "#f2f1ea",
-  Chill: "#2bd576",
-  Normal: "#8f8e85",
-  Brutal: "#ff3b30",
+  good: PALETTE.gain,
+  bad: PALETTE.loss,
+  warning: PALETTE.secondary,
+  neutral: PALETTE.secondary,
+  accent: PALETTE.ink,
+  Chill: PALETTE.gain,
+  Normal: PALETTE.secondary,
+  Brutal: PALETTE.loss,
 };
 
 export function Badge({

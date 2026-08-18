@@ -1,5 +1,7 @@
 "use client";
 
+import { PALETTE } from "@/lib/palette";
+
 export function Sparkline({
   values,
   width = 64,
@@ -28,7 +30,7 @@ export function Sparkline({
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   const up = values[values.length - 1] >= values[0];
-  const stroke = color ?? (up ? "#2bd576" : "#ff3b30");
+  const stroke = color ?? (up ? PALETTE.gain : PALETTE.loss);
   return (
     <svg width={width} height={height} aria-hidden style={{ overflow: "visible" }}>
       <polyline points={pts.join(" ")} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />

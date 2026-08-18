@@ -1,5 +1,6 @@
 "use client";
 
+import { PALETTE, INK_TIER } from "@/lib/palette";
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
@@ -66,7 +67,7 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
       verdict,
       // This was hardcoded to gain-green, so a "Still Racing" or a lost run got
       // stamped in the winner's colour on its own share card.
-      verdictHex: lost ? "#e0483d" : hasEscaped(s) ? "#2bd576" : "#c9a24a",
+      verdictHex: lost ? PALETTE.loss : hasEscaped(s) ? PALETTE.gain : INK_TIER.mid,
       netWorth: nw,
       netWorthText: currency(nw),
       years: s.escapedOnTurn ?? s.turn,

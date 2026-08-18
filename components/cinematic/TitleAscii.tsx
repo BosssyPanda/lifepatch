@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { PALETTE } from "@/lib/palette";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { familyOf } from "@/components/cinematic/canvasFont";
 
@@ -17,9 +18,9 @@ import { familyOf } from "@/components/cinematic/canvasFont";
 const RAMP = [" ", "·", ":", "░", "▒", "▓", "█"] as const;
 const CELL = 12; // css px per glyph cell
 const FPS_MS = 50; // ~20fps — matches the 24fps source closely enough
-const INK = "#f2f1ea";
-const LOSS = "#ff3b30";
-const GAIN = "#2bd576";
+const INK = PALETTE.ink;
+const LOSS = PALETTE.loss;
+const GAIN = PALETTE.gain;
 
 export function TitleAscii() {
   const { reduced } = useMotionCtx();

@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { PALETTE } from "@/lib/palette";
 import { currency } from "@/lib/format";
 import { VERDICTS } from "@/lib/verdict";
 
@@ -12,13 +13,15 @@ export const runtime = "edge";
  * generic wordmark card instead of erroring — an unfurl must never 500.
  */
 
-const BG = "#0E0E0C";
-const INK = "#F2F1EA";
-const SECONDARY = "#8F8E85";
-const TERTIARY = "#818076";
-const HAIRLINE = "#4A4943";
-const GAIN = "#2BD576";
-const LOSS = "#FF3B30";
+// Satori renders this on the edge with no document, so the tokens have to arrive
+// as values. `lib/palette.ts` is the shared source these mirror.
+const BG = PALETTE.bg;
+const INK = PALETTE.ink;
+const SECONDARY = PALETTE.secondary;
+const TERTIARY = PALETTE.tertiary;
+const HAIRLINE = PALETTE.hairline;
+const GAIN = PALETTE.gain;
+const LOSS = PALETTE.loss;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

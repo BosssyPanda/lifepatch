@@ -122,10 +122,13 @@ export function conceptsForText(...texts: (string | undefined)[]): string[] {
   return out;
 }
 
-export const CATEGORY_META: Record<ConceptCategory, { label: string; hex: string }> = {
-  earn: { label: "Earn", hex: "#c9a24a" },
-  grow: { label: "Grow", hex: "#7f8b52" },
-  protect: { label: "Protect", hex: "#5f7480" },
-  borrow: { label: "Borrow", hex: "#a33218" },
-  spend: { label: "Spend", hex: "#c8861e" },
+/** Category labels. The old per-category hexes were SPENT-era olive/amber/brick,
+ *  banned by the palette contract and read by nothing — the mastery map paints its
+ *  swatches from the token scale. */
+export const CATEGORY_META: Record<ConceptCategory, { label: string }> = {
+  earn: { label: "Earn" },
+  grow: { label: "Grow" },
+  protect: { label: "Protect" },
+  borrow: { label: "Borrow" },
+  spend: { label: "Spend" },
 };

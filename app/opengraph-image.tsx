@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { PALETTE } from "@/lib/palette";
 
 export const runtime = "edge";
 export const alt = "LifePatch — Survive the Internet Economy";
@@ -11,11 +12,12 @@ export const contentType = "image/png";
  * frame, FORM 01 filing line. Fonts load from the og route's _fonts dir.
  */
 
-const BG = "#0E0E0C";
-const INK = "#F2F1EA";
-const SECONDARY = "#8F8E85";
-const TERTIARY = "#818076";
-const HAIRLINE = "#4A4943";
+// Edge-rendered: no CSS custom properties available here.
+const BG = PALETTE.bg;
+const INK = PALETTE.ink;
+const SECONDARY = PALETTE.secondary;
+const TERTIARY = PALETTE.tertiary;
+const HAIRLINE = PALETTE.hairline;
 
 export default async function OgImage() {
   const [anton, mono] = await Promise.all([

@@ -1,6 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
+import { PALETTE, CANVAS } from "@/lib/palette";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { familyOf } from "@/components/cinematic/canvasFont";
@@ -16,10 +17,10 @@ import { FIRST_YEAR, LAST_YEAR, sp500Return } from "@/lib/markets";
  * the film grain/flicker on top comes from FilmLayer, not from here).
  */
 
-const INK = "#f2f1ea";
-const INK_DIM = "#8f8e85";
-const HAIRLINE = "#2a2a25";
-const BG = "#0e0e0c";
+const INK = PALETTE.ink;
+const INK_DIM = PALETTE.inkDim;
+const HAIRLINE = CANVAS.hairline;
+const BG = PALETTE.bg;
 
 const BILLS = 130;
 const TOP_Y = 7;

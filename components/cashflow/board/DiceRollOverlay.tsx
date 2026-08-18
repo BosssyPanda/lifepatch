@@ -1,6 +1,7 @@
 "use client";
 
 import { Canvas, useFrame } from "@react-three/fiber";
+import { PALETTE, CANVAS } from "@/lib/palette";
 import { CuboidCollider, Physics, type RapierRigidBody, RigidBody } from "@react-three/rapier";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -21,11 +22,11 @@ import { useSkippable } from "@/src/motion/useSkippable";
  * (gated by the caller).
  */
 
-const BG2 = "#131211";
-const INK = "#f2f1ea";
-const HAIRLINE = "#2a2a25";
-const LOSS = "#ff3b30";
-const BG = "#0e0e0c";
+const BG2 = PALETTE.bg2;
+const INK = PALETTE.ink;
+const HAIRLINE = CANVAS.hairline;
+const LOSS = PALETTE.loss;
+const BG = PALETTE.bg;
 
 // pip layouts on a 3×3 grid (mirrors the 2D Dice.tsx convention)
 const PIPS: Record<number, [number, number][]> = {

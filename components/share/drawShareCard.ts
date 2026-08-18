@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { PALETTE } from "@/lib/palette";
 import { sparkGlyphs } from "@/components/ui/BlockSpark";
 
 /**
@@ -30,12 +31,13 @@ export type ShareCardData = {
   url: string;
 };
 
-const BG = "#0e0e0c";
-const INK = "#f2f1ea";
-const DIM = "#8f8e85";
-const HAIR = "#4a4943";
-const GAIN = "#2bd576";
-const LOSS = "#ff3b30";
+// Canvas 2D takes values, not custom properties.
+const BG: string = PALETTE.bg;
+const INK: string = PALETTE.ink;
+const DIM: string = PALETTE.secondary;
+const HAIR: string = PALETTE.hairline;
+const GAIN: string = PALETTE.gain;
+const LOSS: string = PALETTE.loss;
 
 /** Resolve the actual loaded font-family for a LEDGER class (next/font names are hashed). */
 function fontFamily(kind: "anton" | "mono"): string {
@@ -172,7 +174,7 @@ export async function drawShareCard(format: ShareFormat, data: ShareCardData): P
       const lw = ctx.measureText(val).width;
       ctx.textAlign = "left";
       const lx = left + ctx.measureText(labU).width + 20;
-      ctx.strokeStyle = "#54534a";
+      ctx.strokeStyle = PALETTE.dotted;
       ctx.setLineDash([2, 8]);
       ctx.lineWidth = 2;
       ctx.beginPath();

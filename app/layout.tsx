@@ -1,3 +1,4 @@
+import { PALETTE } from "@/lib/palette";
 import type { Metadata, Viewport } from "next";
 import { Anton, IBM_Plex_Mono, Instrument_Serif, Archivo } from "next/font/google";
 import { MotionProvider } from "@/src/motion/MotionProvider";
@@ -44,7 +45,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0e0e0c",
+  themeColor: PALETTE.bg,
   width: "device-width",
   initialScale: 1,
 };

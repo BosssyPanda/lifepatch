@@ -4,7 +4,7 @@ import { GEOPOLITICS, MYTH_FACTS, TERMS, WEALTH_METHODS } from "@/lib/almanac";
 import { RAT_SIZE } from "@/lib/cashflow/board";
 import { DREAMS } from "@/lib/cashflow/dreams";
 import { PROFESSIONS } from "@/lib/cashflow/professions";
-import { DECISIONS } from "@/lib/decisions";
+import { LIFE_EVENTS } from "@/lib/lifeEvents";
 import { FIRST_YEAR, LAST_YEAR } from "@/lib/markets";
 import { VERDICTS } from "@/lib/verdict";
 import { NumberTicker } from "./NumberTicker";
@@ -15,7 +15,10 @@ import { NumberTicker } from "./NumberTicker";
  * data — the honest version of the marketing stat strip.
  */
 
-const CHOICES = DECISIONS.reduce((s, d) => s + d.options.length, 0);
+/** Counted off the deck the player actually meets. This used to sum a legacy
+ *  decision module that no game mode has ever rendered — a derived figure, but
+ *  derived from content nobody could see. */
+const CHOICES = LIFE_EVENTS.reduce((n, e) => n + e.choices.length, 0);
 
 const STATS: { value: number; label: string }[] = [
   { value: LAST_YEAR - FIRST_YEAR + 1, label: "Years of market history" },
