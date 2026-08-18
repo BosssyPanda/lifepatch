@@ -59,7 +59,11 @@ export function CashflowShell({
 }) {
   const cf = useCashflow();
   const auth = useAuth();
-  const audio = useAudio();
+  // Destructured, not held as one object: the API methods are stable but `audio`
+  // itself changes identity on every mute / volume change, and these effects fire
+  // one-shot accents — depending on the object re-triggered the riser mid-scene
+  // whenever the fader moved.
+  const { setPhase, accent, ambience, unlock } = useAudio();
   const { reduced: reduce } = useMotionCtx();
   const s = cf.state;
 
@@ -73,16 +77,27 @@ export function CashflowShell({
 
   // Drive the adaptive score. Escape/report screens set their own warm phase.
   useEffect(() => {
-    if (view === "setup") audio.setPhase("menu");
-    else if (view === "play") audio.setPhase("gameplay");
-  }, [view, audio]);
+    if (view === "setup") setPhase("menu");
+    else if (view === "play") setPhase("gameplay");
+  }, [view, setPhase]);
 
   // A short riser marks each deliberate scene change (skipped under reduced motion).
   useEffect(() => {
     if (reduce) return;
-    if (view === "escape") audio.accent("riser");
-    else if (view === "report") audio.accent("title");
-  }, [view, reduce, audio]);
+    if (view === "escape") accent("riser");
+    else if (view === "report") accent("title");
+  }, [view, reduce, accent]);
+
+  // The board's room tone. Every other ambience bed is set from the Story run
+  // (YearLoop); the Rat Race set none at all, so the mode was missing a whole
+  // audio layer. `amb_office` is the right bed — this is the cubicle the player
+  // is trying to buy their way out of. Cleared when the escape cinematic takes
+  // over and on unmount, so nothing bleeds into the warm scenes.
+  useEffect(() => {
+    if (view !== "play") return;
+    ambience("amb_office");
+    return () => ambience(null);
+  }, [view, ambience]);
 
   // Post a Rat Race result + bump the streak when the run reaches its report.
   // Keyed on the per-game seed so replays (same name/turn) each post once, and
@@ -138,7 +153,7 @@ export function CashflowShell({
                   hasSave={hasCashflowSave()}
                   onResume={() => {
                     cf.resume();
-                    audio.unlock("gameplay");
+                    unlock("gameplay");
                   }}
                   onBegin={(prof, dream, name) => cf.begin(prof, dream, name)}
                   onExit={onExit}

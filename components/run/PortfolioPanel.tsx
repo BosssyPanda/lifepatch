@@ -25,6 +25,13 @@ export function PortfolioPanel({
   const port = portfolioValue(run);
 
   const handleTrade = (id: AssetId, dollars: number) => {
+    // QA-PROBE-TEMP
+    if (typeof window !== "undefined") {
+      const w = window as unknown as { __qa?: { trades: number; sfx: number } };
+      w.__qa = w.__qa ?? { trades: 0, sfx: 0 };
+      w.__qa.trades += 1;
+      w.__qa.sfx += 1;
+    }
     audio.sfx(dollars >= 0 ? "coins" : "cash");
     onTrade(id, dollars);
   };

@@ -1,6 +1,13 @@
 /**
- * Shared types for the game-music stack. Cue metadata lives in
- * public/audio/meta/*.music.json and is described by `MusicCueMeta`.
+ * Shared types for the game-music stack.
+ *
+ * `TimeSignature` is live code (tempo.ts / BeatClock.ts). `MusicCueMeta` and the
+ * shapes under it are the SCHEMA for the cue documents in
+ * public/audio/meta/*.music.json — the required per-cue metadata (bpm, key, bars,
+ * loop points, sections, cue points, stems, intensity layers, transitions,
+ * license notes) that CLAUDE.md mandates for every cue. Nothing fetches those
+ * files at runtime: `AudioEngine` renders the score procedurally in Tone.js, so
+ * the JSON is documentation of what it plays, and this is what validates it.
  */
 
 export type TimeSignature = `${number}/${number}`;

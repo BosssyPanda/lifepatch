@@ -17,8 +17,9 @@ import { SCORE_BPM } from "./tempo";
 
 export type ScorePhase = "intro" | "title" | "menu" | "gameplay" | "recapGood" | "recapBad";
 export type AccentKind =
+  // the cold open's authored beats reach these through lib/cinematic's own union
   | "thump" | "hit" | "stab" | "riser" | "title"
-  | "rise" | "ping" | "thud" | "stampGood" | "stampBad"
+  | "rise" | "thud" | "stampGood" | "stampBad"
   // v2 learning/social milestones (celebratory, grid-quantized)
   | "mastered" | "levelup" | "streak"
   // Addendum B: the money-consequence land motif (build→impact→settle, A minor)
@@ -61,6 +62,29 @@ const PRESETS: Record<ScorePhase, Record<StemId, number>> = {
   recapBad:  { sub: 0.5,  pad: 0.4,  rhodes: 0.2,  tick: 0.2,  crackle: 0.06, tension: 0.55, warmth: 0.0, lead: 0.0  },
 };
 
+/**
+ * Global floor between repeats of the money / tick foley, in ms — the same
+ * idiom the split-flap board uses (components/cinematic/SplitFlap.tsx). Anything
+ * driven by a counter, a drag or a cascade can call these far faster than they
+ * decay, and each call allocates voices; below its floor the request is dropped
+ * rather than piled onto the bus. Deliberate one-per-action sounds (confirm,
+ * stamp, page, chime, modal) are left unthrottled.
+ */
+const SFX_MIN_MS: Partial<Record<SfxName, number>> = {
+  coins: 90, cash: 90, dice: 140, diceLand: 90, uitick: 55, click: 45, hover: 45,
+};
+
+/** Reusable coin-ping voices — see `ping()`. */
+const PING_VOICES = 4;
+
+/**
+ * Which engine currently owns the shared Tone Transport. `dispose()` fades for
+ * ~450ms before tearing down, and a remount inside that window (StrictMode,
+ * Fast Refresh) builds a second engine — the old one must not stop the Transport
+ * the new one just started.
+ */
+let transportOwner: AudioEngine | null = null;
+
 export class AudioEngine {
   private started = false;
   private phase: ScorePhase = "menu";
@@ -87,8 +111,14 @@ export class AudioEngine {
   private tensionA!: Tone.Oscillator;
   private tensionB!: Tone.Oscillator;
   private warmthOsc!: Tone.Oscillator;
+  /** Pooled coin-ping voices (see `ping`), round-robined by `pingIdx`. */
+  private pings: Tone.MetalSynth[] = [];
+  private pingIdx = 0;
 
   private loops: { dispose(): void }[] = [];
+  /** Last time each throttled SFX actually fired, on the performance clock. */
+  private lastSfxAt: Partial<Record<SfxName, number>> = {};
+  private swellTimer: ReturnType<typeof setTimeout> | null = null;
 
   get isStarted() {
     return this.started;
@@ -249,19 +279,32 @@ export class AudioEngine {
 
     this.loops = [harmonyLoop, motifSeq, pulseLoop, kickLoop, titleSeq];
 
+    // Pooled coin pings, built once instead of per call (see `ping`).
+    this.pings = Array.from({ length: PING_VOICES }, () =>
+      new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.12, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3500, octaves: 1.4, volume: -22 }).connect(this.sfxBus));
+    this.pingIdx = 0;
+
     t.start();
+    transportOwner = this;
     this.started = true;
     this.setPhase(initialPhase, 0.6);
   }
 
-  /** Crossfade stem gains to a phase preset. Transport keeps running. */
+  /**
+   * Crossfade stem gains to a phase preset. Transport keeps running.
+   *
+   * No `cancelScheduledValues` here (nor in setIntensity / setBrainGlow /
+   * setVolume): cancelling an in-flight ramp deletes its END event, so the param
+   * snaps back to its last anchor before the new ramp starts — an audible zipper
+   * whenever these are called rapidly. `Tone.Param.linearRampTo` already
+   * re-anchors at the current value, which is exactly the behaviour we want.
+   */
   setPhase(phase: ScorePhase, fade = 1.1): void {
     this.phase = phase;
     if (!this.started) return;
     const target = this.targetGains();
     const now = Tone.now();
     (Object.keys(this.stems) as StemId[]).forEach((id) => {
-      this.stems[id].gain.cancelScheduledValues(now);
       this.stems[id].gain.linearRampTo(target[id], fade, now);
     });
   }
@@ -273,19 +316,28 @@ export class AudioEngine {
     const target = this.targetGains();
     const now = Tone.now();
     (["tension", "warmth", "rhodes", "tick", "sub"] as StemId[]).forEach((id) => {
-      this.stems[id].gain.cancelScheduledValues(now);
       this.stems[id].gain.linearRampTo(target[id], fade, now);
     });
   }
 
-  /** Brief warmth swell (e.g. a win) that settles back. */
+  /**
+   * Brief warmth swell (e.g. a win) that settles back.
+   *
+   * The settle is a timer rather than a pre-scheduled second ramp: by the time
+   * the swell ends the phase may have moved on, and the restore has to aim at
+   * the bed that is playing THEN, not the one that was playing when it fired.
+   * (It also keeps setPhase free of the cancelScheduledValues it used to need to
+   * clear a stale queued restore.)
+   */
   swellWarmth(amount = 0.5, hold = 1.8): void {
     if (!this.started) return;
-    const g = this.stems.warmth.gain;
-    const now = Tone.now();
-    g.cancelScheduledValues(now);
-    g.linearRampTo(amount, 0.4, now);
-    g.linearRampTo(this.targetGains().warmth, 1.2, now + hold);
+    this.stems.warmth.gain.linearRampTo(amount, 0.4, Tone.now());
+    if (this.swellTimer !== null) clearTimeout(this.swellTimer);
+    this.swellTimer = setTimeout(() => {
+      this.swellTimer = null;
+      if (!this.started) return;
+      this.stems.warmth.gain.linearRampTo(this.targetGains().warmth, 1.2, Tone.now());
+    }, hold * 1000);
   }
 
   private targetGains(): Record<StemId, number> {
@@ -312,7 +364,6 @@ export class AudioEngine {
     const target = this.targetGains();
     const now = Tone.now();
     (["warmth", "pad"] as StemId[]).forEach((id) => {
-      this.stems[id].gain.cancelScheduledValues(now);
       this.stems[id].gain.linearRampTo(target[id], fade, now);
     });
   }
@@ -359,7 +410,6 @@ export class AudioEngine {
       case "riser": this.riser(at); break;
       case "title": mk.membrane("A1", "2n", 0); mk.chord(["A3", "C4", "E4", "A4", "E5"], "triangle", "1m", -6); mk.noiseHit(0.5, 300, -10); break;
       case "rise": this.riser(at, 0.7); break;
-      case "ping": mk.chord(["A5", "E6"], "triangle", "4n", -10); break;
       case "thud": mk.membrane("C1", "4n", -4); mk.noiseHit(0.18, 90, -16); break;
       case "stampGood": mk.chord(["C4", "E4", "G4", "C5"], "triangle", "1m", -6); mk.membrane("C2", "2n", -2); break;
       case "stampBad": mk.chord(["A3", "A#3", "D#4"], "sawtooth", "1m", -7); mk.membrane("A1", "2n", -2); mk.noiseHit(0.4, 120, -12); break;
@@ -425,8 +475,13 @@ export class AudioEngine {
    */
   playSfx(name: SfxName, transpose = 0): void {
     if (!this.started) return;
+    const floor = SFX_MIN_MS[name];
+    if (floor !== undefined) {
+      const t = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (t - (this.lastSfxAt[name] ?? -Infinity) < floor) return;
+      this.lastSfxAt[name] = t;
+    }
     const at = Tone.now() + 0.01;
-    const bus = this.sfxBus;
     const shift = transpose ? Math.pow(2, transpose / 12) : 1;
     switch (name) {
       case "click": this.noiseBurst(at, 0.012, 4000, "highpass", -16); break;
@@ -494,10 +549,20 @@ export class AudioEngine {
     s.triggerAttackRelease(freq, dur, at);
     this.disposeLater(s, dur + 0.8);
   }
+  /**
+   * Coin ping, played from a fixed round-robin pool.
+   *
+   * A `MetalSynth` is ~15 AudioNodes and `coins` fires four pings per call, so
+   * building one per ping (and holding it a full second before disposal) let a
+   * rapid caller stack hundreds of live voices. PING_VOICES is wider than the
+   * widest burst the score asks for, so nothing steals a voice mid-decay.
+   */
   private ping(at: number, freq: number): void {
-    const m = new Tone.MetalSynth({ envelope: { attack: 0.001, decay: 0.12, release: 0.05 }, harmonicity: 5.1, modulationIndex: 32, resonance: 3500, octaves: 1.4, volume: -22 }).connect(this.sfxBus);
+    const pool = this.pings;
+    if (!pool.length) return;
+    const m = pool[this.pingIdx];
+    this.pingIdx = (this.pingIdx + 1) % pool.length;
     m.triggerAttackRelease(freq, "16n", at);
-    this.disposeLater(m, 1);
   }
   private thock(at: number, note: string, vol: number): void {
     const m = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 4, envelope: { attack: 0.001, decay: 0.18, sustain: 0 }, volume: vol }).connect(this.sfxBus);
@@ -599,27 +664,40 @@ export class AudioEngine {
     this.disposeLater(s, dur + 0.6);
   }
 
-  /** Master volume (0..1), ramped — used by mute. Never an abrupt cut. */
+  /**
+   * Master volume (0..1), ramped — used by mute and by the fader. Never an
+   * abrupt cut. No cancelScheduledValues: a fader drag calls this ~100 times a
+   * second and cancelling each in-flight ramp snapped the gain back to its last
+   * anchor every step (a zipper). linearRampTo re-anchors on its own.
+   */
   setVolume(v: number, fade = 0.12): void {
     if (!this.started) return;
-    const now = Tone.now();
-    this.master.gain.cancelScheduledValues(now);
-    this.master.gain.linearRampTo(v, fade, now);
+    this.master.gain.linearRampTo(v, fade, Tone.now());
   }
 
   /** Fade out fully, then stop transport + free nodes. Only on teardown. */
   async dispose(): Promise<void> {
     if (!this.started) return;
+    // setVolume/swellWarmth both bail once this flips, so the fade below has to
+    // be driven off the raw param rather than through them.
     this.started = false;
+    if (this.swellTimer !== null) { clearTimeout(this.swellTimer); this.swellTimer = null; }
     try {
-      this.setVolume(0, 0.4);
+      this.master.gain.linearRampTo(0, 0.4, Tone.now());
       try { this.currentAmb?.out.gain.linearRampTo(0, 0.3, Tone.now()); } catch {}
       await new Promise((r) => setTimeout(r, 450));
-      Tone.getTransport().stop();
+      // Only stop the Transport if a newer engine hasn't taken it over while we
+      // were fading — otherwise this teardown silences the engine that replaced it.
+      if (transportOwner === this) {
+        transportOwner = null;
+        Tone.getTransport().stop();
+      }
       this.loops.forEach((l) => { try { l.dispose(); } catch {} });
       try { this.currentAmb?.dispose(); } catch {}
       this.currentAmb = null;
       [this.pad, this.sub, this.rhodes, this.lead, this.kick, this.hat, this.crackleNoise, this.tensionA, this.tensionB, this.warmthOsc].forEach((n) => { try { n.dispose(); } catch {} });
+      this.pings.forEach((p) => { try { p.dispose(); } catch {} });
+      this.pings = [];
       Object.values(this.stems).forEach((g) => { try { g.dispose(); } catch {} });
       this.musicBus.dispose(); this.accentBus.dispose(); this.sfxBus.dispose(); this.ambBus.dispose(); this.master.dispose();
     } catch {}

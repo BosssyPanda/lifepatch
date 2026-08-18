@@ -151,7 +151,7 @@ function ModePreview({ id, reduced }: { id: ModeId; reduced: boolean }) {
 function BoardPreview({ reduced }: { reduced: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   // Without this a missing/404 webm painted a black rectangle inside the card, with no
-  // hint that it was ever meant to be anything. Same fallback as BoardBackdrop.
+  // hint that it was ever meant to be anything, so it falls back to the poster still.
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {

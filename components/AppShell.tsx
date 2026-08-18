@@ -76,11 +76,15 @@ function AppShellInner() {
 
   // Phase → music preset. intro & recap are owned by Opening/Outro (so they can
   // sync the escalation/verdict), everything else crossfades to a steady bed.
+  // `setPhase` is destructured because it is stable while `audio` is not: keeping
+  // the whole object here re-ramped all eight stem gains on every step of the
+  // volume fader.
+  const { setPhase: setScorePhase } = audio;
   useEffect(() => {
-    if (phase === "mode" || phase === "auth" || phase === "setup") audio.setPhase("menu");
-    else if (phase === "run") audio.setPhase("gameplay");
-    else if (phase === "report") audio.setPhase("menu");
-  }, [phase, audio]);
+    if (phase === "mode" || phase === "auth" || phase === "setup") setScorePhase("menu");
+    else if (phase === "run") setScorePhase("gameplay");
+    else if (phase === "report") setScorePhase("menu");
+  }, [phase, setScorePhase]);
 
   // Post a leaderboard result + bump the daily streak when a life run finishes.
   // submitRunOnce dedupes durably (per run seed), so re-renders, resumes, and

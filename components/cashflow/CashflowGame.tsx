@@ -9,10 +9,9 @@ import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { conceptsForText } from "@/lib/concepts";
 import { Dice } from "@/components/cashflow/board/Dice";
-import { BoardBackdrop } from "@/components/cashflow/board/BoardBackdrop";
 import { HudRail } from "@/components/ui/HudRail";
 
-import { Board3D, DiceRollOverlay } from "@/components/cashflow/board/lazy";
+import { Board, DiceRollOverlay } from "@/components/cashflow/board/lazy";
 import { useCashflowTurn } from "@/components/cashflow/useCashflowTurn";
 import { FtDealCard, FtDreamCard, FtSimpleCard } from "@/components/cashflow/cards/FastTrackCards";
 import { DealCard, DealChooser } from "@/components/cashflow/cards/DealCard";
@@ -100,7 +99,6 @@ export function CashflowGame({
 
   return (
     <div className="relative isolate mx-auto min-h-[100svh] w-full max-w-6xl px-3 py-4 sm:px-5">
-      <BoardBackdrop />
       <HudRail
         mode={isFast ? "Fast Track" : "Rat Race"}
         counter={`Turn ${String(s.turn).padStart(2, "0")}`}
@@ -150,7 +148,7 @@ export function CashflowGame({
         {/* board column */}
         <div>
           <motion.div animate={boardPulse}>
-          <Board3D
+          <Board
             squares={isFast ? FAST_BOARD : RAT_BOARD}
             position={s.position}
             labelFor={(t) => (isFast ? FAST_SQUARE_META[t as keyof typeof FAST_SQUARE_META] : RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META])?.short ?? "?"}
@@ -158,7 +156,6 @@ export function CashflowGame({
             title={isFast ? `Dream: ${dream.title}` : "Escape the Rat Race"}
             onLand={handleLand}
             paydayFlash={paydayFlash}
-            onTileHover={() => audio.sfx("hover")}
           >
             {/* gap-3, not gap-2: `sm`'s hit layer reaches 8px past its box and `md`'s
                 reaches 3px, so an 8px gap would let the toggle's target overlap Roll's. */}
@@ -186,7 +183,7 @@ export function CashflowGame({
                 </p>
               )}
             </div>
-          </Board3D>
+          </Board>
           </motion.div>
 
           {/* freedom + goal hint under board */}

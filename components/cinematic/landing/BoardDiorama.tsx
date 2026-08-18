@@ -1,24 +1,22 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState } from "react";
 import { RAT_BOARD, RAT_SQUARE_META } from "@/lib/cashflow/board";
 import type { RatSquareType } from "@/lib/cashflow/types";
-import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { BoardPreview } from "./BoardPreview";
 
 /**
- * Landing set piece 003 — "THE ARENA" (spectacle Phase L).
- * The light shell around the live 3D board: a pinned stage inside a tall
- * section, framed like the dice overlay (double hairline rule). The heavy
- * three/R3F half (BoardScene) is fetched only when the section comes within
- * ~600px of the viewport; reduced motion or missing WebGL never fetches it
- * and shows the framed Blender poster still instead. Tile hover reports back
- * here and stamps a DOM plate with the square's real META label.
+ * Landing set piece 003 — "THE ARENA".
+ *
+ * The section that shows you the ring you are about to be stuck in. It used to
+ * pin 220svh of scroll to orbit a three/R3F rebuild of the board; it now frames
+ * the real in-game board component (`BoardView`, via `BoardPreview`) fed the
+ * real `RAT_BOARD` data. Same claim — "nothing staged" — except now it is
+ * literally true, and it costs a few hundred DOM nodes instead of a GL context,
+ * a scroll-driven camera and a poster fallback for everyone without WebGL.
+ *
+ * Scroll height went with it: a section only earns 220svh if 220svh of scroll
+ * is doing something. This one is a normal section now.
  */
-
-const BoardScene = dynamic(() => import("./BoardScene").then((m) => m.BoardScene), { ssr: false });
-
-type Hover = { index: number; type: RatSquareType } | null;
 
 // derived, in first-appearance order — the honest contents of the ring
 const TALLY = RAT_BOARD.reduce<{ type: RatSquareType; n: number }[]>((acc, sq) => {
@@ -28,33 +26,16 @@ const TALLY = RAT_BOARD.reduce<{ type: RatSquareType; n: number }[]>((acc, sq) =
   return acc;
 }, []);
 
-/**
- * Cached so React StrictMode's double-invoked state initializer doesn't mint two
- * throwaway GL contexts. Same probe CashflowGame uses for its dice overlay.
- */
-let webglProbe: boolean | null = null;
-function hasWebGL(): boolean {
-  if (webglProbe !== null) return webglProbe;
-  try {
-    const c = document.createElement("canvas");
-    webglProbe = !!(c.getContext("webgl2") || c.getContext("webgl"));
-  } catch {
-    webglProbe = false;
-  }
-  return webglProbe;
-}
-
-/** `live` = a scene will actually run; the poster branch must not promise motion. */
-function Header({ live }: { live: boolean }) {
+export function BoardDiorama() {
   return (
-    <div>
+    <section className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="arena-heading">
       <p className="eyebrow text-secondary">003 — The Arena</p>
       <h2 id="arena-heading" className="display-caps mt-2 text-3xl text-ink sm:text-5xl">
         Twenty-four squares. No exits.
       </h2>
       <p className="mt-3 max-w-xl font-body text-sm leading-relaxed text-ink-dim">
-        The real Rat Race ring, rebuilt live from the engine&apos;s board data — nothing staged.
-        {live ? "Scroll walks the camera." : ""}
+        The real Rat Race ring, rendered by the same component the game renders — nothing staged, and in the exact
+        order a player meets it.
       </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {TALLY.map(({ type, n }) => (
@@ -63,126 +44,15 @@ function Header({ live }: { live: boolean }) {
           </span>
         ))}
       </div>
-    </div>
-  );
-}
 
-export function BoardDiorama() {
-  const { reduced } = useMotionCtx();
-  const sectionRef = useRef<HTMLElement>(null);
-  const [near, setNear] = useState(false);
-  const [onScreen, setOnScreen] = useState(false);
-  const [docVisible, setDocVisible] = useState(true);
-  // Probed synchronously, not in an effect: this tree is `ssr: false`, so the first
-  // render IS the first client render. A false-then-true flip would take the poster
-  // branch first, leaving `sectionRef` unattached — and the observer effect below
-  // (deps `[reduced]`) would never re-run, so the scene would load for nobody.
-  const [webgl] = useState(() => hasWebGL());
-  const [hoverCapable, setHoverCapable] = useState(false);
-  const [sceneReady, setSceneReady] = useState(false);
-  const [hover, setHover] = useState<Hover>(null);
-
-  useEffect(() => {
-    setHoverCapable(window.matchMedia("(hover: hover) and (pointer: fine)").matches);
-    const onVisibility = () => setDocVisible(!document.hidden);
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, []);
-
-  // arm the three fetch well before the pixels arrive; freeze frames off-screen
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el || reduced) return;
-    const nearIO = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setNear(true); nearIO.disconnect(); } },
-      { rootMargin: "600px 0px" },
-    );
-    const liveIO = new IntersectionObserver(([e]) => setOnScreen(e.isIntersecting), { rootMargin: "120px 0px" });
-    nearIO.observe(el);
-    liveIO.observe(el);
-    return () => { nearIO.disconnect(); liveIO.disconnect(); };
-  }, [reduced]);
-
-  const onHover = useCallback((sq: Hover) => setHover(sq), []);
-  const onReady = useCallback(() => setSceneReady(true), []);
-
-  const showScene = near && webgl && !reduced;
-
-  // Reduced motion, or no WebGL at all: the framed poster as a plain document.
-  // Reserving 220svh of pinned scroll for a still that will never move — under a
-  // "[ Scroll to orbit ]" hint pointing at nothing — is the affordance without the
-  // thing. DESIGN.md § Motion asks for the motion to be REPLACED, not for its shell
-  // to be left standing.
-  if (reduced || !webgl) {
-    return (
-      <section className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="arena-heading">
-        <Header live={false} />
-        <div className="relative mt-8 border border-hairline">
-          <img
-            src="/board3d/board-poster.jpg"
-            alt="The LIFEPATCH Rat Race board — 24 squares around a central ledger slab."
-            className="w-full object-cover"
-            loading="lazy"
-            decoding="async"
-          />
-          <div aria-hidden className="pointer-events-none absolute inset-3 border border-hairline" />
-        </div>
-      </section>
-    );
-  }
-
-  return (
-    <section ref={sectionRef} className="relative h-[220svh] border-t border-hairline" aria-labelledby="arena-heading">
-      <div className="sticky top-0 flex h-[100svh] flex-col overflow-hidden px-5 py-10 sm:px-10 lg:px-16">
-        <Header live />
-
-        {/* the stage — dice-overlay frame language */}
-        <div className="relative mt-6 min-h-0 flex-1 border border-hairline bg-bg">
-          <img
-            src="/board3d/board-poster.jpg"
-            alt=""
-            aria-hidden
-            className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
-            style={{ opacity: sceneReady ? 0 : 1 }}
-            loading="lazy"
-            decoding="async"
-          />
-          {showScene ? (
-            <div
-              aria-hidden
-              className="absolute inset-0 transition-opacity duration-500"
-              style={{ opacity: sceneReady ? 1 : 0 }}
-            >
-              <BoardScene
-                targetRef={sectionRef}
-                active={onScreen && docVisible}
-                hoverCapable={hoverCapable}
-                onHover={onHover}
-                onReady={onReady}
-              />
-            </div>
-          ) : null}
-          <div aria-hidden className="pointer-events-none absolute inset-3 border border-hairline" />
-
-          {/* hover readout plate */}
-          <div
-            className="pointer-events-none absolute bottom-5 left-5 border border-ink bg-bg px-3 py-2 transition-opacity duration-200"
-            style={{ opacity: hover ? 1 : 0 }}
-            aria-live="polite"
-          >
-            <span className="num text-ink" style={{ fontSize: "0.72rem", letterSpacing: "0.12em" }}>
-              {hover
-                ? `SQ ${String(hover.index + 1).padStart(2, "0")} / ${RAT_BOARD.length} — ${RAT_SQUARE_META[hover.type].label.toUpperCase()}`
-                : ""}
-            </span>
-          </div>
-
-          {/* operating hint */}
-          <div className="pointer-events-none absolute right-5 top-5">
-            <span className="eyebrow text-tertiary" style={{ fontSize: "0.55rem" }}>
-              {hoverCapable ? "[ Scroll to orbit — hover a square to read it ]" : "[ Scroll to orbit the table ]"}
-            </span>
-          </div>
+      {/* The stage — dice-overlay frame language, double hairline rule. Capped and
+          left-aligned under the heading: the board is 560px at its widest, and a
+          full-bleed 1440px frame around it read as a small board lost in a big
+          empty box. */}
+      <div className="relative mt-8 max-w-[720px] border border-hairline bg-bg">
+        <div aria-hidden className="pointer-events-none absolute inset-3 border border-hairline" />
+        <div className="relative px-5 py-7 sm:px-10 sm:py-12">
+          <BoardPreview />
         </div>
       </div>
     </section>

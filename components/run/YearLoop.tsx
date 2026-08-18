@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Reveal } from "@/components/ui/Reveal";
 import { useAudio } from "@/hooks/useAudio";
 import { useLenis } from "@/hooks/useLenis";
@@ -23,24 +23,38 @@ type Run = ReturnType<typeof useRun>;
 
 export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () => void }) {
   useLenis(true);
-  const audio = useAudio();
+  // Pulled apart rather than held as one object: every method on the audio API is
+  // referentially stable, but `audio` itself changes identity whenever mute /
+  // volume / started does. Depending on the whole object made a volume-fader drag
+  // re-fire these effects — which tore the ambience bed down and rebuilt it on
+  // every step of the slider.
+  const { setIntensity, ambience } = useAudio();
   const s = run.run;
 
   const debt = s?.debt ?? 0;
   const health = s?.life.health ?? 100;
   const happiness = s?.life.happiness ?? 100;
   const year = s?.year ?? 0;
+  const hasRun = Boolean(s);
 
-  // adaptive music intensity from life/market pressure
-  useEffect(() => {
-    if (!s) return;
+  // adaptive music intensity from life/market pressure. Derived as a NUMBER so the
+  // effect below re-runs only when the mix should actually move: the run state is a
+  // fresh object on every slider tick, and depending on it re-ramped every stem
+  // continuously.
+  const intensity = useMemo(() => {
+    if (!hasRun) return null;
     const debtPressure = Math.min(0.25, (debt / 100000) * 0.25);
     const lowHealth = (1 - health / 100) * 0.15;
     const lowMood = (1 - happiness / 100) * 0.15;
     const tone = macroEvent(year)?.tone;
     const macroTension = tone === "bad" ? 0.3 : tone === "warning" ? 0.2 : 0;
-    audio.setIntensity(Math.max(0, Math.min(1, 0.3 + debtPressure + lowHealth + lowMood + macroTension)));
-  }, [audio, s, debt, health, happiness, year]);
+    return Math.max(0, Math.min(1, 0.3 + debtPressure + lowHealth + lowMood + macroTension));
+  }, [hasRun, debt, health, happiness, year]);
+
+  useEffect(() => {
+    if (intensity === null) return;
+    setIntensity(intensity);
+  }, [setIntensity, intensity]);
 
   const events = (s?.pendingEvents ?? [])
     .map((id) => LIFE_EVENTS.find((e) => e.id === id))
@@ -50,9 +64,9 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   const firstOpen = events.find((e) => !s?.yearChoices[e.id]);
   const openTag = firstOpen?.tag ?? null;
   useEffect(() => {
-    audio.ambience(openTag ? ambienceForTag(openTag) : null);
-  }, [audio, openTag]);
-  useEffect(() => () => audio.ambience(null), [audio]);
+    ambience(openTag ? ambienceForTag(openTag) : null);
+  }, [ambience, openTag]);
+  useEffect(() => () => ambience(null), [ambience]);
 
   if (!s) return null;
 

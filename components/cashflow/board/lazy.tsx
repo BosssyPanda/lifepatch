@@ -4,14 +4,15 @@ import dynamic from "next/dynamic";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 
 /**
- * The board's heavy chunks, kept out of every other bundle. Both are only ever mounted by
- * the cashflow screen, and both have a non-WebGL path, so the WebGL probe that decides
- * between them lives here too.
+ * The board's chunks, kept out of every other bundle. Both are only ever mounted by
+ * the cashflow screen. The dice overlay is the one piece that still needs WebGL, so
+ * the probe that gates it lives here too (`useCashflowTurn` prefetches through it).
  */
 
-// WebGL board is loaded only inside the cashflow shell (never the landing bundle).
-// It self-falls-back to the flat 2D <Board> when WebGL is unavailable.
-export const Board3D = dynamic(() => import("@/components/cashflow/board/Board3D").then((m) => m.Board3D), {
+// The board is flat 2D DOM — no WebGL, no canvas — but it is still the biggest
+// component on the screen and nothing outside the cashflow shell renders it, so it
+// stays split out of the landing bundle.
+export const Board = dynamic(() => import("@/components/cashflow/board/Board").then((m) => m.Board), {
   ssr: false,
   // A bare empty box read as "the board area is broken" on first load — a hairline
   // frame + terminal caret, same grammar as AppShell's screen fallback.
@@ -23,8 +24,9 @@ export const Board3D = dynamic(() => import("@/components/cashflow/board/Board3D
 });
 
 // Physics roll overlay (Addendum §13 #10) — three/R3F/Rapier stay out of every
-// bundle until the first roll on this screen. Falls back to the classic timed
-// roll when WebGL is unavailable or reduced motion is on.
+// bundle until the first roll on this screen, and are the only WebGL left in the
+// game. Falls back to the classic timed roll when WebGL is unavailable or
+// reduced motion is on.
 export const DiceRollOverlay = dynamic(() => import("@/components/cashflow/board/DiceRollOverlay"), { ssr: false });
 
 let webglProbe: boolean | null = null;

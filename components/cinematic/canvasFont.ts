@@ -5,9 +5,9 @@
  * class. Read the concrete family off a probe element carrying the same class the
  * DOM uses, and cache it.
  *
- * Lives here, once, because three separate canvas surfaces in the film need it
- * (BoardScene's tile plates, TitleAscii's glyph grid, BillVortex's ghost numerals)
- * and three private copies is how the fonts drifted apart in the first place.
+ * Lives here, once, because separate canvas surfaces in the film need it
+ * (TitleAscii's glyph grid, BillVortex's ghost numerals) and private copies are
+ * how the fonts drifted apart in the first place.
  *
  * Callers still owe `document.fonts.ready` before painting anything they keep: the
  * family name resolves immediately, but the file may not have arrived, and a

@@ -3,17 +3,24 @@
 import { Howl, Howler } from "howler";
 
 /**
- * OPTIONAL file-based SFX override. The shipped game synthesizes all SFX +
- * ambience in AudioEngine.ts (no auth, no files). This bank exists as a
- * drop-in for REAL recorded foley later: once .mp3s are placed in
- * /public/audio/sfx and this bank is wired into useAudio, file playback can
- * override the synth voices without touching any callers. The shared type
- * unions (SfxName / StingTone / AmbienceId) below are the single source of
- * truth used across the audio system.
+ * Two things live in this file, and only one of them runs.
  *
- * Fail-soft: a missing/loading file simply produces no sound. Ambience always
- * CROSSFADES (never a hard cut). Realistic effects need an authorized audio
- * provider (ElevenLabs / Replicate / belt) — see .claude/game-music-stack-audit.md.
+ * 1. THE LIVE PART — the `SfxName` / `StingTone` / `AmbienceId` unions and their
+ *    id arrays. These are the single source of truth for sound ids across the
+ *    audio system (AudioEngine, useAudio, lib/audioMap) and are imported
+ *    `import type`, so they cost nothing at runtime.
+ *
+ * 2. `SfxBank` — the OPTIONAL howler-backed file path, deliberately not wired up.
+ *    The shipped game synthesizes every SFX and ambience bed in AudioEngine.ts
+ *    (no files, no auth; /public/audio holds cue metadata only). This class is
+ *    the drop-in for REAL recorded foley later: put .mp3s in /public/audio/sfx,
+ *    instantiate it in useAudio, and file playback overrides the synth voices
+ *    without touching a single caller. Nothing constructs it today.
+ *
+ * SfxBank is fail-soft: a missing/loading file simply produces no sound, and
+ * ambience always CROSSFADES (never a hard cut). Recorded foley needs an
+ * authorized audio provider (ElevenLabs / Replicate) — see
+ * .claude/game-music-stack-audit.md.
  */
 
 export type SfxName =
