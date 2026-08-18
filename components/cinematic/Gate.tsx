@@ -131,11 +131,19 @@ export function Gate({
           A Financial Survival Story
         </motion.p>
 
+        {/* The wordmark is nine mono glyphs carrying 0.04em of tracking, so it renders
+            at exactly 5.76× the font size (9 × 0.6em advance + 9 × 0.04em). At 19vw that
+            came to 427px inside a 390px phone: the container's overflow was cutting the
+            L and the H in half. Sizing off the width actually available — the viewport
+            less the px-6 gutter the eyebrow, button and caption all sit inside — keeps
+            the line as wide as the screen allows without ever crossing that gutter.
+            0.168 is 0.97 fill ÷ 5.76; the 3% is slack for a fallback mono whose advance
+            runs wider than 0.6em. sm and up already fit, so their ramp is untouched. */}
         <motion.h1
           initial={reduce ? false : { opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.32, ...SPRING.soft }}
-          className="display-caps mt-4 text-[19vw] leading-[0.82] sm:text-[14vw] lg:text-[clamp(4.5rem,8vw,9rem)]"
+          className="display-caps mt-4 text-[calc((100vw_-_3rem)*0.168)] leading-[0.82] sm:text-[14vw] lg:text-[clamp(4.5rem,8vw,9rem)]"
         >
           <span className="text-ink">Life</span>
           <span className="text-ink">patch</span>
