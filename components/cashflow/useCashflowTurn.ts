@@ -25,10 +25,12 @@ import {
   markLessonSeen,
   pushLog,
   roll,
+  tickStockPrices,
 } from "@/lib/cashflow/engine";
-import { QUIZ_BANK, SQUARE_COACH } from "@/lib/cashflow/lessons";
+import { MILESTONE_LESSONS, QUIZ_BANK, SQUARE_COACH } from "@/lib/cashflow/lessons";
 import type { QuizQuestion as QuizT } from "@/lib/cashflow/lessons";
-import { freedomRatio } from "@/lib/cashflow/selectors";
+import { pickIndex } from "@/lib/cashflow/rng";
+import { bankLoanStress, freedomRatio } from "@/lib/cashflow/selectors";
 import { clamp } from "@/lib/format";
 import type { CashflowState, Deal, DoodadCard as DoodadT, FastTrackDeal, MarketCard } from "@/lib/cashflow/types";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
@@ -44,7 +46,7 @@ import { EASE } from "@/src/motion/tokens";
  */
 
 export type Pending =
-  | { kind: "coach"; title: string; body: string; then: () => void }
+  | { kind: "coach"; title: string; body: string; then: () => void; concept?: string }
   | { kind: "deal-choose" }
   | { kind: "deal"; deal: Deal }
   | { kind: "doodad"; card: DoodadT }
@@ -172,25 +174,66 @@ export function useCashflowTurn({
     pushIntensity(next);
   }
 
-  // ── after an action: maybe inject a contextual quiz, else end ──
-  function pickQuiz(state: CashflowState): { key: string; q: QuizT } | null {
+  // ── teaching: one beat per resolution, at the moment the decision needs it ──
+  /**
+   * What the player just did, so an explainer can land on the decision that
+   * earned it rather than on a timer.
+   */
+  type ResolveCtx = "deal" | "doodad" | "sale" | "none";
+
+  type TeachBeat =
+    | { key: string; kind: "coach"; title: string; body: string; concept?: string; when: boolean }
+    | { key: string; kind: "quiz"; q: QuizT; when: boolean };
+
+  /**
+   * The old `pickQuiz` served exactly three of the six bank questions and none of
+   * the three MILESTONE_LESSONS (which nothing imported at all). Everything is
+   * wired now, ordered by pedagogical dependency, and the concept-first beats are
+   * *explainers* — a single "Got it" — never quiz walls. At most one fires per
+   * resolution, so they spread themselves across the run instead of stacking.
+   */
+  function pickTeaching(state: CashflowState, ctx: ResolveCtx): TeachBeat | null {
     const find = (id: string) => QUIZ_BANK.find((q) => q.id === id)!;
-    if (state.dealsBought >= 1 && !state.seenLessons.includes("quiz-first")) return { key: "quiz-first", q: find("q-asset") };
-    if (freedomRatio(state) >= 0.5 && !state.seenLessons.includes("quiz-half")) return { key: "quiz-half", q: find("q-passive") };
-    if (state.liabilities.bankLoan > 0 && !state.seenLessons.includes("quiz-loan")) return { key: "quiz-loan", q: find("q-bankloan") };
-    return null;
+    const fr = freedomRatio(state);
+    const owns = state.realEstate.length + state.businesses.length;
+    const beats: TeachBeat[] = [
+      // first purchase: name what just happened before asking anything about it
+      { key: "t-first-deal", kind: "coach", ...MILESTONE_LESSONS.firstDeal, concept: "assets", when: ctx === "deal" && state.dealsBought >= 1 },
+      // the doodad you just paid for, explained while the sting is fresh
+      { key: "t-doodad", kind: "coach", title: "Doodads", body: find("q-doodad").explain, concept: find("q-doodad").concept, when: ctx === "doodad" },
+      { key: "t-q-asset", kind: "quiz", q: find("q-asset"), when: state.dealsBought >= 2 },
+      // the number on every deal card — explained once they own something to apply it to
+      { key: "t-coc", kind: "coach", title: "Cash-on-cash return", body: find("q-coc").explain, concept: find("q-coc").concept, when: owns >= 1 && state.dealsBought >= 2 },
+      // the bank, the moment it has teeth
+      { key: "t-bankloan", kind: "quiz", q: find("q-bankloan"), when: state.liabilities.bankLoan > 0 },
+      { key: "t-debt-spiral", kind: "coach", title: "The spiral", body: "Your bank loan is past 60% of what the bank will lend. At 10% a month the payment grows faster than a payday can cover it — repay it, or sell an asset, before a bill lands that the bank won't cover.", concept: "Bad debt", when: bankLoanStress(state) >= 0.6 },
+      { key: "t-half", kind: "coach", ...MILESTONE_LESSONS.halfway, concept: "Passive income", when: fr >= 0.5 },
+      { key: "t-q-passive", kind: "quiz", q: find("q-passive"), when: fr >= 0.5 },
+      { key: "t-almost", kind: "coach", ...MILESTONE_LESSONS.almost, when: fr >= 0.75 },
+      { key: "t-escape", kind: "coach", title: "Financial freedom", body: find("q-escape").explain, concept: find("q-escape").concept, when: fr >= 0.85 },
+    ];
+    return beats.find((b) => b.when && !state.seenLessons.includes(b.key)) ?? null;
   }
 
-  function finishResolve(stateAfter: CashflowState) {
-    const quiz = pickQuiz(stateAfter);
-    if (quiz) {
-      const marked = markLessonSeen(stateAfter, quiz.key);
-      commit(() => marked); // reflect the purchase immediately behind the quiz
-      quizState.current = marked;
-      setPending({ kind: "quiz", q: quiz.q });
+  function finishResolve(stateAfter: CashflowState, ctx: ResolveCtx = "none") {
+    // A run that just ended goes straight to its recap — no quiz on the way out.
+    if (stateAfter.status === "lost") {
+      endTurn(stateAfter);
       return;
     }
-    endTurn(stateAfter);
+    const beat = pickTeaching(stateAfter, ctx);
+    if (!beat) {
+      endTurn(stateAfter);
+      return;
+    }
+    const marked = markLessonSeen(stateAfter, beat.key);
+    commit(() => marked); // reflect the purchase immediately behind the card
+    if (beat.kind === "quiz") {
+      quizState.current = marked;
+      setPending({ kind: "quiz", q: beat.q });
+      return;
+    }
+    setPending({ kind: "coach", title: beat.title, body: beat.body, concept: beat.concept, then: () => endTurn(marked) });
   }
 
   // ── opening the right modal for the landed square ──
@@ -212,7 +255,10 @@ export function useCashflowTurn({
           return;
         case "market": {
           const { card, next } = drawMarket(state);
-          commit(() => next);
+          // A market report moves every quote BEFORE the card renders, so the
+          // prices the player is offered are the prices the engine will honour.
+          const moved = card.kind === "stockMarket" ? tickStockPrices(next, card.drift) : next;
+          commit(() => moved);
           setPending({ kind: "market", card });
           return;
         }
@@ -231,7 +277,9 @@ export function useCashflowTurn({
     // fast track
     switch (type) {
       case "ftdeal": {
-        const idx = (state.rngCursor * 7) % FAST_TRACK_DEALS.length;
+        // `(cursor * 7) % 6` reduces to `cursor % 6` — the six Fast Track deals
+        // came out in fixed rotation, every run. Use the run's actual RNG.
+        const idx = pickIndex(state.seed, state.rngCursor + 47, FAST_TRACK_DEALS.length);
         commit(() => ({ ...state, rngCursor: state.rngCursor + 1 }));
         setPending({ kind: "ftdeal", deal: FAST_TRACK_DEALS[idx] });
         return;
@@ -288,7 +336,11 @@ export function useCashflowTurn({
     const land = () => {
       audio.sfx("diceLand");
       let moved = beginTurn(rolled.next);
-      if (s.track === "rat" && s.charityRolls > 0) moved = consumeCharityRoll(moved);
+      // Only a roll that actually USED the two-dice choice spends a charity roll.
+      // It used to burn on every rat-track roll while any were banked, so a player
+      // who rolled a single die lost the benefit they had just paid 10% of their
+      // income for.
+      if (s.track === "rat" && s.charityRolls > 0 && count === 2) moved = consumeCharityRoll(moved);
       const mv = applyMove(moved, rolled.total);
       setTurnPhase("moving");
       apply(() => mv.state);
@@ -304,6 +356,12 @@ export function useCashflowTurn({
       const travel = reduce ? 0 : rolled.total * 165 + 380;
       window.setTimeout(() => {
         audio.accent("stab");
+        // Passing Payday can itself end the run (a payday that the bank will no
+        // longer cover). Don't open a card on top of a finished game.
+        if (mv.state.status === "lost") {
+          endTurn(mv.state);
+          return;
+        }
         resolveLanding(mv.state, mv.landedType);
       }, travel);
     };
@@ -339,7 +397,7 @@ export function useCashflowTurn({
     else next = buyBusiness(s, deal);
     audio.sfx("stamp");
     audio.sting("good");
-    finishResolve(next);
+    finishResolve(next, "deal");
   }
 
   // ── soft "card slides up" cue whenever a resolution modal opens ──

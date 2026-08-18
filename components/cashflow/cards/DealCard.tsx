@@ -4,8 +4,8 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { ApartmentIcon, FactoryIcon, MarketIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
-import { LessonBox, Money } from "@/components/cashflow/shared";
-import { cashOnCash, dividendYield } from "@/lib/cashflow/selectors";
+import { LessonBox, Money, quoteText } from "@/components/cashflow/shared";
+import { cashOnCash, dividendYield, maxAffordable } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
 import type { Deal, StockDeal } from "@/lib/cashflow/types";
 
@@ -76,18 +76,22 @@ function StatLine({ label, value, tone }: { label: string; value: string; tone?:
 export function DealCard({
   deal,
   cash,
+  price,
   onBuy,
   onPass,
 }: {
   deal: Deal;
   cash: number;
+  /** Live quote for a stock deal. Stocks are no longer priced at their deck value
+   *  forever, so the card has to ask for the same number the engine will charge. */
+  price?: number;
   onBuy: (shares?: number) => void;
   onPass: () => void;
 }) {
   const Icon = deal.kind === "stock" ? MarketIcon : deal.kind === "business" ? FactoryIcon : ApartmentIcon;
 
   if (deal.kind === "stock") {
-    return <StockDealView deal={deal} cash={cash} onBuy={onBuy} onPass={onPass} Icon={Icon} />;
+    return <StockDealView deal={deal} cash={cash} price={price ?? deal.price} onBuy={onBuy} onPass={onPass} Icon={Icon} />;
   }
 
   // real estate / business share the same shape
@@ -142,21 +146,23 @@ export function DealCard({
 function StockDealView({
   deal,
   cash,
+  price,
   onBuy,
   onPass,
   Icon,
 }: {
   deal: StockDeal;
   cash: number;
+  price: number;
   onBuy: (shares?: number) => void;
   onPass: () => void;
   Icon: (p: { size?: number }) => React.ReactElement;
 }) {
-  const maxShares = Math.max(0, Math.floor(cash / deal.price));
+  const maxShares = maxAffordable(cash, price);
   const [shares, setShares] = useState(Math.min(100, maxShares));
-  const cost = shares * deal.price;
+  const cost = shares * price;
   const monthly = shares * deal.dividend;
-  const yld = dividendYield(deal.dividend, deal.price);
+  const yld = dividendYield(deal.dividend, price);
 
   return (
     <div className="paper p-5">
@@ -170,13 +176,18 @@ function StockDealView({
           </p>
           <h3 className="display-caps text-xl text-ink">{deal.name}</h3>
         </div>
-        <span className="ml-auto num text-lg font-bold text-ink">{currency(deal.price)}<span className="text-[0.7rem] text-ink/50">/sh</span></span>
+        <span className="ml-auto num text-lg font-bold text-ink">{quoteText(price)}<span className="text-[0.7rem] text-ink/50">/sh</span></span>
       </div>
 
       <div className="mt-3 bg-bg2 px-3 py-1.5">
-        <StatLine label="Dividend" value={deal.dividend > 0 ? `${currency(deal.dividend)}/sh/mo` : "none"} tone={deal.dividend > 0 ? "good" : undefined} />
+        <StatLine label="Dividend" value={deal.dividend > 0 ? `${quoteText(deal.dividend)}/sh/mo` : "none"} tone={deal.dividend > 0 ? "good" : undefined} />
         <StatLine label="Dividend yield" value={`${yld.toFixed(0)}%/yr`} />
-        <StatLine label="Typical range" value={`${currency(deal.range[0])} – ${currency(deal.range[1])}`} />
+        <StatLine label="Typical range" value={`${quoteText(deal.range[0])} – ${quoteText(deal.range[1])}`} />
+        <StatLine
+          label={price > deal.price ? "Above its usual price" : price < deal.price ? "Below its usual price" : "At its usual price"}
+          value={`${price >= deal.price ? "+" : "−"}${Math.abs(Math.round(((price - deal.price) / deal.price) * 100))}%`}
+          tone={price < deal.price ? "good" : price > deal.price ? "bad" : undefined}
+        />
       </div>
 
       <LessonBox>{deal.lesson}</LessonBox>
@@ -228,7 +239,14 @@ function StockDealView({
               <button
                 type="button"
                 onClick={() => setShares(maxShares)}
-                aria-label="Buy the maximum number of shares"
+                /* Not "Buy the maximum number of shares": this control does not buy
+                   anything, it only sets the stepper. The old name also collided with
+                   the real Buy button under any by-role lookup for /^buy/ — the MAX
+                   button comes first in the DOM, so automation (and anyone navigating
+                   by accessible name) hit the stepper instead of the purchase, and the
+                   card became impossible to dismiss. WCAG 2.5.3: the visible "MAX" is
+                   still the start of the accessible name. */
+                aria-label="Max shares affordable"
                 className="relative ml-1 border border-hairline-strong px-2 py-1 num text-[0.7rem] text-ink/70 before:absolute before:-inset-x-1 before:-inset-y-[11px] before:content-['']"
               >
                 MAX

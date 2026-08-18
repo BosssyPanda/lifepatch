@@ -17,6 +17,7 @@ import { FtDealCard, FtDreamCard, FtSimpleCard } from "@/components/cashflow/car
 import { DealCard, DealChooser } from "@/components/cashflow/cards/DealCard";
 import { BabyCard, CharityCard, DoodadCard, DownsizedCard, MarketCardView } from "@/components/cashflow/cards/EventCards";
 import { CoachCard, GlossaryModal, QuizCard, Tutorial } from "@/components/cashflow/learn/Learn";
+import { BankPanel } from "@/components/cashflow/statement/BankPanel";
 import { FinancialStatement } from "@/components/cashflow/statement/FinancialStatement";
 import { FreedomMeter } from "@/components/cashflow/statement/FreedomMeter";
 import { Modal, Money, Toast } from "@/components/cashflow/shared";
@@ -33,19 +34,24 @@ import {
   applyDownsized,
   applyFtLoss,
   applyWindfall,
+  borrow,
   buyDream,
   buyFastTrackDeal,
   collectCashflowDay,
   donateCharity,
   fastTrackMonthly,
   payDoodad,
+  payoffLiability,
+  repayBankLoan,
   sellBusiness,
   sellProperty,
+  sellStock,
 } from "@/lib/cashflow/engine";
 import { TUTORIAL_STEPS } from "@/lib/cashflow/lessons";
 import { getProfession } from "@/lib/cashflow/professions";
+import { quote } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
-import type { CashflowState } from "@/lib/cashflow/types";
+import type { CashflowState, PayoffKey } from "@/lib/cashflow/types";
 
 
 // `ratColor` / `fastColor` (per-tile chip palettes) and `modalTone` (the modal aura
@@ -196,21 +202,51 @@ export function CashflowGame({
                     Win the game
                   </span>
                 </div>
+                {/* This used to advertise progress as `fastTrackMonthly` — carried
+                    passive income PLUS new Fast Track cash flow — while the win
+                    condition (`checkFastWin`) only ever tests the Fast Track half.
+                    The panel could read "goal met" with no win. It now reports the
+                    number the rule actually reads, and says so. */}
                 <p className="mt-1.5 font-body text-[0.82rem] text-ink-dim">
                   Reach <strong className="text-ink">{dream.title}</strong> ({currency(dream.cost)}) or build{" "}
-                  <strong className="text-ink">+{currency(FAST_TRACK_CASHFLOW_GOAL)}/mo</strong> in cash flow. Monthly cash flow now:{" "}
-                  <span className="num text-gain">{currency(fastTrackMonthly(s))}</span>.
+                  <strong className="text-ink">+{currency(FAST_TRACK_CASHFLOW_GOAL)}/mo</strong> from Fast Track
+                  investments. Bought so far:{" "}
+                  <span className="num text-gain">{currency(s.fastTrackCashflow)}</span> —{" "}
+                  <span className="num">{currency(Math.max(0, FAST_TRACK_CASHFLOW_GOAL - s.fastTrackCashflow))}</span> to go.
+                </p>
+                <p className="mt-1 font-body text-[0.74rem] text-ink-dim/80">
+                  You collect {currency(fastTrackMonthly(s))}/mo on a Cash Flow Day (your carried passive income
+                  counts for the payout, not for the goal).
                 </p>
               </div>
             ) : (
-              <FreedomMeter s={s} />
+              <div className="space-y-3">
+                <FreedomMeter s={s} />
+                {/* The bank, made operable: `borrow` and `repayBankLoan` existed in
+                    the engine with zero callers, so the only way to touch a loan was
+                    to have one forced on you. */}
+                <BankPanel
+                  s={s}
+                  disabled={busy}
+                  onBorrow={(n) => { audio.sfx("coins"); commit((st) => borrow(st, n)); }}
+                  onRepay={(n) => { audio.sfx("cash"); commit((st) => repayBankLoan(st, n)); }}
+                />
+              </div>
             )}
           </div>
         </div>
 
         {/* statement column */}
         <div>
-          <FinancialStatement s={s} />
+          <FinancialStatement
+            s={s}
+            actionsDisabled={busy}
+            onPayoff={(key: PayoffKey) => {
+              audio.sfx("stamp");
+              audio.sting("good");
+              commit((st) => payoffLiability(st, key));
+            }}
+          />
         </div>
       </div>
 
@@ -253,26 +289,47 @@ export function CashflowGame({
         {pending && (
           <Modal key={`p-${pending.kind}`} label={pending.kind === "coach" ? pending.title : "Your turn"}>
             {pending.kind === "coach" && (
-              <CoachCard title={pending.title} body={pending.body} onOk={() => { audio.sfx("confirm"); const then = pending.then; setPending(null); then(); }} />
+              <CoachCard
+                title={pending.title}
+                body={pending.body}
+                onOk={() => {
+                  audio.sfx("confirm");
+                  // just-in-time explainers carry a concept; square coaching does not
+                  if (pending.concept) learn(conceptsForText(pending.concept, pending.body), { applied: false });
+                  const then = pending.then;
+                  setPending(null);
+                  then();
+                }}
+              />
             )}
             {pending.kind === "deal-choose" && (
               <DealChooser onPick={pickDeal} onPass={() => { audio.sfx("page"); endTurn(s); }} />
             )}
             {pending.kind === "deal" && (
-              <DealCard deal={pending.deal} cash={s.cash} onBuy={(shares) => { learn(conceptsForText(pending.deal.lesson), { applied: true }); buyDeal(pending.deal, shares); }} onPass={() => { audio.sfx("page"); endTurn(s); }} />
+              <DealCard
+                deal={pending.deal}
+                cash={s.cash}
+                price={pending.deal.kind === "stock" ? quote(s, pending.deal.symbol, pending.deal.price) : undefined}
+                onBuy={(shares) => { learn(conceptsForText(pending.deal.lesson), { applied: true }); buyDeal(pending.deal, shares); }}
+                onPass={() => { audio.sfx("page"); endTurn(s); }}
+              />
             )}
             {pending.kind === "doodad" && (
-              <DoodadCard card={pending.card} cash={s.cash} onPay={() => { audio.sting("bad"); learn(conceptsForText(pending.card.lesson), { applied: false }); finishResolve(payDoodad(s, pending.card.cost)); }} />
+              <DoodadCard card={pending.card} cash={s.cash} onPay={() => { audio.sting("bad"); learn(conceptsForText(pending.card.lesson), { applied: false }); finishResolve(payDoodad(s, pending.card.cost), "doodad"); }} />
             )}
             {pending.kind === "charity" && (
               <CharityCard s={s} onDonate={() => { audio.sfx("coins"); finishResolve(donateCharity(s)); }} onSkip={() => endTurn(s)} />
             )}
             {pending.kind === "market" && (
+              /* A sale used to `commit` straight into the store, skipping
+                 `finishResolve` — so `markEscaped` never ran on the turn a sale
+                 made you free, and the escape was only noticed a turn later. */
               <MarketCardView
                 card={pending.card}
                 s={s}
-                onSellProperty={(uid, price) => { audio.sfx("cash"); commit((st) => sellProperty(st, uid, price)); }}
-                onSellBusiness={(uid) => { audio.sfx("cash"); commit((st) => sellBusiness(st, uid)); }}
+                onSellProperty={(uid, price) => { audio.sfx("cash"); finishResolve(sellProperty(s, uid, price), "sale"); }}
+                onSellBusiness={(uid, price) => { audio.sfx("cash"); finishResolve(sellBusiness(s, uid, price), "sale"); }}
+                onSellStock={(symbol, shares) => { audio.sfx("cash"); finishResolve(sellStock(s, symbol, shares), "sale"); }}
                 onWindfall={(c) => { if (c.cash >= 0) audio.sfx("cash"); else audio.sting("bad"); finishResolve(applyWindfall(s, c)); }}
                 onDone={() => endTurn(s)}
               />

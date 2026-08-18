@@ -1,54 +1,95 @@
 import { FAST_BOARD, FAST_SIZE, RAT_BOARD, RAT_SIZE } from "./board";
-import { BIG_DEALS, DOODADS, MARKET_CARDS, SMALL_DEALS } from "./decks";
+import {
+  BIG_DEALS,
+  DOODADS,
+  MARKET_CARDS,
+  SMALL_DEALS,
+  STOCK_CATALOG,
+  initialStockPrices,
+} from "./decks";
 import { FAST_TRACK_CASHFLOW_GOAL, getDream } from "./dreams";
 import { FT_LOSS_AMOUNT } from "./messages";
 import { getProfession } from "./professions";
-import { pickIndex, rollDice as rollDiceRaw } from "./rng";
+import { pickIndex, rngAt, rollDice as rollDiceRaw } from "./rng";
 import {
+  bankHeadroom,
   bankLoanPayment,
   hasEscaped,
+  maxAffordable,
+  maxBankLoan,
+  netWorth,
   passiveIncome,
   payday,
+  quote,
   totalExpenses,
   totalIncome,
 } from "./selectors";
 import type {
   BusinessDeal,
+  BusinessHolding,
   CashflowState,
   Deal,
   DoodadCard,
   FastTrackDeal,
   MarketCard,
+  PayoffKey,
   RealEstateDeal,
+  RealEstateHolding,
+  SaleTerms,
   StockDeal,
   TurnRecord,
 } from "./types";
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 const BANK_UNIT = 1000;
+
+/** The copy shown on the lose screen when the bank finally says no. */
+export const BANKRUPT_REASON =
+  "The bank stopped lending. Your bank loan hit its ceiling and there was no cash left to cover the bill.";
 
 function uid(s: CashflowState, prefix: string): string {
   return `${prefix}-${s.seed.toString(36)}-${s.rngCursor.toString(36)}`;
 }
 
+/**
+ * Cash can never be negative: the shortfall becomes a bank loan (rounded to
+ * $1,000) at a brutal 10%/mo. The squeeze IS the lesson — but it now has a floor
+ * AND a ceiling. Borrowing stops at `maxBankLoan`, and a shortfall the bank will
+ * not cover ends the run. Before this, `bankLoan_{n+1} ≈ 1.1 × bankLoan_n +
+ * deficit` compounded forever and `"lost"` was a status nothing ever assigned, so
+ * a hopeless run simply never ended.
+ */
 function clampCash(s: CashflowState): CashflowState {
-  // Never let cash go negative: auto-borrow from the bank (rounded to $1,000),
-  // which adds a brutal 10%/mo payment. The squeeze IS the lesson.
   if (s.cash >= 0) return s;
-  const need = Math.ceil(-s.cash / BANK_UNIT) * BANK_UNIT;
-  return {
+  const shortfall = -s.cash;
+  const room = Math.floor(bankHeadroom(s) / BANK_UNIT) * BANK_UNIT;
+  const borrowed = Math.min(Math.ceil(shortfall / BANK_UNIT) * BANK_UNIT, Math.max(0, room));
+  const next: CashflowState = {
     ...s,
-    cash: s.cash + need,
-    liabilities: { ...s.liabilities, bankLoan: s.liabilities.bankLoan + need },
+    cash: s.cash + borrowed,
+    liabilities: { ...s.liabilities, bankLoan: s.liabilities.bankLoan + borrowed },
   };
+  if (next.cash >= 0) return next;
+  // Still short with the bank tapped out. On the Fast Track the player has already
+  // escaped — a setback there eats the balance, it does not un-win the game.
+  if (next.track !== "rat" || next.status !== "playing") return { ...next, cash: 0 };
+  return { ...next, cash: 0, status: "lost", lostReason: BANKRUPT_REASON };
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────
-export function initCashflow(professionId: string, dreamId: string, name: string): CashflowState {
+export function initCashflow(
+  professionId: string,
+  dreamId: string,
+  name: string,
+  /** QA/replay hook: pin the run's RNG so a session is reproducible. */
+  seed?: number,
+): CashflowState {
   const p = getProfession(professionId);
+  const startingLiabilities =
+    p.liab.homeMortgage + p.liab.schoolLoan + p.liab.carLoan + p.liab.creditCard + p.liab.retail;
   return {
     version: STATE_VERSION,
-    seed: Math.floor(Math.random() * 1e9),
+    seed: Number.isFinite(seed) ? Math.abs(Math.floor(seed as number)) : Math.floor(Math.random() * 1e9),
     rngCursor: 0,
     professionId: p.id,
     dreamId: getDream(dreamId).id,
@@ -79,6 +120,13 @@ export function initCashflow(professionId: string, dreamId: string, name: string
     stocks: [],
     realEstate: [],
     businesses: [],
+    stockPrices: initialStockPrices(),
+
+    // Everyone starts underwater — that is the premise, not a failure state. The
+    // solvency drag measures against THIS, so leverage is judged on what it does
+    // to you, not on the hole you were handed.
+    startingNetWorth: p.startingCash - startingLiabilities,
+    interestPaid: 0,
 
     track: "rat",
     position: 0,
@@ -91,6 +139,7 @@ export function initCashflow(professionId: string, dreamId: string, name: string
 
     status: "playing",
     escapedOnTurn: null,
+    lostReason: null,
 
     log: [],
     tutorialDone: false,
@@ -130,7 +179,13 @@ export function applyMove(s: CashflowState, steps: number): MoveResult {
       if (RAT_BOARD[pos].type === "payday") paid++;
     }
     const amount = payday(s);
-    const state = clampCash({ ...s, position: pos, cash: s.cash + amount * paid });
+    const state = clampCash({
+      ...s,
+      position: pos,
+      cash: s.cash + amount * paid,
+      // the receipt the lose screen reads back: every dollar the bank took
+      interestPaid: s.interestPaid + bankLoanPayment(s) * paid,
+    });
     return { state, landedType: RAT_BOARD[pos].type, paydaysPassed: paid, paydayAmount: amount };
   }
   // fast track: no pass-payments; cash flow only on landing a Cash Flow Day
@@ -151,13 +206,16 @@ export const drawMarket = (s: CashflowState) => draw<MarketCard>(s, MARKET_CARDS
 
 // ── Buying assets ─────────────────────────────────────────────────────────────
 export function maxAffordableShares(s: CashflowState, deal: StockDeal): number {
-  return Math.max(0, Math.floor(s.cash / deal.price));
+  return maxAffordable(s.cash, quote(s, deal.symbol, deal.price));
 }
 
 export function buyStock(s: CashflowState, deal: StockDeal, shares: number): CashflowState {
-  const n = Math.max(0, Math.floor(shares));
+  // Guarded in the engine, not just by the share stepper's clamp: an engine that
+  // only behaves because one caller happens to bound its input is not a rule.
+  const n = Math.min(Math.max(0, Math.floor(shares)), maxAffordableShares(s, deal));
   if (n <= 0) return s;
-  const cost = n * deal.price;
+  const price = quote(s, deal.symbol, deal.price);
+  const cost = n * price;
   const existing = s.stocks.find((h) => h.symbol === deal.symbol);
   let stocks;
   if (existing) {
@@ -169,20 +227,44 @@ export function buyStock(s: CashflowState, deal: StockDeal, shares: number): Cas
   } else {
     stocks = [
       ...s.stocks,
-      { uid: uid(s, "stk"), symbol: deal.symbol, name: deal.name, shares: n, costBasis: deal.price, dividend: deal.dividend },
+      { uid: uid(s, "stk"), symbol: deal.symbol, name: deal.name, shares: n, costBasis: price, dividend: deal.dividend },
     ];
   }
   return { ...s, cash: s.cash - cost, stocks, dealsBought: s.dealsBought + 1, rngCursor: s.rngCursor + 1 };
 }
 
-export function sellStock(s: CashflowState, symbol: string, shares: number, price: number): CashflowState {
+/** Sell shares at today's quote. This is the only way a capital gain is ever realized. */
+export function sellStock(s: CashflowState, symbol: string, shares: number): CashflowState {
   const h = s.stocks.find((x) => x.symbol === symbol);
   if (!h) return s;
-  const n = Math.min(shares, h.shares);
-  const stocks = h.shares - n <= 0
-    ? s.stocks.filter((x) => x.uid !== h.uid)
-    : s.stocks.map((x) => (x.uid === h.uid ? { ...x, shares: x.shares - n } : x));
-  return { ...s, cash: s.cash + n * price, stocks };
+  const n = Math.min(Math.max(0, Math.floor(shares)), h.shares);
+  if (n <= 0) return s;
+  const price = quote(s, symbol, h.costBasis);
+  const stocks =
+    h.shares - n <= 0
+      ? s.stocks.filter((x) => x.uid !== h.uid)
+      : s.stocks.map((x) => (x.uid === h.uid ? { ...x, shares: x.shares - n } : x));
+  return { ...s, cash: s.cash + Math.round(n * price), stocks };
+}
+
+// ── The quote board ───────────────────────────────────────────────────────────
+/**
+ * Move every quote. `drift` is the card's centre; each ticker then gets its own
+ * RNG shock scaled by how wide its published range is, and is clamped to that
+ * range so PLSE stays a lottery ticket and GRID stays a utility. Deterministic
+ * from (seed, cursor) like every other draw, so a run replays exactly.
+ */
+export function tickStockPrices(s: CashflowState, drift: number): CashflowState {
+  const prices: Record<string, number> = { ...s.stockPrices };
+  STOCK_CATALOG.forEach((d, i) => {
+    const [lo, hi] = d.range;
+    const now = quote(s, d.symbol, d.price);
+    const volatility = (hi - lo) / d.price; // GRID ≈ 0.87, PLSE ≈ 11.8
+    const shock = (rngAt(s.seed, s.rngCursor + 101 + i) - 0.5) * 0.14 * Math.min(volatility, 4);
+    const moved = now * (1 + drift * Math.min(1, volatility) + shock);
+    prices[d.symbol] = Math.max(lo, Math.min(hi, Math.round(moved * 100) / 100));
+  });
+  return { ...s, stockPrices: prices, rngCursor: s.rngCursor + 1 };
 }
 
 export function buyRealEstate(s: CashflowState, deal: RealEstateDeal): CashflowState {
@@ -246,35 +328,60 @@ export function applyWindfall(s: CashflowState, card: Extract<MarketCard, { kind
   return clampCash({ ...s, cash: s.cash + card.cash });
 }
 
-/** Sell one property matching a market card; you net salePrice − mortgage. */
+// ── Selling assets at The Market ──────────────────────────────────────────────
+/**
+ * The offer on one holding, resolved from the card's terms and the run's RNG.
+ * PURE and stable for a given (state, card, holding): the card shows this number
+ * and the sale executes at this number, so the UI can never quote a price the
+ * engine won't honour. A tiny per-uid hash keeps two identical duplexes from
+ * fetching the identical offer.
+ */
+function uidNoise(uid: string): number {
+  let h = 0;
+  for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) | 0;
+  return Math.abs(h) % 97;
+}
+
+export function saleOffer(s: CashflowState, terms: SaleTerms, holdingUid: string, price: number): number {
+  const r = rngAt(s.seed, s.rngCursor + 211 + uidNoise(holdingUid));
+  const multiple = terms.multiple * (1 + (r * 2 - 1) * terms.spread);
+  return Math.max(0, Math.round(price * Math.max(0.15, multiple)));
+}
+
+export function propertySaleOffer(s: CashflowState, terms: SaleTerms, h: RealEstateHolding): number {
+  return saleOffer(s, terms, h.uid, h.price);
+}
+
+export function businessSaleOffer(s: CashflowState, terms: SaleTerms, h: BusinessHolding): number {
+  return saleOffer(s, terms, h.uid, h.price);
+}
+
+/** Sell one property matching a market card; you net the offer − the mortgage. */
 export function sellProperty(s: CashflowState, propUid: string, salePrice: number): CashflowState {
   const h = s.realEstate.find((x) => x.uid === propUid);
   if (!h) return s;
-  return {
+  return clampCash({
     ...s,
     cash: s.cash + (salePrice - h.mortgage),
     realEstate: s.realEstate.filter((x) => x.uid !== h.uid),
-  };
+  });
 }
 
-/** Sell one business at a ~50% premium over its purchase price. */
-export function businessSalePrice(price: number): number {
-  return Math.round(price * 1.5);
-}
-
-export function sellBusiness(s: CashflowState, bizUid: string): CashflowState {
+export function sellBusiness(s: CashflowState, bizUid: string, salePrice: number): CashflowState {
   const h = s.businesses.find((x) => x.uid === bizUid);
   if (!h) return s;
-  return {
+  return clampCash({
     ...s,
-    cash: s.cash + (businessSalePrice(h.price) - h.liability),
+    cash: s.cash + (salePrice - h.liability),
     businesses: s.businesses.filter((x) => x.uid !== h.uid),
-  };
+  });
 }
 
 // ── Bank ───────────────────────────────────────────────────────────────────────
+/** Deliberate borrowing, capped at the same ceiling the auto-borrow respects. */
 export function borrow(s: CashflowState, amount: number): CashflowState {
-  const units = Math.ceil(amount / BANK_UNIT) * BANK_UNIT;
+  const room = Math.floor(bankHeadroom(s) / BANK_UNIT) * BANK_UNIT;
+  const units = Math.min(Math.ceil(Math.max(0, amount) / BANK_UNIT) * BANK_UNIT, room);
   if (units <= 0) return s;
   return { ...s, cash: s.cash + units, liabilities: { ...s.liabilities, bankLoan: s.liabilities.bankLoan + units } };
 }
@@ -283,6 +390,24 @@ export function repayBankLoan(s: CashflowState, amount: number): CashflowState {
   const units = Math.min(Math.floor(amount / BANK_UNIT) * BANK_UNIT, s.liabilities.bankLoan, Math.floor(s.cash / BANK_UNIT) * BANK_UNIT);
   if (units <= 0) return s;
   return { ...s, cash: s.cash - units, liabilities: { ...s.liabilities, bankLoan: s.liabilities.bankLoan - units } };
+}
+
+/**
+ * Clear a starting liability outright — balance and its monthly expense line
+ * together. Full payoff only: the balances carry no amortization schedule, so
+ * partial payments would silently buy nothing. This is the second lever on the
+ * Freedom meter (buying assets is the first), and it is the move that makes the
+ * denominator of `freedomRatio` finally move.
+ */
+export function payoffLiability(s: CashflowState, key: PayoffKey): CashflowState {
+  const balance = s.liabilities[key];
+  if (balance <= 0 || s.cash < balance) return s;
+  return {
+    ...s,
+    cash: s.cash - balance,
+    liabilities: { ...s.liabilities, [key]: 0 },
+    expenses: { ...s.expenses, [key]: 0 },
+  };
 }
 
 // ── Escape + Fast Track ─────────────────────────────────────────────────────────
@@ -306,8 +431,14 @@ export function collectCashflowDay(s: CashflowState): CashflowState {
   return { ...s, cash: s.cash + fastTrackMonthly(s) };
 }
 
+/**
+ * A Fast-Track setback goes through the same borrow path as everything else. It
+ * used to floor at `Math.max(0, cash - 20000)`, which meant a player holding
+ * $3,000 lost $3,000 and a player holding $0 lost nothing at all — the one square
+ * on the board that could not hurt you.
+ */
 export function applyFtLoss(s: CashflowState): CashflowState {
-  return { ...s, cash: Math.max(0, s.cash - FT_LOSS_AMOUNT) };
+  return clampCash({ ...s, cash: s.cash - FT_LOSS_AMOUNT });
 }
 
 export function canAffordFt(s: CashflowState, deal: FastTrackDeal): boolean {
@@ -356,4 +487,14 @@ export function markLessonSeen(s: CashflowState, id: string): CashflowState {
 }
 
 // re-exports the controller leans on
-export { bankLoanPayment, hasEscaped, passiveIncome, payday, totalExpenses, totalIncome };
+export {
+  bankHeadroom,
+  bankLoanPayment,
+  hasEscaped,
+  maxBankLoan,
+  netWorth,
+  passiveIncome,
+  payday,
+  totalExpenses,
+  totalIncome,
+};

@@ -2,12 +2,12 @@
 
 import { HeartIcon, ScamIcon, VampireIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
-import { LessonBox, Money } from "@/components/cashflow/shared";
-import { businessSalePrice, charityCost } from "@/lib/cashflow/engine";
+import { LessonBox, Money, quoteText } from "@/components/cashflow/shared";
+import { businessSaleOffer, charityCost, propertySaleOffer } from "@/lib/cashflow/engine";
 import { CHARITY_STRATEGY_NOTE, EXPENSE_FREEDOM_NOTE } from "@/lib/cashflow/messages";
-import { totalExpenses } from "@/lib/cashflow/selectors";
+import { quote, totalExpenses } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
-import type { CashflowState, DoodadCard as DoodadT, MarketCard as MarketT } from "@/lib/cashflow/types";
+import type { CashflowState, DoodadCard as DoodadT, MarketCard as MarketT, SaleTerms } from "@/lib/cashflow/types";
 
 export function DoodadCard({ card, cash, onPay }: { card: DoodadT; cash: number; onPay: () => void }) {
   const needLoan = cash < card.cost;
@@ -72,18 +72,56 @@ export function CharityCard({ s, onDonate, onSkip }: { s: CashflowState; onDonat
   );
 }
 
+/** One sellable line: what it fetches, what that nets, and whether it's a gain. */
+function SaleRow({
+  label,
+  offer,
+  debt,
+  basis,
+  onSell,
+}: {
+  label: string;
+  offer: number;
+  debt: number;
+  basis: number;
+  onSell: () => void;
+}) {
+  const net = offer - debt;
+  const gain = offer - basis;
+  const good = gain >= 0;
+  return (
+    <div className="flex items-center justify-between gap-2 bg-bg2 px-3 py-2">
+      <div className="min-w-0">
+        <p className="display-caps truncate text-[0.82rem] text-ink">{label}</p>
+        <p className="font-body text-[0.72rem] text-ink/60">
+          Offer {currency(offer)} · net cash <Money n={net} className={net >= 0 ? "text-gain" : "text-loss"} />
+        </p>
+        <p className={`num text-[0.7rem] ${good ? "text-gain" : "text-loss"}`}>
+          {good ? "Capital gain +" : "Capital LOSS "}
+          {currency(gain)} vs. the {currency(basis)} you paid
+        </p>
+      </div>
+      <NeonButton variant={good ? "paper" : "outline"} size="sm" onClick={onSell}>
+        Sell
+      </NeonButton>
+    </div>
+  );
+}
+
 export function MarketCardView({
   card,
   s,
   onSellProperty,
   onSellBusiness,
+  onSellStock,
   onWindfall,
   onDone,
 }: {
   card: MarketT;
   s: CashflowState;
   onSellProperty: (uid: string, salePrice: number) => void;
-  onSellBusiness: (uid: string) => void;
+  onSellBusiness: (uid: string, salePrice: number) => void;
+  onSellStock: (symbol: string, shares: number) => void;
   onWindfall: (card: Extract<MarketT, { kind: "windfall" }>) => void;
   onDone: () => void;
 }) {
@@ -110,10 +148,16 @@ export function MarketCardView({
     );
   }
 
-  const matches =
-    card.kind === "propertySale"
-      ? s.realEstate.filter((h) => h.propertyType === card.propertyType)
-      : s.businesses;
+  // Both sale kinds carry the same `SaleTerms`; lift them once so the offer helper
+  // is called with a narrowed value rather than a cast.
+  const terms: SaleTerms =
+    card.kind === "propertySale" || card.kind === "businessSale"
+      ? { multiple: card.multiple, spread: card.spread }
+      : { multiple: 1, spread: 0 };
+  const properties = card.kind === "propertySale" ? s.realEstate.filter((h) => h.propertyType === card.propertyType) : [];
+  const businesses = card.kind === "businessSale" ? s.businesses : [];
+  const stocks = card.kind === "stockMarket" ? s.stocks : [];
+  const count = properties.length + businesses.length + stocks.length;
 
   return (
     <div className="panel">
@@ -127,56 +171,71 @@ export function MarketCardView({
       <p className="voice mt-1 text-[0.86rem] text-ink/65">{card.flavor}</p>
       <LessonBox>{card.lesson}</LessonBox>
 
-      {matches.length === 0 ? (
+      {card.kind === "stockMarket" && (
+        /* The quote board moves whether or not you own anything — seeing it move
+           is half the lesson for a stock that pays no dividend. */
+        <div className="mt-3 bg-bg2 px-3 py-2">
+          <p className="eyebrow text-secondary" style={{ fontSize: "0.54rem" }}>
+            Quote board
+          </p>
+          <div className="mt-1 grid grid-cols-2 gap-x-4">
+            {Object.entries(s.stockPrices ?? {}).map(([sym, px]) => (
+              <div key={sym} className="flex items-baseline justify-between py-[1px]">
+                <span className="num text-[0.74rem] text-ink/70">{sym}</span>
+                <span className="num text-[0.74rem] text-ink">{quoteText(px)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {count === 0 ? (
         <p className="mt-3 font-body text-[0.84rem] text-ink/70">
-          You don&apos;t own a matching asset, so there&apos;s nothing to sell. Noted for next time.
+          {card.kind === "stockMarket"
+            ? "You hold no shares, so this one just moves prices. Watching a market you're not in is free education."
+            : "You don't own a matching asset, so there's nothing to sell. Noted for next time."}
         </p>
       ) : (
         <div className="mt-3 space-y-2">
-          {card.kind === "propertySale"
-            ? s.realEstate
-                .filter((h) => h.propertyType === card.propertyType)
-                .map((h) => {
-                  const net = card.salePrice - h.mortgage;
-                  const gain = card.salePrice - h.price;
-                  return (
-                    <div key={h.uid} className="flex items-center justify-between bg-bg2 px-3 py-2">
-                      <div>
-                        <p className="display-caps text-[0.82rem] text-ink">{h.label}</p>
-                        <p className="font-body text-[0.72rem] text-ink/60">
-                          Net cash <Money n={net} className="text-gain" /> · gain {gain >= 0 ? "+" : ""}
-                          {currency(gain)}
-                        </p>
-                      </div>
-                      <NeonButton variant="paper" size="sm" onClick={() => onSellProperty(h.uid, card.salePrice)}>
-                        Sell
-                      </NeonButton>
-                    </div>
-                  );
-                })
-            : s.businesses.map((h) => {
-                const sale = businessSalePrice(h.price);
-                const net = sale - h.liability;
-                return (
-                  <div key={h.uid} className="flex items-center justify-between bg-bg2 px-3 py-2">
-                    <div>
-                      <p className="display-caps text-[0.82rem] text-ink">{h.label}</p>
-                      <p className="font-body text-[0.72rem] text-ink/60">
-                        Sells for {currency(sale)} · net <Money n={net} className="text-gain" />
-                      </p>
-                    </div>
-                    <NeonButton variant="paper" size="sm" onClick={() => onSellBusiness(h.uid)}>
-                      Sell
-                    </NeonButton>
-                  </div>
-                );
-              })}
+          {properties.map((h) => (
+            <SaleRow
+              key={h.uid}
+              label={h.label}
+              offer={propertySaleOffer(s, terms, h)}
+              debt={h.mortgage}
+              basis={h.price}
+              onSell={() => onSellProperty(h.uid, propertySaleOffer(s, terms, h))}
+            />
+          ))}
+          {businesses.map((h) => (
+            <SaleRow
+              key={h.uid}
+              label={h.label}
+              offer={businessSaleOffer(s, terms, h)}
+              debt={h.liability}
+              basis={h.price}
+              onSell={() => onSellBusiness(h.uid, businessSaleOffer(s, terms, h))}
+            />
+          ))}
+          {stocks.map((h) => {
+            const px = quote(s, h.symbol, h.costBasis);
+            return (
+              <SaleRow
+                key={h.uid}
+                label={`${h.shares} × ${h.symbol} @ ${quoteText(px)}`}
+                offer={Math.round(h.shares * px)}
+                debt={0}
+                basis={Math.round(h.shares * h.costBasis)}
+                onSell={() => onSellStock(h.symbol, h.shares)}
+              />
+            );
+          })}
         </div>
       )}
 
       <div className="mt-4 flex justify-end">
         <NeonButton variant="outline" size="sm" onClick={onDone}>
-          {matches.length === 0 ? "Continue" : "Keep & continue"}
+          {count === 0 ? "Continue" : "Keep & continue"}
         </NeonButton>
       </div>
     </div>

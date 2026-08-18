@@ -98,7 +98,7 @@ export const SMALL_DEALS: Deal[] = [
     price: 8,
     dividend: 0,
     range: [3, 35],
-    lesson: "No dividend — you profit only if the price rises and you SELL. That's a capital gain, not passive income.",
+    lesson: "No dividend — it pays you nothing to hold it. You profit only if the quote rises and you SELL at The Market. That's a capital gain, not passive income, and it does nothing for your Freedom meter until you take it.",
   },
   {
     kind: "stock",
@@ -118,9 +118,25 @@ export const SMALL_DEALS: Deal[] = [
     price: 5,
     dividend: 0,
     range: [1, 60],
-    lesson: "Cheap and volatile. Big upside, big risk — never bet money you need to live on.",
+    lesson: "Cheap and violently volatile. Big upside, big risk, zero income while you wait — never bet money you need to live on.",
   },
 ];
+
+// ── The quote board ───────────────────────────────────────────────────────────
+// Every stock in the deck has a live price that moves at The Market, so a
+// non-dividend ticker can actually deliver (or destroy) the capital gain its card
+// promises. Without this, stocks were valued at cost forever and ORBT/PLSE were
+// pure traps: the lesson told you to sell for a gain the game could not produce.
+export const STOCK_CATALOG: StockDeal[] = SMALL_DEALS.filter(
+  (d): d is StockDeal => d.kind === "stock",
+);
+
+/** The opening quote board: every ticker at its deck price. */
+export function initialStockPrices(): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const d of STOCK_CATALOG) out[d.symbol] = d.price;
+  return out;
+}
 
 // ── BIG DEALS — larger capital, larger cash flow ───────────────────────────────
 export const BIG_DEALS: Deal[] = [
@@ -207,22 +223,27 @@ export const DOODADS: DoodadCard[] = [
 ];
 
 // ── MARKET — chances to realize gains (or eat a loss) ──────────────────────────
+// Every sale card quotes a MULTIPLE of what the holding cost, ± a spread resolved
+// off the run's RNG, so no card is a standing arbitrage. Several centre below 1.0:
+// selling has to be able to hurt, or "sell high" is not a lesson, it's a button.
 export const MARKET_CARDS: MarketCard[] = [
   {
     kind: "propertySale",
     id: "mk-house-buyer",
     title: "Buyer Hunting Starter Homes",
     propertyType: "house",
-    salePrice: 62000,
+    multiple: 1.16,
+    spread: 0.22,
     flavor: "A relocating family will pay top dollar for a turnkey house.",
-    lesson: "Selling above your purchase price is a CAPITAL GAIN. You give up the cash flow for a lump sum.",
+    lesson: "Selling above your purchase price is a CAPITAL GAIN. You give up the cash flow for a lump sum — and the offer is never the same twice.",
   },
   {
     kind: "propertySale",
     id: "mk-duplex-buyer",
     title: "Investor Wants Small Multifamily",
     propertyType: "duplex",
-    salePrice: 84000,
+    multiple: 1.12,
+    spread: 0.2,
     flavor: "A fund is rolling up duplexes in your area.",
     lesson: "Sell or hold? A bird in the hand (cash) vs. ongoing cash flow. There's no wrong answer — only trade-offs.",
   },
@@ -231,26 +252,64 @@ export const MARKET_CARDS: MarketCard[] = [
     id: "mk-plex-buyer",
     title: "REIT Acquiring Apartment Buildings",
     propertyType: "plex",
-    salePrice: 320000,
+    multiple: 1.1,
+    spread: 0.18,
     flavor: "A real-estate trust is paying a premium for plexes.",
-    lesson: "Big assets attract big buyers. A timely sale can fund your down payment on something even larger.",
+    lesson: "Big assets attract big buyers. A timely sale can fund your down payment on something even larger — but you're handing over the cash flow that got you here.",
   },
   {
     kind: "propertySale",
     id: "mk-land-buyer",
-    title: "Developer Wants Your Land",
+    title: "Developer Circling Your Land",
     propertyType: "land",
-    salePrice: 165000,
-    flavor: "The highway broke ground. Your acreage just got interesting.",
-    lesson: "This is why people speculate on land — but it only paid off because you had the cash to wait.",
+    multiple: 1.2,
+    spread: 0.55,
+    flavor: "The highway broke ground. Whether your acreage is on the right side of it is another matter.",
+    lesson: "Land has no cash flow, so the ONLY outcome is the sale price — and this one swings from a deep loss to a fat gain. That is what speculation actually feels like.",
+  },
+  {
+    kind: "propertySale",
+    id: "mk-soft-market",
+    title: "Soft Market — Cash Buyers Only",
+    propertyType: "house",
+    multiple: 0.82,
+    spread: 0.14,
+    flavor: "Rates jumped. The only offers are from people smelling blood.",
+    lesson: "Assets do not always go up. Sell here and you crystallize a real loss — this is why cash flow beats hoping for a price.",
   },
   {
     kind: "businessSale",
     id: "mk-biz-buyer",
     title: "Chain Acquiring Local Businesses",
-    salePrice: 0, // resolved per-business in the engine (premium over cost)
+    multiple: 1.3,
+    spread: 0.25,
     flavor: "A national chain is buying out independents at a premium.",
-    lesson: "Building a business and selling it is one of the fastest ways to a lump sum of capital.",
+    lesson: "Building a business and selling it is one of the fastest ways to a lump sum of capital — when the buyer likes the numbers.",
+  },
+  {
+    kind: "businessSale",
+    id: "mk-biz-distress",
+    title: "Distressed Buyer Lowballs You",
+    multiple: 0.75,
+    spread: 0.2,
+    flavor: "They know you might need the cash more than they need the business.",
+    lesson: "A forced seller is a price-taker. Never let your debts decide when you sell.",
+  },
+  {
+    kind: "stockMarket",
+    id: "mk-stk-rally",
+    title: "Market Rally",
+    drift: 0.18,
+    flavor: "Every quote on the board is green today.",
+    lesson: "A stock with no dividend pays you nothing while you hold it. The gain is only real once you SELL — and the price is only there today.",
+  },
+  {
+    kind: "stockMarket",
+    id: "mk-stk-selloff",
+    title: "Market Selloff",
+    drift: -0.16,
+    flavor: "Somebody blinked, and the whole board went red.",
+    lesson: "The same volatility that hands you a capital gain can take it back. Dividends keep paying through a selloff; a price does not.",
   },
   { kind: "windfall", id: "mk-tax-refund", title: "Tax Refund", cash: 1200, flavor: "You overpaid. The government noticed.", lesson: "Found money is best deployed into assets, not doodads." },
   { kind: "windfall", id: "mk-inheritance", title: "Small Inheritance", cash: 5000, flavor: "A great-aunt remembered you fondly.", lesson: "A capital injection is a chance to buy a deal you couldn't reach before." },

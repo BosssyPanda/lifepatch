@@ -1,11 +1,13 @@
 // Derived numbers off CashflowState. This is the heart of the lesson: the income
 // statement + balance sheet recomputed live, every render.
 
-import type { CashflowState } from "./types";
+import type { CashflowState, PayoffKey } from "./types";
 
 /** Monthly bank-loan payment: a punishing 10% of the outstanding balance. */
+export const BANK_LOAN_RATE = 0.1;
+
 export function bankLoanPayment(s: CashflowState): number {
-  return Math.round(s.liabilities.bankLoan * 0.1);
+  return Math.round(s.liabilities.bankLoan * BANK_LOAN_RATE);
 }
 
 /** Passive income = stock dividends + real-estate cash flow + business cash flow.
@@ -52,16 +54,72 @@ export function freedomRatio(s: CashflowState): number {
   return passiveIncome(s) / exp;
 }
 
+/**
+ * How much value the player has DESTROYED since turn 0 — cash burned on doodads,
+ * bank interest, bad sales. Not raw net worth: every profession starts tens or
+ * hundreds of thousands underwater (that is the premise), so measuring against
+ * zero would peg everyone at 0% from turn 1 and make the meter useless.
+ *
+ * Buying a $520k building with a $450k mortgage moves this by exactly $0 — good
+ * leverage is not punished. Paying $8k for doodads moves it by $8k.
+ */
+export function valueDestroyed(s: CashflowState): number {
+  return Math.max(0, s.startingNetWorth - netWorth(s));
+}
+
+/** Two years of the player's own lifestyle — the scale a deficit is judged against. */
+export function solvencyHorizon(s: CashflowState): number {
+  return Math.max(24 * totalExpenses(s), 50_000);
+}
+
+/** 1 = solvent, 0 = has destroyed two years of living costs. Multiplies the meter. */
+export function solvencyFactor(s: CashflowState): number {
+  const horizon = solvencyHorizon(s);
+  if (horizon <= 0) return 1;
+  return clamp01(1 - valueDestroyed(s) / horizon);
+}
+
+function clamp01(n: number): number {
+  return n < 0 ? 0 : n > 1 ? 1 : n;
+}
+
+/**
+ * The number on the Freedom meter. Cash flow earns it; destroyed value drags it.
+ * Without the drag, a player $1.2M in the hole still read "FREEDOM 28%" — because
+ * property mortgages have no expense line, so leverage could only ever raise it.
+ */
+export function freedomPct(s: CashflowState): number {
+  return Math.round(Math.min(1, freedomRatio(s)) * solvencyFactor(s) * 100);
+}
+
 /** The win condition for the Rat Race. */
 export function hasEscaped(s: CashflowState): boolean {
   return passiveIncome(s) >= totalExpenses(s);
 }
 
 // ── Balance sheet ──────────────────────────────────────────────────────────────
-export function stocksValue(s: CashflowState): number {
-  return Math.round(s.stocks.reduce((t, h) => t + h.shares * h.costBasis, 0));
+/** The live quote for a ticker, falling back to what the holding cost. */
+export function quote(s: CashflowState, symbol: string, fallback = 0): number {
+  const q = s.stockPrices?.[symbol];
+  return typeof q === "number" && q > 0 ? q : fallback;
 }
 
+export function stocksValue(s: CashflowState): number {
+  return Math.round(s.stocks.reduce((t, h) => t + h.shares * quote(s, h.symbol, h.costBasis), 0));
+}
+
+/** Unrealized gain/loss across the whole stock book. */
+export function stocksUnrealized(s: CashflowState): number {
+  return Math.round(
+    s.stocks.reduce((t, h) => t + h.shares * (quote(s, h.symbol, h.costBasis) - h.costBasis), 0),
+  );
+}
+
+// ── Per-holding EQUITY (display only) ────────────────────────────────────────
+// These are net of the holding's own debt, so they must NEVER be combined with
+// `totalLiabilities` — that double-counts the principal. Net worth was doing
+// exactly that: a $520k building with a $450k mortgage contributed −$380,000
+// instead of +$70,000. The balance sheet below is gross-on-gross instead.
 export function realEstateEquity(s: CashflowState): number {
   return Math.round(s.realEstate.reduce((t, h) => t + (h.price - h.mortgage), 0));
 }
@@ -70,8 +128,17 @@ export function businessEquity(s: CashflowState): number {
   return Math.round(s.businesses.reduce((t, h) => t + (h.price - h.liability), 0));
 }
 
+export function realEstateValue(s: CashflowState): number {
+  return Math.round(s.realEstate.reduce((t, h) => t + h.price, 0));
+}
+
+export function businessValue(s: CashflowState): number {
+  return Math.round(s.businesses.reduce((t, h) => t + h.price, 0));
+}
+
+/** GROSS assets — what you own, before what you owe on it. */
 export function totalAssets(s: CashflowState): number {
-  return s.cash + stocksValue(s) + realEstateEquity(s) + businessEquity(s);
+  return Math.round(s.cash + stocksValue(s) + realEstateValue(s) + businessValue(s));
 }
 
 export function totalLiabilities(s: CashflowState): number {
@@ -90,8 +157,83 @@ export function totalLiabilities(s: CashflowState): number {
   );
 }
 
+/** The one identity the statement has to reconcile: assets − liabilities. */
 export function netWorth(s: CashflowState): number {
-  return Math.round(s.cash + stocksValue(s) + realEstateEquity(s) + businessEquity(s) - totalLiabilities(s) + s.fastTrackCashflow * 0);
+  return Math.round(totalAssets(s) - totalLiabilities(s));
+}
+
+// ── The bank ───────────────────────────────────────────────────────────────────
+/**
+ * Everything the player owes each month EXCEPT the bank payment. The ceiling has
+ * to be measured against this and never against `totalExpenses`: the bank payment
+ * is itself an expense, so a limit keyed on total expenses would grow every time
+ * the loan grew — the runaway the ceiling exists to stop.
+ */
+export function lifestyleExpenses(s: CashflowState): number {
+  return totalExpenses(s) - bankLoanPayment(s);
+}
+
+/** Months of living costs the bank will extend to anyone, however small the salary. */
+export const BANK_FLOOR_MONTHS = 18;
+
+/**
+ * The credit ceiling. Uncapped, `clampCash` turned every shortfall into
+ * `bankLoan_{n+1} ≈ 1.1 × bankLoan_n + deficit`: an exponential spiral with no
+ * bottom, and `"lost"` was a status nothing ever assigned, so a hopeless run
+ * never ended.
+ *
+ * `5 × income` is the headline (at 10%/month that caps the payment near half of
+ * income). It is not enough on its own: the low-salary professions have so
+ * little rope that a Downsized-plus-doodad opening killed a Janitor on turn 3 —
+ * an unsurvivable start, not a lesson. The floor of 18 months of lifestyle costs
+ * is what makes an early run recoverable; verified worst case is now turn 6 for
+ * every profession (see the balance notes in the Stage 2A report).
+ */
+export function maxBankLoan(s: CashflowState): number {
+  return Math.round(Math.max(5 * totalIncome(s), BANK_FLOOR_MONTHS * lifestyleExpenses(s)));
+}
+
+/** How much more the bank will lend right now. */
+export function bankHeadroom(s: CashflowState): number {
+  return Math.max(0, maxBankLoan(s) - s.liabilities.bankLoan);
+}
+
+/** Fraction of the ceiling already used, 0..1+. Warn past ~0.6. */
+export function bankLoanStress(s: CashflowState): number {
+  const cap = maxBankLoan(s);
+  return cap <= 0 ? 1 : s.liabilities.bankLoan / cap;
+}
+
+/**
+ * Starting liabilities never amortize, so their expense lines are a permanently
+ * unreducible slab of the freedom denominator. Paying one off outright is the
+ * classic freedom-raising move — and the meter's second lever, next to buying
+ * assets. Maps each payable balance to the expense line it kills.
+ */
+export const PAYOFF_LINES: { key: PayoffKey; label: string; hint: string }[] = [
+  { key: "creditCard", label: "Credit Card", hint: "The most expensive debt per dollar — kill it first." },
+  { key: "retail", label: "Retail Debt", hint: "Small balance, real monthly bite." },
+  { key: "carLoan", label: "Car Loan", hint: "A depreciating asset you are still paying for." },
+  { key: "schoolLoan", label: "School Loan", hint: "Cheap debt, but the payment still counts against freedom." },
+  { key: "homeMortgage", label: "Home Mortgage", hint: "Your biggest line — and the biggest single jump in freedom." },
+];
+
+export function canPayoff(s: CashflowState, key: PayoffKey): boolean {
+  const bal = s.liabilities[key];
+  return bal > 0 && s.cash >= bal;
+}
+
+/** What clearing this balance does to the Freedom meter, in points. */
+export function payoffFreedomGain(s: CashflowState, key: PayoffKey): number {
+  const bal = s.liabilities[key];
+  if (bal <= 0) return 0;
+  const after: CashflowState = {
+    ...s,
+    cash: s.cash - bal,
+    liabilities: { ...s.liabilities, [key]: 0 },
+    expenses: { ...s.expenses, [key]: 0 },
+  };
+  return Math.max(0, freedomPct(after) - freedomPct(s));
 }
 
 // ── Deal analysis (the coach math) ──────────────────────────────────────────────
@@ -99,6 +241,12 @@ export function netWorth(s: CashflowState): number {
 export function cashOnCash(annualCashFlow: number, cashInvested: number): number {
   if (cashInvested <= 0) return 0;
   return (annualCashFlow / cashInvested) * 100;
+}
+
+/** How many whole shares `cash` buys at `price`. */
+export function maxAffordable(cash: number, price: number): number {
+  if (price <= 0) return 0;
+  return Math.max(0, Math.floor(cash / price));
 }
 
 /** Dividend yield for a stock at a given price, as a percent (annualized). */

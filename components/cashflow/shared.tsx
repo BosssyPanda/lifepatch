@@ -8,6 +8,15 @@ import { currency } from "@/lib/format";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 
+/**
+ * A share price. `currency` rounds to whole dollars, which is right for every
+ * other figure in the game but hides the movement on a $5 ticker — the quote
+ * board would read "$5" before and after a rally. Cents appear under $100.
+ */
+export function quoteText(n: number): string {
+  return n < 100 ? `$${n.toFixed(2)}` : currency(n);
+}
+
 /** Money in tabular display numerals, optionally signed/colored. */
 export function Money({
   n,

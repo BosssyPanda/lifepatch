@@ -2,11 +2,18 @@ import type { FastSquare, FastSquareType, RatSquare, RatSquareType } from "./typ
 
 // ── Rat Race ring: 24 squares ──────────────────────────────────────────────────
 // Heavy on Opportunity (deal) squares so players are always being offered assets.
+//
+// Paydays sit at 5 / 13 / 21 — exactly 8 apart, so every "month" is the same
+// length. They used to sit at 5 / 11 / 19, which made months 6, 8 and 10 steps
+// long: a Downsized on a 6-step month cost far less than the same card on a
+// 10-step one, for no reason a player could see. The type counts and the ring
+// size are unchanged (12 deal / 3 doodad / 2 charity / 3 payday / 2 market /
+// 1 baby / 1 downsized), so saved `position` values stay valid.
 const RAT_PATTERN: RatSquareType[] = [
   "deal", "doodad", "deal", "charity", "deal", "payday",
-  "deal", "market", "deal", "doodad", "deal", "payday",
-  "deal", "baby", "deal", "doodad", "deal", "market",
-  "deal", "payday", "deal", "downsized", "deal", "charity",
+  "deal", "market", "deal", "doodad", "deal", "baby",
+  "deal", "payday", "deal", "doodad", "deal", "market",
+  "deal", "downsized", "deal", "payday", "deal", "charity",
 ];
 
 export const RAT_BOARD: RatSquare[] = RAT_PATTERN.map((type, index) => ({ index, type }));

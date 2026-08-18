@@ -51,6 +51,9 @@ export type StockHolding = {
   dividend: number; // monthly dividend per share (often 0)
 };
 
+/** The keys of `Liabilities` a player can pay off outright from cash. */
+export type PayoffKey = "homeMortgage" | "schoolLoan" | "carLoan" | "creditCard" | "retail";
+
 export type RealEstateHolding = {
   uid: string;
   label: string;
@@ -136,21 +139,40 @@ export type DoodadCard = {
   lesson: string;
 };
 
+/**
+ * Sale cards quote a *multiple of what the holding cost*, not a flat price, plus a
+ * `spread` of genuine variance resolved off the run's RNG. A flat price meant one
+ * card was a guaranteed 83% arbitrage every time it appeared (and a flat price for
+ * a whole propertyType paid the same for a $30k fixer as a $52k condo). A multiple
+ * below 1 — or a wide spread straddling it — is what makes selling a real decision.
+ */
+export type SaleTerms = {
+  multiple: number; // centre of the offer, × the holding's purchase price
+  spread: number; // ± fraction of the multiple actually offered (0.25 = ±25%)
+};
+
 export type MarketCard =
-  | {
+  | ({
       kind: "propertySale";
       id: string;
       title: string;
       propertyType: string;
-      salePrice: number; // gross sale price per property
       flavor: string;
       lesson: string;
-    }
-  | {
+    } & SaleTerms)
+  | ({
       kind: "businessSale";
       id: string;
       title: string;
-      salePrice: number;
+      flavor: string;
+      lesson: string;
+    } & SaleTerms)
+  | {
+      // A market report: every quoted share price moves, and you may sell into it.
+      kind: "stockMarket";
+      id: string;
+      title: string;
+      drift: number; // centre of the move, e.g. -0.12 = a 12% average drawdown
       flavor: string;
       lesson: string;
     }
@@ -216,6 +238,16 @@ export type CashflowState = {
   stocks: StockHolding[];
   realEstate: RealEstateHolding[];
   businesses: BusinessHolding[];
+  /** Live quote per ticker. Stocks are valued at this, not at what you paid, so a
+   *  non-dividend stock can actually deliver (or destroy) the capital gain its card
+   *  promises. Seeded from the deck and moved by "The Market". */
+  stockPrices: Record<string, number>;
+
+  /** Net worth at turn 0. The solvency drag measures value DESTROYED against this,
+   *  never against zero — every profession starts deeply underwater by design. */
+  startingNetWorth: number;
+  /** Cumulative bank-loan interest already paid at Payday. The debt-spiral receipt. */
+  interestPaid: number;
 
   track: Track;
   position: number;
@@ -228,6 +260,8 @@ export type CashflowState = {
 
   status: CashflowStatus;
   escapedOnTurn: number | null;
+  /** Why the run ended in `"lost"` — shown on the recap. Null while solvent. */
+  lostReason: string | null;
 
   log: TurnRecord[];
 

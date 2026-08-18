@@ -4,6 +4,7 @@ import {
   hasEscaped,
   netWorth as cashflowNetWorth,
   passiveIncome,
+  payday as cashflowPayday,
   totalExpenses,
 } from "../cashflow/selectors";
 import type { CashflowState } from "../cashflow/types";
@@ -40,19 +41,44 @@ export function resultFromRun(run: RunState): NewResult {
   };
 }
 
-/** Rat Race: ranked by passive income; tracks escape speed (turns). */
+/**
+ * Rat Race scoring, v2. Ranking by passive income alone was blind to debt and
+ * expenses, so maximum leverage was the optimal ranked strategy — the exact
+ * opposite of what the mode teaches. The score is now a balance-sheet measure
+ * plus a year of realized cash flow:
+ *
+ *     score = netWorth + 12 × payday
+ *
+ * Net worth counts every dollar borrowed against you; `payday` (income − ALL
+ * expenses, bank interest included) counts the cost of carrying that debt. You
+ * still climb by buying cash-flowing assets — you just can't climb by drowning.
+ *
+ * v1 rows are not comparable to v2 rows, so the version rides in `metrics`.
+ */
+export const CASHFLOW_SCORE_VERSION = 2;
+
+export function cashflowScore(s: CashflowState): number {
+  return Math.round(cashflowNetWorth(s) + 12 * cashflowPayday(s));
+}
+
 export function resultFromCashflow(s: CashflowState): NewResult {
   const passive = passiveIncome(s);
+  const escaped = hasEscaped(s);
   return {
     mode: "cashflow",
-    score: passive,
-    verdict: hasEscaped(s) ? "Escaped the Rat Race" : "Still Racing",
+    score: cashflowScore(s),
+    verdict: s.status === "lost" ? "Buried in Debt" : escaped ? "Escaped the Rat Race" : "Still Racing",
     metrics: {
+      scoreVersion: CASHFLOW_SCORE_VERSION,
       passiveIncome: passive,
       netWorth: cashflowNetWorth(s),
+      payday: cashflowPayday(s),
       expenses: totalExpenses(s),
+      bankLoan: s.liabilities.bankLoan,
+      interestPaid: Math.round(s.interestPaid),
       turns: s.turn,
-      escaped: hasEscaped(s) ? 1 : 0,
+      escaped: escaped ? 1 : 0,
+      lost: s.status === "lost" ? 1 : 0,
     },
   };
 }

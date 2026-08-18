@@ -67,11 +67,14 @@ export function CashflowShell({
   const { reduced: reduce } = useMotionCtx();
   const s = cf.state;
 
+  // "lost" reaches the recap too — a debt spiral that ends the run has to LAND,
+  // with the same ceremony the win gets. The status existed in the type from the
+  // start and nothing ever assigned it, so a hopeless run just went on forever.
   const view: "setup" | "play" | "escape" | "report" = !s
     ? "setup"
     : s.status === "escaped"
       ? "escape"
-      : s.status === "won"
+      : s.status === "won" || s.status === "lost"
         ? "report"
         : "play";
 
