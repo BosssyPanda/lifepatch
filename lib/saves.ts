@@ -1,5 +1,5 @@
 import type { ModeId } from "./modes";
-import type { RunState } from "./runEngine";
+import { isCompatibleSave, type RunState } from "./runEngine";
 import { isCloud, supabase } from "./supabase";
 
 export type SaveRow = {
@@ -7,6 +7,22 @@ export type SaveRow = {
   state: RunState;
   updatedAt: string;
 };
+
+/**
+ * The result of looking for a save, with "there isn't one" and "there is one but
+ * this engine can't read it" kept apart — they need different words on screen.
+ */
+export type SaveLookup =
+  | { kind: "ok"; state: RunState }
+  | { kind: "none" }
+  | { kind: "outdated" };
+
+/**
+ * What to tell a player whose save predates the current engine. Not an error:
+ * the game changed under them, and the only cost is this one run.
+ */
+export const OUTDATED_SAVE_MESSAGE =
+  "This save is from an older version of the game and can't be continued. Your progress elsewhere is safe — start a fresh run to play the updated economy.";
 
 function localKey(userId: string, mode: ModeId) {
   return `lifepatch.save.${userId}.${mode}`;
@@ -47,6 +63,22 @@ export async function loadRun(userId: string, mode: ModeId): Promise<RunState | 
   } catch {
     return null;
   }
+}
+
+/**
+ * `loadRun`, but it tells you WHY there's nothing to resume.
+ *
+ * `isCompatibleSave` now checks `RunState.version` explicitly instead of
+ * duck-typing three key names, so a save written by an older engine is refused
+ * here rather than resuming as a half-initialised state (missing `homeValue`,
+ * `mortgage`, `seed`…) and corrupting the run. A rejection is not an error —
+ * pair `"outdated"` with OUTDATED_SAVE_MESSAGE and a "Begin a new life" button.
+ * A genuine load FAILURE still throws, so callers can keep telling that apart.
+ */
+export async function loadRunChecked(userId: string, mode: ModeId): Promise<SaveLookup> {
+  const state = await loadRun(userId, mode);
+  if (state === null) return { kind: "none" };
+  return isCompatibleSave(state) ? { kind: "ok", state } : { kind: "outdated" };
 }
 
 export async function listSaves(userId: string): Promise<{ mode: ModeId; updatedAt: string }[]> {

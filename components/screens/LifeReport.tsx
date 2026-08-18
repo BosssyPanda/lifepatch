@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { ShareCard } from "@/components/share/ShareCard";
 import { useShareUrl } from "@/components/share/useShareUrl";
-import { BrainIcon, CashIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
+import { ApartmentIcon, BrainIcon, CashIcon, DebtIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
@@ -16,7 +16,7 @@ import { conceptTitle } from "@/lib/concepts";
 import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
-import { netWorth, type RunState } from "@/lib/runEngine";
+import { homeEquity, netWorth, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { STAGGER } from "@/src/motion/tokens";
 
@@ -30,19 +30,30 @@ const REASON: Record<string, { label: string; Icon: typeof TrophyIcon }> = {
   died: { label: "Your number came up", Icon: SkullIcon },
 };
 
+/**
+ * Where the money ended up — assets AND what is owed against them.
+ *
+ * The shares used to divide by the listed assets alone, so a player holding
+ * $10k of cash against $2M of debt read "Cash — 100%" and a full bar. Percentages
+ * are of GROSS assets, and the liabilities are printed underneath as their own
+ * share of that same base: owing more than you own shows as a bar past 100%,
+ * because that is what it is. The closing line is the number that actually counts.
+ */
 function PortfolioBreakdown({ run }: { run: RunState }) {
-  const rows = [
+  const assetRows = [
     ...ASSETS.map((a) => ({ key: a.id, label: a.short, Icon: a.Icon, value: run.holdings[a.id] ?? 0 })),
     { key: "cash", label: "Cash", Icon: CashIcon, value: run.cash },
+    { key: "home", label: "Home", Icon: ApartmentIcon, value: run.homeValue },
   ]
     .filter((r) => r.value > 0)
     .sort((a, b) => b.value - a.value);
-  // Divide by what's actually listed: an overdrawn cash balance makes the true total smaller
-  // than the holdings, and every share would print over 100% beside a full bar.
-  const shown = rows.reduce((t, r) => t + r.value, 0);
+
+  const gross = assetRows.reduce((t, r) => t + r.value, 0);
+  const owed = run.debt + run.mortgage;
+  const nw = netWorth(run);
 
   // The header above is the question, so the panel always answers it — even with nothing left.
-  if (rows.length === 0) {
+  if (assetRows.length === 0 && owed === 0) {
     return (
       <div className="border border-hairline bg-bg2 p-4">
         <LedgerRow label="Nothing left" value={currency(0)} />
@@ -50,11 +61,19 @@ function PortfolioBreakdown({ run }: { run: RunState }) {
     );
   }
 
+  const liabilities = [
+    { key: "mortgage", label: "Mortgage", value: run.mortgage },
+    { key: "debt", label: "Debt", value: run.debt },
+  ].filter((r) => r.value > 0);
+
+  // With no assets at all, a share of gross is a divide-by-zero; show the bar full instead.
+  const share = (v: number) => (gross > 0 ? (v / gross) * 100 : 100);
+
   return (
     <div className="border border-hairline bg-bg2 p-4">
       <ul className="space-y-2">
-        {rows.map((r) => {
-          const pct = (r.value / shown) * 100;
+        {assetRows.map((r) => {
+          const pct = share(r.value);
           const Icon = r.Icon;
           return (
             <li key={r.key} className="flex items-center gap-2.5">
@@ -69,6 +88,29 @@ function PortfolioBreakdown({ run }: { run: RunState }) {
           );
         })}
       </ul>
+
+      {liabilities.length > 0 && (
+        <ul className="mt-3 space-y-2 border-t border-hairline pt-3">
+          {liabilities.map((r) => {
+            const pct = share(r.value);
+            return (
+              <li key={r.key} className="flex items-center gap-2.5">
+                <DebtIcon size={15} className="shrink-0 text-loss" />
+                <span className="w-20 shrink-0 truncate font-mono text-[0.72rem] font-semibold uppercase tracking-wide text-loss">{r.label}</span>
+                <div className="h-2 flex-1 overflow-hidden bg-hairline">
+                  <div className="h-full bg-loss" style={{ width: `${Math.max(2, Math.min(100, pct))}%` }} />
+                </div>
+                <span className="num w-20 shrink-0 text-right text-sm text-loss">−{currency(r.value)}</span>
+                <span className="num w-9 shrink-0 text-right text-[0.7rem] text-loss">{pct.toFixed(0)}%</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="mt-3 border-t border-hairline pt-3">
+        <LedgerRow label="Net worth" value={currency(nw)} strong />
+      </div>
     </div>
   );
 }
@@ -129,6 +171,8 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
 
   const ledger = [
     { label: "Net worth", value: currency(nw) },
+    ...(run.homeValue > 0 ? [{ label: "Home equity", value: currency(homeEquity(run)) }] : []),
+    ...(run.mortgage > 0 ? [{ label: "Mortgage", value: currency(run.mortgage) }] : []),
     { label: "Debt", value: currency(run.debt) },
     { label: "Final salary", value: `${currency(run.salary)}/yr` },
     { label: "Years lived", value: `${hist.length}` },

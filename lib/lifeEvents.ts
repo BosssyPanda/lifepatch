@@ -1,3 +1,4 @@
+import { HOME_DOWN_PAYMENT } from "./economy";
 import type { Tone } from "./markets";
 
 export type LifeEffect = Partial<{
@@ -7,6 +8,8 @@ export type LifeEffect = Partial<{
   salaryTo: number; // set salary to an absolute value (overrides salaryPct)
   health: number;
   happiness: number;
+  /** Change in dependents. Any event can use it; each kid costs ~$9k/yr. */
+  kids: number;
 }>;
 
 /** One possible result of a choice. Multiple outcomes => rolled by weight. */
@@ -32,6 +35,8 @@ export type EventContext = {
   age: number;
   year: number;
   salary: number;
+  cash: number;
+  debt: number;
   flags: Record<string, number>;
   life: { health: number; happiness: number; partner: boolean; kids: number; housing: "renting" | "owned" };
 };
@@ -111,7 +116,11 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     id: "newJob",
     tag: "Career",
     prompt: "You've been job-hunting. Two offers finally appear — one safe, one a swing.",
-    weight: 3,
+    // Heavily weighted so it is drawn almost immediately: being out of work is
+    // meant to be a shock, not a decade-long spiral no choice can escape. At the
+    // old weight of 3 it competed with ~15 other events and left a laid-off
+    // player jobless for a median of several years while expenses compounded.
+    weight: 30,
     requires: (c) => c.salary === 0,
     choices: [
       { id: "safe", label: "Take the steady job", blurb: "Reliable paycheck.", outcomes: [{ weight: 100, note: "Re-employed.", effect: { salaryTo: 38000, happiness: 5, health: 3 }, tone: "good", clearFlags: ["unemployed"], consequence: "Back on a payroll. Less glamour, more stability. The bills can be paid again.", lesson: "Income stability is underrated. You can't invest a paycheck you don't have." }] },
@@ -133,9 +142,12 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     minAge: 27,
     once: true,
     weight: 2,
-    requires: (c) => c.life.housing === "renting" && c.salary > 0,
+    // You cannot buy a house you can't put money down on. The engine turns the
+    // "owned" flag into a $220k home + a $176k mortgage, so the down payment has
+    // to be real cash the player actually accumulated.
+    requires: (c) => c.life.housing === "renting" && c.salary > 0 && c.cash >= HOME_DOWN_PAYMENT,
     choices: [
-      { id: "buy", label: "Buy the house", blurb: "Down payment + a mortgage.", outcomes: [{ weight: 100, effect: { cash: -40000, debt: 200000, happiness: 8 }, tone: "warning", setFlags: ["owned"], consequence: "Keys in hand — and a 30-year obligation. Welcome to property tax and leaky roofs.", lesson: "A house is shelter first, investment second. Don't buy more than your income can carry." }] },
+      { id: "buy", label: "Buy the house", blurb: "20% down + a 30-year mortgage.", outcomes: [{ weight: 100, effect: { cash: -HOME_DOWN_PAYMENT, happiness: 8 }, tone: "warning", setFlags: ["owned"], consequence: "Keys in hand — and a 30-year obligation. Property tax, insurance and a roof that will, eventually, leak.", lesson: "A house is shelter first, investment second. The down payment is gone from the market, and the mortgage doesn't shrink when prices do." }] },
       { id: "rent", label: "Keep renting, invest the rest", blurb: "Stay flexible and liquid.", outcomes: [{ weight: 100, effect: { happiness: -2 }, tone: "neutral", consequence: "No yard, no upkeep, full flexibility. The down payment stays working in the market.", lesson: "Renting isn't 'throwing money away' — it buys flexibility and dodges maintenance." }] },
     ],
   },
@@ -179,7 +191,7 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     once: true,
     weight: 1,
     choices: [
-      { id: "yes", label: "Start a family", blurb: "Life changes forever.", outcomes: [{ weight: 100, effect: { cash: -12000, happiness: 16, health: -4 }, tone: "good", consequence: "Sleep is gone; meaning arrives. Daycare costs more than your first car.", lesson: "Kids are a values choice, not a math one — but budget for the math anyway." }] },
+      { id: "yes", label: "Start a family", blurb: "Life changes forever.", outcomes: [{ weight: 100, effect: { cash: -12000, happiness: 16, health: -4, kids: 1 }, tone: "good", consequence: "Sleep is gone; meaning arrives. Daycare costs more than your first car.", lesson: "Kids are a values choice, not a math one — but budget for the math anyway." }] },
       { id: "no", label: "Not for you", blurb: "Keep your freedom.", outcomes: [{ weight: 100, effect: { happiness: 2 }, tone: "neutral", consequence: "You keep your time, money, and uninterrupted sleep. Completely valid.", lesson: "There's no 'correct' life ledger. Optimize for your actual goals." }] },
     ],
   },

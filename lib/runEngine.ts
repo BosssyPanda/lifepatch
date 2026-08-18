@@ -1,4 +1,21 @@
 import { getBackground } from "./backgrounds";
+import {
+  BASE_LIVING,
+  DEBT_MIN_FLOOR,
+  DEBT_MIN_PCT,
+  DEBT_RATE,
+  HOME_DOWN_PAYMENT,
+  HOME_PRICE,
+  HOME_UPKEEP,
+  INFLATION,
+  KID_COST,
+  MORTGAGE_PAYMENT,
+  MORTGAGE_RATE,
+  RENT_START,
+  RETIRE_MULTIPLE,
+  TAKE_HOME,
+  WAGE_GROWTH,
+} from "./economy";
 import { clamp } from "./format";
 import {
   eligibleEvents,
@@ -8,8 +25,17 @@ import {
   type LifeChoice,
   type Outcome,
 } from "./lifeEvents";
-import { type AssetId, macroEvent, sp500Return, yearReturns } from "./markets";
+import { ASSET_IDS, type AssetId, macroEvent, sp500Return, yearReturns } from "./markets";
 import { getMode, type ModeId } from "./modes";
+
+/**
+ * Save/engine format. BUMP THIS whenever `RunState`'s shape or the economy
+ * changes — `isCompatibleSave` checks it explicitly, so an older save is
+ * refused cleanly instead of loading as a corrupt half-state.
+ *   4 → 5: seed-aware markets, home equity + mortgage, inflating expenses,
+ *          mandatory debt service, three unreachable assets removed.
+ */
+export const RUN_VERSION = 5;
 
 export type Life = {
   health: number;
@@ -35,6 +61,8 @@ export type RunStatus = "playing" | "ended";
 export type EndReason = "story-complete" | "retired" | "quit" | "died";
 
 export type RunState = {
+  /** Engine/save format — see RUN_VERSION. Checked before a save is resumed. */
+  version: number;
   mode: ModeId;
   startYear: number;
   endYear: number | null;
@@ -44,6 +72,10 @@ export type RunState = {
   backgroundId: string;
   cash: number;
   debt: number;
+  /** Market value of the home, 0 while renting. Moves with the real-estate return. */
+  homeValue: number;
+  /** Outstanding mortgage principal. Secured, cheaper than `debt`, and amortising. */
+  mortgage: number;
   salary: number;
   job: string;
   holdings: Record<AssetId, number>;
@@ -56,14 +88,12 @@ export type RunState = {
   yearChoices: Record<string, string>; // eventId -> "choiceId|outcomeIdx"
   status: RunStatus;
   endReason?: EndReason;
+  /** Drives life-event rolls AND the synthetic half of the market model. */
   seed: number;
   lastDelta: number;
 };
 
-const ALL_ASSETS: AssetId[] = [
-  "savings", "bonds", "index", "realEstate", "gold", "crypto",
-  "voltMotors", "forgeIndustrial", "heliosEnergy",
-];
+const ALL_ASSETS: AssetId[] = ASSET_IDS;
 
 function emptyHoldings(): Record<AssetId, number> {
   return ALL_ASSETS.reduce((a, id) => ((a[id] = 0), a), {} as Record<AssetId, number>);
@@ -93,12 +123,33 @@ export function portfolioValue(s: RunState): number {
   return ALL_ASSETS.reduce((sum, id) => sum + (s.holdings[id] ?? 0), 0);
 }
 
-export function netWorth(s: RunState): number {
+/**
+ * What you could actually spend: cash + tradable holdings − unsecured debt.
+ * Home equity is deliberately excluded — you live in it, so it can't fund a
+ * retirement. This is what the FI test below measures.
+ */
+export function liquidNetWorth(s: RunState): number {
   return s.cash + portfolioValue(s) - s.debt;
 }
 
+export function homeEquity(s: RunState): number {
+  return s.homeValue - s.mortgage;
+}
+
+export function netWorth(s: RunState): number {
+  return liquidNetWorth(s) + homeEquity(s);
+}
+
 function eventContext(s: RunState): EventContext {
-  return { age: s.age, year: s.year, salary: s.salary, flags: s.flags, life: s.life };
+  return {
+    age: s.age,
+    year: s.year,
+    salary: s.salary,
+    cash: s.cash,
+    debt: s.debt,
+    flags: s.flags,
+    life: s.life,
+  };
 }
 
 function drawEvents(s: RunState): string[] {
@@ -122,6 +173,7 @@ export function initRun(mode: ModeId, backgroundId: string, name: string): RunSt
   const bg = getBackground(backgroundId);
   const seed = Math.floor(Math.random() * 1e9);
   const base: RunState = {
+    version: RUN_VERSION,
     mode,
     startYear: cfg.startYear,
     endYear: cfg.endYear,
@@ -131,6 +183,8 @@ export function initRun(mode: ModeId, backgroundId: string, name: string): RunSt
     backgroundId,
     cash: bg.cash,
     debt: bg.debt,
+    homeValue: 0,
+    mortgage: 0,
     salary: bg.salary,
     job: bg.job,
     holdings: emptyHoldings(),
@@ -204,7 +258,14 @@ export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice
   const e = o.effect;
 
   let salary = s.salary;
-  if (e.salaryTo !== undefined) salary = Math.max(0, Math.round(e.salaryTo));
+  // `salaryTo` is an ABSOLUTE figure written in year-one dollars, so it has to be
+  // restated at today's price level. Left nominal it becomes a structural trap:
+  // once expenses inflate past it, "take the steady job" hands the player a wage
+  // that can never cover a year of living, and the run is unrecoverable through
+  // no fault of the choice. Percentage effects need no such treatment, and cash
+  // effects are deliberately left nominal so the ledger derivations in
+  // `consequenceBeats` still reconcile exactly.
+  if (e.salaryTo !== undefined) salary = Math.max(0, Math.round(e.salaryTo * inflator(s)));
   else if (e.salaryPct) salary = Math.max(0, Math.round(salary * (1 + e.salaryPct / 100)));
 
   const flags = { ...s.flags };
@@ -213,16 +274,30 @@ export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice
 
   let partner = s.life.partner;
   let housing = s.life.housing;
-  let kids = s.life.kids;
   if (o.setFlags?.includes("married")) partner = true;
   if (o.clearFlags?.includes("married")) partner = false;
-  if (o.setFlags?.includes("owned")) housing = "owned";
-  if (eventId === "kid" && choice.id === "yes") kids += 1;
+
+  // Family size is an EFFECT, not a hardcoded event id — any event can add (or,
+  // one day, remove) a dependent, and the cost follows automatically.
+  const kids = Math.max(0, s.life.kids + (e.kids ?? 0));
+
+  // Buying a home: the down payment leaves as `effect.cash`, and in exchange the
+  // player gets an asset AND the mortgage that paid for it. Never one without
+  // the other — that was the "free house" bug.
+  let homeValue = s.homeValue;
+  let mortgage = s.mortgage;
+  if (o.setFlags?.includes("owned") && housing !== "owned") {
+    housing = "owned";
+    homeValue = HOME_PRICE;
+    mortgage = HOME_PRICE - HOME_DOWN_PAYMENT;
+  }
 
   return {
     ...s,
     cash: s.cash + (e.cash ?? 0),
     debt: Math.max(0, s.debt + (e.debt ?? 0)),
+    homeValue,
+    mortgage,
     salary,
     life: {
       ...s.life,
@@ -238,9 +313,39 @@ export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice
   };
 }
 
-function annualExpenses(s: RunState): number {
-  const housing = s.life.housing === "owned" ? 13000 : 14000;
-  return 14000 + housing + s.life.kids * 9000;
+/** Prices since year one of the run. Expenses inflate; a flat cost curve made
+ *  the back half of a long run free. */
+function inflator(s: RunState): number {
+  return Math.pow(1 + INFLATION, s.year - s.startYear);
+}
+
+/**
+ * Everything a year of this life costs, *excluding* debt service.
+ *
+ * Renting: rent inflates. Owning: no rent, but property tax, insurance and
+ * upkeep run ≈2.5% of the home's value every year — and the mortgage payment on
+ * top of that (charged separately in `advanceYear`, because part of it is
+ * principal and comes back as equity).
+ */
+export function annualExpenses(s: RunState): number {
+  const infl = inflator(s);
+  const living = (BASE_LIVING + s.life.kids * KID_COST) * infl;
+  const housing = s.life.housing === "owned" ? s.homeValue * HOME_UPKEEP : RENT_START * infl;
+  return Math.round(living + housing);
+}
+
+/** One year of the mortgage: interest first, the rest chips at the principal. */
+function mortgageService(s: RunState): { payment: number; balance: number } {
+  if (s.mortgage <= 0) return { payment: 0, balance: 0 };
+  const interest = s.mortgage * MORTGAGE_RATE;
+  const payment = Math.min(MORTGAGE_PAYMENT, s.mortgage + interest);
+  return { payment: Math.round(payment), balance: Math.round(Math.max(0, s.mortgage + interest - payment)) };
+}
+
+/** What the lender demands this year: the interest plus a slice of the principal. */
+export function debtMinimum(debt: number): number {
+  if (debt <= 0) return 0;
+  return Math.round(Math.min(debt, Math.max(DEBT_MIN_FLOOR, debt * DEBT_MIN_PCT)));
 }
 
 function deathRoll(s: RunState): boolean {
@@ -252,41 +357,92 @@ function deathRoll(s: RunState): boolean {
   return rng() < base + healthPenalty;
 }
 
-/** Resolve the current year's market + cashflow, then advance to next year. */
+/**
+ * Resolve the current year's market + cashflow, then advance to next year.
+ *
+ * Order matters, and it is the honest one:
+ *   1. markets move          5. the lender takes its minimum — from cash, then
+ *   2. the year's cash flow      by forcing a sale of holdings
+ *   3. the mortgage is served 6. the home revalues
+ *   4. any deficit becomes debt
+ */
 export function advanceYear(s: RunState): RunState {
-  const rets = yearReturns(s.year);
+  // Seeded: the synthetic half of the market moves differently per run. The
+  // historical returns inside `yearReturns` are untouched by the seed.
+  const rets = yearReturns(s.year, s.seed);
   const holdings = { ...s.holdings };
   const before = portfolioValue(s);
   for (const id of ALL_ASSETS) {
     holdings[id] = Math.max(0, (holdings[id] ?? 0) * (1 + (rets[id] ?? 0) / 100));
   }
-  const after = ALL_ASSETS.reduce((sum, id) => sum + holdings[id], 0);
+  let after = ALL_ASSETS.reduce((sum, id) => sum + holdings[id], 0);
   const portfolioDelta = Math.round(after - before);
 
-  const takeHome = Math.round(s.salary * 0.78);
+  const takeHome = Math.round(s.salary * TAKE_HOME);
   const expenses = annualExpenses(s);
-  let debt = s.debt * 1.07;
-  let cash = s.cash + takeHome - expenses;
+  const ms = mortgageService(s);
+  let cash = s.cash + takeHome - expenses - ms.payment;
+
+  // Interest accrues, then a deficit rolls into the balance. Going cash-negative
+  // is still allowed and still graceful — it just isn't free.
+  let debt = s.debt * (1 + DEBT_RATE);
   if (cash < 0) {
     debt += -cash;
     cash = 0;
   }
-  debt = Math.round(debt);
 
-  const draft: RunState = { ...s, holdings, cash, debt, lastDelta: portfolioDelta };
+  // The bite: the minimum is NOT optional. If cash can't cover it, holdings are
+  // sold pro-rata to make up the difference — which is exactly what high-interest
+  // debt does to a real portfolio. Only a player with neither cash nor holdings
+  // rolls the shortfall forward, and that balance keeps compounding at 7%.
+  let forcedSale = 0;
+  const due = debtMinimum(debt);
+  if (due > 0) {
+    const fromCash = Math.min(cash, due);
+    cash -= fromCash;
+    const short = due - fromCash;
+    if (short > 0 && after > 0) {
+      forcedSale = Math.min(short, after);
+      const keep = 1 - forcedSale / after;
+      for (const id of ALL_ASSETS) holdings[id] = holdings[id] * keep;
+      after -= forcedSale;
+    }
+    debt -= fromCash + forcedSale;
+  }
+  debt = Math.round(Math.max(0, debt));
+  cash = Math.round(cash);
+
+  // The house is a leveraged asset: it moves with the property market, and the
+  // mortgage doesn't shrink to match. 2008 is in the table for a reason.
+  const homeValue = s.homeValue > 0
+    ? Math.max(0, Math.round(s.homeValue * (1 + (rets.realEstate ?? 0) / 100)))
+    : 0;
+
+  const draft: RunState = {
+    ...s,
+    holdings,
+    cash,
+    debt,
+    homeValue,
+    mortgage: ms.balance,
+    lastDelta: portfolioDelta,
+  };
   const record: YearRecord = {
     yearIndex: yearIndex(s),
     year: s.year,
     age: s.age,
     netWorth: Math.round(netWorth(draft)),
-    indexReturn: sp500Return(s.year),
+    indexReturn: sp500Return(s.year, s.seed),
     portfolioDelta,
-    cashFlow: takeHome - expenses,
+    // What actually left the account this year — housing and debt service included,
+    // so the figure the player sees is the one they lived.
+    cashFlow: Math.round(takeHome - expenses - ms.payment - due),
   };
 
   const nextYear = s.year + 1;
   const nextAge = s.age + 1;
-  const salary = s.salary > 0 ? Math.round(s.salary * 1.02) : 0; // no drift while unemployed
+  // No drift while unemployed. Nominal wage growth, ~0.5pt ahead of prices.
+  const salary = s.salary > 0 ? Math.round(s.salary * (1 + WAGE_GROWTH)) : 0;
 
   let status: RunStatus = "playing";
   let endReason: EndReason | undefined;
@@ -320,13 +476,33 @@ export function retire(s: RunState): RunState {
 export function quitRun(s: RunState): RunState {
   return { ...s, status: "ended", endReason: "quit" };
 }
-export function canRetire(s: RunState): boolean {
-  return s.age >= 60;
+/**
+ * The number: 25× a year of expenses, invested. The 4% rule, which is the whole
+ * point of the game stated as one figure.
+ */
+export function retirementNumber(s: RunState): number {
+  return Math.round(annualExpenses(s) * RETIRE_MULTIPLE);
 }
 
-/** Whether a save is from a compatible (v4) engine. */
+/**
+ * Retirement is a GOAL, not an age gate. The old `age >= 60` test could never
+ * fire in Story mode (it runs 21 years from age 20–24, so the player tops out in
+ * their forties) — the mode's own ending was unreachable by construction.
+ * Hitting your number ends the run in any mode; age 60 stays as the ordinary
+ * path for a long Infinite run that never got rich.
+ */
+export function canRetire(s: RunState): boolean {
+  return liquidNetWorth(s) >= retirementNumber(s) || s.age >= 60;
+}
+
+/**
+ * Whether a save was written by THIS engine. Version-checked explicitly: the old
+ * duck-type ("does it have marketLog?") passed every past and future shape, so a
+ * stale save loaded as a half-initialised state instead of being refused.
+ * Callers should treat `false` as "no save" — see `loadRunChecked` in lib/saves.
+ */
 export function isCompatibleSave(s: unknown): s is RunState {
-  return Boolean(s && typeof s === "object" && "marketLog" in s && "flags" in s && "yearChoices" in s);
+  return Boolean(s && typeof s === "object" && (s as Partial<RunState>).version === RUN_VERSION);
 }
 
 export function playHeadline(year: number, indexReturn: number): { text: string; tone: "good" | "bad" | "warning" | "neutral" } | null {

@@ -38,12 +38,15 @@ export function ConsequenceBeat({
   event,
   choice,
   outcome,
+  netWorthBefore,
   netWorthAfter,
   onDone,
 }: {
   event: LifeEvent;
   choice: LifeChoice;
   outcome: Outcome;
+  /** The player's net worth the instant BEFORE the choice was applied. */
+  netWorthBefore: number;
   netWorthAfter: number;
   onDone: () => void;
 }) {
@@ -52,8 +55,16 @@ export function ConsequenceBeat({
 
   const effect = outcome.effect;
   const cash = effect.cash ?? 0;
-  const nwDelta = (effect.cash ?? 0) - (effect.debt ?? 0);
-  const netWorthBefore = netWorthAfter - nwDelta;
+  // The REALISED swing, measured, not reconstructed. Deriving it from the raw
+  // effect (`cash − debt`) ignored everything the engine does on the way in —
+  // the `Math.max(0, …)` debt floor, and a home purchase that swaps cash for
+  // equity — so a debt-forgiveness bigger than the balance printed a before/after
+  // pair that didn't subtract.
+  const nwDelta = netWorthAfter - netWorthBefore;
+  // The headline figure is still the cash that moved: that is what the ledger
+  // rows below decompose. It can differ from the net-worth swing on purpose —
+  // buying a house is −$44,000 of cash and ~$0 of net worth, and saying both is
+  // the lesson.
   const primary = cash !== 0 ? cash : nwDelta;
   const isLoss = primary < 0;
   const isGain = primary > 0;

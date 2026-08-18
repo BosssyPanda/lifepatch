@@ -1,8 +1,26 @@
 /**
- * Real (curated, approximate) S&P 500 annual total returns 1957–2025, plus
- * derived annual returns for the other tradable assets and notable macro events.
- * Numbers are percentages (26.7 === +26.7%). Returns are intentionally
- * approximate and easy to refine — they exist to make the world feel real.
+ * Market data + market model.
+ *
+ * ── WHAT IS REAL vs WHAT IS SYNTHETIC ──────────────────────────────────────
+ *
+ * REAL (curated, approximate history — identical for every player, NEVER seeded):
+ *   • `SP500[year]`        1957–2025 annual total returns.
+ *   • `OVERRIDES[a:y]`     the signature years for gold, bonds, real estate and
+ *                          crypto (1979 gold, 2008 housing, 2022 crypto, …).
+ *   • `savingsRate(year)`  the era's deposit/policy rate.
+ *   These are the history the game teaches from. They must stay truthful, and a
+ *   run's seed must never move them.
+ *
+ * SYNTHETIC (a model, not a record — seeded, so two players don't live the same
+ * market noise):
+ *   • `jitter()` / `gauss()` — the small per-asset wobble layered on the derived
+ *     series in years the override table doesn't name.
+ *   • `futureReturn()` — the post-`LAST_YEAR` regime, where there is no history
+ *     to read at all. It has a real mean, real variance and real crash years;
+ *     every asset can lose money, and crypto can lose most of it.
+ *
+ * Percentages throughout (26.7 === +26.7%). `seed` defaults to 0 so the landing
+ * page's reference toys (CompoundToy, TitleTicker) keep one stable series.
  */
 
 export type AssetId =
@@ -11,10 +29,7 @@ export type AssetId =
   | "index"
   | "realEstate"
   | "gold"
-  | "crypto"
-  | "voltMotors"
-  | "forgeIndustrial"
-  | "heliosEnergy";
+  | "crypto";
 
 export type Tone = "good" | "bad" | "warning" | "neutral";
 
@@ -59,18 +74,59 @@ const EVENTS: Record<number, MacroEvent> = {
   2022: { title: "Inflation Reckoning", blurb: "Stocks AND bonds fall together. Crypto −64%. The 60/40 portfolio breaks.", tone: "bad" },
 };
 
-// deterministic per-(asset,year) jitter in [-amp, amp]
-function jitter(year: number, salt: number, amp: number): number {
-  const x = Math.sin(year * 928.3 + salt * 13.7) * 43758.5453;
-  return ((x - Math.floor(x)) * 2 - 1) * amp;
+// ── synthetic layer ────────────────────────────────────────────────────────
+// Everything below this line is a MODEL. None of it is historical record.
+
+/** Deterministic uniform in [0,1) from (year, salt, seed). Same inputs → same draw. */
+function hash01(year: number, salt: number, seed: number): number {
+  let h = Math.imul(year | 0, 0x27d4eb2d) ^ Math.imul(salt | 0, 0x165667b1) ^ Math.imul(seed | 0, 0x9e3779b9);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+
+/** Deterministic per-(asset, year, run) jitter in [-amp, amp]. Synthetic noise, not data. */
+function jitter(year: number, salt: number, amp: number, seed: number): number {
+  return (hash01(year, salt, seed) * 2 - 1) * amp;
+}
+
+/** Approx standard normal, bounded to ±3.46σ (Irwin–Hall, n = 4). Synthetic. */
+function gauss(year: number, salt: number, seed: number): number {
+  const u =
+    hash01(year, salt, seed) +
+    hash01(year, salt + 1, seed) +
+    hash01(year, salt + 2, seed) +
+    hash01(year, salt + 3, seed);
+  return (u - 2) / 0.5773502691896258;
+}
+
+/** Salt bases, spaced by 4 so `gauss`'s four draws never collide. */
+const SALT = {
+  bonds: 8, gold: 20, realEstate: 32,
+  futIndex: 56, futCrash: 60, futDepth: 64, futRate: 68,
+  futBonds: 72, futGold: 76, futRe: 80, cryptoRegime: 84, cryptoDraw: 88,
+} as const;
+
+const r1 = (n: number) => Math.round(n * 10) / 10;
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
 // sparse signature overrides keyed `${asset}:${year}`
 const OVERRIDES: Record<string, number> = {
-  // gold
+  // gold — now continuous 1972→2024. The 1982–2004 stretch used to fall through to
+  // the synthetic `2 ± 9` wobble, which quietly gave gold a positive mean through
+  // a two-decade bear market it actually spent losing money. That single gap made
+  // "all-in gold" the best play in any run ending around 2010; the real series
+  // (London PM fix, year-over-year, approximate) removes it.
   "gold:1972": 49, "gold:1973": 73, "gold:1974": 66, "gold:1979": 126, "gold:1980": 15,
-  "gold:1981": -32, "gold:2005": 18, "gold:2007": 31, "gold:2008": 5, "gold:2009": 24,
-  "gold:2010": 29, "gold:2011": 10, "gold:2013": -28, "gold:2019": 18, "gold:2020": 25, "gold:2022": 0, "gold:2024": 27,
+  "gold:1981": -32, "gold:1982": 15, "gold:1983": -15, "gold:1984": -19, "gold:1985": 6,
+  "gold:1986": 19, "gold:1987": 24, "gold:1988": -16, "gold:1989": -2,
+  "gold:1990": -3, "gold:1991": -10, "gold:1992": -6, "gold:1993": 17, "gold:1994": -2,
+  "gold:1995": 1, "gold:1996": -5, "gold:1997": -21, "gold:1998": -1, "gold:1999": 1,
+  "gold:2000": -6, "gold:2001": 2, "gold:2002": 25, "gold:2003": 20, "gold:2004": 5,
+  "gold:2005": 18, "gold:2006": 23, "gold:2007": 31, "gold:2008": 5, "gold:2009": 24,
+  "gold:2010": 29, "gold:2011": 10, "gold:2012": 8, "gold:2013": -28, "gold:2014": -2,
+  "gold:2015": -10, "gold:2016": 8, "gold:2017": 13, "gold:2018": -1,
+  "gold:2019": 18, "gold:2020": 25, "gold:2021": -4, "gold:2022": 0, "gold:2023": 13, "gold:2024": 27,
   // bonds
   "bonds:1994": -3, "bonds:2008": 5, "bonds:2009": 6, "bonds:2013": -2, "bonds:2022": -13,
   // real estate
@@ -82,7 +138,13 @@ const OVERRIDES: Record<string, number> = {
   "crypto:2021": 60, "crypto:2022": -64, "crypto:2023": 155, "crypto:2024": 120, "crypto:2025": 40,
 };
 
-function savingsRate(year: number): number {
+/** REAL: the era's deposit rate through LAST_YEAR; a modelled cycle after it. */
+function savingsRate(year: number, seed = 0): number {
+  if (year > LAST_YEAR) {
+    // SYNTHETIC: a slow policy cycle (0.25%–9%) rather than a flat forever-rate.
+    const cycle = 3.4 + 2.3 * Math.sin((year - LAST_YEAR) / 5.5);
+    return r1(clamp(cycle + gauss(year, SALT.futRate, seed) * 1.2, 0.25, 9));
+  }
   if (year < 1970) return 4;
   if (year < 1979) return 6;
   if (year < 1985) return 10.5;
@@ -95,46 +157,96 @@ function savingsRate(year: number): number {
   return 5;
 }
 
-export function assetReturn(asset: AssetId, year: number): number {
-  const sp = SP500[year] ?? 8;
-  const ov = OVERRIDES[`${asset}:${year}`];
-  if (ov !== undefined) return ov;
+/**
+ * SYNTHETIC: the index in a year history doesn't cover.
+ * ~13% ± 14 in an ordinary year, with a ~1-in-9 crash of −15% to −40%.
+ * Arithmetic mean ≈ +8.5%/yr, σ ≈ 18.5, about one losing year in three — i.e.
+ * the shape of real equity returns, not the old risk-free "8% forever".
+ */
+const CRASH_P = 0.11;
+function futureIndex(year: number, seed: number): number {
+  if (hash01(year, SALT.futCrash, seed) < CRASH_P) {
+    return -(15 + hash01(year, SALT.futDepth, seed) * 25);
+  }
+  return 13 + gauss(year, SALT.futIndex, seed) * 14;
+}
 
+/**
+ * SYNTHETIC: crypto after the historical table runs out. Four regimes —
+ * the old `40 + jitter` printer is gone, and so is any memorisable answer.
+ *   20%  bubble pops   −80% … −40%
+ *   20%  long winter   −30% …  −5%
+ *   40%  chop          −10% … +50%
+ *   20%  mania         +70% … +260%
+ * Arithmetic mean ≈ +25%/yr but the COMPOUNDED mean is only ≈ +3%/yr — the
+ * volatility-drag lesson, priced in. A 50%+ loss lands in ~14% of years.
+ */
+function futureCrypto(year: number, seed: number): number {
+  const regime = hash01(year, SALT.cryptoRegime, seed);
+  const u = hash01(year, SALT.cryptoDraw, seed);
+  if (regime < 0.20) return -(40 + u * 40);
+  if (regime < 0.40) return -(5 + u * 25);
+  if (regime < 0.80) return -10 + u * 60;
+  return 70 + u * 190;
+}
+
+/** SYNTHETIC: every asset's post-`LAST_YEAR` regime. All of them can lose money. */
+function futureReturn(asset: AssetId, year: number, seed: number): number {
+  const sp = futureIndex(year, seed);
   switch (asset) {
     case "index":
-      return sp;
+      return r1(sp);
     case "savings":
-      return savingsRate(year);
+      return savingsRate(year, seed);
     case "bonds":
-      return +(savingsRate(year) * 0.7 + 1.5 + jitter(year, 2, 2)).toFixed(1);
+      return r1(savingsRate(year, seed) * 0.7 + 1.2 + gauss(year, SALT.futBonds, seed) * 3);
     case "gold":
-      return +(2 + jitter(year, 5, 9)).toFixed(1);
+      return r1(3 + gauss(year, SALT.futGold, seed) * 16);
     case "realEstate":
-      return +(5 + sp * 0.12 + jitter(year, 7, 3)).toFixed(1);
+      return r1(3.5 + sp * 0.35 + gauss(year, SALT.futRe, seed) * 6);
     case "crypto":
-      return year >= CRYPTO_FROM ? +(40 + jitter(year, 11, 30)).toFixed(1) : 0;
-    case "voltMotors": // high-beta tech/growth
-      return +(sp * 1.7 + jitter(year, 17, 12)).toFixed(1);
-    case "forgeIndustrial": // steadier value
-      return +(sp * 0.85 + 1 + jitter(year, 23, 5)).toFixed(1);
-    case "heliosEnergy": // oil/energy, era tilts
-      return +(sp * 0.6 + jitter(year, 29, 14)).toFixed(1);
+      return r1(futureCrypto(year, seed));
   }
 }
 
-export function yearReturns(year: number): Record<AssetId, number> {
-  const ids: AssetId[] = [
-    "savings", "bonds", "index", "realEstate", "gold", "crypto",
-    "voltMotors", "forgeIndustrial", "heliosEnergy",
-  ];
-  return ids.reduce((acc, id) => {
-    acc[id] = assetReturn(id, year);
+export function assetReturn(asset: AssetId, year: number, seed = 0): number {
+  // REAL first: a curated year is a fact and outranks every model below it.
+  const ov = OVERRIDES[`${asset}:${year}`];
+  if (ov !== undefined) return ov;
+  if (year > LAST_YEAR) return futureReturn(asset, year, seed);
+
+  const sp = SP500[year] ?? 8;
+  switch (asset) {
+    case "index": // REAL
+      return sp;
+    case "savings": // REAL
+      return savingsRate(year);
+    // The rest are REAL anchors (the era's rate, the index) plus SYNTHETIC wobble.
+    case "bonds":
+      return r1(savingsRate(year) * 0.7 + 1.5 + jitter(year, SALT.bonds, 2, seed));
+    case "gold":
+      return r1(2 + jitter(year, SALT.gold, 9, seed));
+    case "realEstate":
+      return r1(5 + sp * 0.12 + jitter(year, SALT.realEstate, 3, seed));
+    case "crypto":
+      // 2011–2025 are all curated in OVERRIDES above. Any *other* in-table year has
+      // no record to read, so it gets the model — never a flat "+40% and up".
+      return year >= CRYPTO_FROM ? r1(futureCrypto(year, seed)) : 0;
+  }
+}
+
+export const ASSET_IDS: AssetId[] = ["savings", "bonds", "index", "realEstate", "gold", "crypto"];
+
+export function yearReturns(year: number, seed = 0): Record<AssetId, number> {
+  return ASSET_IDS.reduce((acc, id) => {
+    acc[id] = assetReturn(id, year, seed);
     return acc;
   }, {} as Record<AssetId, number>);
 }
 
-export function sp500Return(year: number): number {
-  return SP500[year] ?? 8;
+export function sp500Return(year: number, seed = 0): number {
+  if (year > LAST_YEAR) return r1(futureIndex(year, seed)); // SYNTHETIC
+  return SP500[year] ?? 8; // REAL
 }
 
 export function macroEvent(year: number): MacroEvent | null {

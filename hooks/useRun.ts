@@ -84,8 +84,12 @@ export function useRun(userId: string | null) {
 
     resume: useCallback((r: RunState) => {
       setMode(r.mode);
+      // Second line of defence: AuthGate already filters incompatible saves out
+      // before offering "Continue", but a version mismatch must never reach the
+      // year loop — a save from an older engine has no `homeValue`/`mortgage`
+      // and would run as a corrupt half-state.
       if (!isCompatibleSave(r)) {
-        setPhase("setup"); // stale pre-v4 save — start fresh for this mode
+        setPhase("setup"); // stale save — start fresh for this mode
         return;
       }
       setRun(r);

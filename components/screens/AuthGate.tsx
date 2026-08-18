@@ -8,8 +8,8 @@ import { TerminalOp } from "@/components/ui/TerminalOp";
 import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import type { useAuth } from "@/hooks/useAuth";
 import { MODES, type ModeId } from "@/lib/modes";
-import { loadRun } from "@/lib/saves";
-import { isCompatibleSave, yearIndex, type RunState } from "@/lib/runEngine";
+import { loadRunChecked, OUTDATED_SAVE_MESSAGE } from "@/lib/saves";
+import { yearIndex, type RunState } from "@/lib/runEngine";
 
 export function AuthGate({
   auth,
@@ -32,6 +32,9 @@ export function AuthGate({
   const [signInError, setSignInError] = useState<string | null>(null);
   /** The save lookup failed — distinct from "no save", which is safe to overwrite. */
   const [loadFailed, setLoadFailed] = useState(false);
+  /** A save exists but predates the current engine: say so instead of silently
+   *  offering a fresh run, which reads as "my save vanished". */
+  const [outdated, setOutdated] = useState(false);
   const [retry, setRetry] = useState(0);
   const errorId = useId();
 
@@ -40,9 +43,12 @@ export function AuthGate({
     let active = true;
     setChecking(true);
     setLoadFailed(false);
-    loadRun(user.id, mode)
-      .then((s) => {
-        if (active) setSave(isCompatibleSave(s) ? s : null);
+    setOutdated(false);
+    loadRunChecked(user.id, mode)
+      .then((res) => {
+        if (!active) return;
+        setSave(res.kind === "ok" ? res.state : null);
+        setOutdated(res.kind === "outdated");
       })
       // A rejection used to fall through the bare `.finally()` and quietly offer a fresh
       // run — which overwrites a save that may well still be there.
@@ -153,6 +159,15 @@ export function AuthGate({
                   </p>
                   <NeonButton variant="secondary" size="md" className="w-full" onClick={() => setRetry((n) => n + 1)}>
                     Try again
+                  </NeonButton>
+                </>
+              ) : outdated ? (
+                <>
+                  {/* Not an error and not loss-red: nothing playable is being
+                      destroyed, so this is information, not a warning. */}
+                  <p className="voice text-sm leading-snug text-ink-dim">{OUTDATED_SAVE_MESSAGE}</p>
+                  <NeonButton variant="primary" size="md" className="w-full" onClick={onNew}>
+                    Begin a new life →
                   </NeonButton>
                 </>
               ) : save ? (

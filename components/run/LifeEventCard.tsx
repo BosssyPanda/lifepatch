@@ -7,6 +7,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { stingForTone } from "@/lib/audioMap";
 import { conceptsForText } from "@/lib/concepts";
+import { KID_COST } from "@/lib/economy";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEffect, LifeEvent } from "@/lib/lifeEvents";
 import { netWorth, type RunState } from "@/lib/runEngine";
@@ -29,6 +30,8 @@ function chips(e: LifeEffect): { text: string; positive: boolean }[] {
   if (e.debt) out.push({ text: `${e.debt > 0 ? "+" : "−"}${currency(Math.abs(e.debt))} debt`, positive: e.debt < 0 });
   if (e.salaryTo !== undefined) out.push({ text: `salary → ${currency(e.salaryTo)}`, positive: e.salaryTo > 0 });
   if (e.salaryPct) out.push({ text: `${e.salaryPct > 0 ? "+" : ""}${e.salaryPct}% pay`, positive: e.salaryPct > 0 });
+  // A dependent is a recurring cost, so it earns a money chip like any other.
+  if (e.kids) out.push({ text: `${e.kids > 0 ? "+" : "−"}${Math.abs(e.kids)} kid · ${currency(KID_COST)}/yr`, positive: e.kids < 0 });
   if (e.health) out.push({ text: `${e.health > 0 ? "+" : "−"}${Math.abs(e.health)} health`, positive: e.health > 0 });
   if (e.happiness) out.push({ text: `${e.happiness > 0 ? "+" : "−"}${Math.abs(e.happiness)} mood`, positive: e.happiness > 0 });
   return out;
@@ -60,6 +63,13 @@ export function LifeEventCard({
   const [showBeat, setShowBeat] = useState(false);
   /** Where a keyboard player lands when the beat closes — see the beat's onDone. */
   const outcomeRef = useRef<HTMLDivElement>(null);
+  /**
+   * Net worth captured the instant before the choice is applied, so the beat can
+   * print a true before → after pair. Reconstructing it from the outcome's raw
+   * effect can't work: the engine floors debt at zero and swaps cash for home
+   * equity, so the arithmetic doesn't close.
+   */
+  const nwBefore = useRef<number | null>(null);
 
   // reveal sting once, keyed to the outcome's tone
   const stungRef = useRef(false);
@@ -104,7 +114,12 @@ export function LifeEventCard({
               <button
                 type="button"
                 disabled={answered}
-                onClick={() => { audio.sfx("paper"); onChoose(event.id, c); }}
+                onClick={() => {
+                  audio.sfx("paper");
+                  // captured BEFORE the engine mutates — see nwBefore
+                  if (runState) nwBefore.current = netWorth(runState);
+                  onChoose(event.id, c);
+                }}
                 data-radius=""
                 className={`group flex w-full items-start gap-2.5 border px-3.5 py-2.5 text-left transition-all ${
                   isChosen ? "border-ink bg-ink/10" : dim ? "border-ink/10 opacity-45" : "border-hairline-strong hover:border-ink hover:bg-ink/[0.04]"
@@ -170,6 +185,7 @@ export function LifeEventCard({
         event={event}
         choice={chosenChoice}
         outcome={outcome}
+        netWorthBefore={nwBefore.current ?? netWorth(runState)}
         netWorthAfter={netWorth(runState)}
         onDone={() => {
           setShowBeat(false);
