@@ -24,14 +24,10 @@ export function PortfolioPanel({
   const assets = assetsForYear(run.year);
   const port = portfolioValue(run);
 
+  // One committed interaction = one trade = one sound. The rows stage their dollars
+  // locally and call this exactly once, on release (see AssetRow) — this used to fire on
+  // every `input` event, so a slow drag stacked ~100 overlapping SFX voices.
   const handleTrade = (id: AssetId, dollars: number) => {
-    // QA-PROBE-TEMP
-    if (typeof window !== "undefined") {
-      const w = window as unknown as { __qa?: { trades: number; sfx: number } };
-      w.__qa = w.__qa ?? { trades: 0, sfx: 0 };
-      w.__qa.trades += 1;
-      w.__qa.sfx += 1;
-    }
     audio.sfx(dollars >= 0 ? "coins" : "cash");
     onTrade(id, dollars);
   };
@@ -44,7 +40,8 @@ export function PortfolioPanel({
     for (const [id, dollars] of orders) onTrade(id, dollars);
   };
 
-  // share of total money (cash + invested) still sitting idle as cash
+  // Every dollar the player has. The ONE denominator this screen quotes shares against —
+  // rows print "% of total" off the same figure, so two readouts can never disagree.
   const total = run.cash + port;
   const cashPct = total > 0 ? (run.cash / total) * 100 : 0;
 
@@ -60,16 +57,21 @@ export function PortfolioPanel({
       {/* cash-left readout + debt tile */}
       <div className="mt-3 grid grid-cols-2 gap-2.5">
         <div className="border border-hairline bg-bg px-3 py-2.5">
-          <p className="eyebrow text-gain">Cash left to invest</p>
+          <p className="eyebrow text-gain">Cash on hand</p>
           <p className="num text-xl text-ink">{currency(run.cash)}</p>
           {/* fixed-size track + scaling fill: `transition-[width]` was a layout tween
-              on a bar that moves on every trade (DESIGN.md § Motion). Same 300ms. */}
+              on a bar that moves on every trade (DESIGN.md § Motion). Same 300ms.
+              The fill is the cash share and the caption states that same number: the bar
+              used to read as progress toward being invested while measuring the opposite. */}
           <div className="mt-1.5 h-1 overflow-hidden bg-ink/12" aria-hidden>
             <div
               className="h-full w-full origin-left bg-gain transition-transform duration-300"
               style={{ transform: `scaleX(${Math.max(0, Math.min(100, cashPct)) / 100})` }}
             />
           </div>
+          <p className="eyebrow mt-1 tabular-nums text-tertiary" style={{ fontSize: "0.55rem" }}>
+            {cashPct.toFixed(0)}% of total — {(100 - cashPct).toFixed(0)}% invested
+          </p>
         </div>
         <div className="border border-hairline bg-bg px-3 py-2.5">
           <div className="flex items-center justify-between">
@@ -95,12 +97,24 @@ export function PortfolioPanel({
       </div>
 
       <p className="voice mt-4 text-sm text-ink-dim">
-        Drag each slider to set how much you hold. No ticker tells you what&apos;s next — only risk does.
+        Every slider spends the same pot. Set the dollars you want in each — the trade lands when you
+        let go. No ticker tells you what&apos;s next; only risk does.
       </p>
+
+      {/* ONE shared budget line for the whole grid. It used to be reprinted under all six
+          rows, which read as six separate budgets when there is a single pool. */}
+      <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-y border-hairline py-1.5">
+        <p className="eyebrow text-tertiary">
+          <span className="num text-ink">{currency(run.cash)}</span> cash free to allocate
+        </p>
+        <p className="eyebrow text-tertiary">
+          total <span className="num text-ink-dim">{currency(total)}</span>
+        </p>
+      </div>
 
       <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2">
         {assets.map((a) => (
-          <AssetRowWrapper key={a.id} run={run} assetId={a.id} port={port} onTrade={handleTrade} def={a} />
+          <AssetRowWrapper key={a.id} run={run} assetId={a.id} total={total} onTrade={handleTrade} def={a} />
         ))}
       </div>
     </section>
@@ -110,23 +124,22 @@ export function PortfolioPanel({
 function AssetRowWrapper({
   run,
   assetId,
-  port,
+  total,
   def,
   onTrade,
 }: {
   run: RunState;
   assetId: AssetId;
-  port: number;
+  /** cash + everything invested — the single denominator every row quotes against */
+  total: number;
   def: AssetDef;
   onTrade: (id: AssetId, dollars: number) => void;
 }) {
-  const value = run.holdings[assetId] ?? 0;
-  const pct = port > 0 ? (value / port) * 100 : 0;
   return (
     <AssetRow
       asset={def}
-      value={value}
-      pct={pct}
+      value={run.holdings[assetId] ?? 0}
+      total={total}
       cash={run.cash}
       series={priceSeries(run, assetId)}
       lastReturn={lastAssetReturn(run, assetId)}
