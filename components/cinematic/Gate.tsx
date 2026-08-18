@@ -51,7 +51,12 @@ export function Gate({
   return (
     <div
       onPointerMove={onMove}
-      className="relative flex min-h-[100svh] w-full flex-col items-center justify-center gap-6 overflow-hidden px-6 py-16 lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-16"
+      // The column is a fixed 100svh rather than a floor of it. `min-h` let the stack
+      // grow past the screen instead of dividing it, which is how a 667px phone ended
+      // up 896px tall with BEGIN stranded 121px below the fold. A definite height gives
+      // the illustration below something to shrink against. lg keeps the old auto
+      // height — the row layout there sizes itself and never overflowed.
+      className="relative flex h-[100svh] min-h-[100svh] w-full flex-col items-center justify-center gap-6 overflow-hidden px-6 py-10 lg:h-auto lg:flex-row lg:items-center lg:justify-center lg:gap-10 lg:px-16 lg:py-16"
     >
       {/* ---------------- HUD: corner brackets ---------------- */}
       <div aria-hidden className="pointer-events-none absolute inset-3 z-20 lg:inset-5">
@@ -78,13 +83,24 @@ export function Gate({
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 1, ease: EASE }}
         style={{ perspective: 1100 }}
-        className="relative z-10 flex w-full max-w-[260px] shrink-0 justify-center sm:max-w-[320px] lg:h-[90svh] lg:max-h-[900px] lg:w-auto lg:max-w-none"
+        // The atlas is the one part of the composition that can afford to give ground,
+        // so it is what absorbs a short screen: `flex-1 min-h-0` lets it take the room
+        // the title block leaves rather than holding 520px and pushing BEGIN off the
+        // bottom. The svg carries preserveAspectRatio="xMidYMid meet", so it fits itself
+        // into whatever height it is handed — no crop, no distortion. max-h pins the
+        // natural size (2× the width cap, the viewBox being 600×1200) so tall phones
+        // render exactly as before. Under 480px of viewport the share left over is too
+        // thin to read as a drawing, so it steps out and lets the title carry the screen
+        // alone — that is landscape, where the stack used to overflow by 680px.
+        className="relative z-10 flex max-h-[520px] min-h-0 w-full max-w-[260px] flex-1 justify-center [@media(max-height:480px)]:hidden sm:max-h-[640px] sm:max-w-[320px] lg:h-[90svh] lg:max-h-[900px] lg:w-auto lg:max-w-none lg:flex-none"
       >
         <motion.div
           style={reduce ? undefined : { rotateX: tiltX, rotateY: tiltY }}
           className="relative flex h-full w-full justify-center overflow-hidden"
         >
-          <DataAtlas px={sx} py={sy} className="h-auto w-full lg:h-full lg:w-auto" />
+          {/* h-full, not h-auto: the drawing now takes its size from the height it is
+              given instead of deriving one from its width. lg already worked this way. */}
+          <DataAtlas px={sx} py={sy} className="h-full w-full lg:w-auto" />
           {/* slow accent scanline sweep over the panel */}
           {!reduce && (
             <motion.div
@@ -116,7 +132,9 @@ export function Gate({
       </motion.div>
 
       {/* ---------------- title block ---------------- */}
-      <div className="relative z-10 flex w-full max-w-xl flex-col items-center text-center lg:items-start lg:text-left">
+      {/* shrink-0: the eyebrow, the wordmark, BEGIN and the caption are the screen's
+          reason for existing, so they keep their height and the illustration yields. */}
+      <div className="relative z-10 flex w-full max-w-xl shrink-0 flex-col items-center text-center lg:items-start lg:text-left">
         {/* The eyebrow used to animate `letterSpacing` 0.5em → 0.28em, reflowing the
             text run every frame. The tracking is static now and the settle rides
             `scaleX` instead: 0.22em of extra tracking across 25 glyphs widened the
