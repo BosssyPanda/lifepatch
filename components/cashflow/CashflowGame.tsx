@@ -93,7 +93,7 @@ export function CashflowGame({
   const dream = getDream(s.dreamId);
   const prof = getProfession(s.professionId);
 
-  const rollLabel = s.skipTurns > 0 ? `Skip turn · downsized ×${s.skipTurns}` : turnPhase === "idle" ? "Roll" : "…";
+  const rollLabel = s.skipTurns > 0 ? `Skip turn · laid off ×${s.skipTurns}` : turnPhase === "idle" ? "Roll" : "…";
 
   // Leaving destroys the in-memory session; the save on disk survives, so say so.
   const exit = useArmedAction({
@@ -117,7 +117,9 @@ export function CashflowGame({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="eyebrow text-ink" style={{ fontSize: "0.58rem" }}>
-            {isFast ? "Fast Track" : "The Rat Race"} · Turn {s.turn}
+            {isFast ? "Fast Track" : "The Rat Race"} ·{" "}
+            {/* which turn you are on = what is live. The board name stays ink. */}
+            <span className="text-accent">Turn {s.turn}</span>
           </p>
           <h1 className="display-caps truncate text-xl text-ink sm:text-2xl">{prof.title}</h1>
         </div>
@@ -183,7 +185,10 @@ export function CashflowGame({
               )}
               {/* min-w: the busy "…" label used to collapse the button to ~40px and
                   reflow the whole hub under the board on every roll. */}
-              <NeonButton variant="brass" size="md" disabled={busy} onClick={handleRoll} className="min-w-[7rem]">
+              {/* ROLL is the primary path of a turn — the one action the whole board is
+                  waiting on — so it takes the accent fill (`primary`), not the outline
+                  the transitional `brass` alias gave it. */}
+              <NeonButton variant="primary" size="md" disabled={busy} onClick={handleRoll} className="min-w-[7rem]">
                 {rollLabel}
               </NeonButton>
               {isFast && (

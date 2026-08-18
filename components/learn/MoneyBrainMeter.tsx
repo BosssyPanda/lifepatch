@@ -35,8 +35,11 @@ export function MoneyBrainMeter({
       >
         {/* fixed-size track + scaling fill: `transition-[width]` was a layout tween.
             `scaleX` from the left edge is the same picture, on the compositor. */}
+        {/* Chartreuse: this bar is a reward readout — how much money brain you have
+            EARNED — not a state and not an amount. It is the only highlight on the
+            surfaces it appears on (the Money Brain map header, the run report). */}
         <div
-          className="h-full w-full origin-left bg-ink transition-transform duration-700 ease-out"
+          className="h-full w-full origin-left bg-highlight transition-transform duration-700 ease-out"
           style={{ transform: `scaleX(${pct / 100})` }}
         />
         {/* faint quarter-marks so progress reads against milestones */}

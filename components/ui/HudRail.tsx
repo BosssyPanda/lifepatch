@@ -49,7 +49,10 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
       <span className={`${cell} border-r border-hairline text-ink`} style={type}>
         {mode.toUpperCase()}
       </span>
-      <span className={`${cell} border-r border-hairline text-secondary`} style={type}>
+      {/* The counter is the one cell that is LIVE — the turn/year the run is standing
+          on right now — so it carries the accent and the rest of the rail stays ink.
+          6.04:1 on bg; it is also the cell the live region announces. */}
+      <span className={`${cell} border-r border-hairline text-accent`} style={type}>
         {counter.toUpperCase()}
       </span>
       <span aria-hidden className={`${cell} hidden text-tertiary sm:flex`} style={type}>

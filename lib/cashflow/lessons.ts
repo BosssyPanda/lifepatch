@@ -35,8 +35,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: "deals",
-    title: "Opportunities & doodads",
-    body: "Land on an Opportunity to buy assets (deals). Land on a Doodad and you must pay for some shiny thing that earns you nothing. Tell the difference and you'll already beat most people.",
+    title: "Opportunities & expenses",
+    body: "Land on an Opportunity to buy assets (deals). Land on an Expense and you must pay for some shiny thing that earns you nothing. Tell the difference and you'll already beat most people.",
     target: "board",
   },
   {
@@ -48,14 +48,20 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
 ];
 
 // One-line coach prompts shown the first time a player lands on each square type.
+//
+// The KEYS are the engine's square types and never change (`lib/cashflow/board.ts`,
+// saved `position` values depend on them). The TITLES are what a fifteen-year-old
+// reads, so they are the same plain words the tile is stamped with — Expense, Laid
+// Off — not the Cashflow-101 originals. "Doodad" is still taught, in the one place a
+// piece of jargon belongs: the glossary (`lib/cashflow/glossary.ts`).
 export const SQUARE_COACH: Record<string, { title: string; body: string }> = {
   deal: {
     title: "Opportunity",
     body: "Choose a Small Deal (cheap, frequent) or a Big Deal (pricey, powerful). Either way: only buy if it produces cash flow or a likely capital gain.",
   },
   doodad: {
-    title: "Doodad",
-    body: "A doodad is a liability disguised as a treat. You must pay. If you're short, the bank covers it — at a painful 10%/month. This is how good incomes go broke.",
+    title: "Expense",
+    body: "An expense is a cost dressed up as a treat — it takes money out and gives nothing back. You must pay. If you're short, the bank covers it at a painful 10%/month. This is how good incomes go broke.",
   },
   charity: {
     title: "Charity",
@@ -74,7 +80,7 @@ export const SQUARE_COACH: Record<string, { title: string; body: string }> = {
     body: "Congratulations! Children add a recurring monthly expense. Real life raises your bar to freedom — plan for it.",
   },
   downsized: {
-    title: "Downsized",
+    title: "Laid Off",
     body: "You lost your job: pay a full month of expenses and skip 2 turns. This is exactly why passive income matters — it doesn't get laid off.",
   },
 };
@@ -145,14 +151,14 @@ export const QUIZ_BANK: QuizQuestion[] = [
   },
   {
     id: "q-doodad",
-    concept: "Doodads",
-    question: "What's the smartest way to pay for fun 'doodads'?",
+    concept: "Expenses",
+    question: "What's the smartest way to pay for the fun stuff?",
     options: [
       { label: "From the cash flow your assets produce", correct: true },
       { label: "With a bank loan", correct: false },
       { label: "By selling your only rental", correct: false },
     ],
-    explain: "Buy assets first; let them generate income; then enjoy the doodads that income buys. That order keeps you wealthy.",
+    explain: "An expense takes money out and hands you nothing back — the opposite of an asset. Buy assets first, let them generate income, then let that income buy the fun. That order keeps you wealthy.",
   },
 ];
 

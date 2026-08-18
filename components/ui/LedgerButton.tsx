@@ -6,9 +6,9 @@ import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { SPRING } from "@/src/motion/tokens";
 
 /**
- * The house button. LEDGER: square-ish, mono, flat — emphasis comes from inversion, never
- * glow. Four variants do all the work; `inverted` flips a variant's fill (what the old
- * `paper` variant hard-coded).
+ * The house button. LEDGER: square-ish, mono, flat — emphasis comes from the ONE colour in
+ * the system, never from glow. Four variants do all the work; `inverted` flips a variant's
+ * fill (what the old `paper` variant hard-coded).
  *
  * The legacy names (`outline`, `paper`, `brass`) are still accepted so the ~40 existing call
  * sites keep compiling through this phase; they normalize onto the four below and go away in
@@ -27,8 +27,16 @@ const LEGACY: Record<LegacyVariant, { variant: CoreVariant; inverted?: boolean }
   paper: { variant: "primary", inverted: true },
 };
 
+/**
+ * `primary` is the SIGNATURE: the safety orange, and the only variant that carries it.
+ * It marks the primary path and nothing else — one per screen, at most one per card.
+ * Its label is knocked out in paper (`text-bg`), never ink: ink on orange measures
+ * 2.74:1 and fails, paper on orange is 6.04:1 (DESIGN.md § Palette, hard rule 1).
+ * Secondary/ghost/danger are unchanged — the accent must not become the default, or
+ * it stops meaning "this one".
+ */
 const VARIANTS: Record<CoreVariant, string> = {
-  primary: "bg-ink text-bg border-ink hover:bg-ink-bright",
+  primary: "bg-accent text-bg border-accent hover:bg-transparent hover:text-accent",
   secondary: "bg-transparent text-ink border-hairline-strong hover:bg-ink hover:text-bg",
   ghost: "bg-transparent text-ink-dim border-transparent hover:text-ink",
   danger: "bg-transparent text-loss border-loss hover:bg-loss hover:text-bg",
@@ -36,7 +44,7 @@ const VARIANTS: Record<CoreVariant, string> = {
 
 /** `inverted` = start from the filled state and empty out on hover (the old `paper`). */
 const INVERTED: Record<CoreVariant, string> = {
-  primary: "bg-ink text-bg border-ink hover:bg-transparent hover:text-ink",
+  primary: "bg-accent text-bg border-accent hover:bg-transparent hover:text-accent",
   secondary: "bg-ink text-bg border-ink hover:bg-transparent hover:text-ink",
   ghost: "bg-transparent text-ink border-transparent hover:text-ink-dim",
   danger: "bg-loss text-bg border-loss hover:bg-transparent hover:text-loss",
@@ -110,6 +118,9 @@ export function LedgerButton({
       aria-pressed={ariaPressed}
       aria-busy={loading || undefined}
       data-radius=""
+      // An accent-filled control cannot wear the accent focus ring — an orange ring 2px
+      // off an orange edge is one thick orange band. `globals.css` swaps it for ink here.
+      {...(core === "primary" ? { "data-accent-fill": "" } : null)}
       whileHover={inert || reduced ? undefined : { y: -1 }}
       whileTap={inert ? undefined : { scale: 0.97 }}
       transition={SPRING.press}

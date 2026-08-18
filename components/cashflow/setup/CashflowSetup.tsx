@@ -82,7 +82,7 @@ export function CashflowSetup({
                   whileHover={reduced ? undefined : { y: -4 }}
                   data-radius=""
                   // `ring-*` is box-shadow, which the LEDGER reset kills — a real inset outline.
-                  style={active ? { outline: "2px solid var(--color-ink)", outlineOffset: "-2px" } : undefined}
+                  style={active ? { outline: "2px solid var(--color-accent)", outlineOffset: "-2px" } : undefined}
                   onPointerMove={onSpot}
                   className="paper spotlight relative overflow-hidden p-4 text-left"
                 >
@@ -90,7 +90,7 @@ export function CashflowSetup({
                     <>
                       {/* the ink wash the other two pickers already had */}
                       <span className="pointer-events-none absolute inset-0 z-[1] bg-ink/15" />
-                      <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-6 w-6 place-items-center bg-ink text-bg">
+                      <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-6 w-6 place-items-center bg-accent text-bg">
                         <CheckIcon size={13} />
                       </span>
                     </>
@@ -143,9 +143,9 @@ export function CashflowSetup({
                   transition={{ delay: i * 0.04, type: "spring", stiffness: 240, damping: 20 }}
                   whileHover={reduced ? undefined : { y: -4 }}
                   data-radius=""
-                  style={active ? { outline: "2px solid var(--color-ink)", outlineOffset: "-2px" } : undefined}
+                  style={active ? { outline: "2px solid var(--color-accent)", outlineOffset: "-2px" } : undefined}
                   onPointerMove={onSpot}
-                  className={`spotlight relative overflow-hidden border p-4 text-left ${active ? "border-ink bg-ink/15" : "border-hairline-strong bg-bg2 hover:border-ink"}`}
+                  className={`spotlight relative overflow-hidden border p-4 text-left ${active ? "border-accent bg-ink/15" : "border-hairline-strong bg-bg2 hover:border-ink"}`}
                 >
                   <h3 className="display-caps text-base text-ink">{d.title}</h3>
                   <p className="mt-1 font-body text-[0.78rem] leading-snug text-ink-dim">{d.blurb}</p>

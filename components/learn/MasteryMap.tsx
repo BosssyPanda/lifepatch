@@ -200,8 +200,9 @@ function ConceptNode({
             <span
               key={i}
               className="h-1.5 flex-1"
-              // ink-scale, not gain-green: mastery is not money
-              style={{ background: i < level ? "var(--color-ink)" : "var(--color-hairline)" }}
+              // Chartreuse, not gain-green: a mastery tick is EARNED, and green here would
+              // read as money. Never accent either — these are not the primary path.
+              style={{ background: i < level ? "var(--color-highlight)" : "var(--color-hairline)" }}
             />
           ))}
         </span>

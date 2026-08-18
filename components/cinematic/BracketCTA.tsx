@@ -26,19 +26,24 @@ export function BracketCTA({
     <button
       type="button"
       onClick={onClick}
-      className={`group relative inline-flex min-w-[15rem] items-center overflow-hidden border border-ink px-4 py-3.5 text-left sm:min-w-[19rem] ${className}`}
+      // The site's loudest CTA, so it carries the signature: an orange keyline that
+      // fills orange on hover with the label knocked out in paper (6.04:1 — ink on
+      // orange fails at 2.74:1). `data-accent-fill` swaps the focus ring to ink, or
+      // an orange ring 2px off an orange edge would read as one thick band.
+      data-accent-fill=""
+      className={`group relative inline-flex min-w-[15rem] items-center overflow-hidden border border-accent px-4 py-3.5 text-left sm:min-w-[19rem] ${className}`}
     >
       {/* fill sweeps across on hover/press */}
       <span
         aria-hidden
-        className="absolute inset-0 origin-left scale-x-0 bg-ink transition-transform duration-300 ease-out group-hover:scale-x-100 group-active:scale-x-100 motion-reduce:transition-none"
+        className="absolute inset-0 origin-left scale-x-0 bg-accent transition-transform duration-300 ease-out group-hover:scale-x-100 group-active:scale-x-100 motion-reduce:transition-none"
       />
-      <span className="relative z-10 flex w-full items-center gap-2.5 display-caps text-ink transition-colors duration-200 group-hover:text-bg">
+      <span className="relative z-10 flex w-full items-center gap-2.5 display-caps text-accent transition-colors duration-200 group-hover:text-bg">
         <span className="text-secondary transition-colors duration-200 group-hover:text-bg">[</span>
         {caret && (
           <motion.span
             aria-hidden
-            className="inline-block h-[0.9em] w-[0.5ch] bg-ink group-hover:bg-bg"
+            className="inline-block h-[0.9em] w-[0.5ch] bg-accent group-hover:bg-bg"
             animate={reduce ? undefined : { opacity: [1, 1, 0, 0] }}
             transition={{ duration: 1.05, repeat: Infinity, times: [0, 0.5, 0.5, 1], ease: "linear" }}
           />

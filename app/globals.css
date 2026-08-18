@@ -262,10 +262,23 @@ body {
   }
 }
 
-/* ---------------- Focus ring ---------------- */
+/* ---------------- Focus ring ----------------
+   The signature orange is also the "you are here" of the keyboard: 2px, offset 2px,
+   the same geometry as before — only the hue changed. Measured, not assumed:
+   accent on bg 6.04:1, on bg2 5.72:1, on bg3 5.36:1, so the ring clears WCAG 1.4.11
+   on every ground the app paints (`scratchpad/palette-audit.js`).
+
+   The one place it cannot work is on top of itself. A control that is ITSELF an
+   accent fill (the primary CTA, the bracketed terminal CTA, the finale wordmark)
+   would wear an orange ring 2px off an orange edge and read as one thick band, so
+   those opt out by name and take the ink ring instead — 16.54:1 on the ground the
+   ring is actually drawn on, and unmistakably not part of the button. */
 :where(button, a, [tabindex], input, select):focus-visible {
-  outline: 2px solid var(--color-ink);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
+}
+[data-accent-fill]:focus-visible {
+  outline-color: var(--color-ink);
 }
 
 /* A composed screen owns the display — game toasts wait. The recap film sets

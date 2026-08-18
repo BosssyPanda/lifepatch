@@ -57,14 +57,14 @@ export function Setup({
               whileHover={reduced ? undefined : { y: -5 }}
               data-radius=""
               // `ring-*` is box-shadow, which the LEDGER reset kills — a real inset outline.
-              style={active ? { outline: "2px solid var(--color-ink)", outlineOffset: "-2px" } : undefined}
+              style={active ? { outline: "2px solid var(--color-accent)", outlineOffset: "-2px" } : undefined}
               onPointerMove={onSpot}
               className="paper spotlight relative overflow-hidden p-5 text-left"
             >
               {active && (
                 <>
                   <span className="pointer-events-none absolute inset-0 z-[1] bg-ink/15" />
-                  <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center border-2 border-bg bg-ink text-bg">
+                  <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center border-2 border-bg bg-accent text-bg">
                     <CheckIcon size={15} />
                   </span>
                 </>

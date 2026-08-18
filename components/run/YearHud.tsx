@@ -96,7 +96,10 @@ export function YearHud({
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-3 py-2.5 sm:gap-6 sm:px-5">
         <div className="shrink-0">
           <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>Year</p>
-          <p className="num text-2xl leading-none text-ink">{yearIndex(run)}</p>
+          {/* The year you are IN — the accent's "what is live" job. Every other figure in
+              this rail is money and stays on the gain/loss/ink scale, so the one orange
+              number in the HUD can never be mistaken for an amount. */}
+          <p className="num text-2xl leading-none text-accent">{yearIndex(run)}</p>
         </div>
         <div className="hidden h-7 w-px shrink-0 bg-hairline sm:block" />
 

@@ -104,7 +104,12 @@ function SaleRow({
           {currency(gain)} vs. the {currency(basis)} you paid
         </p>
       </div>
-      <NeonButton variant={good ? "paper" : "outline"} size="sm" onClick={onSell}>
+      {/* One variant for every row, whatever the maths says. A market card can list
+          three sellable assets at once, so `good ? primary : secondary` would have put
+          the accent on "this is the profitable one" — orange grading an outcome, which
+          the palette forbids, and three orange buttons in one card besides. The gain or
+          loss is already stated twice above, in the colour that means money. */}
+      <NeonButton variant="secondary" size="sm" onClick={onSell}>
         Sell
       </NeonButton>
     </div>

@@ -8,6 +8,7 @@ import { PROFESSIONS } from "@/lib/cashflow/professions";
 import { VERDICTS } from "@/lib/verdict";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
+import { SectionMark } from "@/components/ui/SectionMark";
 
 /**
  * Landing set piece 002 — "HOW A RUN WORKS" (spectacle Phase K1).
@@ -200,12 +201,12 @@ export function RunTour() {
   if (reduced || narrow) {
     return (
       <section className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="runtour-heading">
-        <p className="eyebrow text-secondary">002 — The Loop</p>
+        <SectionMark n="002">The Loop</SectionMark>
         <h2 id="runtour-heading" className="display-caps mt-3 text-3xl text-ink sm:text-5xl">How a run works</h2>
         <div className="mt-10 grid gap-8 md:grid-cols-2">
           {STEPS.map((s, i) => (
             <div key={s.n}>
-              <p className="eyebrow text-secondary">{s.n} — {s.label}</p>
+              <SectionMark n={s.n}>{s.label}</SectionMark>
               <p className="mt-1 mb-4 font-body text-sm text-ink-dim">{s.sub}</p>
               {panels(true)[i]}
             </div>
@@ -219,7 +220,7 @@ export function RunTour() {
     <section ref={ref} className="relative h-[380svh] border-t border-hairline" aria-labelledby="runtour-heading">
       <div className="sticky top-0 flex h-[100svh] flex-col overflow-hidden px-5 py-10 sm:px-10 lg:px-16">
         <div>
-          <p className="eyebrow text-secondary">002 — The Loop</p>
+          <SectionMark n="002">The Loop</SectionMark>
           <h2 id="runtour-heading" className="display-caps mt-2 text-3xl text-ink sm:text-5xl">How a run works</h2>
         </div>
 
@@ -234,8 +235,11 @@ export function RunTour() {
                     className="num mt-0.5 border px-1.5 py-0.5 transition-colors duration-300"
                     style={{
                       fontSize: "0.62rem",
-                      borderColor: active ? "var(--color-ink)" : "var(--color-hairline)",
-                      color: active ? "var(--color-ink)" : "var(--color-tertiary)",
+                      // the accent's other job: what is LIVE. One orange chip at a
+                      // time, walking the rail as you scroll — the label beside it
+                      // stays ink, so the colour marks position, not importance.
+                      borderColor: active ? "var(--color-accent)" : "var(--color-hairline)",
+                      color: active ? "var(--color-accent)" : "var(--color-tertiary)",
                     }}
                   >
                     {s.n}

@@ -199,8 +199,10 @@ export function useCashflowTurn({
     const beats: TeachBeat[] = [
       // first purchase: name what just happened before asking anything about it
       { key: "t-first-deal", kind: "coach", ...MILESTONE_LESSONS.firstDeal, concept: "assets", when: ctx === "deal" && state.dealsBought >= 1 },
-      // the doodad you just paid for, explained while the sting is fresh
-      { key: "t-doodad", kind: "coach", title: "Doodads", body: find("q-doodad").explain, concept: find("q-doodad").concept, when: ctx === "doodad" },
+      // the expense you just paid for, explained while the sting is fresh. The beat key
+      // and the square type stay `doodad` (they are engine identifiers and are persisted
+      // in `seenLessons`); only the words a player reads are the board's plain ones.
+      { key: "t-doodad", kind: "coach", title: "Expenses", body: find("q-doodad").explain, concept: find("q-doodad").concept, when: ctx === "doodad" },
       { key: "t-q-asset", kind: "quiz", q: find("q-asset"), when: state.dealsBought >= 2 },
       // the number on every deal card — explained once they own something to apply it to
       { key: "t-coc", kind: "coach", title: "Cash-on-cash return", body: find("q-coc").explain, concept: find("q-coc").concept, when: owns >= 1 && state.dealsBought >= 2 },

@@ -6,6 +6,7 @@ import { NeonButton } from "@/components/ui/LedgerButton";
 import { MODES } from "@/lib/modes";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { SPRING } from "@/src/motion/tokens";
+import { SectionMark } from "@/components/ui/SectionMark";
 
 /** Session flag: the visitor has reached the end of the file at least once —
  *  later visits get the hero CTA back (read in Intro). */
@@ -46,7 +47,7 @@ export function FooterColophon({ onBegin, onAlmanac }: { onBegin: () => void; on
         viewport={{ amount: 0.55, once: true }}
         aria-labelledby="finale-heading"
       >
-        <p className="eyebrow text-secondary">007 — Filing</p>
+        <SectionMark n="007">Filing</SectionMark>
         <h2 id="finale-heading" className="voice mt-4 max-w-xl text-xl text-ink sm:text-2xl">
           You&apos;ve read the file. The house is ready when you are.
         </h2>
@@ -67,7 +68,11 @@ export function FooterColophon({ onBegin, onAlmanac }: { onBegin: () => void; on
             animate={stamped ? { opacity: 1, scaleY: 1, y: 0 } : { opacity: 0, scaleY: 1.18, y: 8 }}
             transition={reduced ? { duration: 0 } : SPRING.pop}
             style={{ fontSize: "clamp(3rem, 11.5vw, 10.5rem)", transformOrigin: "left bottom" }}
-            className="group block cursor-pointer border-y-2 border-transparent text-left font-anton leading-[0.92] tracking-[-0.01em] text-ink transition-colors duration-200 hover:bg-ink hover:text-bg focus-visible:bg-ink focus-visible:text-bg"
+            // The finale CTA is the display type itself, so it is also where the
+            // signature lands hardest: orange at rest, an orange plate with a paper
+            // knockout on hover/focus. `data-accent-fill` takes the ink focus ring.
+            data-accent-fill=""
+            className="group block cursor-pointer border-y-2 border-transparent text-left font-anton leading-[0.92] tracking-[-0.01em] text-accent transition-colors duration-200 hover:bg-accent hover:text-bg focus-visible:bg-accent focus-visible:text-bg"
           >
             BEGIN A&nbsp;RUN
             <span aria-hidden className="inline-block translate-y-[-0.06em] pl-[0.15em] transition-transform duration-200 group-hover:translate-x-[0.08em]">→</span>

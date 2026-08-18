@@ -1,11 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BrainIcon, CheckIcon, FreedomIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
+import { BoardView } from "@/components/cashflow/board/BoardView";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { StreakChip } from "@/components/social/StreakChip";
 import { useAudio } from "@/hooks/useAudio";
+import { RAT_BOARD, RAT_SQUARE_META } from "@/lib/cashflow/board";
 import { FIRST_YEAR, LAST_YEAR, sp500Return } from "@/lib/markets";
 import { MODES, type ModeId } from "@/lib/modes";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
@@ -58,9 +60,11 @@ export function ModeSelect({
               transition={{ ...SPRING.pop, delay: i * 0.1 }}
               whileHover={reduced ? undefined : { y: -6 }}
               data-radius=""
-              // 2px inset ink outline: `ring-*` is box-shadow, which the LEDGER reset kills,
-              // so the "picked" card had no border treatment at all.
-              style={active ? { outline: "2px solid var(--color-ink)", outlineOffset: "-2px" } : undefined}
+              // 2px inset ACCENT outline: `ring-*` is box-shadow, which the LEDGER reset
+              // kills, so the "picked" card had no border treatment at all. Orange because
+              // the chosen card is the primary path — the one thing on this screen that is
+              // about to happen. The wash under it stays ink: a hue would fight the board.
+              style={active ? { outline: "2px solid var(--color-accent)", outlineOffset: "-2px" } : undefined}
               onPointerMove={onSpot}
               className="paper spotlight group relative overflow-hidden p-6 text-left"
             >
@@ -68,7 +72,7 @@ export function ModeSelect({
               {active && (
                 <>
                   <span className="pointer-events-none absolute inset-0 bg-ink/15" />
-                  <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center border-2 border-bg bg-ink text-bg">
+                  <span data-radius="round" className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center border-2 border-bg bg-accent text-bg">
                     <CheckIcon size={15} />
                   </span>
                 </>
@@ -142,42 +146,70 @@ export function ModeSelect({
 /* ---------------- live micro-previews (Phase N) ---------------- */
 
 function ModePreview({ id, reduced }: { id: ModeId; reduced: boolean }) {
-  if (id === "cashflow") return <BoardPreview reduced={reduced} />;
+  if (id === "cashflow") return <BoardPreview />;
   if (id === "story") return <MarketSparkline reduced={reduced} />;
   return <YearTicker reduced={reduced} />;
 }
 
-/** Rat Race — the Phase G board orbit, muted, playing only while on screen. */
-function BoardPreview({ reduced }: { reduced: boolean }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  // Without this a missing/404 webm painted a black rectangle inside the card, with no
-  // hint that it was ever meant to be anything, so it falls back to the poster still.
-  const [failed, setFailed] = useState(false);
+/**
+ * Rat Race — the REAL board, in miniature.
+ *
+ * This window used to play `/board3d/board-orbit.webm`, an orbiting render of a 3D
+ * board that no longer exists in this game: you picked Rat Race off a card showing
+ * one board and landed on a completely different one. It now mounts `BoardView` —
+ * the same component the run and the landing's Arena render (see
+ * `components/cinematic/landing/BoardPreview.tsx`, which drives it the same way,
+ * without game state) — so the card cannot drift from the board again.
+ *
+ * Static and inert by construction, not by flag: no `onSquareHover` means BoardView
+ * attaches no listeners at all, and a `tokenIndex` that never changes means no hop
+ * path, no springs, no timers — nothing here ticks whether or not motion is reduced.
+ * `describeFor` is deliberately omitted too: `title` tooltips inside a <button> are
+ * noise. The card is a button, so the whole preview is `aria-hidden` — the mode's
+ * name, tagline and blurb are the real text under it.
+ *
+ * The board is laid out at its own natural size and scaled into the 80px window, so
+ * the tiles keep the proportions (and the container-query type scale) they have in
+ * the game instead of collapsing at a size the labels were never solved for.
+ */
+const CARD_BOARD_PX = 232;
+const CARD_WINDOW_PX = 80;
+/** One "you are here" square, so the card carries the board's accent the way the run does. */
+const CARD_ACTIVE_SQUARE = 5;
 
-  useEffect(() => {
-    if (reduced || failed) return;
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) void el.play().catch(() => {});
-        else el.pause();
-      },
-      { threshold: 0.3 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [reduced, failed]);
-
-  if (reduced || failed) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src="/board3d/board-poster.jpg" alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />;
-  }
+function BoardPreview() {
   return (
-    <video ref={ref} muted loop playsInline preload="none" poster="/board3d/board-poster.jpg" aria-hidden onError={() => setFailed(true)} className="h-full w-full object-cover">
-      <source src="/board3d/board-orbit.webm" type="video/webm" />
-      <source src="/board3d/board-orbit.mp4" type="video/mp4" />
-    </video>
+    <div aria-hidden className="absolute inset-0 overflow-hidden">
+      {/* Centred by margin, not by `place-items-center`: the window is a scroll
+          container (overflow: hidden), and CSS box alignment treats centring in a
+          scroll container as SAFE — an item bigger than the box falls back to
+          start-alignment rather than overflowing both ways. The 232px board did
+          exactly that and hung out of the bottom of the frame. Half-negative
+          margins put its centre on the window's centre with no alignment involved,
+          and `scale` about that centre keeps it there. */}
+      <div
+        style={{
+          position: "absolute",
+          left: "50%",
+          top: "50%",
+          width: CARD_BOARD_PX,
+          height: CARD_BOARD_PX,
+          marginLeft: -CARD_BOARD_PX / 2,
+          marginTop: -CARD_BOARD_PX / 2,
+          transform: `scale(${CARD_WINDOW_PX / CARD_BOARD_PX})`,
+          transformOrigin: "center",
+        }}
+      >
+        <BoardView
+          squares={RAT_BOARD}
+          tokenIndex={CARD_ACTIVE_SQUARE}
+          activeIndex={CARD_ACTIVE_SQUARE}
+          labelFor={(t) => RAT_SQUARE_META[t as keyof typeof RAT_SQUARE_META]?.short ?? "?"}
+          playerInitial="P"
+          title="Rat Race"
+        />
+      </div>
+    </div>
   );
 }
 

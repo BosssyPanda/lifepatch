@@ -64,7 +64,7 @@ export const GLOSSARY: GlossaryTerm[] = [
   },
   {
     term: "Doodad",
-    def: "A non-essential purchase that produces no income — a liability dressed up as a treat.",
+    def: "The classic board-game name for what this board stamps EXPENSE: a non-essential purchase that produces no income — a liability dressed up as a treat.",
   },
   {
     term: "Good Debt vs. Bad Debt",

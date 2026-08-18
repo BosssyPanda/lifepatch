@@ -54,18 +54,22 @@ export function StreakChip() {
   }
 
   return (
+    /* Chartreuse, and one of only four places in the app that gets it: a streak is
+       something you EARNED, which is the highlight's entire remit (DESIGN.md § Palette
+       amendment E). Never orange — a streak is not the primary path — and never green,
+       which would read as money. 12.35:1 over this chip's ground. */
     <span className="inline-flex items-center gap-1.5 border border-ink/40 bg-bg2/70 px-3 py-1 text-sm">
       <motion.span
         aria-hidden
         animate={pulse && !reduce ? { scale: [1, 1.55, 1], rotate: [0, -12, 10, 0] } : { scale: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="text-ink"
+        className="text-highlight"
       >
         <FlameIcon size={14} />
       </motion.span>
       {/* the outer span is role=generic, where ARIA forbids a name — so the label is text */}
       <span className="sr-only">Daily streak: </span>
-      <span className="display-caps tracking-[0.1em] text-ink">{current}</span>
+      <span className="display-caps tracking-[0.1em] text-highlight">{current}</span>
       <span className="text-ink-dim">day{current === 1 ? "" : "s"}</span>
     </span>
   );

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { assetReturn, FIRST_YEAR, LAST_YEAR, type AssetId } from "@/lib/markets";
 import { NumberTicker } from "./NumberTicker";
+import { SectionMark } from "@/components/ui/SectionMark";
 
 /**
  * Landing set piece 005 — "RUN THE NUMBERS" (spectacle Phase K3).
@@ -83,7 +84,7 @@ export function CompoundToy() {
 
   return (
     <section className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="toy-heading">
-      <p className="eyebrow text-secondary">005 — Run the Numbers</p>
+      <SectionMark n="005">Run the Numbers</SectionMark>
       <h2 id="toy-heading" className="display-caps mt-3 text-3xl text-ink sm:text-5xl">
         Boring money, absurd endings.
       </h2>

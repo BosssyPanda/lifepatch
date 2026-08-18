@@ -26,12 +26,13 @@ export function ConceptToast({ conceptId }: { conceptId: string | null }) {
       <Toast show={!!conceptId}>
         {/* .concept-toast: hidden while a ceremony owns the screen (body[data-ceremony]) */}
         <div className="concept-toast pointer-events-none flex items-center gap-3 border border-hairline bg-bg2 px-4 py-2.5">
+          {/* the moment a lesson lands — the fourth and last chartreuse in the app */}
           <span
             aria-hidden
-            className="eyebrow text-secondary"
+            className="eyebrow text-highlight"
             style={{ fontSize: "0.55rem", letterSpacing: "0.24em" }}
           >
-            Noted
+            ✓ Noted
           </span>
           <span aria-hidden className="h-3.5 w-px bg-hairline" />
           <span aria-hidden className="display-caps text-sm text-ink">{concept?.title ?? conceptId}</span>

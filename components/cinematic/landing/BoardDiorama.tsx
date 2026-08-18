@@ -3,6 +3,7 @@
 import { RAT_BOARD, RAT_SQUARE_META } from "@/lib/cashflow/board";
 import type { RatSquareType } from "@/lib/cashflow/types";
 import { BoardPreview } from "./BoardPreview";
+import { SectionMark } from "@/components/ui/SectionMark";
 
 /**
  * Landing set piece 003 — "THE ARENA".
@@ -29,7 +30,7 @@ const TALLY = RAT_BOARD.reduce<{ type: RatSquareType; n: number }[]>((acc, sq) =
 export function BoardDiorama() {
   return (
     <section className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="arena-heading">
-      <p className="eyebrow text-secondary">003 — The Arena</p>
+      <SectionMark n="003">The Arena</SectionMark>
       <h2 id="arena-heading" className="display-caps mt-2 text-3xl text-ink sm:text-5xl">
         Twenty-four squares. No exits.
       </h2>

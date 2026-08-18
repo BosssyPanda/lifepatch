@@ -20,6 +20,6 @@ export const FT_SETBACK_ACTION = "Take the hit";
 
 // Teaching lines that previously sat inline in the event cards.
 export const CHARITY_STRATEGY_NOTE =
-  "Generosity here is also strategy: choosing your dice count lets you aim for Opportunity squares and dodge Doodads.";
+  "Generosity here is also strategy: choosing your dice count lets you aim for Opportunity squares and dodge Expenses.";
 export const EXPENSE_FREEDOM_NOTE =
   "Life raises the bar to freedom. The more it costs to live, the more passive income you need — plan ahead.";

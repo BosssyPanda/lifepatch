@@ -27,6 +27,7 @@ import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { useScramble } from "@/src/motion/useScramble";
 import { DUR, EASE, SPRING } from "@/src/motion/tokens";
+import { SectionMark } from "@/components/ui/SectionMark";
 
 const TAGLINE = "SURVIVE THE INTERNET ECONOMY";
 
@@ -209,7 +210,10 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
             transition={{ duration: DUR.base, ease: EASE }}
             className="eyebrow text-secondary"
           >
-            File No. 01 — Your Money
+            {/* The hero's folio, and the first orange thing on the site: the same
+                numeral-in-accent rule the seven `SectionMark`s below it follow, so the
+                signature is introduced in the first frame instead of arriving at 001. */}
+            File No. <span className="text-accent">01</span> — Your Money
           </motion.p>
 
           {/* the wordmark STAMPS in with an invert flash — one SOLID plane.
@@ -292,20 +296,26 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
                 <NeonButton variant="secondary" size="lg" onClick={onAlmanac}>Almanac</NeonButton>
               </>
             ) : (
-              <div className="flex items-center gap-3 border border-hairline px-4 py-3">
-                <span className="num text-ink" aria-hidden>[</span>
+              /* The bracketed terminal prompt, in the same orange keyline `BracketCTA`
+                 wears — on a first visit this IS the CTA, it just asks you to scroll
+                 instead of to click, and the hero would otherwise be the one screen on
+                 the site with no signature on it at all. The sentence stays ink. */
+              <div className="flex items-center gap-3 border border-accent px-4 py-3">
+                <span className="num text-accent" aria-hidden>[</span>
                 <span className="eyebrow text-ink" style={{ fontSize: "0.66rem", letterSpacing: "0.22em" }}>
                   Read the file — the run waits at the end
                 </span>
+                {/* On a first visit there is no CTA up here — scrolling IS the primary
+                    path, so the arrow that says so is the thing that carries the accent. */}
                 <motion.span
                   aria-hidden
-                  className="num text-ink"
+                  className="num text-accent"
                   animate={reduced ? {} : { y: [0, 3, 0] }}
                   transition={{ duration: 1.8, repeat: Infinity }}
                 >
                   ↓
                 </motion.span>
-                <span className="num text-ink" aria-hidden>]</span>
+                <span className="num text-accent" aria-hidden>]</span>
               </div>
             )}
           </motion.div>
@@ -337,7 +347,7 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
       <section className="px-5 py-20 sm:px-10 lg:px-16">
         <div className="mx-auto grid max-w-5xl gap-px border border-hairline bg-hairline sm:grid-cols-[1.4fr_1fr]">
           <div className="bg-bg p-6 sm:p-10">
-            <p className="eyebrow text-secondary">001 — The Setup</p>
+            <SectionMark n="001">The Setup</SectionMark>
             <h2 className="display-caps mt-3 text-2xl leading-tight text-ink sm:text-4xl">
               The economy is rigged.
               <br />

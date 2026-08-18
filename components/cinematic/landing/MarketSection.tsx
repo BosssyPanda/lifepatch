@@ -6,6 +6,7 @@ import { FIRST_YEAR, LAST_YEAR, macroEvent, sp500Return } from "@/lib/markets";
 import { NumberTicker } from "./NumberTicker";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
+import { SectionMark } from "@/components/ui/SectionMark";
 
 /**
  * Landing set piece 004 — "THE HOUSE KEEPS SCORE" (spectacle Phase K2).
@@ -64,7 +65,7 @@ export function MarketSection() {
     <section ref={ref} className="border-t border-hairline px-5 py-20 sm:px-10 lg:px-16" aria-labelledby="market-heading">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="eyebrow text-secondary">004 — The House Ledger</p>
+          <SectionMark n="004">The House Ledger</SectionMark>
           <h2 id="market-heading" className="display-caps mt-3 text-3xl text-ink sm:text-5xl">
             69 years. Every crash. Still up.
           </h2>

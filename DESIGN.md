@@ -63,9 +63,44 @@ and fourth money colour and must never be used to grade a number.
   Orange is *not* a verdict tier. The old warm-brown/olive/amber seal hexes are SPENT-era
   legacy and must not come back.
 - No cool blues/purples, no warm browns, no second orange, no gradients as decoration — flat
-  fields only. Every value above is audited: `node scratchpad/palette-audit.js` re-runs all 28
-  contrast checks, and a palette change means all three of `app/globals.css` (`@theme`),
-  `lib/palette.ts` and this section, in the same commit.
+  fields only. Every value above is audited: `node scratchpad/palette-audit.js` re-runs all 41
+  contrast checks — the original 28 plus every pairing the accent sweep introduced (the ring on
+  each ground, the CTA's two states, the selection outline over its wash, and chartreuse over
+  the chip, toast and meter grounds). A palette change means all three of `app/globals.css`
+  (`@theme`), `lib/palette.ts` and this section, in the same commit; a change to WHERE a colour
+  is spent means this section too.
+
+**Where the accent is actually spent (approved 2026-08-18, stage 3b).** Amendment E
+bought the hue; this is the budget. Orange marks **the primary path and what is live**,
+and nothing else — roughly one to two per cent of a screen's pixels, never more than a
+tenth, because an accent that marks everything marks nothing. Its sanctioned homes are
+exactly these, and adding a seventh is a design decision, not a styling one:
+
+1. The **primary CTA** — `LedgerButton`'s `primary` variant (and the legacy `paper`
+   alias that normalizes onto it), `BracketCTA`, and the finale wordmark button. One
+   per screen; one per card. Everything else is `secondary`, `ghost` or `danger`.
+2. The **folio numerals** — the hero's `File No. 01` and the seven landing sections,
+   through one component, `components/ui/SectionMark.tsx`. The numeral is orange, the
+   title beside it stays ink: colour marks position, never the sentence.
+3. The **focus ring** — `2px solid var(--color-accent)` at `2px` offset, replacing the
+   ink ring. 6.04:1 on bg, 5.72:1 on bg2, 5.36:1 on bg3, so it clears 1.4.11 on every
+   ground the app paints. A control that is itself an accent fill cannot wear it (an
+   orange ring 2px off an orange edge is one thick band), so it declares
+   **`data-accent-fill`** and takes the ink ring instead. That attribute is the third
+   and last system escape hatch, alongside `data-radius` and `data-elevated`.
+4. **Selection** on the three card pickers — a 2px inset outline plus the check badge.
+   The wash under a selected card stays ink; only the marks are coloured.
+5. **What is live** — the HUD rail's turn/year counter, `YearHud`'s year numeral, the
+   Rat Race turn number, the active step in the landing's run tour, and ROLL.
+6. The **active board square** and the player token (already shipped with the board).
+
+Chartreuse has four homes and no more: the streak chip, the Money Brain meter, the
+mastery ticks, and the concept-noted toast. It is never a state and never a number.
+
+Two rules bind every one of these: anything knocked out of an accent fill is painted
+`--color-bg`, and **orange never grades an outcome** — a "sell" button does not turn
+orange because the sale is profitable, because the gain is already printed in green.
+
 
 ## Typography (four fonts, one job each)
 
