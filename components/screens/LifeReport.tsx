@@ -7,6 +7,7 @@ import { ShareCard } from "@/components/share/ShareCard";
 import { useShareUrl } from "@/components/share/useShareUrl";
 import { ApartmentIcon, BrainIcon, CashIcon, DebtIcon, ReplayIcon, SkullIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
+import { SoundCell } from "@/components/ui/SoundCell";
 import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
@@ -16,7 +17,8 @@ import { conceptTitle } from "@/lib/concepts";
 import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
-import { homeEquity, netWorth, type RunState } from "@/lib/runEngine";
+import { DEBT_RATE, TAKE_HOME } from "@/lib/economy";
+import { annualExpenses, homeEquity, netWorth, operatingCashFlow, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { STAGGER } from "@/src/motion/tokens";
 
@@ -28,7 +30,49 @@ const REASON: Record<string, { label: string; Icon: typeof TrophyIcon }> = {
   retired: { label: "You retired", Icon: TrophyIcon },
   quit: { label: "You walked away", Icon: TrophyIcon },
   died: { label: "Your number came up", Icon: SkullIcon },
+  // The life sim's insolvency ending. Same register as the Rat Race lose screen:
+  // it states what happened, it does not scold.
+  insolvent: { label: "The debt won", Icon: DebtIcon },
 };
+
+/**
+ * The closing statement for a run the engine ended as unrecoverable.
+ *
+ * Deliberately the same shape as `components/cashflow/recap/CashflowReport`'s lose
+ * screen — years survived, what the interest consumed, the concept named — rather
+ * than a second visual language for the same idea. The two modes teach one lesson
+ * and they now print it on the same stationery.
+ */
+function ClosingStatement({ run }: { run: RunState }) {
+  const years = run.history.length;
+  const lastInterest = Math.round(run.debt * DEBT_RATE);
+  const shortfall = Math.abs(operatingCashFlow(run));
+  return (
+    <motion.div variants={item} className="mt-8 border-t border-hairline pt-4">
+      <p className="eyebrow text-loss" style={{ fontSize: "0.58rem" }}>
+        The concept: the debt spiral
+      </p>
+      <div className="mt-3">
+        <LedgerRow label="Years survived" value={String(years)} />
+        <LedgerRow label="Interest the balance charged" value={currency(Math.round(run.interestPaid))} tone="text-loss" />
+        <LedgerRow label="Balance at the end" value={currency(run.debt)} tone="text-loss" />
+        <LedgerRow label="…which cost you this year alone" value={currency(lastInterest)} tone="text-loss" />
+        <LedgerRow label="A year of this life cost" value={currency(annualExpenses(run))} />
+        <LedgerRow label="…and the job brought home" value={currency(Math.round(run.salary * TAKE_HOME))} />
+      </div>
+      <p className="voice mt-4 text-[1.15rem] leading-snug text-ink">
+        A year of living outran the paycheque by {currency(shortfall)}, and the shortfall became debt. Debt charges
+        7% a year, so the next year started {currency(lastInterest)} further behind — and that gap is itself an
+        expense, which made the next shortfall bigger. With nothing left to sell, no choice on the board could
+        close it. Interest compounds against you exactly as fast as savings compound for you.
+      </p>
+      <p className="voice mt-3 text-[1.05rem] leading-snug text-ink/75">
+        The way out was never one good year. It was killing the balance while it was still small, or getting the
+        cost of a year below what the job pays — the two levers that shrink the gap instead of feeding it.
+      </p>
+    </motion.div>
+  );
+}
 
 /**
  * Where the money ended up — assets AND what is owed against them.
@@ -191,12 +235,15 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
 
   return (
     <div className="mx-auto min-h-[100svh] w-full max-w-2xl px-5 py-16">
+      {/* Outside the stagger: the sound control is chrome, not part of the reveal. */}
+      <SoundCell className="mb-5" />
       <motion.div variants={container} initial="hidden" animate="show">
         {/* masthead — the statement header */}
         <motion.header variants={item} className="border-b border-hairline pb-4">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="eyebrow text-secondary">Life Statement</p>
-            <p className="eyebrow flex items-center gap-1.5 text-secondary">
+            <p className="eyebrow text-secondary">{run.endReason === "insolvent" ? "Closing Statement" : "Life Statement"}</p>
+            <p className={`eyebrow flex items-center gap-1.5 ${run.endReason === "insolvent" ? "text-loss" : "text-secondary"}`}>
+              {run.endReason === "insolvent" && <span aria-hidden>▲</span>}
               <Icon size={13} /> {reason.label}
             </p>
           </div>
@@ -215,6 +262,9 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
           <p className="voice mt-3 max-w-lg text-[1.05rem] leading-snug text-ink/80">{klass.blurb}</p>
         </motion.div>
 
+        {/* a run the engine had to close: the receipt, before the ledger */}
+        {run.endReason === "insolvent" && <ClosingStatement run={run} />}
+
         {/* statement — dot-leader ledger rows */}
         <motion.section variants={item}>
           <SectionLabel>Statement</SectionLabel>
@@ -223,7 +273,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
           ))}
         </motion.section>
 
-        {/* annotated net-worth line — best/worst swings + the macro events crossed */}
+        {/* annotated net-worth line — biggest one-year moves + the macro events crossed */}
         {hist.length > 1 && (
           <motion.div variants={item}>
             <SectionLabel>Net worth, year by year</SectionLabel>
@@ -237,11 +287,24 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
           <PortfolioBreakdown run={run} />
         </motion.div>
 
-        {/* best / worst — named market years */}
+        {/* best / worst — named MARKET years.
+            These are a different measurement from the chart's RISE and FALL, and the two
+            used to sit 200px apart with nothing saying so: a run could print "RISE 2001
+            +$43,141 / FALL 2005 −$96,228" on the chart and "BEST YEAR $0 / WORST YEAR $0"
+            here and read as self-contradicting. The chart tracks NET WORTH (wages, debt,
+            the house, everything); these two track only what the market did to the
+            portfolio — which is exactly $0 for a player who never bought anything. Both
+            are now labelled for what they measure, and the header says it once. */}
         {best && worst && (
-          <motion.div variants={item} className="mt-4 grid gap-3 sm:grid-cols-2">
+          <motion.div variants={item}>
+            <SectionLabel>Your investments, best and worst</SectionLabel>
+            <p className="mb-3 font-body text-[0.82rem] leading-snug text-secondary">
+              What the market alone added to or took from your portfolio. The chart above is a
+              different figure — net worth, which also moves with your pay, your debt and your home.
+            </p>
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className={`border border-hairline border-l-2 bg-bg2 p-4 ${bestUp ? "border-l-gain" : "border-l-hairline-strong"}`}>
-              <p className={`eyebrow ${bestUp ? "text-gain" : "text-secondary"}`}>Best year · {neverInvested ? "—" : best.year}</p>
+              <p className={`eyebrow ${bestUp ? "text-gain" : "text-secondary"}`}>Best market year · {neverInvested ? "—" : best.year}</p>
               <p className={`num text-lg ${bestUp ? "text-gain" : bestDown ? "text-loss" : "text-secondary"}`}>
                 {bestUp ? `+${currency(best.portfolioDelta)}` : bestDown ? `−${currency(Math.abs(best.portfolioDelta))}` : currency(0)}
               </p>
@@ -254,7 +317,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
               </p>
             </div>
             <div className={`border border-hairline border-l-2 bg-bg2 p-4 ${tookAHit ? "border-l-loss" : "border-l-hairline-strong"}`}>
-              <p className={`eyebrow ${tookAHit ? "text-loss" : "text-secondary"}`}>Worst year · {neverInvested ? "—" : worst.year}</p>
+              <p className={`eyebrow ${tookAHit ? "text-loss" : "text-secondary"}`}>Worst market year · {neverInvested ? "—" : worst.year}</p>
               <p className={`num text-lg ${tookAHit ? "text-loss" : wonSomewhere ? "text-gain" : "text-secondary"}`}>
                 {tookAHit ? `−${currency(Math.abs(worst.portfolioDelta))}` : wonSomewhere ? `+${currency(worst.portfolioDelta)}` : currency(0)}
               </p>
@@ -266,6 +329,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
                     : "Nothing invested means nothing to lose — and nothing to gain."}
               </p>
             </div>
+          </div>
           </motion.div>
         )}
 

@@ -60,7 +60,9 @@ export const RAT_SQUARE_META: Record<RatSquareType, { label: string; short: stri
 
 export const FAST_SQUARE_META: Record<FastSquareType, { label: string; short: string }> = {
   ftdeal: { label: "Investment", short: "INVEST" },
-  cashflowday: { label: "Cash Flow Day", short: "PAYDAY" },
+  // A landing here pays twelve months at once (engine: CASHFLOW_DAY_MONTHS) — up
+  // on the Fast Track time runs in years, so the square is named for what it pays.
+  cashflowday: { label: "Cash Flow Year", short: "PAYDAY" },
   dream: { label: "Your Dream", short: "DREAM" },
   ftloss: { label: "Setback", short: "SETBACK" },
 };

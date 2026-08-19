@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BrainIcon, CheckIcon, FreedomIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
 import { BoardView } from "@/components/cashflow/board/BoardView";
 import { NeonButton } from "@/components/ui/LedgerButton";
+import { SoundCell } from "@/components/ui/SoundCell";
 import { StreakChip } from "@/components/social/StreakChip";
 import { useAudio } from "@/hooks/useAudio";
 import { RAT_BOARD, RAT_SQUARE_META } from "@/lib/cashflow/board";
@@ -35,7 +36,9 @@ export function ModeSelect({
 
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-4xl flex-col justify-center px-5 py-14">
-      <div className="mb-4 flex justify-end"><StreakChip /></div>
+      {/* The screen's chrome row: the streak the player has earned, and the sound
+          control every non-run screen now carries in the same corner. */}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3"><StreakChip /><SoundCell /></div>
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
         <p className="eyebrow text-ink">Choose your run</p>
         <h1 className="display-caps mt-3 text-4xl text-ink sm:text-6xl">Three ways to play</h1>

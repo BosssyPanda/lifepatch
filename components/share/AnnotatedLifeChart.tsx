@@ -11,18 +11,27 @@ import { EASE } from "@/src/motion/tokens";
  * Phase M3 — the annotated net-worth line for a finished run (antimetal's
  * annotated-chart language, MarketSection's SVG grammar). LINEAR scale with a
  * dashed zero baseline (net worth can go negative). Every annotation is
- * derived from recorded data only: BEST/WORST year from the series' own
- * deltas, plus up to 3 real macro events (lib/markets) for calendar years the
- * run actually lived through — never a guessed event→year pairing.
+ * derived from recorded data only: the biggest rise and fall from the series'
+ * own deltas, plus real macro events (lib/markets) for calendar years the run
+ * actually lived through — never a guessed event→year pairing.
+ *
+ * Stage 4c — the labels are now PLACED, not positioned. Three separate collisions
+ * were shipping: the rise/fall callouts drew straight through the plotted line,
+ * two macro callouts could land on the same row on top of each other, and the
+ * final net-worth plate and the BEST callout printed over one another whenever
+ * the best year sat near the end of the run (measured at 1440px: "BEST 2008 +$70"
+ * and "−$86,157" overlapped by 62px). Everything below is one small solver:
+ * candidate boxes are scored against the line, against each other, and against
+ * the frame, and the cheapest one wins.
  */
 
 /**
  * Squeezed into a phone column this chart rendered its callouts at roughly four real pixels:
  * present, unreadable, and overlapping each other. Two things fix that, and they are separate
- * problems. LAYOUT is a geometry swap — a phone gets a narrower, taller frame carrying one
- * macro callout instead of three, and labels drop the event title (the part that overflows)
- * for year + market return. TYPE SIZE is solved back from the measured width against a real
- * pixel target, because a fixed unit size renders at whatever the container makes it.
+ * problems. LAYOUT is a geometry swap — a phone gets a narrower, taller frame carrying fewer
+ * macro callouts, and labels drop the event title (the part that overflows) for year + market
+ * return. TYPE SIZE is solved back from the measured width against a real pixel target,
+ * because a fixed unit size renders at whatever the container makes it.
  */
 type Geom = {
   W: number;
@@ -51,18 +60,18 @@ const MONO_ADVANCE_EM = 0.6;
 
 const WIDE: Geom = {
   W: 960,
-  H: 380,
-  PAD: { top: 64, right: 26, bottom: 40, left: 26 },
+  H: 400,
+  PAD: { top: 64, right: 26, bottom: 44, left: 26 },
   maxMacro: 3,
 };
 
-// A phone column can hold one callout at a readable size, not three — and the taller aspect
+// A phone column can hold two callouts at a readable size, not three — and the taller aspect
 // keeps the line from flattening into a horizon once the labels claim their band.
 const COMPACT: Geom = {
   W: 480,
-  H: 300,
-  PAD: { top: 56, right: 14, bottom: 34, left: 14 },
-  maxMacro: 1,
+  H: 340,
+  PAD: { top: 56, right: 14, bottom: 38, left: 14 },
+  maxMacro: 2,
 };
 
 /** Below this container width the wide geometry stops being readable. */
@@ -71,35 +80,76 @@ const COMPACT_BELOW = 520;
 export type LifePoint = { year: number; netWorth: number };
 
 type Plotted = LifePoint & { x: number; y: number };
+type Box = { x: number; y: number; w: number; h: number };
 
-function plot(points: LifePoint[], g: Geom): { pts: Plotted[]; zeroY: number | null } {
+function plot(points: LifePoint[], g: Geom, topPad: number): { pts: Plotted[]; zeroY: number | null } {
   const { W, H, PAD } = g;
   const values = points.map((p) => p.netWorth);
   const min = Math.min(...values, 0);
   const max = Math.max(...values, 1);
   const span = max - min || 1;
   const innerW = W - PAD.left - PAD.right;
-  const innerH = H - PAD.top - PAD.bottom;
+  const innerH = H - topPad - PAD.bottom;
   const x0 = points[0].year;
   const x1 = points[points.length - 1].year || x0 + 1;
   const pts = points.map((p) => ({
     ...p,
     x: PAD.left + ((p.year - x0) / Math.max(1, x1 - x0)) * innerW,
-    y: PAD.top + (1 - (p.netWorth - min) / span) * innerH,
+    y: topPad + (1 - (p.netWorth - min) / span) * innerH,
   }));
-  const zeroY = min < 0 ? PAD.top + (1 - (0 - min) / span) * innerH : null;
+  const zeroY = min < 0 ? topPad + (1 - (0 - min) / span) * innerH : null;
   return { pts, zeroY };
+}
+
+// ── the label solver ────────────────────────────────────────────────────────
+function overlapArea(a: Box, b: Box): number {
+  const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  return ix * iy;
+}
+
+/** Does the segment p→q cut through the box? Liang–Barsky, clipped to the rect. */
+function segmentHitsBox(p: { x: number; y: number }, q: { x: number; y: number }, b: Box): boolean {
+  let t0 = 0;
+  let t1 = 1;
+  const dx = q.x - p.x;
+  const dy = q.y - p.y;
+  const tests: [number, number][] = [
+    [-dx, p.x - b.x],
+    [dx, b.x + b.w - p.x],
+    [-dy, p.y - b.y],
+    [dy, b.y + b.h - p.y],
+  ];
+  for (const [pp, qq] of tests) {
+    if (pp === 0) {
+      if (qq < 0) return false;
+      continue;
+    }
+    const r = qq / pp;
+    if (pp < 0) {
+      if (r > t1) return false;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return false;
+      if (r < t1) t1 = r;
+    }
+  }
+  return t0 <= t1;
+}
+
+function lineHitsBox(pts: Plotted[], b: Box): boolean {
+  for (let i = 1; i < pts.length; i++) if (segmentHitsBox(pts[i - 1], pts[i], b)) return true;
+  return false;
 }
 
 type ChartModel = {
   pts: Plotted[];
   zeroY: number | null;
   d: string;
-  best: Plotted | null;
-  worst: Plotted | null;
-  bestDelta: number;
-  worstDelta: number;
-  macro: Plotted[];
+  rise: { p: Plotted; delta: number; label: string; box: Box } | null;
+  fall: { p: Plotted; delta: number; label: string; box: Box } | null;
+  final: { label: string; box: Box };
+  macro: { p: Plotted; label: string; tone: string; labelY: number; x: number }[];
 } | null;
 
 export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoint[]; className?: string }) {
@@ -129,60 +179,179 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
   const fs = unit(TARGET_PX.anno);
   const fsAxis = unit(TARGET_PX.axis);
   const fsFinal = unit(TARGET_PX.final);
-  const row = fs + 5;
+  const row = fs + 6;
 
   const model = useMemo((): ChartModel => {
     if (points.length < 2) return null;
-    const { pts, zeroY } = plot(points, g);
 
-    // deltas between recorded years — the run's own best/worst swings
-    let best: Plotted | null = null;
-    let worst: Plotted | null = null;
-    let bestDelta = 0;
-    let worstDelta = 0;
-    for (let i = 1; i < pts.length; i++) {
-      const d = pts[i].netWorth - pts[i - 1].netWorth;
-      if (d > bestDelta) { bestDelta = d; best = pts[i]; }
-      if (d < worstDelta) { worstDelta = d; worst = pts[i]; }
+    const halfW = (text: string, size: number) => (text.length * MONO_ADVANCE_EM * size) / 2;
+    const clampX = (x: number, text: string, size: number) => {
+      const h = Math.min(halfW(text, size), W / 2);
+      return Math.min(W - h, Math.max(h, x));
+    };
+    /** A centred label's box. `baseline` is the SVG text baseline. */
+    const boxOf = (cx: number, baseline: number, text: string, size: number): Box => ({
+      x: cx - halfW(text, size),
+      y: baseline - size,
+      w: halfW(text, size) * 2,
+      h: size * 1.3,
+    });
+
+    // ── pass 1: x positions and the macro row packing (neither depends on top pad) ──
+    const first = plot(points, g, PAD.top);
+    const scan = first.pts;
+
+    let bestI = -1;
+    let worstI = -1;
+    let riseDelta = 0;
+    let fallDelta = 0;
+    for (let i = 1; i < scan.length; i++) {
+      const d = scan[i].netWorth - scan[i - 1].netWorth;
+      if (d > riseDelta) { riseDelta = d; bestI = i; }
+      if (d < fallDelta) { fallDelta = d; worstI = i; }
     }
 
-    // real macro events crossed by this run, strongest market moves first
-    const taken = new Set([best?.year, worst?.year]);
-    const macro = pts
+    const taken = new Set([scan[bestI]?.year, scan[worstI]?.year]);
+    const macroPts = scan
       .filter((p) => !taken.has(p.year) && macroEvent(p.year))
       .sort((a, b) => Math.abs(sp500Return(b.year)) - Math.abs(sp500Return(a.year)))
       .slice(0, g.maxMacro)
       .sort((a, b) => a.x - b.x);
 
+    /**
+     * Greedy left-to-right row packing. The old code used `(i % 2) * row`, which
+     * alternates rows by INDEX and knows nothing about width — two long callouts
+     * whose years sit close together landed on the same row on top of each other,
+     * and clamping them both away from the frame edge could push them into the same
+     * place from opposite directions. Sorted by x, a label takes the first row whose
+     * last occupant ends before it starts.
+     */
+    const GAP = fs * 0.8;
+    const rowEnds: number[] = [];
+    const macro = macroPts.map((p) => {
+      const e = macroEvent(p.year)!;
+      const move = `${sp500Return(p.year) > 0 ? "+" : "−"}${Math.abs(sp500Return(p.year)).toFixed(0)}%`;
+      const long = `${p.year} — ${e.title.toUpperCase()} · ${move}`;
+      const short = `${p.year} · ${move}`;
+      const label = !compact && halfW(long, fs) <= W / 2 ? long : short;
+      const x = clampX(p.x, label, fs);
+      const left = x - halfW(label, fs);
+      const right = x + halfW(label, fs);
+      let r = 0;
+      while (r < rowEnds.length && left < rowEnds[r] + GAP) r++;
+      rowEnds[r] = right;
+      const tone = e.tone === "bad" ? "var(--color-loss)" : e.tone === "good" ? "var(--color-gain)" : "var(--color-ink-dim)";
+      return { p, label, tone, row: r, x };
+    });
+
+    // ── pass 2: re-plot with exactly the top band the callouts need ──
+    const rows = Math.max(1, rowEnds.length);
+    const topPad = Math.max(PAD.top, fs + 6 + rows * row + 14);
+    const { pts, zeroY } = plot(points, g, topPad);
+    const zeroY0 = zeroY;
     const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-    return { pts, zeroY, d, best, worst, bestDelta, worstDelta, macro };
-  }, [points, g]);
+    const macroPlaced = macro.map((m) => ({
+      p: pts[scan.indexOf(m.p)] ?? m.p,
+      label: m.label,
+      tone: m.tone,
+      x: m.x,
+      labelY: fs + 6 + m.row * row,
+    }));
+
+    const last = pts[pts.length - 1];
+
+    // Boxes already claimed before any callout is placed: the packed macro band and
+    // the frame's own furniture — the two axis years and the $0 tick. Leaving the
+    // axis out is how "RISE 2008 +$70" ended up printed through "2010".
+    const axisY = H - PAD.bottom + fsAxis + 10;
+    const placed: Box[] = [
+      ...macroPlaced.map((m) => boxOf(m.x, m.labelY, m.label, fs)),
+      { x: pts[0].x, y: axisY - fsAxis, w: halfW(String(pts[0].year), fsAxis) * 2, h: fsAxis * 1.3 },
+      {
+        x: W - PAD.right - halfW(String(last.year), fsAxis) * 2,
+        y: axisY - fsAxis,
+        w: halfW(String(last.year), fsAxis) * 2,
+        h: fsAxis * 1.3,
+      },
+    ];
+    if (zeroY0 !== null) {
+      placed.push({ x: W - PAD.right - halfW("$0", fsAxis) * 2, y: zeroY0 - 6 - fsAxis, w: halfW("$0", fsAxis) * 2, h: fsAxis * 1.3 });
+    }
+
+    /**
+     * Place one callout: try above the point, then below, at increasing offsets, and
+     * take the cheapest box. Cost = drawing over the plotted line (which is what made
+     * "WORST 2000 −$15,301" unreadable) + area shared with anything already placed +
+     * a small pull toward the point so a clean box near the marker beats a clean box
+     * far from it.
+     */
+    const place = (p: Plotted, label: string, size: number): Box => {
+      const cx = clampX(p.x, label, size);
+      const offsets = [12, 20, 28, 38, 50, 64];
+      let best: { box: Box; cost: number } | null = null;
+      for (const dir of [-1, 1] as const) {
+        for (const off of offsets) {
+          const baseline = dir < 0 ? p.y - off : p.y + off + size;
+          const box = boxOf(cx, baseline, label, size);
+          // Inside the plotting frame only: above it is the macro band, below it is
+          // the year axis, and a callout in either reads as belonging to that band.
+          if (box.y < size + 2 || box.y + box.h > H - PAD.bottom - 2) continue;
+          let cost = lineHitsBox(pts, box) ? 10_000 : 0;
+          for (const q of placed) cost += overlapArea(box, q) * 4;
+          cost += off * 2;
+          if (!best || cost < best.cost) best = { box, cost };
+        }
+      }
+      const fallback = boxOf(cx, Math.min(H - PAD.bottom - 4, Math.max(size + 4, p.y - 12)), label, size);
+      const box = best ? best.box : fallback;
+      placed.push(box);
+      return box;
+    };
+
+    // The final plate goes first — it is the figure the whole chart exists to deliver,
+    // so it gets first refusal on the space around the last point.
+    const finalLabel = `${last.netWorth < 0 ? "−" : ""}${currency(Math.abs(last.netWorth))}`;
+    const finalBox = place(last, finalLabel, fsFinal);
+
+    const bestP = bestI > 0 ? pts[bestI] : null;
+    const worstP = worstI > 0 ? pts[worstI] : null;
+    const riseLabel = bestP ? `RISE ${bestP.year} +${currency(riseDelta)}` : "";
+    const fallLabel = worstP ? `FALL ${worstP.year} −${currency(Math.abs(fallDelta))}` : "";
+    const rise = bestP && riseDelta > 0 && bestP.year !== last.year
+      ? { p: bestP, delta: riseDelta, label: riseLabel, box: place(bestP, riseLabel, fs) }
+      : null;
+    const fall = worstP && fallDelta < 0 && worstP.year !== last.year
+      ? { p: worstP, delta: fallDelta, label: fallLabel, box: place(worstP, fallLabel, fs) }
+      : null;
+
+    return { pts, zeroY, d, rise, fall, final: { label: finalLabel, box: finalBox }, macro: macroPlaced };
+  }, [points, g, compact, fs, fsAxis, fsFinal, row, W, H, PAD.top, PAD.right, PAD.bottom]);
 
   if (!model) return null;
-  const { pts, zeroY, d, best, worst, bestDelta, worstDelta, macro } = model;
+  const { pts, zeroY, d, rise, fall, final, macro } = model;
   const first = pts[0];
   const last = pts[pts.length - 1];
   const up = last.netWorth >= 0;
-  // A centred label must keep its own half-width clear of the viewBox, or the SVG's
-  // overflow:hidden eats the front of it. Measured, not inset by a constant: type is sized
-  // in real pixels (TARGET_PX) while an inset would be in viewBox units.
-  const halfW = (text: string, size: number) => (text.length * MONO_ADVANCE_EM * size) / 2;
-  const clampX = (x: number, text: string, size = fs) => {
-    const h = Math.min(halfW(text, size), W / 2); // wider than the frame → centre, don't push
-    return Math.min(W - h, Math.max(h, x));
-  };
-  const clampY = (y: number) => Math.min(H - 10, Math.max(fs + 2, y));
 
-  // Built once each so the clamp measures exactly the string that gets drawn.
-  const bestLabel = best ? `BEST ${best.year} +${currency(bestDelta)}` : "";
-  const worstLabel = worst ? `WORST ${worst.year} −${currency(Math.abs(worstDelta))}` : "";
-  const finalLabel = `${last.netWorth < 0 ? "−" : ""}${currency(Math.abs(last.netWorth))}`;
+  /** Where a solved box's text baseline sits. */
+  const baseline = (b: Box, size: number) => b.y + size;
+  const centre = (b: Box) => b.x + b.w / 2;
 
-  const anno = { initial: reduced ? false : { opacity: 0 }, whileInView: { opacity: 1 }, viewport: { once: true, amount: 0.4 } } as const;
+  // `amount` was 0.4, which on a phone column asks for 40% of a tall dotted-leader
+  // group before anything fades in; a chart glimpsed at the edge of the viewport
+  // could sit there fully drawn with every annotation still at opacity 0.
+  const anno = { initial: reduced ? false : { opacity: 0 }, whileInView: { opacity: 1 }, viewport: { once: true, amount: 0.1 } } as const;
 
   return (
     <div ref={wrapRef} className={`border border-hairline bg-bg2 p-3 sm:p-4 ${className}`}>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Net worth by year, with the run's best year, worst year, and the real market events it lived through.">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="h-auto w-full"
+        role="img"
+        aria-label={`Net worth by year, ${first.year} to ${last.year}, ending at ${final.label}.${
+          rise ? ` Biggest one-year rise ${rise.p.year}, ${currency(rise.delta)}.` : ""
+        }${fall ? ` Biggest one-year fall ${fall.p.year}, ${currency(Math.abs(fall.delta))}.` : ""} Marked years are real market events the run lived through.`}
+      >
         {/* frame + zero baseline */}
         <line x1={PAD.left} y1={H - PAD.bottom} x2={W - PAD.right} y2={H - PAD.bottom} stroke="var(--color-hairline)" />
         {zeroY !== null && (
@@ -201,49 +370,39 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
           strokeLinejoin="round"
           initial={reduced ? false : { pathLength: 0 }}
           whileInView={{ pathLength: 1 }}
-          viewport={{ once: true, amount: 0.4 }}
+          viewport={{ once: true, amount: 0.1 }}
           transition={{ duration: reduced ? 0 : 1.5, ease: EASE }}
           style={reduced ? { pathLength: 1 } : undefined}
         />
 
-        {/* macro events actually crossed — dotted leaders to the top band */}
-        {macro.map((p, i) => {
-          const e = macroEvent(p.year)!;
-          const tone = e.tone === "bad" ? "var(--color-loss)" : e.tone === "good" ? "var(--color-gain)" : "var(--color-ink-dim)";
-          const labelY = fs + 4 + (i % 2) * row;
-          // The event title is what overflows; the year and the market's actual move are the
-          // part that carries meaning, so the title is what goes. Dropping it is width-driven
-          // (a long title outgrows the wide frame too), with the phone column always short —
-          // one callout there is meant to read at a glance, not to span the chart.
-          const move = `${sp500Return(p.year) > 0 ? "+" : "−"}${Math.abs(sp500Return(p.year)).toFixed(0)}%`;
-          const long = `${p.year} — ${e.title.toUpperCase()} · ${move}`;
-          const label = !compact && halfW(long, fs) <= W / 2 ? long : `${p.year} · ${move}`;
-          return (
-            <motion.g key={p.year} {...anno} transition={{ delay: reduced ? 0 : 0.7 + i * 0.15 }}>
-              <line x1={p.x} y1={labelY + 6} x2={p.x} y2={p.y - 5} stroke={tone} strokeDasharray="1 4" opacity="0.8" />
-              <circle cx={p.x} cy={p.y} r="3.5" fill={tone} />
-              <text x={clampX(p.x, label)} y={labelY} textAnchor="middle" className="num" fontSize={fs} fill={tone}>
-                {label}
-              </text>
-            </motion.g>
-          );
-        })}
+        {/* macro events actually crossed — dotted leaders to the packed top band */}
+        {macro.map((m, i) => (
+          <motion.g key={m.p.year} {...anno} transition={{ delay: reduced ? 0 : 0.7 + i * 0.15 }}>
+            <line x1={m.p.x} y1={m.labelY + 6} x2={m.p.x} y2={m.p.y - 5} stroke={m.tone} strokeDasharray="1 4" opacity="0.8" />
+            <circle cx={m.p.x} cy={m.p.y} r="3.5" fill={m.tone} />
+            <text x={m.x} y={m.labelY} textAnchor="middle" className="num" fontSize={fs} fill={m.tone}>
+              {m.label}
+            </text>
+          </motion.g>
+        ))}
 
-        {/* best / worst swings, from the run's own deltas (skip when they sit on
-            the final point — the final plate already owns that spot) */}
-        {best && bestDelta > 0 && best.year !== last.year && (
+        {/* the run's own biggest one-year moves, in NET WORTH — a different figure
+            from the two cards below the chart, which report the market's effect on
+            the portfolio alone. Both are labelled so they can't read as a
+            contradiction. */}
+        {rise && (
           <motion.g {...anno} transition={{ delay: reduced ? 0 : 1.0 }}>
-            <circle cx={best.x} cy={best.y} r="4" fill="var(--color-gain)" />
-            <text x={clampX(best.x, bestLabel)} y={clampY(best.y - 12)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-gain)">
-              {bestLabel}
+            <circle cx={rise.p.x} cy={rise.p.y} r="4" fill="var(--color-gain)" />
+            <text x={centre(rise.box)} y={baseline(rise.box, fs)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-gain)">
+              {rise.label}
             </text>
           </motion.g>
         )}
-        {worst && worstDelta < 0 && worst.year !== last.year && (
+        {fall && (
           <motion.g {...anno} transition={{ delay: reduced ? 0 : 1.1 }}>
-            <circle cx={worst.x} cy={worst.y} r="4" fill="var(--color-loss)" />
-            <text x={clampX(worst.x, worstLabel)} y={clampY(worst.y + fs + 8)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-loss)">
-              {worstLabel}
+            <circle cx={fall.p.x} cy={fall.p.y} r="4" fill="var(--color-loss)" />
+            <text x={centre(fall.box)} y={baseline(fall.box, fs)} textAnchor="middle" className="num" fontSize={fs} fill="var(--color-loss)">
+              {fall.label}
             </text>
           </motion.g>
         )}
@@ -253,15 +412,27 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
           <text x={first.x} y={H - PAD.bottom + fsAxis + 10} textAnchor="start" className="num" fontSize={fsAxis} fill="var(--color-tertiary)">
             {first.year}
           </text>
-          <circle cx={last.x} cy={last.y} r="4.5" fill={up ? "var(--color-gain)" : "var(--color-loss)"} />
           <text x={W - PAD.right} y={H - PAD.bottom + fsAxis + 10} textAnchor="end" className="num" fontSize={fsAxis} fill="var(--color-tertiary)">
             {last.year}
           </text>
-          <text x={clampX(last.x, finalLabel, fsFinal)} y={Math.max(fsFinal + 8, last.y - 14)} textAnchor="middle" className="num" fontSize={fsFinal} fontWeight="700" fill={up ? "var(--color-gain)" : "var(--color-loss)"}>
-            {finalLabel}
+          <circle cx={last.x} cy={last.y} r="4.5" fill={up ? "var(--color-gain)" : "var(--color-loss)"} />
+          <text
+            x={centre(final.box)}
+            y={baseline(final.box, fsFinal)}
+            textAnchor="middle"
+            className="num"
+            fontSize={fsFinal}
+            fontWeight="700"
+            fill={up ? "var(--color-gain)" : "var(--color-loss)"}
+          >
+            {final.label}
           </text>
         </motion.g>
       </svg>
+      <p className="mt-2 font-body text-[0.78rem] leading-snug text-secondary">
+        Net worth: everything you own minus everything you owe. RISE and FALL mark the biggest
+        single-year moves in that line.
+      </p>
     </div>
   );
 }

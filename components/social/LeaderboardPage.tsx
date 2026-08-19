@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Leaderboard } from "@/components/social/Leaderboard";
+import { AuthProvider } from "@/hooks/useAuth";
 
 /**
  * The boards as a real destination, not an overlay — a shared /r/{id} statement needs
@@ -9,9 +10,18 @@ import { Leaderboard } from "@/components/social/Leaderboard";
  * folio rail) rather than the dialog's card-on-a-scrim, which read as a modal that had lost
  * its page. `useAudio` no-ops without a provider and MotionProvider lives in the root layout,
  * so this route carries none of AppShell's weight.
+ *
+ * It DOES need `AuthProvider`, though: `Leaderboard` reads `useProfile`, which reads
+ * `useAuth`, and `useAuth` throws outside a provider by design (a second, parallel copy
+ * of the auth state was the bug that contract replaced). Without this the route rendered
+ * fine in dev — dev does not prerender — and `next build` failed on it every time:
+ *   Error occurred prerendering page "/leaderboard" … useAuth must be used inside
+ *   <AuthProvider>.
+ * One provider per tree is the contract, and this is this tree's one.
  */
 export function LeaderboardPage() {
   return (
+    <AuthProvider>
     <Leaderboard
       open
       chrome="page"
@@ -30,5 +40,6 @@ export function LeaderboardPage() {
         </Link>
       }
     />
+    </AuthProvider>
   );
 }

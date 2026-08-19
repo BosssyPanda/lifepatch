@@ -24,12 +24,24 @@ export function localPlayerId(): string {
 }
 
 /**
+ * Is this id the anonymous device, rather than a real account?
+ *
+ * Guest play hands `localPlayerId()` straight to the run/save layer as the player
+ * id, so everything downstream needs one honest way to ask "is there an account
+ * behind this?" — saves must stay local for a guest even when Supabase keys are
+ * present, and a leaderboard row keyed on a device id would be refused by RLS.
+ */
+export function isGuestId(id: string | null | undefined): boolean {
+  return typeof id === "string" && id.startsWith("device-");
+}
+
+/**
  * The id to attribute results/streaks to.
  * - Signed-in → the auth user id (works in cloud + dev).
- * - Anonymous → a device id in dev; null in cloud, where RLS requires a real
- *   auth user, so callers should prompt sign-in instead of writing.
+ * - Guest / anonymous → a device id in dev; null in cloud, where RLS requires a
+ *   real auth user, so callers should prompt sign-in instead of writing.
  */
 export function resolvePlayerId(authUserId: string | null): string | null {
-  if (authUserId) return authUserId;
+  if (authUserId && !isGuestId(authUserId)) return authUserId;
   return isCloud ? null : localPlayerId();
 }

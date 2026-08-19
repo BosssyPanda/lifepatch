@@ -50,7 +50,7 @@ export function FtDealCard({ deal, cash, onBuy, onPass }: { deal: FastTrackDeal;
         <span className="font-body text-[0.84rem] text-ink/70">Adds monthly cash flow</span>
         <span className="num font-bold text-gain">+{currency(deal.cashFlow)}</span>
       </div>
-      {!afford && <p className="mt-3 font-body text-[0.82rem] text-loss">Not enough cash. Land on Cash Flow Days to build up, then return.</p>}
+      {!afford && <p className="mt-3 font-body text-[0.82rem] text-loss">Not enough cash. Land on a Cash Flow Year to build up, then return.</p>}
       <div className="mt-4 flex items-center justify-end gap-2">
         <NeonButton variant="outline" size="sm" onClick={onPass}>
           Pass

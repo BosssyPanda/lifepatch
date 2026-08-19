@@ -1,20 +1,27 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { localPlayerId } from "@/lib/cloud/identity";
+import { isGuestId, localPlayerId } from "@/lib/cloud/identity";
 import { mergeLocalMastery } from "@/lib/cloud/mastery";
+import { adoptGuestSaves } from "@/lib/saves";
 import { isCloud, supabase } from "@/lib/supabase";
 
 export type AuthUser = { id: string; email: string };
 
 const DEV_KEY = "lifepatch.devUser";
+/** Set once a player has chosen to play without an account; cleared on sign-out. */
+const GUEST_KEY = "lifepatch.guest";
 
 export type AuthApi = {
   user: AuthUser | null;
   loading: boolean;
   linkSent: boolean;
   isCloud: boolean;
+  /** True while `user` is the anonymous device rather than a real account. */
+  guest: boolean;
   signIn: (email: string) => Promise<void>;
+  /** Play now, on this device, with no email. Reversible: `signIn` still works. */
+  continueAsGuest: () => void;
   signOut: () => Promise<void>;
   clearLinkSent: () => void;
 };
@@ -31,19 +38,36 @@ function useAuthState(): AuthApi {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [linkSent, setLinkSent] = useState(false);
+  const guest = isGuestId(user?.id);
+
+  /** The guest chosen on a previous visit, if one was — restored on every load. */
+  const storedGuest = useCallback((): AuthUser | null => {
+    try {
+      return localStorage.getItem(GUEST_KEY) === "1" ? { id: localPlayerId(), email: "" } : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
     if (isCloud && supabase) {
-      supabase.auth.getSession().then(({ data }) => {
+      supabase.auth.getSession().then(async ({ data }) => {
         if (!active) return;
         const u = data.session?.user;
-        setUser(u ? { id: u.id, email: u.email ?? "" } : null);
+        // The magic link lands on a fresh page load, so this is where a cloud
+        // sign-in gets the guest's run carried across (no-op after the first time).
+        if (u) await adoptGuestSaves(localPlayerId(), u.id);
+        if (!active) return;
+        // A real session always wins over a remembered guest; otherwise the guest
+        // is restored, so "Play as guest" survives a reload the same way a sign-in does.
+        setUser(u ? { id: u.id, email: u.email ?? "" } : storedGuest());
         setLoading(false);
       });
-      const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
         const u = session?.user;
-        setUser(u ? { id: u.id, email: u.email ?? "" } : null);
+        if (u) await adoptGuestSaves(localPlayerId(), u.id);
+        setUser(u ? { id: u.id, email: u.email ?? "" } : storedGuest());
       });
       return () => {
         active = false;
@@ -54,11 +78,28 @@ function useAuthState(): AuthApi {
     try {
       const raw = localStorage.getItem(DEV_KEY);
       if (raw) setUser(JSON.parse(raw));
+      else setUser(storedGuest());
     } catch {}
     setLoading(false);
     return () => {
       active = false;
     };
+  }, [storedGuest]);
+
+  /**
+   * Play without an account.
+   *
+   * The Rat Race already did exactly this — it runs on `localPlayerId()` and has
+   * never asked for an email — so Story and Infinite were the only two of the three
+   * modes behind a wall, which on a school laptop is a wall in front of the game.
+   * The device id IS the player id here: `lib/saves` keys by it and keeps a guest's
+   * runs on the device (see `cloudSavesFor`), and `resolvePlayerId` withholds it from
+   * the cloud leaderboard, where RLS would refuse it anyway.
+   */
+  const continueAsGuest = useCallback(() => {
+    try { localStorage.setItem(GUEST_KEY, "1"); } catch {}
+    setUser({ id: localPlayerId(), email: "" });
+    setLinkSent(false);
   }, []);
 
   /**
@@ -69,6 +110,9 @@ function useAuthState(): AuthApi {
   const signIn = useCallback(async (email: string) => {
     const clean = email.trim().toLowerCase();
     if (!clean) throw new Error("Enter an email address.");
+    // Signing in ends guest mode either way; in cloud that takes effect when the
+    // magic link lands, so the flag is dropped now and the session decides.
+    try { localStorage.removeItem(GUEST_KEY); } catch {}
     if (isCloud && supabase) {
       const { error } = await supabase.auth.signInWithOtp({
         email: clean,
@@ -83,8 +127,14 @@ function useAuthState(): AuthApi {
       localStorage.setItem(DEV_KEY, JSON.stringify(u));
     } catch {}
     // Anything learned before signing in was filed under the device id; carry it
-    // across so entering an email never looks like it wiped your progress.
+    // across so entering an email never looks like it wiped your progress. A run in
+    // progress is the same promise, one level up — a guest who signs in mid-run
+    // keeps the run.
     mergeLocalMastery(localPlayerId(), u.id);
+    // AWAITED, not fired and forgotten: `AuthGate` looks for a save the moment
+    // `user` changes, and an in-flight copy loses that race — the gate offered
+    // "Begin a new life" over a run that was still being carried across.
+    await adoptGuestSaves(localPlayerId(), u.id);
     setUser(u);
   }, []);
 
@@ -95,14 +145,17 @@ function useAuthState(): AuthApi {
     if (isCloud && supabase) await supabase.auth.signOut();
     try {
       localStorage.removeItem(DEV_KEY);
+      // Leaving guest mode too, or "Sign out" on a guest would sign them back in on
+      // the next render from the remembered flag.
+      localStorage.removeItem(GUEST_KEY);
     } catch {}
     setUser(null);
     setLinkSent(false);
   }, []);
 
   return useMemo(
-    () => ({ user, loading, linkSent, isCloud, signIn, signOut, clearLinkSent }),
-    [user, loading, linkSent, signIn, signOut, clearLinkSent],
+    () => ({ user, loading, linkSent, isCloud, guest, signIn, continueAsGuest, signOut, clearLinkSent }),
+    [user, loading, linkSent, guest, signIn, continueAsGuest, signOut, clearLinkSent],
   );
 }
 

@@ -12,6 +12,7 @@ import { MODES } from "@/lib/modes";
 import { canRetire } from "@/lib/runEngine";
 import { HudRail } from "@/components/ui/HudRail";
 import { AdvanceBar } from "./AdvanceBar";
+import { InsolvencyNotice } from "./InsolvencyNotice";
 import { LifeEventCard } from "./LifeEventCard";
 import { MarketResults } from "./MarketResults";
 import { MarketTicker } from "./MarketTicker";
@@ -104,6 +105,10 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
       <Reveal>
         <PortfolioPanel run={s} onTrade={run.trade} onPayDebt={run.payDebt} />
       </Reveal>
+
+      {/* Sits directly above the one control that advances the clock, because that is
+          the control the warning is about. */}
+      <InsolvencyNotice run={s} />
 
       <AdvanceBar
         run={s}

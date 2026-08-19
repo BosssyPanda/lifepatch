@@ -135,10 +135,22 @@ export function Toast({ show, children }: { show: boolean; children: ReactNode }
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 16, scale: 0.95, transition: { duration: DUR.exitFast, ease: EASE } }}
           transition={{ type: "spring", stiffness: 300, damping: 20 }}
-          /* Bottom, not top: at top-24 this landed exactly on the board's first
-             tile row, so a concept earned by landing on a square covered the
-             square that taught it. */
-          className="pointer-events-none fixed bottom-6 left-1/2 z-[90] -translate-x-1/2"
+          /* Bottom-RIGHT, above whatever sticky chrome the screen owns.
+           *
+           * Bottom-centre put it squarely on the primary CTA: measured across four
+           * scroll positions it covered 20,262px² of controls on the mobile year
+           * screen (51-68% of ADVANCE THE YEAR) and 79% of the hint that explains
+           * why that button is dead, plus 3,941px² of the Rat Race statement's
+           * controls. Anchoring right of the content column and above the sticky bar
+           * measures 0px² on controls on three of those four screens and 268px² on
+           * the fourth — see the sweep in the Stage 4c report.
+           *
+           * `--toast-inset` is published by whichever screen owns sticky bottom
+           * chrome (AdvanceBar); it is 0 everywhere else, so the toast keeps its
+           * ordinary 8px gap. The safe-area term keeps it clear of a phone's home
+           * indicator. */
+          style={{ bottom: "calc(var(--toast-inset, 0px) + 8px + env(safe-area-inset-bottom, 0px))" }}
+          className="pointer-events-none fixed right-4 z-[90] max-w-[calc(100vw-2rem)]"
         >
           {children}
         </motion.div>

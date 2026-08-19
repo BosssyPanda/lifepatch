@@ -8,6 +8,7 @@ import { BrainIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
 import { ShareCard } from "@/components/share/ShareCard";
 import { useShareUrlFor } from "@/components/share/useShareUrl";
 import { NeonButton } from "@/components/ui/LedgerButton";
+import { SoundCell } from "@/components/ui/SoundCell";
 import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
@@ -105,8 +106,17 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
     audio.setBrainGlow(moneyBrainPct(mastery) / 100);
   }, [mastery, audio]);
 
+  // The statement owns the screen, exactly as on the life report: a concept chip
+  // still queued from the final turn was landing on the recap's own "this run
+  // sharpened" line, which is the same information printed better a few rows down.
+  useEffect(() => {
+    document.body.dataset.statement = "1";
+    return () => { delete document.body.dataset.statement; };
+  }, []);
+
   return (
     <div className="mx-auto min-h-[100svh] w-full max-w-2xl px-5 py-14">
+      <SoundCell className="mb-5" />
       <motion.div variants={container} initial="hidden" animate="show">
         {/* masthead — the win statement, or the receipt for the spiral */}
         <motion.header variants={item} className="border-b border-hairline pb-4">

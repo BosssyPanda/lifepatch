@@ -7,6 +7,7 @@ import { FreedomIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { SkipButton } from "@/components/cinematic/Controls";
 import { useAudio } from "@/hooks/useAudio";
+import { fastTrackStake } from "@/lib/cashflow/engine";
 import { passiveIncome, totalExpenses } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
 import { useSkippable } from "@/src/motion/useSkippable";
@@ -75,6 +76,10 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
 
   const passive = passiveIncome(s);
   const expenses = totalExpenses(s);
+  // Named here because it is the only place the player meets it: the Fast Track
+  // opens with a year of the passive income they just built, and the size of that
+  // stake is the reward for having built a bigger machine.
+  const stake = fastTrackStake(s);
 
   return (
     <div className="relative grid min-h-[100svh] place-items-center overflow-hidden px-5 text-center">
@@ -142,6 +147,11 @@ export function EscapeSequence({ s, onDone }: { s: CashflowState; onDone: () => 
 
         <motion.p variants={item} className="mt-5 font-body text-ink-dim">
           You escaped the Rat Race in {s.turn} turns. Your assets now pay for your life — no job required. Time to chase the dream.
+        </motion.p>
+
+        <motion.p variants={item} className="voice mt-3 text-[1.05rem] leading-snug text-ink">
+          You carry {currency(passive)}/mo of passive income onto the Fast Track, and a year of it —{" "}
+          <span className="num text-ink">{currency(stake)}</span> — is banked as your opening stake.
         </motion.p>
 
         <motion.div variants={item} className="mt-7">

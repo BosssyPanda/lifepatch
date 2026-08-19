@@ -49,7 +49,12 @@ export class Run {
     console.log(`  [${severity}] ${where} — ${detail}`);
   }
 
-  async open(viewport = DESKTOP, { skipIntro = true, seed } = {}) {
+  /**
+   * `seedStorage` pre-populates localStorage before the app boots — the only way to
+   * reach a finished run, or a run standing on a specific year, without playing the
+   * twenty turns that produce it. Pass a plain `{ key: value }` map of strings.
+   */
+  async open(viewport = DESKTOP, { skipIntro = true, seed, seedStorage } = {}) {
     this.browser = await chromium.launch({ executablePath: chromiumPath() });
     this.ctx = await this.browser.newContext({ viewport, reducedMotion: process.env.QA_REDUCED === "1" ? "reduce" : "no-preference" });
     this.page = await this.ctx.newPage();
@@ -58,6 +63,11 @@ export class Run {
       await this.page.addInitScript(() => {
         try { sessionStorage.setItem("lp_introSeen", "1"); } catch {}
       });
+    }
+    if (seedStorage) {
+      await this.page.addInitScript((entries) => {
+        try { for (const [k, v] of entries) localStorage.setItem(k, v); } catch {}
+      }, Object.entries(seedStorage));
     }
 
     this.page.on("console", (m) => {

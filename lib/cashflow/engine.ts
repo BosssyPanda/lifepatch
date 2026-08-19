@@ -8,7 +8,7 @@ import {
   initialStockPrices,
 } from "./decks";
 import { FAST_TRACK_CASHFLOW_GOAL, getDream } from "./dreams";
-import { FT_LOSS_AMOUNT } from "./messages";
+import { FT_LOSS_MIN } from "./messages";
 import { getProfession } from "./professions";
 import { pickIndex, rngAt, rollDice as rollDiceRaw } from "./rng";
 import {
@@ -417,9 +417,28 @@ export function markEscaped(s: CashflowState): CashflowState {
   return { ...s, status: "escaped", escapedOnTurn: s.turn };
 }
 
+/** The Fast Track opens with a year of your own passive income, banked. */
+export const FAST_TRACK_STAKE_MONTHS = 12;
+/** ...and never less than this, so the smallest machine still gets a stake to play. */
+export const FAST_TRACK_STAKE_MIN = 150000;
+
+/**
+ * The stake handed over on escape.
+ *
+ * It used to be `max(passiveIncome × 100, 150000)`, which is the genre's convention and
+ * was the single reason the Fast Track never got played: a Doctor escaped with ~$950,000
+ * against dreams that topped out at $250,000, so the second act was won on the first
+ * DREAM square every time. Twelve months keeps the reward proportional to the machine the
+ * player actually built (a bigger passive income still means a bigger stake AND a bigger
+ * Cash Flow Year) while putting every dream out of reach on arrival — the cheapest is
+ * $400,000, and the largest stake a normal escape produces is a little over half of that.
+ */
+export function fastTrackStake(s: CashflowState): number {
+  return Math.max(FAST_TRACK_STAKE_MIN, passiveIncome(s) * FAST_TRACK_STAKE_MONTHS);
+}
+
 export function enterFastTrack(s: CashflowState): CashflowState {
-  const bonus = Math.max(passiveIncome(s) * 100, 150000);
-  return { ...s, track: "fast", position: 0, cash: s.cash + bonus, status: "playing", fastTrackCashflow: 0 };
+  return { ...s, track: "fast", position: 0, cash: s.cash + fastTrackStake(s), status: "playing", fastTrackCashflow: 0 };
 }
 
 /** Monthly cash flow on the Fast Track = carried passive income + new FT cash flow. */
@@ -427,18 +446,42 @@ export function fastTrackMonthly(s: CashflowState): number {
   return passiveIncome(s) + s.fastTrackCashflow;
 }
 
+/**
+ * Up here time runs in years, not months. A Cash Flow Day pays twelve months at once.
+ *
+ * This is the change that makes the Fast Track playable rather than a formality or a
+ * grind. At one month a landing, a 25%-frequency square paying ≤$50,000 cannot fund the
+ * half-million dollars of investments the +$50k/mo goal requires — the measured median
+ * was 41 turns and the tail ran past 180. At twelve, the two win routes come in within a
+ * few turns of each other and the board is actually played on the way.
+ */
+export const CASHFLOW_DAY_MONTHS = 12;
+
+export function cashflowDayPayout(s: CashflowState): number {
+  return fastTrackMonthly(s) * CASHFLOW_DAY_MONTHS;
+}
+
 export function collectCashflowDay(s: CashflowState): CashflowState {
-  return { ...s, cash: s.cash + fastTrackMonthly(s) };
+  return { ...s, cash: s.cash + cashflowDayPayout(s) };
+}
+
+/** Half a Cash Flow Year, floored — see FT_LOSS_MIN. */
+export const FT_LOSS_MONTHS = 6;
+
+export function ftLossAmount(s: CashflowState): number {
+  return Math.max(FT_LOSS_MIN, fastTrackMonthly(s) * FT_LOSS_MONTHS);
 }
 
 /**
  * A Fast-Track setback goes through the same borrow path as everything else. It
  * used to floor at `Math.max(0, cash - 20000)`, which meant a player holding
  * $3,000 lost $3,000 and a player holding $0 lost nothing at all — the one square
- * on the board that could not hurt you.
+ * on the board that could not hurt you. It is now scaled to the player as well: a
+ * flat figure next to a twelve-month payout is a rounding error, and a setback that
+ * cannot be felt is not a setback.
  */
 export function applyFtLoss(s: CashflowState): CashflowState {
-  return clampCash({ ...s, cash: s.cash - FT_LOSS_AMOUNT });
+  return clampCash({ ...s, cash: s.cash - ftLossAmount(s) });
 }
 
 export function canAffordFt(s: CashflowState, deal: FastTrackDeal): boolean {

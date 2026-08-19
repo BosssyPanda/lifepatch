@@ -10,12 +10,20 @@ import { currency } from "@/lib/format";
  * disagree.
  */
 
-/** Flat cash penalty applied by `applyFtLoss` on a Fast-Track "Setback" square. */
-export const FT_LOSS_AMOUNT = 20000;
+/**
+ * The floor on a Fast-Track "Setback". The penalty itself is no longer flat — see
+ * `ftLossAmount` in the engine. A flat $20,000 was the right size against the old
+ * $150k stake and is loose change against a Cash Flow Year, so the square that is
+ * supposed to keep the victory lap honest stopped registering; it now costs six
+ * months of whatever cash flow the player has built, and never less than this.
+ */
+export const FT_LOSS_MIN = 20000;
 
 // Fast-Track "Setback" (ftloss) card copy.
 export const FT_SETBACK_TITLE = "Setback";
-export const FT_SETBACK_BODY = `A risky venture went sideways. You lose up to ${currency(FT_LOSS_AMOUNT)} — even the wealthy manage risk.`;
+export function ftSetbackBody(amount: number): string {
+  return `A risky venture went sideways. It costs you ${currency(amount)} — six months of your cash flow, or ${currency(FT_LOSS_MIN)}, whichever bites harder. Even the wealthy manage risk.`;
+}
 export const FT_SETBACK_ACTION = "Take the hit";
 
 // Teaching lines that previously sat inline in the event cards.

@@ -6,6 +6,7 @@ import { CheckIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/Badge";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { NameField, playerName } from "@/components/ui/NameField";
+import { SoundCell } from "@/components/ui/SoundCell";
 import { useAudio } from "@/hooks/useAudio";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { currency } from "@/lib/format";
@@ -32,6 +33,7 @@ export function Setup({
 
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-5xl flex-col justify-center px-5 py-14">
+      <SoundCell className="mb-4" />
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="text-center">
         <p className="eyebrow text-ink">{MODES[mode].name} · starts at age {chosen?.startAge}</p>
         <h1 className="display-caps mt-3 text-4xl text-ink sm:text-5xl">Who do you become?</h1>

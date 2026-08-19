@@ -28,6 +28,7 @@ import { useSkippable } from "@/src/motion/useSkippable";
 import { useScramble } from "@/src/motion/useScramble";
 import { DUR, EASE, SPRING } from "@/src/motion/tokens";
 import { SectionMark } from "@/components/ui/SectionMark";
+import { SoundCell } from "@/components/ui/SoundCell";
 
 const TAGLINE = "SURVIVE THE INTERNET ECONOMY";
 
@@ -47,7 +48,16 @@ function Cell({ children, className = "" }: { children: React.ReactNode; classNa
  * bracketed `[ BEGIN A RUN ]` terminal CTA arrives. Reduced motion renders the
  * final composed frame; any input skips to it (global useSkippable).
  */
-export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: () => void }) {
+export function Intro({
+  onBegin,
+  onAlmanac,
+  onReplayIntro,
+}: {
+  onBegin: () => void;
+  onAlmanac: () => void;
+  /** Replay the cold open. Rendered as a rail cell — see the note on the rail. */
+  onReplayIntro?: () => void;
+}) {
   const audio = useAudio();
   const { reduced } = useMotionCtx();
   // Smooth scrolling belongs HERE — this is the long scroll story, with pinned
@@ -189,16 +199,37 @@ export function Intro({ onBegin, onAlmanac }: { onBegin: () => void; onAlmanac: 
           </motion.div>
         </div>
 
-        {/* top HUD rail */}
+        {/* top HUD rail.
+            Both live controls sit HERE, in the document, rather than floating over the
+            page. The intro-replay chip used to be `fixed left-4 top-14`, and probed at
+            eleven scroll offsets it overlapped content at every single one — 15,498px²
+            of it on other controls. A rail cell cannot overlap anything, and this is
+            where a returning visitor arrives, which is the moment the mute is wanted. */}
         <div className="flex items-stretch border-b border-hairline">
-          <div className="flex items-center gap-2 border-r border-hairline px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 border-r border-hairline px-4 py-3 sm:px-6">
             <span className="eyebrow text-ink" style={{ fontSize: "0.62rem", letterSpacing: "0.2em" }}>LIFEPATCH</span>
-            <Cell>/ Survival</Cell>
+            {/* Dropped below `sm`: two controls joined this rail, and at 390px the
+                strapline wrapped onto a second line and pushed VOL's right edge to
+                within 3px of the viewport. */}
+            <Cell className="hidden sm:inline">/ Survival</Cell>
           </div>
-          <div className="ml-auto flex items-center gap-4 px-4 py-3 sm:px-6">
-            <Cell className="hidden sm:inline">Form 01 · A Financial Survival Game</Cell>
-            <span className="hidden h-3 w-px bg-hairline sm:block" />
-            <Cell>Est. MMXXVI</Cell>
+          <div className="ml-auto flex shrink-0 items-center gap-2.5 px-3 py-2 sm:gap-4 sm:px-6">
+            <Cell className="hidden lg:inline">Form 01 · A Financial Survival Game</Cell>
+            <span className="hidden h-3 w-px bg-hairline lg:block" />
+            <Cell className="hidden sm:inline">Est. MMXXVI</Cell>
+            {onReplayIntro && (
+              <button
+                type="button"
+                onClick={onReplayIntro}
+                aria-label="Replay the intro film"
+                data-radius=""
+                className="relative flex items-center gap-1.5 border border-hairline-strong bg-bg px-2.5 py-1.5 text-ink-dim transition-colors hover:border-ink hover:text-ink before:absolute before:-inset-x-[8px] before:-inset-y-[9px] before:content-['']"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M7 4l13 8-13 8z" /></svg>
+                <span className="eyebrow" style={{ fontSize: "0.56rem" }}>Intro</span>
+              </button>
+            )}
+            <SoundCell />
           </div>
         </div>
 

@@ -28,7 +28,7 @@ import {
   RAT_SQUARE_META,
 } from "@/lib/cashflow/board";
 import { FAST_TRACK_CASHFLOW_GOAL, getDream } from "@/lib/cashflow/dreams";
-import { FT_SETBACK_ACTION, FT_SETBACK_BODY, FT_SETBACK_TITLE } from "@/lib/cashflow/messages";
+import { FT_SETBACK_ACTION, FT_SETBACK_TITLE, ftSetbackBody } from "@/lib/cashflow/messages";
 import {
   addBaby,
   applyDownsized,
@@ -37,9 +37,11 @@ import {
   borrow,
   buyDream,
   buyFastTrackDeal,
+  cashflowDayPayout,
   collectCashflowDay,
   donateCharity,
   fastTrackMonthly,
+  ftLossAmount,
   payDoodad,
   payoffLiability,
   repayBankLoan,
@@ -223,8 +225,17 @@ export function CashflowGame({
                   <span className="num">{currency(Math.max(0, FAST_TRACK_CASHFLOW_GOAL - s.fastTrackCashflow))}</span> to go.
                 </p>
                 <p className="mt-1 font-body text-[0.74rem] text-ink-dim/80">
-                  You collect {currency(fastTrackMonthly(s))}/mo on a Cash Flow Day (your carried passive income
-                  counts for the payout, not for the goal).
+                  Up here time runs in years: a <strong className="text-ink">Cash Flow Year</strong> pays twelve
+                  months at once — {currency(fastTrackMonthly(s))}/mo × 12 ={" "}
+                  <span className="num">{currency(cashflowDayPayout(s))}</span>. Your carried passive income
+                  counts for that payout, not for the goal.
+                </p>
+                {/* Both routes run through the same lever, and a dream-chaser who never buys
+                    an investment measures ~3× slower in simulation than one who does — so the
+                    panel says it out loud rather than leaving it to be discovered. */}
+                <p className="mt-1 font-body text-[0.74rem] text-ink-dim/80">
+                  Every investment you buy makes the next Cash Flow Year bigger — including the
+                  one that finally pays for your dream.
                 </p>
               </div>
             ) : (
@@ -346,9 +357,9 @@ export function CashflowGame({
             {pending.kind === "downsized" && <DownsizedCard s={s} onOk={() => { audio.sting("bad"); finishResolve(applyDownsized(s)); }} />}
 
             {pending.kind === "ftdeal" && <FtDealCard deal={pending.deal} cash={s.cash} onBuy={() => { audio.sfx("stamp"); audio.sting("good"); finishResolve(buyFastTrackDeal(s, pending.deal)); }} onPass={() => endTurn(s)} />}
-            {pending.kind === "cashflowday" && <FtSimpleCard title="Cash Flow Day" body={`Collect your monthly cash flow of ${currency(fastTrackMonthly(s))}.`} action="Collect" onOk={() => { audio.sfx("cash"); finishResolve(collectCashflowDay(s)); }} />}
+            {pending.kind === "cashflowday" && <FtSimpleCard title="Cash Flow Year" body={`A full year of cash flow lands at once: ${currency(fastTrackMonthly(s))}/mo × 12 = ${currency(cashflowDayPayout(s))}.`} action="Collect" onOk={() => { audio.sfx("cash"); finishResolve(collectCashflowDay(s)); }} />}
             {pending.kind === "dream" && <FtDreamCard s={s} onBuy={() => { audio.sting("good"); audio.swellWarmth(); finishResolve(buyDream(s)); }} onPass={() => endTurn(s)} />}
-            {pending.kind === "ftloss" && <FtSimpleCard title={FT_SETBACK_TITLE} body={FT_SETBACK_BODY} action={FT_SETBACK_ACTION} tone="bad" onOk={() => { audio.sting("bad"); finishResolve(applyFtLoss(s)); }} />}
+            {pending.kind === "ftloss" && <FtSimpleCard title={FT_SETBACK_TITLE} body={ftSetbackBody(ftLossAmount(s))} action={FT_SETBACK_ACTION} tone="bad" onOk={() => { audio.sting("bad"); finishResolve(applyFtLoss(s)); }} />}
 
             {pending.kind === "quiz" && (
               <QuizCard

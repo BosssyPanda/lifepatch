@@ -63,10 +63,13 @@ and fourth money colour and must never be used to grade a number.
   Orange is *not* a verdict tier. The old warm-brown/olive/amber seal hexes are SPENT-era
   legacy and must not come back.
 - No cool blues/purples, no warm browns, no second orange, no gradients as decoration — flat
-  fields only. Every value above is audited: `node scratchpad/palette-audit.js` re-runs all 41
-  contrast checks — the original 28 plus every pairing the accent sweep introduced (the ring on
+  fields only. Every value above is audited: `node scratchpad/palette-audit.js` re-runs all 52
+  contrast checks — the original 28, every pairing the accent sweep introduced (the ring on
   each ground, the CTA's two states, the selection outline over its wash, and chartreuse over
-  the chip, toast and meter grounds). A palette change means all three of `app/globals.css`
+  the chip, toast and meter grounds), and the life sim's insolvency warning panel (a
+  `border-loss/60` frame was drafted for it and measured 2.56:1 on bg2, so it ships as a
+  hairline frame with a solid loss left rule at 5.09:1). A pairing that has not been measured
+  does not ship. A palette change means all three of `app/globals.css`
   (`@theme`), `lib/palette.ts` and this section, in the same commit; a change to WHERE a colour
   is spent means this section too.
 

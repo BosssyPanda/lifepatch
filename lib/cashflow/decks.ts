@@ -318,11 +318,22 @@ export const MARKET_CARDS: MarketCard[] = [
 ];
 
 // ── FAST TRACK — big businesses bought with cash for huge monthly cash flow ────
+/**
+ * Every one of these is priced at exactly 10 x its monthly cash flow — a ten-month
+ * payback, which is the whole point of the Fast Track: up here money buys income at a
+ * rate the Rat Race never offers. It is also the number the player is meant to notice,
+ * because the ladder to the +$50,000/mo goal is then legible at a glance: half a million
+ * dollars of these, in any combination, wins the game.
+ *
+ * They used to run 120k-300k for 7k-12k/mo (a 17-25 month payback) against a $150,000
+ * entry stake and $80k-$150k dreams, which made the Fast Track a formality if you bought
+ * the dream and a 60+ turn grind if you did not.
+ */
 export const FAST_TRACK_DEALS: FastTrackDeal[] = [
-  { id: "ft-software", label: "SaaS Company", price: 180000, cashFlow: 9000, flavor: "Recurring revenue, near-zero marginal cost." },
-  { id: "ft-apartments", label: "200-Unit Apartment Tower", price: 300000, cashFlow: 14000, flavor: "A whole building of tenants paying you rent." },
-  { id: "ft-franchise", label: "12-Store Franchise Group", price: 250000, cashFlow: 12000, flavor: "A regional empire of proven storefronts." },
-  { id: "ft-patent", label: "License a Patent Portfolio", price: 120000, cashFlow: 7000, flavor: "Royalties roll in while you sleep." },
-  { id: "ft-storage", label: "Self-Storage Facility", price: 200000, cashFlow: 10000, flavor: "Low maintenance, high margin, sticky tenants." },
-  { id: "ft-energy", label: "Solar Farm", price: 220000, cashFlow: 11000, flavor: "Sell power back to the grid for decades." },
+  { id: "ft-patent", label: "License a Patent Portfolio", price: 90000, cashFlow: 9000, flavor: "Royalties roll in while you sleep." },
+  { id: "ft-storage", label: "Self-Storage Facility", price: 120000, cashFlow: 12000, flavor: "Low maintenance, high margin, sticky tenants." },
+  { id: "ft-software", label: "SaaS Company", price: 150000, cashFlow: 15000, flavor: "Recurring revenue, near-zero marginal cost." },
+  { id: "ft-energy", label: "Solar Farm", price: 180000, cashFlow: 18000, flavor: "Sell power back to the grid for decades." },
+  { id: "ft-franchise", label: "12-Store Franchise Group", price: 220000, cashFlow: 22000, flavor: "A regional empire of proven storefronts." },
+  { id: "ft-apartments", label: "200-Unit Apartment Tower", price: 280000, cashFlow: 28000, flavor: "A whole building of tenants paying you rent." },
 ];

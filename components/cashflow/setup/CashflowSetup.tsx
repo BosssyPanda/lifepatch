@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { CheckIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
+import { SoundCell } from "@/components/ui/SoundCell";
 import { NameField, playerName } from "@/components/ui/NameField";
 import { useAudio } from "@/hooks/useAudio";
 import { DREAMS } from "@/lib/cashflow/dreams";
@@ -46,9 +47,12 @@ export function CashflowSetup({
     <div className="mx-auto min-h-[100svh] w-full max-w-5xl px-4 py-10">
       <div className="flex items-center justify-between">
         <p className="eyebrow text-ink">Escape the Rat Race · Setup</p>
-        <NeonButton variant="ghost" size="sm" onClick={onExit}>
-          ← Title
-        </NeonButton>
+        <div className="flex items-center gap-3">
+          <SoundCell />
+          <NeonButton variant="ghost" size="sm" onClick={onExit}>
+            ← Title
+          </NeonButton>
+        </div>
       </div>
 
       {hasSave && step === "profession" && (

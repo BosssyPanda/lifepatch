@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { ArrowDown, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
@@ -27,6 +27,27 @@ export function AdvanceBar({
   const blocked = !allEventsResolved(run);
   const hintId = useId();
 
+  /**
+   * Publish this bar's real height as `--toast-inset` so the floating concept toast
+   * can sit ABOVE it instead of on top of it. Measured rather than hardcoded: the
+   * bar is 63px on desktop and 73px on a phone (the disabled-CTA hint wraps), and it
+   * changes again when the hint appears or goes.
+   */
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const publish = () => root.style.setProperty("--toast-inset", `${Math.round(el.getBoundingClientRect().height)}px`);
+    publish();
+    const ro = new ResizeObserver(publish);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--toast-inset");
+    };
+  }, []);
+
   // One tap used to end the run outright and cut straight to the recap film.
   const endRun = useArmedAction({
     label: "End run",
@@ -39,7 +60,7 @@ export function AdvanceBar({
   });
 
   return (
-    <div className="sticky bottom-0 z-30 border-t border-hairline bg-bg">
+    <div ref={barRef} className="sticky bottom-0 z-30 border-t border-hairline bg-bg">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-5 py-3">
         <div className="flex items-center gap-5">
           <button

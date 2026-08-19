@@ -1,3 +1,4 @@
+import { isGuestId } from "./cloud/identity";
 import type { ModeId } from "./modes";
 import { isCompatibleSave, type RunState } from "./runEngine";
 import { isCloud, supabase } from "./supabase";
@@ -28,9 +29,22 @@ function localKey(userId: string, mode: ModeId) {
   return `lifepatch.save.${userId}.${mode}`;
 }
 
+/**
+ * Where this player's saves live.
+ *
+ * A guest is the anonymous device id, and there is no auth session behind it — the
+ * `saves` table is row-level-secured on `auth.uid()`, so a cloud write would be
+ * refused and the run would silently fail to persist. Guest saves therefore stay on
+ * the device even when Supabase keys are configured, which is exactly what the gate
+ * promises them.
+ */
+function cloudSavesFor(userId: string): boolean {
+  return Boolean(isCloud && supabase && !isGuestId(userId));
+}
+
 export async function saveRun(userId: string, mode: ModeId, state: RunState): Promise<void> {
-  if (isCloud && supabase) {
-    await supabase
+  if (cloudSavesFor(userId)) {
+    await supabase!
       .from("saves")
       .upsert(
         { user_id: userId, mode, state, updated_at: new Date().toISOString() },
@@ -47,8 +61,8 @@ export async function saveRun(userId: string, mode: ModeId, state: RunState): Pr
 }
 
 export async function loadRun(userId: string, mode: ModeId): Promise<RunState | null> {
-  if (isCloud && supabase) {
-    const { data } = await supabase
+  if (cloudSavesFor(userId)) {
+    const { data } = await supabase!
       .from("saves")
       .select("state")
       .eq("user_id", userId)
@@ -82,8 +96,8 @@ export async function loadRunChecked(userId: string, mode: ModeId): Promise<Save
 }
 
 export async function listSaves(userId: string): Promise<{ mode: ModeId; updatedAt: string }[]> {
-  if (isCloud && supabase) {
-    const { data } = await supabase
+  if (cloudSavesFor(userId)) {
+    const { data } = await supabase!
       .from("saves")
       .select("mode, updated_at")
       .eq("user_id", userId);
@@ -100,11 +114,43 @@ export async function listSaves(userId: string): Promise<{ mode: ModeId; updated
 }
 
 export async function deleteSave(userId: string, mode: ModeId): Promise<void> {
-  if (isCloud && supabase) {
-    await supabase.from("saves").delete().eq("user_id", userId).eq("mode", mode);
+  if (cloudSavesFor(userId)) {
+    await supabase!.from("saves").delete().eq("user_id", userId).eq("mode", mode);
     return;
   }
   try {
     localStorage.removeItem(localKey(userId, mode));
+  } catch {}
+}
+
+/**
+ * Carry a guest's on-device runs onto a real account the first time they sign in.
+ *
+ * Signing in must never read as "my save vanished" — the same reasoning that made
+ * `signIn` merge local mastery across. Existing saves on the account always win
+ * (this only ever fills an empty slot), a save the current engine cannot read is
+ * skipped rather than resurrected, and every step is best-effort: a failure here
+ * leaves the guest copy exactly where it was.
+ */
+export async function adoptGuestSaves(guestId: string, userId: string): Promise<void> {
+  if (!guestId || !userId || guestId === userId || !isGuestId(guestId)) return;
+  // Once per account. Without this every page load of a player who ever played as a
+  // guest would re-read both modes from the cloud to discover there is nothing to do.
+  const done = `lifepatch.adopted.${userId}`;
+  try {
+    if (localStorage.getItem(done) === "1") return;
+  } catch {}
+  for (const mode of ["story", "infinite"] as ModeId[]) {
+    try {
+      const raw = localStorage.getItem(localKey(guestId, mode));
+      if (!raw) continue;
+      const state = (JSON.parse(raw) as SaveRow).state;
+      if (!isCompatibleSave(state)) continue;
+      if (await loadRun(userId, mode)) continue; // never overwrite the account's own run
+      await saveRun(userId, mode, state);
+    } catch {}
+  }
+  try {
+    localStorage.setItem(done, "1");
   } catch {}
 }
