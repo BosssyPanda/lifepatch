@@ -2,11 +2,13 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Opening } from "@/components/cinematic/Opening";
 import { ModeSelect } from "@/components/screens/ModeSelect";
+import { playerName } from "@/components/ui/NameField";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AudioProvider, useAudio } from "@/hooks/useAudio";
+import { MatchProvider, useMatchCtx } from "@/hooks/useMatch";
 import { useRun } from "@/hooks/useRun";
 import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
 import { TerminalOp } from "@/components/ui/TerminalOp";
@@ -15,6 +17,7 @@ import { wipeFor } from "@/src/motion/transitions";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
+import { yearIndex, type RunState } from "@/lib/runEngine";
 
 // Code-split every screen first paint doesn't need. Only the intro (Opening) and
 // ModeSelect stay eager; the run engine, Rat Race board, cinematics, report, and
@@ -31,6 +34,9 @@ const Outro = dynamic(() => import("@/components/cinematic/Outro").then((m) => m
 const LifeReport = dynamic(() => import("@/components/screens/LifeReport").then((m) => m.LifeReport), { ssr: false, loading: screenFallback });
 const AuthGate = dynamic(() => import("@/components/screens/AuthGate").then((m) => m.AuthGate), { ssr: false, loading: screenFallback });
 const Setup = dynamic(() => import("@/components/screens/Setup").then((m) => m.Setup), { ssr: false, loading: screenFallback });
+// "With friends" screens: nobody who plays solo ever pays for these chunks.
+const LobbyScreen = dynamic(() => import("@/components/mp/LobbyScreen").then((m) => m.LobbyScreen), { ssr: false, loading: screenFallback });
+const MatchPodium = dynamic(() => import("@/components/mp/MatchPodium").then((m) => m.MatchPodium), { ssr: false, loading: screenFallback });
 // Overlays: keep their always-mounted open/close API (and exit animation) but defer
 // the chunk until the first time each is opened, then leave it mounted.
 const Almanac = dynamic(() => import("@/components/screens/Almanac").then((m) => m.Almanac), { ssr: false });
@@ -47,18 +53,34 @@ export function AppShell() {
           concept a player earned was filed under the anonymous device id while
           the map read the signed-in one, and progress never appeared. */}
       <AuthProvider>
-        <ConceptLearnProvider>
-          <AppShellInner />
-        </ConceptLearnProvider>
+        {/* The match provider sits under auth because the room needs the same
+            player id the rest of the social layer uses, and above everything
+            that renders a screen: a match is a property of the whole session,
+            not of the run currently on screen. Outside a room it holds no
+            channel and `useMatchCtx()` reads null, so every solo path below is
+            byte-for-byte what it was before multiplayer existed. */}
+        <MatchProvider>
+          <ConceptLearnProvider>
+            <AppShellInner />
+          </ConceptLearnProvider>
+        </MatchProvider>
       </AuthProvider>
     </AudioProvider>
   );
+}
+
+/** The signature a match run reports on: a new year, or the end of the life. */
+function matchSig(r: RunState): string {
+  return `${r.seed}:${yearIndex(r)}:${r.status}`;
 }
 
 function AppShellInner() {
   const auth = useAuth();
   const run = useRun(auth.user?.id ?? null);
   const audio = useAudio();
+  // null unless this device is in a room — every branch below that reads it is
+  // additive, so the solo phases render exactly as they always have.
+  const match = useMatchCtx();
   const { reduced } = useMotionCtx();
   // Phase-C transition layer: the paper-feed wipe (director's pick; see src/motion/transitions).
   const wipe = wipeFor(reduced);
@@ -83,25 +105,97 @@ function AppShellInner() {
 
   // Phase → music preset. intro & recap are owned by Opening/Outro (so they can
   // sync the escalation/verdict), everything else crossfades to a steady bed.
+  // The lobby and the podium are menus with a room in them, so they take the menu
+  // bed — multiplayer ships no cues of its own, by contract.
   // `setPhase` is destructured because it is stable while `audio` is not: keeping
   // the whole object here re-ramped all eight stem gains on every step of the
   // volume fader.
   const { setPhase: setScorePhase } = audio;
   useEffect(() => {
-    if (phase === "mode" || phase === "auth" || phase === "setup") setScorePhase("menu");
+    if (phase === "mode" || phase === "auth" || phase === "setup" || phase === "lobby") setScorePhase("menu");
     else if (phase === "run") setScorePhase("gameplay");
-    else if (phase === "report") setScorePhase("menu");
+    else if (phase === "report" || phase === "podium") setScorePhase("menu");
   }, [phase, setScorePhase]);
 
   // Post a leaderboard result + bump the daily streak when a life run finishes.
   // submitRunOnce dedupes durably (per run seed), so re-renders, resumes, and
   // reloads all post exactly once.
+  //
+  // "podium" is in the gate because a match run ends THERE, not in the report: a
+  // player who reads the standings and closes the tab still finished a story run
+  // and still owns their place on the global board. The dedupe key makes the
+  // second pass (once they tap through to their report) a no-op.
   useEffect(() => {
-    if (phase !== "report" || !run.run || run.run.status !== "ended") return;
+    if ((phase !== "report" && phase !== "podium") || !run.run || run.run.status !== "ended") return;
     const r = run.run;
     const id = resolvePlayerId(auth.user?.id ?? null);
     void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r));
   }, [phase, run.run, auth.user]);
+
+  // ── the room ──────────────────────────────────────────────────────────────
+  // A match run reports itself to the room once per YEAR and once at its end.
+  // This lives here rather than in YearLoop because the ending unmounts YearLoop
+  // in the same commit that produces the ended state — the final standings row
+  // would never leave the device. Gated on the signature so the dozen state
+  // objects a year of trading produces don't each become a broadcast.
+  const reportedRef = useRef("");
+  useEffect(() => {
+    const r = run.run;
+    if (!match || !r) return;
+    const sig = matchSig(r);
+    if (sig === reportedRef.current) return;
+    reportedRef.current = sig;
+    if (r.status === "ended") match.reportEnded(r);
+    else match.reportAdvance(r);
+  }, [match, run.run]);
+
+  // Every client starts (or resumes) its own life the moment the room says the
+  // match is running — same background, same seed, same world.
+  const startedRoomRef = useRef<string | null>(null);
+  const onStartRun = () => {
+    const cfg = match?.config;
+    if (!cfg || startedRoomRef.current === cfg.roomCode) return;
+    startedRoomRef.current = cfg.roomCode;
+    if (match?.resumeState) {
+      // Rejoin: the hook already caught this life up to the room's year.
+      run.resume(match.resumeState, { matchCode: cfg.roomCode });
+      return;
+    }
+    const name = playerName(match?.peers[match.selfId]?.name ?? "");
+    const r = run.start("story", cfg.backgroundId, name, { seed: cfg.seed, matchCode: cfg.roomCode });
+    // Seed the standings row now instead of a render later, and mark it reported
+    // so the effect above doesn't send the same year twice.
+    reportedRef.current = matchSig(r);
+    match?.reportAdvance(r);
+  };
+
+  // The lobby calls `onStartRun` when the room flips to running, and that is the
+  // normal path. This is the other one: a REJOIN arrives in a match that is
+  // already running, so there is no flip to watch for — the lobby is a doorway it
+  // passes straight through. Idempotent (the ref above is the gate), so the two
+  // paths can't double-start a life.
+  const onStartRunRef = useRef(onStartRun);
+  onStartRunRef.current = onStartRun;
+  useEffect(() => {
+    if (phase === "lobby" && match?.phase === "running") onStartRunRef.current();
+  }, [phase, match]);
+
+  const leaveRoom = () => match?.leaveMatch();
+  const exitToTitle = () => {
+    leaveRoom();
+    run.toTitle();
+  };
+
+  // A room screen with no room behind it (the transport dropped, or the player
+  // left from somewhere else) has nothing to render — fall back to the solo flow
+  // rather than a blank phase.
+  const setRunPhase = run.setPhase;
+  useEffect(() => {
+    if (match) return;
+    startedRoomRef.current = null;
+    if (phase === "lobby") setRunPhase("setup");
+    else if (phase === "podium") setRunPhase("report");
+  }, [match, phase, setRunPhase]);
 
   // Fresh run → clear the "this run sharpened" concept summary.
   const runSeed = run.run?.seed ?? null;
@@ -142,13 +236,30 @@ function AppShellInner() {
 
         {phase === "setup" && mode && (
           <motion.div key="setup" {...wipe}>
-            <Setup mode={mode} onStart={(bg, name) => run.start(mode, bg, name)} onBack={() => run.setPhase("auth")} />
+            <Setup
+              mode={mode}
+              onStart={(bg, name) => run.start(mode, bg, name)}
+              onBack={() => run.setPhase("auth")}
+              onEnterLobby={() => run.setPhase("lobby")}
+            />
+          </motion.div>
+        )}
+
+        {phase === "lobby" && match && (
+          <motion.div key="lobby" {...wipe}>
+            <LobbyScreen onStartRun={onStartRun} onLeave={() => { leaveRoom(); run.setPhase("setup"); }} />
           </motion.div>
         )}
 
         {phase === "run" && run.run && (
           <motion.div key="run" {...wipe}>
             <YearLoop run={run} onOpenAlmanac={openAlmanac} />
+          </motion.div>
+        )}
+
+        {phase === "podium" && match && run.run && (
+          <motion.div key="podium" {...wipe}>
+            <MatchPodium run={run.run} onSeeReport={() => run.setPhase("recap")} onExit={exitToTitle} />
           </motion.div>
         )}
 
@@ -162,8 +273,11 @@ function AppShellInner() {
           <motion.div key="report" {...wipe}>
             <LifeReport
               run={run.run}
-              onReplay={() => run.start(run.run!.mode, run.run!.backgroundId, run.run!.name)}
-              onTitle={run.toTitle}
+              // Both exits close the room first: a replay is a solo run, and a
+              // player still holding a channel would keep broadcasting rows from
+              // a life the room never started.
+              onReplay={() => { leaveRoom(); run.start(run.run!.mode, run.run!.backgroundId, run.run!.name); }}
+              onTitle={exitToTitle}
               onAlmanac={openAlmanac}
               onMasteryMap={openMasteryMap}
             />

@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { MatchRail } from "@/components/mp/MatchRail";
+import { YearTimer } from "@/components/mp/YearTimer";
 import { Reveal } from "@/components/ui/Reveal";
 import { useAudio } from "@/hooks/useAudio";
 import { useLenis } from "@/hooks/useLenis";
+import { useMatchCtx } from "@/hooks/useMatch";
 import type { useRun } from "@/hooks/useRun";
 import { ambienceForTag } from "@/lib/audioMap";
 import { LIFE_EVENTS } from "@/lib/lifeEvents";
 import { macroEvent } from "@/lib/markets";
 import { MODES } from "@/lib/modes";
-import { canRetire } from "@/lib/runEngine";
+import { autoChoiceFor } from "@/lib/mp/autoResolve";
+import { canRetire, netWorth, yearIndex } from "@/lib/runEngine";
 import { HudRail } from "@/components/ui/HudRail";
 import { AdvanceBar } from "./AdvanceBar";
 import { InsolvencyNotice } from "./InsolvencyNotice";
@@ -29,8 +33,11 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   // volume / started does. Depending on the whole object made a volume-fader drag
   // re-fire these effects — which tore the ambience bed down and rebuilt it on
   // every step of the slider.
-  const { setIntensity, ambience } = useAudio();
+  const { setIntensity, ambience, sfx } = useAudio();
+  // null for a solo run — everything below that reads it is additive.
+  const match = useMatchCtx();
   const s = run.run;
+  const { choose, advance } = run;
 
   const debt = s?.debt ?? 0;
   const health = s?.life.health ?? 100;
@@ -69,6 +76,33 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   }, [ambience, openTag]);
   useEffect(() => () => ambience(null), [ambience]);
 
+  // ── the room's clock ──────────────────────────────────────────────────────
+  // In a match the year turns for everyone at once and the clock waits for no
+  // one: when the room has moved past this life (a `tick` from the acting host,
+  // or this client's own fallback deadline), anything the player left open is
+  // answered with the same deterministic auto-choice that ghost-plays an absent
+  // player — then the year rolls. One year per pass, so a tab that was asleep
+  // catches up a year per commit instead of freezing on a long loop.
+  //
+  // Reporting the new state to the room is AppShell's job: the ending unmounts
+  // this screen in the same commit that produces it.
+  useEffect(() => {
+    if (!match || !s || s.status !== "playing") return;
+    if (match.roomYearIndex <= yearIndex(s)) return;
+    for (const id of s.pendingEvents) {
+      if (s.yearChoices[id]) continue;
+      const auto = autoChoiceFor(s, id);
+      // An event this build no longer knows can't be answered; `advanceYear`
+      // clears the pending list anyway, so the year still turns.
+      if (auto) choose(id, auto);
+    }
+    // The same page turn the solo bar plays on "Advance the year". In a match the
+    // bar only locks in, so without this the room's loudest shared beat — the year
+    // actually turning — would be silent.
+    sfx("page");
+    advance();
+  }, [match, s, choose, advance, sfx]);
+
   if (!s) return null;
 
   return (
@@ -78,6 +112,17 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
       <h1 className="sr-only">{s.name}&rsquo;s life — year {s.year - s.startYear + 1}, age {s.age}</h1>
       {/* Phase M2 chrome rail — relative year only (calendar years are end-report spoilers) */}
       <HudRail mode={MODES[s.mode].name} counter={`Year ${s.year - s.startYear + 1} — Age ${s.age}`} />
+      {/* The room's chrome sits with the run's own: the shared countdown and the
+          live standings read as one band under the rail, so everything that is
+          LIVE is in a single column instead of scattered down the page. */}
+      {match && (
+        <div className="border-b border-hairline bg-bg">
+          <div className="mx-auto max-w-5xl space-y-3 px-3 py-3 sm:px-5">
+            <YearTimer />
+            <MatchRail selfNetWorth={netWorth(s)} />
+          </div>
+        </div>
+      )}
       <YearHud run={s} saving={run.saving} onOpenAlmanac={onOpenAlmanac} />
       <RunTicker run={s} />
 

@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { CheckIcon } from "@/components/icons";
+import { WithFriendsPanel } from "@/components/mp/WithFriendsPanel";
 import { Badge } from "@/components/ui/Badge";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { NameField, playerName } from "@/components/ui/NameField";
@@ -19,10 +20,13 @@ export function Setup({
   mode,
   onStart,
   onBack,
+  onEnterLobby,
 }: {
   mode: ModeId;
   onStart: (backgroundId: string, name: string) => void;
   onBack: () => void;
+  /** Story only: the player opened or joined a room and the lobby takes over. */
+  onEnterLobby?: () => void;
 }) {
   const audio = useAudio();
   const { reduced } = useMotionCtx();
@@ -102,6 +106,16 @@ export function Setup({
           Start your life →
         </NeonButton>
       </div>
+
+      {/* The second door. Solo remains the primary path — it keeps the one accent
+          CTA on this screen — and the room is ruled off below it the way a form
+          separates its sections. Story only: a shared 1990–2010 world is the whole
+          basis of a fair match, and Infinite has no shared ending to race to. */}
+      {mode === "story" && onEnterLobby && (
+        <div className="mx-auto mt-10 w-full max-w-md border-t border-hairline pt-8">
+          <WithFriendsPanel name={playerName(name)} onEnterLobby={onEnterLobby} />
+        </div>
+      )}
     </div>
   );
 }

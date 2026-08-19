@@ -176,10 +176,17 @@ function drawEvents(s: RunState): string[] {
   return picks;
 }
 
-export function initRun(mode: ModeId, backgroundId: string, name: string): RunState {
+/**
+ * `seed` is optional and, left out, the run rolls its own exactly as it always
+ * has. Passed in, two runs share one world — identical markets, identical event
+ * draws from identical positions — which is the entire basis of a "with friends"
+ * match. It is floored so a fractional seed can never make one client's
+ * `mulberry32` disagree with another's.
+ */
+export function initRun(mode: ModeId, backgroundId: string, name: string, seedIn?: number): RunState {
   const cfg = getMode(mode);
   const bg = getBackground(backgroundId);
-  const seed = Math.floor(Math.random() * 1e9);
+  const seed = seedIn === undefined ? Math.floor(Math.random() * 1e9) : Math.floor(seedIn);
   const base: RunState = {
     version: RUN_VERSION,
     mode,

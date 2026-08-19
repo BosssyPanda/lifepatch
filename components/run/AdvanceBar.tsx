@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
-import { ArrowDown, TrophyIcon } from "@/components/icons";
+import { ArrowDown, CheckIcon, TrophyIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import { useAudio } from "@/hooks/useAudio";
+import { useMatchCtx } from "@/hooks/useMatch";
 import { allEventsResolved, type RunState } from "@/lib/runEngine";
 
 /** Expands a text button's hit box to 44px without changing how tall it looks. */
@@ -24,8 +25,20 @@ export function AdvanceBar({
   onQuit: () => void;
 }) {
   const audio = useAudio();
+  // null for a solo run: the bar below is then exactly what it has always been.
+  const match = useMatchCtx();
   const blocked = !allEventsResolved(run);
   const hintId = useId();
+
+  // In a match this button no longer moves the clock — the room does. It locks
+  // the year in, and the year turns when everyone has locked in or the countdown
+  // runs out, whichever comes first.
+  const locked = match ? (match.peers[match.selfId]?.ready ?? false) : false;
+  const hint = blocked
+    ? "Make your life choice first"
+    : locked
+      ? "Waiting for the year to turn"
+      : null;
 
   /**
    * Publish this bar's real height as `--toast-inset` so the floating concept toast
@@ -48,10 +61,12 @@ export function AdvanceBar({
     };
   }, []);
 
-  // One tap used to end the run outright and cut straight to the recap film.
+  // One tap used to end the run outright and cut straight to the recap film. In a
+  // match it is "Drop out": the life still ends here, the player still goes to the
+  // standings, and the room plays on without them.
   const endRun = useArmedAction({
-    label: "End run",
-    armedLabel: "Tap again to end",
+    label: match ? "Drop out" : "End run",
+    armedLabel: match ? "Tap again to drop out" : "Tap again to end",
     onArm: () => audio.sfx("uitick"),
     onConfirm: () => {
       audio.sfx("soft");
@@ -84,23 +99,33 @@ export function AdvanceBar({
 
         <div className="flex items-center gap-3">
           {/* The reason the primary button is dead used to be `hidden sm:inline` — on a
-              phone the player met a greyed-out CTA with no explanation at all. */}
-          {blocked && (
+              phone the player met a greyed-out CTA with no explanation at all. The
+              same slot carries the match's "you're locked in, sit tight" line, for
+              exactly the same reason. */}
+          {hint && (
             <span
               id={hintId}
               className="voice max-w-[8.5rem] text-right text-[0.7rem] leading-tight text-ink-dim sm:max-w-none sm:text-xs"
             >
-              Make your life choice first
+              {hint}
             </span>
           )}
           <NeonButton
             variant="primary"
             size="md"
-            onClick={() => { audio.sfx("page"); onAdvance(); }}
-            disabled={blocked}
-            aria-describedby={blocked ? hintId : undefined}
+            onClick={
+              match
+                ? () => { audio.sfx("stamp"); match.markReady(); }
+                : () => { audio.sfx("page"); onAdvance(); }
+            }
+            disabled={blocked || locked}
+            aria-describedby={hint ? hintId : undefined}
           >
-            Advance the year <ArrowDown size={16} />
+            {match ? (
+              locked ? <>Locked in <CheckIcon size={16} /></> : <>Lock in the year <CheckIcon size={16} /></>
+            ) : (
+              <>Advance the year <ArrowDown size={16} /></>
+            )}
           </NeonButton>
         </div>
       </div>

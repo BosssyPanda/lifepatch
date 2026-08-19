@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { ModeId } from "@/lib/modes";
 import {
   advanceYear,
@@ -14,19 +14,50 @@ import {
   type RunState,
 } from "@/lib/runEngine";
 import { saveRun } from "@/lib/saves";
+import { loadMatch, saveMatch } from "@/lib/mp/matchStore";
 import type { AssetId } from "@/lib/markets";
 import type { LifeChoice } from "@/lib/lifeEvents";
 
-export type Phase = "intro" | "mode" | "auth" | "setup" | "run" | "recap" | "report";
+export type Phase = "intro" | "mode" | "auth" | "setup" | "run" | "recap" | "report" | "lobby" | "podium";
+
+/**
+ * Extras for a "with friends" run. Absent — which is every solo start — the run
+ * behaves exactly as it always has: its own random seed, its own save slot, the
+ * cinematic recap on the way out.
+ */
+export type RunOpts = {
+  /** The room's shared world. Every player in a match starts from this number. */
+  seed?: number;
+  /** Set for a match run: routes persistence to the room's store, ending to the podium. */
+  matchCode?: string;
+};
 
 export function useRun(userId: string | null) {
   const [phase, setPhase] = useState<Phase>("intro");
   const [mode, setMode] = useState<ModeId | null>(null);
   const [run, setRun] = useState<RunState | null>(null);
   const [saving, setSaving] = useState(false);
+  /** The room this run belongs to, or null for a solo run. */
+  const matchCodeRef = useRef<string | null>(null);
 
   const persist = useCallback(
     async (r: RunState) => {
+      const code = matchCodeRef.current;
+      if (code) {
+        // A match run must NEVER reach `lib/saves.ts`. That store is keyed
+        // (user_id, mode) and a match run is still `mode: "story"`, so routing one
+        // through it would overwrite the player's own story save with a run they
+        // were handed the host's background and seed for. The room keeps its own
+        // localStorage namespace instead.
+        //
+        // The config comes from the record `useMatch` writes on each advance; until
+        // that first write lands there is nothing to key a room save by, and the
+        // write is simply skipped (the run is one advance away from being saved
+        // anyway, and a rejoin can always rebuild it from the shared seed).
+        const cfg = loadMatch(code)?.config;
+        if (cfg) saveMatch(code, cfg, r);
+        return;
+      }
       if (!userId) return;
       setSaving(true);
       try {
@@ -49,7 +80,9 @@ export function useRun(userId: string | null) {
       setRun((prev) => {
         if (!prev) return prev;
         const next = fn(prev);
-        if (next.status === "ended") setPhase("recap"); // cinematic recap → report
+        // A match run goes to the room's podium first — the standings are the point,
+        // and the player's own cinematic recap is one tap away from there.
+        if (next.status === "ended") setPhase(matchCodeRef.current ? "podium" : "recap");
         void persist(next);
         return next;
       });
@@ -71,18 +104,23 @@ export function useRun(userId: string | null) {
     }, []),
     toSetup: useCallback(() => setPhase("setup"), []),
 
+    /** Returns the fresh run so a caller that needs it (a match's first standings
+     *  row) doesn't have to wait a render for `run`. */
     start: useCallback(
-      (m: ModeId, backgroundId: string, name: string) => {
-        const r = initRun(m, backgroundId, name);
+      (m: ModeId, backgroundId: string, name: string, opts?: RunOpts) => {
+        matchCodeRef.current = opts?.matchCode ?? null;
+        const r = initRun(m, backgroundId, name, opts?.seed);
         setMode(m);
         setRun(r);
         setPhase("run");
         void persist(r);
+        return r;
       },
       [persist],
     ),
 
-    resume: useCallback((r: RunState) => {
+    resume: useCallback((r: RunState, opts?: RunOpts) => {
+      matchCodeRef.current = opts?.matchCode ?? null;
       setMode(r.mode);
       // Second line of defence: AuthGate already filters incompatible saves out
       // before offering "Continue", but a version mismatch must never reach the
@@ -93,7 +131,8 @@ export function useRun(userId: string | null) {
         return;
       }
       setRun(r);
-      setPhase(r.status === "ended" ? "report" : "run");
+      // A finished match run belongs on the room's podium, not straight in the report.
+      setPhase(r.status === "ended" ? (opts?.matchCode ? "podium" : "report") : "run");
     }, []),
 
     // year actions
@@ -110,11 +149,13 @@ export function useRun(userId: string | null) {
     toReport: useCallback(() => setPhase("report"), []),
 
     reset: useCallback(() => {
+      matchCodeRef.current = null;
       setRun(null);
       setMode(null);
       setPhase("mode");
     }, []),
     toTitle: useCallback(() => {
+      matchCodeRef.current = null;
       setRun(null);
       setMode(null);
       setPhase("intro");
