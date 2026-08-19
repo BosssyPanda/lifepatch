@@ -10,7 +10,7 @@ import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
 import { useMatchCtx, type MatchPeer } from "@/hooks/useMatch";
 import { currency } from "@/lib/format";
-import { netWorth, yearIndex, type RunState } from "@/lib/runEngine";
+import { netWorth, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE, SPRING, STAGGER, stepDelay } from "@/src/motion/tokens";
@@ -111,8 +111,13 @@ export function MatchPodium({
       <section aria-label="Your result" className="paper mt-8 p-4">
         <div className="flex items-baseline justify-between border-b border-hairline pb-2">
           <p className="eyebrow text-secondary">Your ledger</p>
+          {/* Years LIVED, not the engine's year index: `advanceYear` rolls the year
+              past the end before it stamps "story-complete", so a finished story run
+              carries index 22 for a life the player saw 21 years of. The history
+              length is the same figure the report prints on the very next screen,
+              and it is right for every ending — retire/quit never advance the year. */}
           <p className="num text-[0.62rem] tracking-[0.16em] text-tertiary">
-            YEAR {yearIndex(run)} · AGE {run.age}
+            YEARS {run.history.length} · AGE {run.age}
           </p>
         </div>
         <div className="mt-3 flex flex-wrap items-baseline justify-between gap-2">

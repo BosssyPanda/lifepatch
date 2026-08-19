@@ -38,18 +38,26 @@ export function MatchRail({ selfNetWorth }: { selfNetWorth: number }) {
   }, [peers, selfId, selfNetWorth]);
 
   const selfRank = rows.findIndex((r) => r.playerId === selfId);
+  const roomYear = match?.roomYearIndex ?? 0;
 
   useEffect(() => {
     if (selfRank < 0 || rows.length < 2) return;
     const prev = prevRankRef.current;
     prevRankRef.current = selfRank;
+    // Year one is the roster settling in, not a race. Every peer row starts as a $0
+    // placeholder while this life is already at its background's real net worth —
+    // for the room's default that is negative, which seeds us BELOW every row that
+    // hasn't reported yet, and the first statuses of the match then slide us upward
+    // on nothing but the id tiebreak. Nobody's standing can genuinely move before
+    // the first tick, so there is no real overtake to miss here.
+    if (roomYear < 2) return;
     // A smaller index is a better place. First read is the baseline, never a cue.
     if (prev === null || selfRank >= prev) return;
     const now = Date.now();
     if (now - lastCueRef.current < beat.msPerBar) return;
     lastCueRef.current = now;
     accent("streak");
-  }, [selfRank, rows.length, accent, beat]);
+  }, [selfRank, rows.length, roomYear, accent, beat]);
 
   if (!match || rows.length === 0) return null;
 

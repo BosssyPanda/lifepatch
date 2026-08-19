@@ -31,9 +31,10 @@ const COPIED_MS = 1600;
  * The room code is the one place in the game where wide-tracked uppercase mono is
  * the point: it is a stamp on a filing, meant to be read out loud over a call.
  *
- * Leaving the lobby is the same door for both: `onStartRun()` fires whenever the
- * phase is `"running"` — on the host's own Start, on a guest's `start` broadcast,
- * and on mount for a rejoiner who arrived into a match already in flight.
+ * Leaving the lobby happens here whenever the phase flips to `"running"` — on the
+ * host's own Start, and on a guest's `start` broadcast. The rejoin cases are NOT
+ * this screen's to catch: it is a dynamic import, so it is frequently unmounted at
+ * the moment a rejoin settles the room. AppShell owns that door.
  */
 export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; onLeave: () => void }) {
   const match = useMatchCtx();

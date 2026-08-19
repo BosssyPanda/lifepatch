@@ -541,9 +541,24 @@ export function MatchProvider({ children }: { children: ReactNode }) {
           beginRunning(cfg, 1);
           return;
         }
-        case "tick":
-          applyTick(msg.yearIndex, msg.yearSeconds);
+        case "tick": {
+          // The one inbound message with no author. `TickMsg` carries no sender id,
+          // and a field that claimed one would be forged just as cheaply — so the
+          // clock is bounded by what the room can be SHOWN to have reached instead:
+          // a tick may pull us to the next year, or catch us up to a year roster
+          // members are demonstrably already at, never past it. Peer years arrive
+          // only from roster members, so a stranger who was read the room code can
+          // no longer end the match with one message. Airtight needs a server
+          // authority, which is out of scope by contract.
+          const cfg = configRef.current;
+          if (!cfg || cfg.startedAt === 0) return; // no running room, no clock
+          let seen = roomYearRef.current;
+          for (const p of Object.values(peersRef.current)) {
+            if (p.playerId !== selfIdRef.current && p.yearIndex > seen) seen = p.yearIndex;
+          }
+          applyTick(Math.min(msg.yearIndex, seen + 1), msg.yearSeconds);
           return;
+        }
         case "status":
           // Only the acting host speaks for someone else (a ghost row), nobody
           // speaks for us, and only a player this room admitted speaks at all.
@@ -845,7 +860,9 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         if (!cfg.roster.some((r) => r.playerId === selfIdRef.current)) {
           throw new Error("That match has already started.");
         }
-        const target = Math.max(roomYearRef.current, peerYearIndex(), 1);
+        // `peerYearIndex` is peer-written and the wire allows far more years than
+        // the story has. Never auto-play a returning player past the end of it.
+        const target = Math.min(Math.max(roomYearRef.current, peerYearIndex(), 1), LAST_YEAR_INDEX + 1);
         // Best source first: this device's own copy. Then the acting host's cache.
         // Failing both, rebuild from the shared seed — auto-play from year one is
         // exactly what the room has been watching anyway.
@@ -995,13 +1012,22 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       if (p.playerId === selfId || !p.connected || p.ghost) continue;
       if (p.yearIndex > ahead) ahead = p.yearIndex;
     }
-    if (ahead > roomYearIndex) applyTick(ahead, config.yearSeconds);
+    // One step per commit. A host that legitimately fell N years behind a frozen
+    // tab walks forward a year at a time (this effect re-runs on `roomYearIndex`),
+    // while a single bogus row can no longer teleport the room to the story's end.
+    if (ahead > roomYearIndex) applyTick(Math.min(ahead, roomYearIndex + 1), config.yearSeconds);
   }, [phase, isHost, peers, config, roomYearIndex, selfId, applyTick]);
 
   // All-ready skip: the clock waits for no one, but it doesn't make everyone wait
   // either. Only the acting host may pull the year forward.
   useEffect(() => {
     if (phase !== "running" || !isHost) return;
+    // The resync effect above runs in the SAME flush and moves the clock through a
+    // ref, so this closure's `peers`/`roomYearIndex` can already be a year stale.
+    // `emitTick` reads the ref and increments blindly, so acting on a stale decision
+    // would push the room N -> N+2 and auto-resolve a year nobody played. Bail and
+    // re-decide on the render the resync schedules, where readiness is cleared too.
+    if (roomYearRef.current !== roomYearIndex) return;
     const live = Object.values(peers).filter((p) => p.connected && p.status === "playing");
     // Readiness is bound to the year it was sent for: a lock-in from the year the
     // room has already left is not consent to skip the year that replaced it.

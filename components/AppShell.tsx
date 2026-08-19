@@ -172,12 +172,23 @@ function AppShellInner() {
   // The lobby calls `onStartRun` when the room flips to running, and that is the
   // normal path. This is the other one: a REJOIN arrives in a match that is
   // already running, so there is no flip to watch for — the lobby is a doorway it
-  // passes straight through. Idempotent (the ref above is the gate), so the two
-  // paths can't double-start a life.
+  // passes straight through. It lives here rather than in LobbyScreen because that
+  // screen is a dynamic import and is often not mounted yet at the moment the room
+  // settles. Idempotent (the ref above is the gate), so the two paths can't
+  // double-start a life.
   const onStartRunRef = useRef(onStartRun);
   onStartRunRef.current = onStartRun;
   useEffect(() => {
-    if (phase === "lobby" && match?.phase === "running") onStartRunRef.current();
+    if (phase !== "lobby") return;
+    // A rejoin can also land in a room that is ALREADY over — the room's clock has
+    // passed the last year, so the match reads "finished" before this screen ever
+    // mounts. The life the hook just caught up belongs on the podium (and on the
+    // global board), not on a lobby whose Start button can never fire again.
+    // `resumeState` is the gate: without a recovered run there is nothing to show,
+    // and starting one would drop a fresh year-one life into a dead room.
+    if (match?.phase === "running" || (match?.phase === "finished" && match.resumeState)) {
+      onStartRunRef.current();
+    }
   }, [phase, match]);
 
   const leaveRoom = () => match?.leaveMatch();

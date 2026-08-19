@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { CheckIcon } from "@/components/icons";
 import { WithFriendsPanel } from "@/components/mp/WithFriendsPanel";
 import { Badge } from "@/components/ui/Badge";
@@ -9,6 +9,7 @@ import { NeonButton } from "@/components/ui/LedgerButton";
 import { NameField, playerName } from "@/components/ui/NameField";
 import { SoundCell } from "@/components/ui/SoundCell";
 import { useAudio } from "@/hooks/useAudio";
+import { useMatch } from "@/hooks/useMatch";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { currency } from "@/lib/format";
 import { MODES, type ModeId } from "@/lib/modes";
@@ -31,6 +32,15 @@ export function Setup({
   const audio = useAudio();
   const { reduced } = useMotionCtx();
   const onSpot = useSpotlightHandler<HTMLButtonElement>();
+  // `createRoom`/`joinRoom` publish the room's phase SYNCHRONOUSLY and only then
+  // await the transport handshake — several seconds of spinner on a slow or wrong
+  // code. The panel below greys its own buttons for that window; this door has to
+  // close too, or an impatient tap starts a solo life that already wears the room's
+  // chrome and is taken away the moment the join lands. Every failure path in the
+  // hook resets the phase to null, so this is disabled for exactly that window.
+  const match = useMatch();
+  const opening = match.phase !== null;
+  const openingId = useId();
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string>(BACKGROUNDS[0].id);
   const chosen = BACKGROUNDS.find((b) => b.id === picked);
@@ -101,11 +111,21 @@ export function Setup({
           // The CTA copy never changes, and a card is already picked on mount — so the
           // accessible name has to carry which one, the way ModeSelect's visible label does.
           aria-label={chosen ? `Start your life as ${chosen.name}` : undefined}
+          disabled={opening}
+          aria-describedby={opening ? openingId : undefined}
           onClick={() => { audio.sfx("confirm"); onStart(picked, playerName(name)); }}
         >
           Start your life →
         </NeonButton>
       </div>
+
+      {/* A greyed CTA never ships without its reason (same rule as AdvanceBar). Its
+          own line, so the solo row above is exactly the row it has always been. */}
+      {opening && (
+        <p id={openingId} className="voice mt-3 text-center text-xs text-ink-dim">
+          Opening your room…
+        </p>
+      )}
 
       {/* The second door. Solo remains the primary path — it keeps the one accent
           CTA on this screen — and the room is ruled off below it the way a form
