@@ -85,9 +85,17 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
 
       {events.length > 0 && (
         <div className="space-y-4 py-2">
-          {events.map((e) => (
+          {events.map((e, i) => (
             <Reveal key={e.id}>
-              <LifeEventCard event={e} chosen={s.yearChoices[e.id]} onChoose={run.choose} runState={s} />
+              <LifeEventCard
+                event={e}
+                /* folio within THIS year, so the card reads like a numbered form in a
+                   filing — matching the board's plate numbers and the landing's folios */
+                plate={String(i + 1).padStart(2, "0")}
+                chosen={s.yearChoices[e.id]}
+                onChoose={run.choose}
+                runState={s}
+              />
             </Reveal>
           ))}
         </div>

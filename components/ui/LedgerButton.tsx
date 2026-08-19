@@ -120,13 +120,24 @@ export function LedgerButton({
       data-radius=""
       // An accent-filled control cannot wear the accent focus ring — an orange ring 2px
       // off an orange edge is one thick orange band. `globals.css` swaps it for ink here.
-      {...(core === "primary" ? { "data-accent-fill": "" } : null)}
+      // Only while it is actually filled: an inert primary drops to the neutral surface
+      // below, so from then on the ordinary accent ring is the right one.
+      {...(core === "primary" && !inert ? { "data-accent-fill": "" } : null)}
       whileHover={inert || reduced ? undefined : { y: -1 }}
       whileTap={inert ? undefined : { scale: 0.97 }}
       transition={SPRING.press}
       className={`group relative inline-flex items-center justify-center gap-2 border display-caps tracking-[0.12em] transition-colors duration-200 disabled:cursor-not-allowed ${
         loading ? "disabled:opacity-70" : "disabled:opacity-40"
-      } ${(flip ? INVERTED : VARIANTS)[core]} ${SIZES[size]} ${HIT[size]} ${className}`}
+      } ${(flip ? INVERTED : VARIANTS)[core]} ${
+        // A filled primary that merely fades to 40% is still orange, so a control the
+        // player CANNOT press reads as the brightest thing on the screen — "advance the
+        // year" looked live while it was waiting on a life choice. An inert primary
+        // hands the accent back and sits on the neutral surface instead; the accent is
+        // for what you can act on. Loading keeps the fill: it is mid-action, not dead.
+        core === "primary" && disabled && !loading
+          ? "disabled:border-hairline-strong disabled:bg-bg2 disabled:text-secondary"
+          : ""
+      } ${SIZES[size]} ${HIT[size]} ${className}`}
     >
       {/* §8.3 bracket highlight — corner marks that register on hover/focus */}
       <span aria-hidden className="pointer-events-none absolute left-0.5 top-0.5 h-1.5 w-1.5 border-l border-t border-current opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-visible:opacity-70" />

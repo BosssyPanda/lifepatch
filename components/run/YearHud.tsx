@@ -33,7 +33,14 @@ function barVar(v: number) {
  * the same compositor path as the tint and never touches the overlay's contract.
  * Reduced motion keeps the tint (feedback is never deleted) and drops the pop.
  */
-const FLASH_TINT = { gain: "rgba(43,213,118,0.16)", loss: "rgba(255,59,48,0.16)" } as const;
+/* Mixed from the tokens, not transcribed from them. These were literal rgba() —
+   43,213,118 and 255,59,48 — which is the palette from BEFORE the Risograph pass,
+   so the HUD had been flashing the old green and the old red ever since. An rgba()
+   triplet is invisible to a search for hex, which is exactly how it survived. */
+const FLASH_TINT = {
+  gain: "color-mix(in srgb, var(--color-gain) 16%, transparent)",
+  loss: "color-mix(in srgb, var(--color-loss) 16%, transparent)",
+} as const;
 
 /**
  * 44px of hit box without changing how big either control looks. Both expanders stay
@@ -43,26 +50,33 @@ const FLASH_TINT = { gain: "rgba(43,213,118,0.16)", loss: "rgba(255,59,48,0.16)"
 const ICON_HIT = "relative before:absolute before:-inset-[7px] before:content-['']";
 const TEXT_HIT = "relative before:absolute before:inset-x-0 before:-inset-y-[8px] before:content-['']";
 
-function FlashValue({ value, children }: { value: number; children: ReactNode }) {
+function FlashValue({ value, children, delta = false }: { value: number; children: ReactNode; delta?: boolean }) {
   const { reduced } = useMotionCtx();
   const prev = useRef(value);
   const [flash, setFlash] = useState<"gain" | "loss" | null>(null);
+  /** The signed figure to float off this number, keyed so a repeat amount re-fires. */
+  const [bubble, setBubble] = useState<{ id: number; amount: number; tier: 0 | 1 | 2 } | null>(null);
   const pop = useAnimationControls();
   useEffect(() => {
     if (value === prev.current) return;
-    const magnitudePct = (Math.abs(value - prev.current) / Math.max(Math.abs(prev.current), 1)) * 100;
+    const change = value - prev.current;
+    const magnitudePct = (Math.abs(change) / Math.max(Math.abs(prev.current), 1)) * 100;
     setFlash(value > prev.current ? "gain" : "loss");
     prev.current = value;
+    const { popScale, tier } = juiceTier(magnitudePct);
     if (!reduced) {
-      const { popScale } = juiceTier(magnitudePct);
       void pop
         .start({ scale: popScale }, SPRING.press)
         .then(() => pop.start({ scale: 1 }, SPRING.lift))
         .catch(() => {});
     }
-    const id = window.setTimeout(() => setFlash(null), 650);
-    return () => window.clearTimeout(id);
-  }, [value, reduced, pop]);
+    // The board throws a signed figure off the square that produced it; the HUD only
+    // ever popped in place, so a player watching the board learned what moved and a
+    // player watching the HUD did not. Same idea, same tiering — deliberately NOT the
+    // board's absolute log10 scale: out here a $5,000 swing means something different
+    // at $10k net worth than at $2M, and `juiceTier` is already relative to the figure.
+    if (delta) setBubble({ id: Date.now(), amount: change, tier });
+  }, [value, reduced, pop, delta]);
   return (
     <motion.span className="relative -mx-1 inline-block px-1" animate={pop} style={{ originX: 0.5, originY: 0.5 }}>
       <motion.span
@@ -74,6 +88,25 @@ function FlashValue({ value, children }: { value: number; children: ReactNode })
         transition={{ duration: DUR.scene }}
       />
       <span className="relative">{children}</span>
+      {bubble && (
+        <motion.span
+          key={bubble.id}
+          aria-hidden
+          className="num pointer-events-none absolute left-1/2 top-0 z-20 -translate-x-1/2 whitespace-nowrap leading-none"
+          style={{
+            color: bubble.amount > 0 ? "var(--color-gain)" : "var(--color-loss)",
+            fontSize: `${0.62 + 0.06 * bubble.tier}rem`,
+          }}
+          initial={reduced ? { opacity: 1, y: -12 } : { opacity: 0, y: 0, scale: 0.8 }}
+          animate={reduced ? { opacity: 1, y: -12 } : { opacity: [0, 1, 1, 0], y: -(16 + 8 * bubble.tier), scale: 1 }}
+          transition={reduced ? { duration: 0 } : { duration: 0.8 + 0.2 * bubble.tier, times: [0, 0.14, 0.68, 1], ease: "easeOut" }}
+          onAnimationComplete={() => setBubble(null)}
+        >
+          {/* the sign is always printed, so colour is the second channel and never the only one */}
+          {bubble.amount > 0 ? "+" : "−"}
+          {currency(Math.abs(bubble.amount))}
+        </motion.span>
+      )}
     </motion.span>
   );
 }
@@ -104,14 +137,14 @@ export function YearHud({
         <div className="hidden h-7 w-px shrink-0 bg-hairline sm:block" />
 
         <Stat label="Age" value={`${run.age}`} />
-        <Stat label="Cash" animated={run.cash} fmt={currency} />
+        <Stat label="Cash" animated={run.cash} fmt={currency} delta />
         <div className="flex flex-1 flex-col">
           <p className="eyebrow text-secondary" style={{ fontSize: "0.6rem" }}>Net worth</p>
           {/* The live region carries the settled figure only — the count-up itself is
               hidden, or every rAF frame would be announced. */}
           <p className="num text-lg sm:text-xl" style={{ color: nwVar }} aria-live="polite" aria-atomic="true">
             <span aria-hidden>
-              <FlashValue value={nw}>
+              <FlashValue value={nw} delta>
                 <AnimatedNumber value={nw} format={currency} />
               </FlashValue>
             </span>
@@ -193,7 +226,7 @@ export function YearHud({
   );
 }
 
-function Stat({ label, value, animated, fmt }: { label: string; value?: string; animated?: number; fmt?: (n: number) => string }) {
+function Stat({ label, value, animated, fmt, delta = false }: { label: string; value?: string; animated?: number; fmt?: (n: number) => string; delta?: boolean }) {
   const live = animated !== undefined && !!fmt;
   return (
     <div className="flex flex-col">
@@ -206,7 +239,7 @@ function Stat({ label, value, animated, fmt }: { label: string; value?: string; 
         {live ? (
           <>
             <span aria-hidden>
-              <FlashValue value={animated!}>
+              <FlashValue value={animated!} delta={delta}>
                 <AnimatedNumber value={animated!} format={fmt!} />
               </FlashValue>
             </span>

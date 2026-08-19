@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { CheckIcon, LockIcon } from "@/components/icons";
+import { SectionMark } from "@/components/ui/SectionMark";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { stingForTone } from "@/lib/audioMap";
@@ -39,11 +40,14 @@ function chips(e: LifeEffect): { text: string; positive: boolean }[] {
 
 export function LifeEventCard({
   event,
+  plate = "01",
   chosen,
   onChoose,
   runState,
 }: {
   event: LifeEvent & { choices: LifeChoice[] };
+  /** zero-padded folio within the current year — "01", "02", … */
+  plate?: string;
   chosen?: string; // "choiceId|outcomeIdx"
   onChoose: (eventId: string, choice: LifeChoice) => void;
   runState?: RunState;
@@ -97,8 +101,13 @@ export function LifeEventCard({
         <Reveal>, which is reduced-motion aware. The wrapper that used to live here
         double-faded the card and stacked ~40px of travel on top of Reveal's. */}
     <div className="paper mx-auto max-w-3xl px-5 py-5 sm:px-6">
-      <div className="flex items-center justify-between border-b border-ink/30 pb-2">
-        <span className="eyebrow text-secondary">{event.tag}</span>
+      {/* The board's squares carry a plate number and a category rule; this card is the
+          run's equivalent object, so it wears the same folio. The numeral is accent and
+          the category is ink: colour marks WHERE you are, never what the answer is. A
+          tinted category rule would prejudge a decision the player hasn't made yet —
+          the outcome below is the only thing allowed to read gain or loss. */}
+      <div className="flex items-center justify-between border-b border-hairline-strong pb-2">
+        <SectionMark n={plate}>{event.tag}</SectionMark>
         <span className="eyebrow text-secondary">Life event</span>
       </div>
       <p className="mt-3 font-body text-[1.02rem] leading-relaxed text-ink/85">{event.prompt}</p>
@@ -121,11 +130,16 @@ export function LifeEventCard({
                   onChoose(event.id, c);
                 }}
                 data-radius=""
+                /* The choice you made is the live thing on this card, so it takes the
+                   accent — the same job it does on the selected mode card and the
+                   active square. It marks WHICH you picked, never whether that was
+                   the right pick; the outcome rail below carries the verdict. */
                 className={`group flex w-full items-start gap-2.5 border px-3.5 py-2.5 text-left transition-all ${
-                  isChosen ? "border-ink bg-ink/10" : dim ? "border-ink/10 opacity-45" : "border-hairline-strong hover:border-ink hover:bg-ink/[0.04]"
+                  isChosen ? "border-accent bg-accent/10" : dim ? "border-ink/10 opacity-45" : "border-hairline-strong hover:border-ink hover:bg-ink/[0.04]"
                 } ${answered ? "cursor-default" : "cursor-pointer"}`}
               >
-                <span data-radius="round" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center border ${isChosen ? "border-ink bg-ink text-bg" : "border-ink/40 text-transparent"}`}>
+                {/* paper knockout on the accent fill — ink on accent is 2.74:1 */}
+                <span data-radius="round" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center border ${isChosen ? "border-accent bg-accent text-bg" : "border-ink/40 text-transparent"}`}>
                   <CheckIcon size={12} />
                 </span>
                 <span className="min-w-0 flex-1">
