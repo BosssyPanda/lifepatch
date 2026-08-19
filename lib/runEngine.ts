@@ -389,10 +389,14 @@ export const INSOLVENCY_DEBT_MULTIPLE = 5;
  * These three numbers were solved, not guessed. 1,800 simulated runs across both
  * modes, six backgrounds and five player policies were recorded year by year with
  * the ending disabled, and every candidate triple was then replayed over those
- * 58,388 run-years. At (7, 5, 0.15) the ending fires on 70 runs (3.9%); NONE of
- * them ever reached a non-negative net worth again, and NONE ever cleared the
- * balance. Loosening any one dial puts recoverable runs inside the net: (5, 5,
- * 0.15) fires on 115 runs and six of them climb back above zero.
+ * 58,388 run-years. At (7, 5, 0.15) the ending fires on 3.9% of runs, and on a
+ * wider replay (703 firings across 300 seeds × 2 modes × 3 backgrounds × 5
+ * policies) 12 of them — about 1.7% — would eventually have climbed back above
+ * zero, all via the same late wage restoration. So the net is tight but not
+ * perfect, and an earlier note here claiming NONE ever recovered was measuring a
+ * smaller sample than it sounded like. Loosening any one dial makes it markedly
+ * worse: (5, 5, 0.15) fires on 115 runs with six recoveries, and (3, 1.5, 0.10)
+ * fires on 21% of all runs with 75.
  */
 export const INSOLVENCY_DEFICIT_PCT = 0.15;
 

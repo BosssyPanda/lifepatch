@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./useAuth";
-import { resolvePlayerId } from "@/lib/cloud/identity";
+import { resolvePlayerId, resolveProgressId } from "@/lib/cloud/identity";
 import { ensureProfile, updateUsername } from "@/lib/cloud/profiles";
 import { getStreak } from "@/lib/cloud/streaks";
 import { getMastery } from "@/lib/cloud/mastery";
@@ -24,7 +24,7 @@ export function useProfile() {
 
   // Resolve identity on the client (the device-id fallback needs localStorage).
   useEffect(() => {
-    setPlayerId(resolvePlayerId(user?.id ?? null));
+    setPlayerId(resolveProgressId(user?.id ?? null));
   }, [user]);
 
   const load = useCallback(async (id: string) => {

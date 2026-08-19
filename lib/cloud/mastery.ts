@@ -1,3 +1,4 @@
+import { isGuestId } from "./identity";
 import { isCloud, supabase } from "../supabase";
 import type { MasteryRow } from "./types";
 
@@ -64,8 +65,13 @@ export function mergeLocalMastery(fromId: string, toId: string): void {
   } catch {}
 }
 
+/** A guest's progress lives on the device — there is no cloud row to read or write. */
+function cloudMasteryFor(userId: string): boolean {
+  return Boolean(isCloud && supabase && !isGuestId(userId));
+}
+
 export async function getMastery(userId: string): Promise<MasteryRow[]> {
-  if (isCloud && supabase) {
+  if (supabase && cloudMasteryFor(userId)) {
     const { data } = await supabase.from("mastery").select("*").eq("user_id", userId);
     return (data ?? []).map(fromRow);
   }
@@ -93,7 +99,7 @@ export async function recordConcepts(userId: string, conceptIds: string[]): Prom
     updatedRows.push({ conceptId, level, updatedAt: now });
   }
 
-  if (isCloud && supabase) {
+  if (supabase && cloudMasteryFor(userId)) {
     await supabase.from("mastery").upsert(
       updatedRows.map((r) => ({
         user_id: userId,

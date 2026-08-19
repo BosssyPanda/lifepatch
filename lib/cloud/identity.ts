@@ -45,3 +45,18 @@ export function resolvePlayerId(authUserId: string | null): string | null {
   if (authUserId && !isGuestId(authUserId)) return authUserId;
   return isCloud ? null : localPlayerId();
 }
+
+/**
+ * The id to attribute LEARNING progress to.
+ *
+ * Unlike a leaderboard row, mastery has a local store and no server to refuse it,
+ * so a guest keeps earning it in cloud deployments too — `resolvePlayerId` returns
+ * null there, and routing progress through that would have reproduced, for every
+ * cloud guest, exactly the bug the auth refactor was written to kill: a report
+ * announcing "this run sharpened Compounding, Windfalls…" above a Money Brain
+ * reading 0% with every concept locked.
+ */
+export function resolveProgressId(authUserId: string | null): string {
+  if (authUserId && !isGuestId(authUserId)) return authUserId;
+  return localPlayerId();
+}

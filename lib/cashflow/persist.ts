@@ -33,8 +33,10 @@ function migrateV1(raw: Partial<CashflowState> & { version: number }): CashflowS
       typeof s.startingNetWorth === "number" ? s.startingNetWorth : p.startingCash - startingLiabilities,
     lostReason: s.lostReason ?? null,
     interestPaid: typeof s.interestPaid === "number" ? s.interestPaid : 0,
-    // Quotes open at deck prices; anything already held keeps its cost basis as
-    // its fallback, so a migrated book is never revalued behind the player's back.
+    // Quotes open at deck prices. That happens to match every v1 holding's cost
+    // basis today, because v1 always bought at the deck price and no price on this
+    // branch moved — so a migrated book is not revalued. Edit a deck price and that
+    // stops being true: this backfill would mark an old position to the new price.
     stockPrices: s.stockPrices && typeof s.stockPrices === "object" ? s.stockPrices : initialStockPrices(),
   };
 }

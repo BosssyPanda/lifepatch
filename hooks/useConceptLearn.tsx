@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { ConceptToast } from "@/components/learn/ConceptToast";
 import { useAudio } from "@/hooks/useAudio";
 import { useAuth } from "@/hooks/useAuth";
-import { resolvePlayerId } from "@/lib/cloud/identity";
+import { resolvePlayerId, resolveProgressId } from "@/lib/cloud/identity";
 import { recordConcepts } from "@/lib/cloud/mastery";
 import { markSeen } from "@/lib/cloud/seen";
 
@@ -55,7 +55,7 @@ export function ConceptLearnProvider({ children }: { children: ReactNode }) {
       if (newly.length > 0) setQueue((q) => [...q, ...newly]);
 
       if (opts?.applied) {
-        const id = resolvePlayerId(user?.id ?? null);
+        const id = resolveProgressId(user?.id ?? null);
         if (id) {
           void recordConcepts(id, ids)
             .then((gains) => {

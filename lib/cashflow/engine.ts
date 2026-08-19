@@ -12,6 +12,7 @@ import { FT_LOSS_MIN } from "./messages";
 import { getProfession } from "./professions";
 import { pickIndex, rngAt, rollDice as rollDiceRaw } from "./rng";
 import {
+  BANK_UNIT,
   bankHeadroom,
   bankLoanPayment,
   hasEscaped,
@@ -41,7 +42,7 @@ import type {
 } from "./types";
 
 export const STATE_VERSION = 2;
-const BANK_UNIT = 1000;
+
 
 /** The copy shown on the lose screen when the bank finally says no. */
 export const BANKRUPT_REASON =
@@ -62,8 +63,14 @@ function uid(s: CashflowState, prefix: string): string {
 function clampCash(s: CashflowState): CashflowState {
   if (s.cash >= 0) return s;
   const shortfall = -s.cash;
-  const room = Math.floor(bankHeadroom(s) / BANK_UNIT) * BANK_UNIT;
-  const borrowed = Math.min(Math.ceil(shortfall / BANK_UNIT) * BANK_UNIT, Math.max(0, room));
+  // `bankHeadroom` is already quantised to whole $1,000 units, so the number the
+  // Bank panel prints is the number that can actually be drawn. It used to floor
+  // here and nowhere else, which left the loan parked at the largest multiple under
+  // an arbitrary cap and headroom stranded in [$1, $999]: the panel advertised
+  // "$320 left to borrow" and the next $50 bill ended the run. That accounted for
+  // 26.6% of all bankruptcies.
+  const room = Math.max(0, bankHeadroom(s));
+  const borrowed = Math.min(Math.ceil(shortfall / BANK_UNIT) * BANK_UNIT, room);
   const next: CashflowState = {
     ...s,
     cash: s.cash + borrowed,
@@ -215,7 +222,8 @@ export function buyStock(s: CashflowState, deal: StockDeal, shares: number): Cas
   const n = Math.min(Math.max(0, Math.floor(shares)), maxAffordableShares(s, deal));
   if (n <= 0) return s;
   const price = quote(s, deal.symbol, deal.price);
-  const cost = n * price;
+  // Settled in cents for the same reason the share count is counted in them.
+  const cost = Math.round(n * price * 100) / 100;
   const existing = s.stocks.find((h) => h.symbol === deal.symbol);
   let stocks;
   if (existing) {
@@ -438,6 +446,13 @@ export function fastTrackStake(s: CashflowState): number {
 }
 
 export function enterFastTrack(s: CashflowState): CashflowState {
+  // Idempotent, because this is the one resolution handler committed with a
+  // FUNCTIONAL updater — every other one hands `commit` a precomputed constant, so
+  // a repeat click re-applies the same value harmlessly. This one composes, and the
+  // escape ceremony stays mounted and clickable through its exit animation: four
+  // clicks turned a $150,000 stake into $600,000 and cleared every dream the
+  // rebalance had just put out of reach.
+  if (s.track === "fast") return s;
   return { ...s, track: "fast", position: 0, cash: s.cash + fastTrackStake(s), status: "playing", fastTrackCashflow: 0 };
 }
 

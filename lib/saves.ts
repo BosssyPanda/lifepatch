@@ -140,6 +140,7 @@ export async function adoptGuestSaves(guestId: string, userId: string): Promise<
   try {
     if (localStorage.getItem(done) === "1") return;
   } catch {}
+  let complete = true;
   for (const mode of ["story", "infinite"] as ModeId[]) {
     try {
       const raw = localStorage.getItem(localKey(guestId, mode));
@@ -148,8 +149,14 @@ export async function adoptGuestSaves(guestId: string, userId: string): Promise<
       if (!isCompatibleSave(state)) continue;
       if (await loadRun(userId, mode)) continue; // never overwrite the account's own run
       await saveRun(userId, mode, state);
-    } catch {}
+    } catch {
+      // A transient cloud failure on the one page load where the magic link lands
+      // must not permanently mark this account adopted — that would strand the
+      // guest's run on the device with nothing left to trigger another attempt.
+      complete = false;
+    }
   }
+  if (!complete) return;
   try {
     localStorage.setItem(done, "1");
   } catch {}

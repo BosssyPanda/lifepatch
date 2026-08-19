@@ -176,6 +176,9 @@ export function lifestyleExpenses(s: CashflowState): number {
 /** Months of living costs the bank will extend to anyone, however small the salary. */
 export const BANK_FLOOR_MONTHS = 18;
 
+/** The bank lends in whole thousands — the ceiling is quantised to match. */
+export const BANK_UNIT = 1000;
+
 /**
  * The credit ceiling. Uncapped, `clampCash` turned every shortfall into
  * `bankLoan_{n+1} ≈ 1.1 × bankLoan_n + deficit`: an exponential spiral with no
@@ -190,7 +193,15 @@ export const BANK_FLOOR_MONTHS = 18;
  * every profession (see the balance notes in the Stage 2A report).
  */
 export function maxBankLoan(s: CashflowState): number {
-  return Math.round(Math.max(5 * totalIncome(s), BANK_FLOOR_MONTHS * lifestyleExpenses(s)));
+  // Quantised to the $1,000 unit the bank actually lends in. An arbitrary integer
+  // ceiling can never be reached by thousand-dollar draws, so the last $1–$999 was
+  // permanently unreachable while every surface kept offering it.
+  const raw = Math.max(5 * totalIncome(s), BANK_FLOOR_MONTHS * lifestyleExpenses(s));
+  // Never below what is already drawn. Clearing a liability removes its expense
+  // line, which shrinks this ceiling — so the game's own recommended move could
+  // leave a player who was at the limit retroactively OVER it, at zero headroom
+  // and one bill from bankruptcy. Paying down debt must not be punished.
+  return Math.max(Math.floor(raw / BANK_UNIT) * BANK_UNIT, s.liabilities.bankLoan);
 }
 
 /** How much more the bank will lend right now. */
@@ -246,7 +257,15 @@ export function cashOnCash(annualCashFlow: number, cashInvested: number): number
 /** How many whole shares `cash` buys at `price`. */
 export function maxAffordable(cash: number, price: number): number {
   if (price <= 0) return 0;
-  return Math.max(0, Math.floor(cash / price));
+  // Both sides in whole cents. Quotes carry two decimals, so `cash / price` in
+  // floating point can hand back a share count whose cost then exceeds `cash` by
+  // ~1e-13 — enough to leave the engine holding negative cash, which the next
+  // `clampCash` reads as a shortfall and answers with a phantom $1,000 loan at
+  // 10%/mo (or, at the ceiling, a bankruptcy). $1,003 of PLSE at $2.95 did it.
+  const cents = Math.round(cash * 100);
+  const priceCents = Math.round(price * 100);
+  if (priceCents <= 0) return 0;
+  return Math.max(0, Math.floor(cents / priceCents));
 }
 
 /** Dividend yield for a stock at a given price, as a percent (annualized). */
