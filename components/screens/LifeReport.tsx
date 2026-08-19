@@ -147,9 +147,17 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
   const best = [...hist].sort((a, b) => b.portfolioDelta - a.portfolioDelta)[0];
   const worst = [...hist].sort((a, b) => a.portfolioDelta - b.portfolioDelta)[0];
   // A run whose worst year still finished green has no "hit" — clamping it to zero
-  // printed "−$0" in loss red, which is both wrong and unearned drama.
+  // printed "−$0" in loss red, which is both wrong and unearned drama. The BEST card
+  // carried the mirror image of the same bug: a player who never bought anything has
+  // a portfolio delta of exactly 0 every year, and the card told them "−$0 — even your
+  // best year lost money" in loss red while the card beside it said "you never had a
+  // down year". Neither swing exists, so both cards now say so.
   const tookAHit = !!worst && worst.portfolioDelta < 0;
   const bestUp = !!best && best.portfolioDelta > 0;
+  const bestDown = !!best && best.portfolioDelta < 0;
+  const wonSomewhere = !!worst && worst.portfolioDelta > 0;
+  /** No holdings all run: there is no best or worst market year to report. */
+  const neverInvested = !!best && best.portfolioDelta === 0 && !!worst && worst.portfolioDelta === 0;
 
   // Rebuilt every render, this redrew ShareCard's whole 1080×1920 canvas on every
   // parent tick — and this screen has running counters.
@@ -169,11 +177,14 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
     [klass.title, klass.hex, nw, hist, run.mode, run.seed, tookAHit, worst, shareUrl],
   );
 
-  const ledger = [
+  // Owed lines carry their sign and the loss tone. Printed as bare positives in the
+  // same ink as "Home equity", a $152k mortgage read as something the player HAD,
+  // and no arrangement of the six rows added up to the net worth above them.
+  const ledger: { label: string; value: string; tone?: string }[] = [
     { label: "Net worth", value: currency(nw) },
     ...(run.homeValue > 0 ? [{ label: "Home equity", value: currency(homeEquity(run)) }] : []),
-    ...(run.mortgage > 0 ? [{ label: "Mortgage", value: currency(run.mortgage) }] : []),
-    { label: "Debt", value: currency(run.debt) },
+    ...(run.mortgage > 0 ? [{ label: "Mortgage", value: currency(-run.mortgage), tone: "text-loss" }] : []),
+    { label: "Debt", value: currency(-run.debt), tone: run.debt > 0 ? "text-loss" : undefined },
     { label: "Final salary", value: `${currency(run.salary)}/yr` },
     { label: "Years lived", value: `${hist.length}` },
   ];
@@ -208,7 +219,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
         <motion.section variants={item}>
           <SectionLabel>Statement</SectionLabel>
           {ledger.map((r, i) => (
-            <LedgerRow key={r.label} label={r.label} value={r.value} strong={i === 0} />
+            <LedgerRow key={r.label} label={r.label} value={r.value} tone={r.tone} strong={i === 0} />
           ))}
         </motion.section>
 
@@ -230,21 +241,29 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
         {best && worst && (
           <motion.div variants={item} className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className={`border border-hairline border-l-2 bg-bg2 p-4 ${bestUp ? "border-l-gain" : "border-l-hairline-strong"}`}>
-              <p className={`eyebrow ${bestUp ? "text-gain" : "text-secondary"}`}>Best year · {best.year}</p>
-              <p className={`num text-lg ${bestUp ? "text-gain" : "text-loss"}`}>
-                {bestUp ? `+${currency(best.portfolioDelta)}` : `−${currency(Math.abs(best.portfolioDelta))}`}
+              <p className={`eyebrow ${bestUp ? "text-gain" : "text-secondary"}`}>Best year · {neverInvested ? "—" : best.year}</p>
+              <p className={`num text-lg ${bestUp ? "text-gain" : bestDown ? "text-loss" : "text-secondary"}`}>
+                {bestUp ? `+${currency(best.portfolioDelta)}` : bestDown ? `−${currency(Math.abs(best.portfolioDelta))}` : currency(0)}
               </p>
               <p className="voice mt-1 text-[0.92rem] text-secondary">
-                {bestUp ? macroEvent(best.year)?.title ?? "A quiet, green year." : "Even your best year lost money."}
+                {bestUp
+                  ? macroEvent(best.year)?.title ?? "A quiet, green year."
+                  : bestDown
+                    ? "Even your best year lost money."
+                    : "You never put a dollar in the market, so it never paid you one."}
               </p>
             </div>
             <div className={`border border-hairline border-l-2 bg-bg2 p-4 ${tookAHit ? "border-l-loss" : "border-l-hairline-strong"}`}>
-              <p className={`eyebrow ${tookAHit ? "text-loss" : "text-secondary"}`}>Worst year · {worst.year}</p>
-              <p className={`num text-lg ${tookAHit ? "text-loss" : "text-gain"}`}>
-                {tookAHit ? `−${currency(Math.abs(worst.portfolioDelta))}` : `+${currency(worst.portfolioDelta)}`}
+              <p className={`eyebrow ${tookAHit ? "text-loss" : "text-secondary"}`}>Worst year · {neverInvested ? "—" : worst.year}</p>
+              <p className={`num text-lg ${tookAHit ? "text-loss" : wonSomewhere ? "text-gain" : "text-secondary"}`}>
+                {tookAHit ? `−${currency(Math.abs(worst.portfolioDelta))}` : wonSomewhere ? `+${currency(worst.portfolioDelta)}` : currency(0)}
               </p>
               <p className="voice mt-1 text-[0.92rem] text-secondary">
-                {tookAHit ? macroEvent(worst.year)?.title ?? "The market just shrugged." : "You never had a down year."}
+                {tookAHit
+                  ? macroEvent(worst.year)?.title ?? "The market just shrugged."
+                  : wonSomewhere
+                    ? "You never had a down year."
+                    : "Nothing invested means nothing to lose — and nothing to gain."}
               </p>
             </div>
           </motion.div>

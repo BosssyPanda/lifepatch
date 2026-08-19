@@ -98,10 +98,15 @@ function allocate(entries: Array<[AssetId, number]>, cash: number): Array<[Asset
 export function PortfolioPresets({
   availableAssets,
   cash,
+  invested,
   onApply,
 }: {
   availableAssets: AssetDef[];
   cash: number;
+  /** Current portfolio value. Only used to tell "all in" apart from "flat broke":
+   *  the no-cash hint used to say "sell something below" to players who owned
+   *  nothing to sell, on a grid where every slider already read MAX $0. */
+  invested: number;
   onApply: (orders: Array<[AssetId, number]>) => void;
 }) {
   const { reduced: reduce } = useMotionCtx();
@@ -159,7 +164,9 @@ export function PortfolioPresets({
       <p className="voice mt-2 text-xs text-tertiary">
         {canInvest
           ? <>One tap splits your {currency(cash)} across a starter mix. Fine-tune below.</>
-          : "Invested. Sell something below to free up cash, or advance the year."}
+          : invested > 0
+            ? "Invested. Sell something below to free up cash, or advance the year."
+            : "No cash to put to work this year. Advance the year and see what the salary brings."}
       </p>
     </div>
   );

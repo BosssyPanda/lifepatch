@@ -43,7 +43,13 @@ export function PortfolioPanel({
   // Every dollar the player has. The ONE denominator this screen quotes shares against —
   // rows print "% of total" off the same figure, so two readouts can never disagree.
   const total = run.cash + port;
-  const cashPct = total > 0 ? (run.cash / total) * 100 : 0;
+  // The cash/invested split is quoted against the money that actually exists, not
+  // against `total`: a mid-year overspend makes `total` zero or negative, and
+  // `total > 0 ? … : 0` then printed "0% of total — 100% invested" to a player
+  // holding nothing at all. `pot` can only be zero when there is genuinely nothing
+  // to split, which is the one case the caption below refuses to quote a share for.
+  const pot = Math.max(0, run.cash) + port;
+  const cashPct = pot > 0 ? (Math.max(0, run.cash) / pot) * 100 : 0;
   // A mid-year choice can spend past the balance; the engine only converts that
   // shortfall into debt when the year advances. Until then cash is genuinely
   // negative, and printing it as a budget reads as "-$2,500 free to allocate".
@@ -75,7 +81,9 @@ export function PortfolioPanel({
             />
           </div>
           <p className="eyebrow mt-1 tabular-nums text-tertiary" style={{ fontSize: "0.55rem" }}>
-            {cashPct.toFixed(0)}% of total — {(100 - cashPct).toFixed(0)}% invested
+            {pot > 0
+              ? `${cashPct.toFixed(0)}% of total — ${(100 - cashPct).toFixed(0)}% invested`
+              : "nothing invested yet"}
           </p>
         </div>
         <div className="border border-hairline bg-bg px-3 py-2.5">
@@ -98,7 +106,7 @@ export function PortfolioPanel({
 
       {/* one-tap starter mixes — the risk ladder is the lesson */}
       <div className="mt-4">
-        <PortfolioPresets availableAssets={assets} cash={run.cash} onApply={handleApplyPreset} />
+        <PortfolioPresets availableAssets={assets} cash={run.cash} invested={port} onApply={handleApplyPreset} />
       </div>
 
       <p className="voice mt-4 text-sm text-ink-dim">

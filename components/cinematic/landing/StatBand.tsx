@@ -42,6 +42,12 @@ export function StatBand() {
             <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem" }}>{s.label}</span>
           </div>
         ))}
+        {/* Seven figures in a 2- or 4-column grid leave one slot empty, and the grid's
+            own `bg-hairline` paints straight through it — a solid grey block sat under
+            the last stat at every width below `lg`. This filler carries the cell
+            background so the row closes cleanly; at `lg` the grid is exactly seven
+            columns wide and the filler is removed rather than wrapping to a new row. */}
+        <div aria-hidden className="bg-bg lg:hidden" />
       </div>
     </section>
   );
