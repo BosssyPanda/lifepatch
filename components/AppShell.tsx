@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { Opening } from "@/components/cinematic/Opening";
 import { ModeSelect } from "@/components/screens/ModeSelect";
-import { useAuth } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AudioProvider, useAudio } from "@/hooks/useAudio";
 import { useRun } from "@/hooks/useRun";
 import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
@@ -41,9 +41,16 @@ export function AppShell() {
   return (
     // MotionProvider now lives in the root layout so the standalone routes get it too.
     <AudioProvider>
-      <ConceptLearnProvider>
-        <AppShellInner />
-      </ConceptLearnProvider>
+      {/* Auth sits ABOVE the concept provider on purpose: the provider records
+          mastery, and it has to observe the same sign-in the report and the
+          mastery map do. When these were two separate hook instances, every
+          concept a player earned was filed under the anonymous device id while
+          the map read the signed-in one, and progress never appeared. */}
+      <AuthProvider>
+        <ConceptLearnProvider>
+          <AppShellInner />
+        </ConceptLearnProvider>
+      </AuthProvider>
     </AudioProvider>
   );
 }

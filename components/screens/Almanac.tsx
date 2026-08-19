@@ -212,7 +212,12 @@ function MythSection({
       sub="Make your call first — then see whether the thing everyone repeats is actually true."
       aside={
         <span aria-live="polite" className={`border px-2.5 py-1 font-mono text-[0.68rem] uppercase tracking-[0.14em] ${answered ? "border-ink/40 text-ink" : "border-ink/15 text-ink-dim"}`}>
-          Called {correct}/{MYTH_FACTS.length}
+          {/* This said "Called {correct}/8" — the count of RIGHT answers under a word
+              that means "answered", so a player who called all eight and got three
+              right read it as five unanswered. Progress and score are two facts and
+              now say so; the score only appears once there is one. */}
+          Called {answered}/{MYTH_FACTS.length}
+          {answered > 0 && <span className="text-ink-dim"> · {correct} right</span>}
         </span>
       }
     >

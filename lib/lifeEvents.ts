@@ -338,7 +338,12 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     weight: 1,
     requires: employed,
     choices: [
-      { id: "invest", label: "Invest it", blurb: "Pretend it never came.", outcomes: [{ weight: 100, effect: { cash: 5000, happiness: 2 }, tone: "good", consequence: "Straight to the portfolio. The compounding starts tonight.", lesson: "Treat windfalls as investment capital by default — you won't miss what you never spent." }] },
+      // The effect can only move cash, and cash earns nothing here on purpose. This
+      // used to promise "straight to the portfolio, the compounding starts tonight"
+      // and then leave the money sitting idle — the one screen that teaches windfalls
+      // was lying about what happened to one. Naming the second step is the better
+      // lesson anyway: money does not invest itself, and the player still chooses where.
+      { id: "invest", label: "Bank it, don't touch it", blurb: "Pretend it never came.", outcomes: [{ weight: 100, effect: { cash: 5000, happiness: 2 }, tone: "good", consequence: "Untouched, and in the account. It earns nothing until you put it to work below.", lesson: "Treat windfalls as investment capital by default — but cash only compounds once you actually allocate it." }] },
       { id: "spend", label: "Enjoy it", blurb: "You earned it.", outcomes: [{ weight: 100, effect: { cash: 1500, happiness: 7 }, tone: "neutral", consequence: "A nice splurge and some left over. Balance is allowed.", lesson: "Spending on purpose is fine. Autopilot spending is the only real enemy." }] },
     ],
   },
@@ -565,8 +570,14 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
         label: "Buy a stack of tickets",
         blurb: "Someone has to win.",
         outcomes: [
+          // Odds you can actually do the arithmetic on: 1 in 2,000 for a $250,000
+          // jackpot against a $200 ticket is EV −$75 a play. It used to be 1 in 100,
+          // which made buying worth +$2,302 a go — a game about not getting fleeced
+          // in which the gambling paid, directly above a lesson calling the expected
+          // value "deeply negative". The jackpot still exists, because a lottery that
+          // cannot pay is not a lottery; it just almost never lands, like the real one.
           { weight: 1, note: "JACKPOT.", effect: { cash: 250000, happiness: 20 }, tone: "good", consequence: "Lightning struck. You won. (This basically never happens — but wow.)", lesson: "The lottery is a tax on hope. It paid off this once; it won't again. Invest the winnings, don't blow them." },
-          { weight: 99, effect: { cash: -200, happiness: -1 }, tone: "bad", consequence: "Numbers didn't hit. Shocking absolutely no one but you.", lesson: "Expected value of the lottery is deeply negative. It's entertainment, not a plan." },
+          { weight: 1999, effect: { cash: -200, happiness: -1 }, tone: "bad", consequence: "Numbers didn't hit. Shocking absolutely no one but you.", lesson: "Expected value of the lottery is deeply negative. It's entertainment, not a plan." },
         ],
       },
       { id: "pass", label: "Keep your $200", blurb: "Bad odds.", outcomes: [{ weight: 100, effect: { cash: 0, happiness: 1 }, tone: "neutral", consequence: "You skip it and invest the money instead. Boring. Correct.", lesson: "The house always wins. Be the house — own the index, not the ticket." }] },

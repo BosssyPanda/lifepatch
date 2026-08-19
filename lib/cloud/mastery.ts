@@ -37,6 +37,33 @@ function writeLocal(userId: string, rows: MasteryRow[]): void {
   } catch {}
 }
 
+/**
+ * Carry anonymous progress onto a real account.
+ *
+ * A player can earn mastery before they ever sign in — the Rat Race never asks,
+ * and the landing's concept toasts fire on the way through. That progress is
+ * filed under the device id, so without this it would appear to vanish the
+ * moment they enter an email. Levels take the higher of the two, so signing in
+ * can only ever add to what you had.
+ *
+ * Local-only: in cloud mode an anonymous player has no rows to carry.
+ */
+export function mergeLocalMastery(fromId: string, toId: string): void {
+  if (isCloud || fromId === toId) return;
+  const from = readLocal(fromId);
+  if (from.length === 0) return;
+  const to = readLocal(toId);
+  const byId = new Map(to.map((r) => [r.conceptId, r]));
+  for (const row of from) {
+    const existing = byId.get(row.conceptId);
+    if (!existing || row.level > existing.level) byId.set(row.conceptId, row);
+  }
+  writeLocal(toId, [...byId.values()]);
+  try {
+    localStorage.removeItem(localKey(fromId));
+  } catch {}
+}
+
 export async function getMastery(userId: string): Promise<MasteryRow[]> {
   if (isCloud && supabase) {
     const { data } = await supabase.from("mastery").select("*").eq("user_id", userId);
