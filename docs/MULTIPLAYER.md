@@ -166,7 +166,26 @@ renders a disabled state instead of a broken Create button.
 - **Realtime must be enabled** on the Supabase project (channels with broadcast
   + presence). No auth is required — rooms are guest-first on the anon key.
 - Env vars: `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  (the same pair `lib/supabase.ts` already reads).
+  (the same pair `lib/supabase.ts` already reads). Take both from
+  **Settings → API Keys**: the Project URL, and the **publishable key**
+  (`sb_publishable_…`) that replaced the legacy `anon` key — projects created
+  since Nov 2025 have no `anon` key at all. It is a drop-in replacement; only the
+  env var's historical *name* still says "anon".
+- **Hosted deploys inline `NEXT_PUBLIC_*` at BUILD time.** Setting these in
+  Vercel's dashboard changes nothing until the next deploy — a redeploy is
+  required, not just a save.
+- **Rooms work for guests; the global leaderboard does not.** Realtime needs no
+  auth, so anyone can create and join a room. But once Supabase is configured,
+  `resolvePlayerId` (`lib/cloud/identity.ts`) returns `null` for a `device-*`
+  guest, because the `results` table's RLS requires a real auth user — so a
+  guest's finished match posts nowhere. Players who want a global row must sign
+  in with the magic link. The match podium is unaffected either way.
+- **Channels are public (`private` is unset, i.e. `false`).** Anyone who learns a
+  room code can join that channel; Realtime's private-channel mode would require
+  authenticated users and RLS policies on `realtime.messages`, which would break
+  guest-first play. The room layer defends itself instead — roster gating on
+  `status`/`snapshot`, a bounded `tick`, and self-row protection (see §2) — but
+  the trust model is "the room code is the secret".
 - **No schema changes.** `supabase/schema.sql` is untouched. Match persistence
   is localStorage-only; result submission reuses the existing `results` table as
   `mode: "story"`, which its CHECK already allows. There is no rooms table, no

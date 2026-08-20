@@ -18,14 +18,25 @@ The game is fully playable out of the box — with no configuration it uses a lo
 - **Story** — 1990 → 2010. A finite run through the dot-com boom/bust and the 2008 crash, ending in a report.
 - **Infinite** — 1957 → today. Live a whole lifetime until you retire, quit, or your number comes up. Autosaves every year.
 
-## Optional: real cloud saves (Supabase)
+## Optional: cloud saves, leaderboards, and multiplayer (Supabase)
 
-Cloud login + cross-device saves are off by default and require zero code changes to enable:
+Cloud login, cross-device saves, and the **Play with friends** rooms in Story are
+off by default and require zero code changes to enable:
 
 1. Create a free project at [supabase.com](https://supabase.com).
 2. SQL editor → run [`supabase/schema.sql`](supabase/schema.sql).
-3. Authentication → enable **Email** (magic link), and add your site URL as a redirect.
-4. Copy `.env.local.example` → `.env.local` and paste your `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+3. Authentication → Providers → enable **Email** (magic link).
+4. Authentication → URL Configuration → add your site URL (and `http://localhost:3000`).
+5. Settings → **API Keys** → copy the Project URL and the **publishable key**
+   (`sb_publishable_…`, which replaced the legacy `anon` key).
+6. Copy `.env.local.example` → `.env.local` and paste both values.
+
+Multiplayer needs nothing beyond those two variables — Realtime ships inside the
+Supabase client, rooms are guest-first on the publishable key, and there is no
+rooms table. See [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
+
+On a hosted deploy, `NEXT_PUBLIC_*` values are inlined at **build** time — setting
+them in your host's dashboard takes effect only on the next deploy.
 
 ## Notes
 
