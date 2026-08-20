@@ -162,6 +162,10 @@ function AssetRowWrapper({
       value={run.holdings[assetId] ?? 0}
       total={total}
       cash={run.cash}
+      /* The year an open gesture belongs to. In a match the clock can turn it under
+         the player's finger; the dollars they were staging were an answer to LAST
+         year's ledger, so they are dropped rather than posted into the new one. */
+      year={run.year}
       series={priceSeries(run, assetId)}
       lastReturn={lastAssetReturn(run, assetId)}
       onTrade={onTrade}

@@ -30,8 +30,15 @@ const FOLEY_S = 3;
  * the final three. Colour is not available for this — orange marks identity and
  * what is live, never a state going bad (DESIGN.md § the accent budget), and red
  * and green in this game mean money and nothing else.
+ *
+ * `compact` is the same clock printed as one line, for the sticky bar at the foot
+ * of the run: the band this normally lives in scrolls away, and the decisions that
+ * are worth timing — a trade, a knife-edge lock-in — happen at the bottom of a long
+ * page with the countdown nowhere on screen. The compact copy is a second reading
+ * of one clock, so it is aria-hidden and silent; the band above owns the sound and
+ * everything spoken.
  */
-export function YearTimer() {
+export function YearTimer({ compact = false }: { compact?: boolean }) {
   const match = useMatchCtx();
   const { sfx } = useAudio();
   const { reduced } = useMotionCtx();
@@ -58,6 +65,7 @@ export function YearTimer() {
   }, [deadlineAt]);
 
   useEffect(() => {
+    if (compact) return; // one clock, one set of ticks
     if (left === null || left <= 0 || left > FOLEY_S) return;
     if (tickedRef.current === left) return;
     tickedRef.current = left;
@@ -67,12 +75,29 @@ export function YearTimer() {
       .start({ scale: 1.14 }, SPRING.press)
       .then(() => pop.start({ scale: 1 }, SPRING.lift))
       .catch(() => {});
-  }, [left, reduced, pop, sfx]);
+  }, [compact, left, reduced, pop, sfx]);
 
   if (left === null || total === null) return null;
 
   const urgent = left <= URGENT_S;
   const clock = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+
+  if (compact) {
+    return (
+      <span aria-hidden className="flex shrink-0 items-baseline gap-1.5">
+        <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem" }}>
+          Ends in
+        </span>
+        <motion.span
+          animate={pop}
+          className="num inline-block text-base leading-none text-ink transition-opacity duration-300"
+          style={{ opacity: urgent ? 1 : RESTING_OPACITY }}
+        >
+          {clock}
+        </motion.span>
+      </span>
+    );
+  }
 
   return (
     <div role="timer" aria-label="Time left in this year" className="w-full">

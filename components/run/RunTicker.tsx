@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { useMatchCtx } from "@/hooks/useMatch";
 import { currency } from "@/lib/format";
 import { macroEvent, sp500Return } from "@/lib/markets";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
@@ -20,25 +21,41 @@ type Tick = { label: string; value?: string; up?: boolean };
 
 const PRESEED_YEARS = 8;
 
-function buildTicks(run: RunState): Tick[] {
+/**
+ * How a year is named on the strip.
+ *
+ * A match run may not print calendar years (`lib/modes.ts`: the real start/end
+ * years are the end report's reveal, and in a room they would also hand one
+ * player the shape of the world before another gets there). The same figures are
+ * labelled by the run's OWN clock instead — `Y07`, and `−3Y` for the seeded years
+ * that came before it. Solo keeps its calendar dates exactly as they were.
+ */
+function yearLabel(year: number, startYear: number, relative: boolean): string {
+  if (!relative) return String(year);
+  const rel = year - startYear + 1;
+  return rel > 0 ? `Y${String(rel).padStart(2, "0")}` : `−${startYear - year}Y`;
+}
+
+function buildTicks(run: RunState, relative: boolean): Tick[] {
   const ticks: Tick[] = [];
+  const label = (y: number) => yearLabel(y, run.startYear, relative);
   if (run.history.length === 0) {
     // Year 1: real context from the years just before the run started.
     for (let y = run.startYear - PRESEED_YEARS; y < run.startYear; y++) {
       const pct = sp500Return(y);
-      ticks.push({ label: `S&P ${y}`, value: `${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(1)}%`, up: pct >= 0 });
+      ticks.push({ label: `S&P ${label(y)}`, value: `${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(1)}%`, up: pct >= 0 });
       const ev = macroEvent(y);
-      if (ev) ticks.push({ label: `${y} · ${ev.title.toUpperCase()}` });
+      if (ev) ticks.push({ label: `${label(y)} · ${ev.title.toUpperCase()}` });
     }
     return ticks;
   }
   for (const h of run.history) {
-    ticks.push({ label: `S&P ${h.year}`, value: `${h.indexReturn >= 0 ? "+" : "−"}${Math.abs(h.indexReturn).toFixed(1)}%`, up: h.indexReturn >= 0 });
+    ticks.push({ label: `S&P ${label(h.year)}`, value: `${h.indexReturn >= 0 ? "+" : "−"}${Math.abs(h.indexReturn).toFixed(1)}%`, up: h.indexReturn >= 0 });
     if (h.portfolioDelta !== 0) {
-      ticks.push({ label: `YOUR BOOK ${h.year}`, value: `${h.portfolioDelta >= 0 ? "+" : "−"}${currency(Math.abs(h.portfolioDelta))}`, up: h.portfolioDelta >= 0 });
+      ticks.push({ label: `YOUR BOOK ${label(h.year)}`, value: `${h.portfolioDelta >= 0 ? "+" : "−"}${currency(Math.abs(h.portfolioDelta))}`, up: h.portfolioDelta >= 0 });
     }
     const ev = macroEvent(h.year);
-    if (ev) ticks.push({ label: `${h.year} · ${ev.title.toUpperCase()}` });
+    if (ev) ticks.push({ label: `${label(h.year)} · ${ev.title.toUpperCase()}` });
   }
   return ticks;
 }
@@ -62,9 +79,11 @@ function Row({ ticks }: { ticks: Tick[] }) {
 
 export function RunTicker({ run }: { run: RunState }) {
   const { reduced: reduce } = useMotionCtx();
+  // null for a solo run, which is what keeps the solo strip byte-identical.
+  const match = useMatchCtx();
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [visible, setVisible] = useState(true);
-  const ticks = buildTicks(run);
+  const ticks = buildTicks(run, match !== null);
 
   // pause the loop whenever the strip is scrolled out of view (§8.5: trivial ambient CPU)
   useEffect(() => {

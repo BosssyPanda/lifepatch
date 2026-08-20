@@ -44,6 +44,15 @@ export function useRun(userId: string | null) {
   const matchCodeRef = useRef<string | null>(null);
   /** Our player id inside that room — the owner stamp on every match save. */
   const matchPlayerIdRef = useRef<string | null>(null);
+  /**
+   * The live run, readable from a closure that is holding a STALE copy of it.
+   *
+   * A screen on its way out keeps the props of its last render for the length of
+   * the exit animation (`AnimatePresence mode="wait"`), and its effects keep
+   * firing while the context around it changes. `run` in such a copy still says
+   * "playing" long after the life ended; this ref never does.
+   */
+  const liveRef = useRef<RunState | null>(null);
 
   const persist = useCallback(
     async (r: RunState) => {
@@ -81,7 +90,12 @@ export function useRun(userId: string | null) {
 
   // local mutation (no save) — used for trades within a year
   const mutate = useCallback((fn: (s: RunState) => RunState) => {
-    setRun((prev) => (prev ? fn(prev) : prev));
+    setRun((prev) => {
+      if (!prev) return prev;
+      const next = fn(prev);
+      liveRef.current = next;
+      return next;
+    });
   }, []);
 
   // mutation that also persists + may end the run
@@ -90,6 +104,11 @@ export function useRun(userId: string | null) {
       setRun((prev) => {
         if (!prev) return prev;
         const next = fn(prev);
+        // The engine refuses some mutations outright — aging a life that has already
+        // ended is the one that matters here — and hands the state back untouched.
+        // Nothing was decided, so nothing is announced and nothing is written.
+        if (next === prev) return prev;
+        liveRef.current = next;
         // A match run goes to the room's podium first — the standings are the point,
         // and the player's own cinematic recap is one tap away from there.
         if (next.status === "ended") setPhase(matchCodeRef.current ? "podium" : "recap");
@@ -122,6 +141,7 @@ export function useRun(userId: string | null) {
         matchPlayerIdRef.current = opts?.matchPlayerId ?? null;
         const r = initRun(m, backgroundId, name, opts?.seed);
         setMode(m);
+        liveRef.current = r;
         setRun(r);
         setPhase("run");
         void persist(r);
@@ -142,6 +162,7 @@ export function useRun(userId: string | null) {
         setPhase("setup"); // stale save — start fresh for this mode
         return;
       }
+      liveRef.current = r;
       setRun(r);
       // A finished match run belongs on the room's podium, not straight in the report.
       setPhase(r.status === "ended" ? (opts?.matchCode ? "podium" : "report") : "run");
@@ -155,6 +176,10 @@ export function useRun(userId: string | null) {
       [mutate],
     ),
     advance: useCallback(() => commit((s) => advanceYear(s)), [commit]),
+
+    /** Is the LIVE life still open? A stale copy of this hook still answers honestly:
+     *  the ref behind it is shared by every render (see `liveRef`). */
+    stillPlaying: useCallback(() => liveRef.current?.status === "playing", []),
     retire: useCallback(() => commit((s) => retire(s)), [commit]),
     quit: useCallback(() => commit((s) => quitRun(s)), [commit]),
 
@@ -163,6 +188,7 @@ export function useRun(userId: string | null) {
     reset: useCallback(() => {
       matchCodeRef.current = null;
       matchPlayerIdRef.current = null;
+      liveRef.current = null;
       setRun(null);
       setMode(null);
       setPhase("mode");
@@ -170,6 +196,7 @@ export function useRun(userId: string | null) {
     toTitle: useCallback(() => {
       matchCodeRef.current = null;
       matchPlayerIdRef.current = null;
+      liveRef.current = null;
       setRun(null);
       setMode(null);
       setPhase("intro");

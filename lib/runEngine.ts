@@ -269,6 +269,10 @@ export function chosenOutcome(s: RunState, eventId: string): { choice: LifeChoic
 }
 
 export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice): RunState {
+  // Same contract as `advanceYear`: nothing may move money through a closed
+  // ledger. `advanceYear` clears `yearChoices`, so the guard below cannot catch a
+  // choice replayed against an already-ended run.
+  if (s.status !== "playing") return s;
   if (s.yearChoices[eventId]) return s;
   const idx = rollOutcome(s, eventId, choice);
   const o = choice.outcomes[idx];
@@ -465,6 +469,13 @@ function deathRoll(s: RunState): boolean {
  *   4. any deficit becomes debt
  */
 export function advanceYear(s: RunState): RunState {
+  // A finished life does not keep aging. The engine is the only place this can be
+  // guaranteed: the year turns from several callers — the solo bar, the room's
+  // shared clock, `fastForward` — and one of them can hold a stale copy of a run
+  // that has since ended (a screen mid-exit still owns its last rendered props).
+  // Without this the ledger of an ended run kept compounding, and the podium
+  // printed a life nobody played.
+  if (s.status !== "playing") return s;
   // Seeded: the synthetic half of the market moves differently per run. The
   // historical returns inside `yearReturns` are untouched by the seed.
   const rets = yearReturns(s.year, s.seed);

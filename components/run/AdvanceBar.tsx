@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import { ArrowDown, CheckIcon, TrophyIcon } from "@/components/icons";
+import { YearTimer } from "@/components/mp/YearTimer";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import { useAudio } from "@/hooks/useAudio";
@@ -98,6 +99,10 @@ export function AdvanceBar({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* The room's clock, where the decisions are. The band at the top of the run
+              scrolls away with the page, and a lock-in with four seconds left is taken
+              down here — so the countdown comes along, as one line beside the button. */}
+          {match && <YearTimer compact />}
           {/* The reason the primary button is dead used to be `hidden sm:inline` — on a
               phone the player met a greyed-out CTA with no explanation at all. The
               same slot carries the match's "you're locked in, sit tight" line, for

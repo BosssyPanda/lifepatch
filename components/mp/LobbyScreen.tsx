@@ -212,7 +212,10 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
                       </span>
                     </>
                   )}
-                  <div className="relative flex items-center justify-between border-b border-ink pb-1.5">
+                  {/* The check disc sits in this corner when the card is picked, and it
+                      is drawn over the header — so the header gives the badge room to
+                      move out from under it rather than losing its last letter. */}
+                  <div className={`relative flex items-center justify-between border-b border-ink pb-1.5 ${active ? "pr-7" : ""}`}>
                     <span className="eyebrow text-secondary" style={{ fontSize: "0.56rem" }}>
                       Age {b.startAge}
                     </span>

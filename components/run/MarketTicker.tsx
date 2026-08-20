@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { MascotLine } from "@/components/story/MascotLine";
+import { useMatchCtx } from "@/hooks/useMatch";
 import { currency } from "@/lib/format";
 import { playHeadline, type RunState } from "@/lib/runEngine";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
@@ -23,15 +24,24 @@ function taunt(indexReturn: number, delta: number): { line: string; mood: "gloat
 export function MarketTicker({ run }: { run: RunState }) {
   // read before the early return, so hook order is stable across both branches
   const { reduced } = useMotionCtx();
+  // null for a solo run — the solo copy below is untouched.
+  const match = useMatchCtx();
   const last = run.history[run.history.length - 1];
 
   if (!last) {
+    // Year one says the same thing twice over: in a match the clock HAS started —
+    // it is counting down a few hundred pixels up the page — and the button this
+    // copy points at is labelled "Lock in the year", not "Advance the year".
     return (
       <div className="mx-auto max-w-3xl px-5 py-6 text-center">
         <p className="eyebrow text-ink">Year One</p>
-        <h2 className="display-caps mt-2 text-3xl text-ink sm:text-4xl">The clock hasn&apos;t started</h2>
+        <h2 className="display-caps mt-2 text-3xl text-ink sm:text-4xl">
+          {match ? "The room's clock is running" : "The clock hasn't started"}
+        </h2>
         <p className="mx-auto mt-2 max-w-md font-body text-ink-dim">
-          Put your starting cash to work below, handle whatever life throws at you, then advance the year. You won&apos;t know what&apos;s coming. That&apos;s the point.
+          {match
+            ? "Put your starting cash to work below, handle whatever life throws at you, then lock in the year. Everyone's year turns together — ready or not."
+            : "Put your starting cash to work below, handle whatever life throws at you, then advance the year. You won't know what's coming. That's the point."}
         </p>
       </div>
     );

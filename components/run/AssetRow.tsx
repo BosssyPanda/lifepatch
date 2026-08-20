@@ -70,6 +70,7 @@ export function AssetRow({
   value,
   total,
   cash,
+  year,
   series,
   lastReturn,
   onTrade,
@@ -81,6 +82,8 @@ export function AssetRow({
   total: number;
   /** The shared free-cash pool, unspent by any row. */
   cash: number;
+  /** The run's current year. A gesture belongs to the year it started in. */
+  year: number;
   series: number[];
   lastReturn: number | null;
   onTrade: (id: AssetId, dollars: number) => void;
@@ -127,9 +130,19 @@ export function AssetRow({
     const { value: held, cash: free, staged: want, ceiling: cap, onTrade: trade, id } = latest.current;
     setGesture(null);
     // "All in" means every free dollar, not a rounded notch — the engine clamps the rest.
-    const target = want >= cap ? held + free : Math.round(want);
+    const allIn = want >= cap;
+    const target = allIn ? held + free : Math.round(want);
     const delta = target - held;
-    if (Math.abs(delta) >= 0.5) trade(id, delta);
+    // Below half a notch there is no intention to read: the control cannot express
+    // an amount that small, so a difference that size did not come from the player.
+    // A held dollar figure is almost never ON the notch grid — the market moves it
+    // off — and the browser re-snaps a range input onto that grid whenever `step` or
+    // `max` changes under it, which is exactly what a year turn does. Without this
+    // floor that re-snap released as a trade of a few dollars nobody asked for.
+    // The two ends of the track are exact by definition — "everything" and "nothing"
+    // are intentions the control CAN express — so they are always honoured.
+    const floor = allIn || target <= 0 ? 0.5 : Math.max(0.5, stepFor(cap) / 2);
+    if (Math.abs(delta) >= floor) trade(id, delta);
   }, []);
 
   /** Freeze the ceiling. Idempotent: a gesture already open keeps its snapshot. */
@@ -160,6 +173,23 @@ export function AssetRow({
       window.removeEventListener("pointercancel", end);
     };
   }, [commit]);
+
+  /**
+   * The year can turn under an open gesture — in a match the room's clock waits for
+   * no one, and it can fire while a finger is still on the track. The staged dollars
+   * were an answer to the ledger of the year that just closed: the ceiling they were
+   * measured against is gone, the holding they started from has been through a market,
+   * and posting them now would spend NEW cash on an OLD intention. So the gesture is
+   * abandoned — the control re-baselines onto the settled holding, the release that
+   * follows finds nothing staged and trades nothing, and the row and its slider can no
+   * longer print two different figures for the same asset.
+   *
+   * Solo is untouched by this: nothing there can advance the year mid-gesture.
+   */
+  useEffect(() => {
+    clearTimer();
+    setGesture(null);
+  }, [year]);
 
   useEffect(() => clearTimer, []);
 

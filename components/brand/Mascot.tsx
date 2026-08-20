@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useEffect, useRef } from "react";
 import type { Tone } from "@/lib/types";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 
@@ -19,6 +20,16 @@ export function moodFromTone(tone: Tone | null | undefined): MascotMood {
   }
 }
 
+/**
+ * One path per mood, and they are NOT interpolated into each other.
+ *
+ * These shapes do not share a command structure — `gloating` is two cubics where
+ * `idle` is one and `defeated` is a straight `h` — so tweening the `d` attribute
+ * between them fed the browser `d="undefined"` for the length of the transition
+ * (an SVG error on every mood change, and a momentarily featureless face). A mood
+ * is a cut, not a morph: the path is re-keyed and the new face fades in, which is
+ * compositor-only work and never emits an invalid path.
+ */
 const MOUTHS: Record<MascotMood, string> = {
   idle: "M78 150c8 6 36 6 44 0",
   smug: "M78 150c10 9 34 9 44 -2",
@@ -46,6 +57,14 @@ export function Mascot({
 }) {
   const { reduced } = useMotionCtx();
   const idle = bob && !reduced;
+
+  // Only a CHANGE of face is worth animating: the first one to be painted is simply
+  // the face this mascot has, and fading it in would blink on every mount.
+  const prevMood = useRef<MascotMood>(mood);
+  const faceIn = prevMood.current !== mood && !reduced ? { opacity: 0 } : false;
+  useEffect(() => {
+    prevMood.current = mood;
+  }, [mood]);
 
   return (
     <motion.svg
@@ -106,13 +125,15 @@ export function Mascot({
 
       {/* brows */}
       <motion.path
+        key={`brow-${mood}`}
         d={BROWS[mood]}
         stroke="var(--color-ink)"
         strokeWidth="3"
         fill="none"
         strokeLinecap="round"
-        animate={{ d: BROWS[mood] }}
-        transition={{ type: "spring", stiffness: 220, damping: 18 }}
+        initial={faceIn}
+        animate={{ opacity: 1 }}
+        transition={{ duration: reduced ? 0 : 0.18 }}
       />
 
       {/* mustache */}
@@ -126,13 +147,15 @@ export function Mascot({
 
       {/* mouth */}
       <motion.path
+        key={`mouth-${mood}`}
         d={MOUTHS[mood]}
         stroke="var(--color-ink)"
         strokeWidth="3"
         fill={mood === "gloating" ? "var(--color-loss)" : "none"}
         strokeLinecap="round"
-        animate={{ d: MOUTHS[mood] }}
-        transition={{ type: "spring", stiffness: 220, damping: 18 }}
+        initial={faceIn}
+        animate={{ opacity: 1 }}
+        transition={{ duration: reduced ? 0 : 0.18 }}
       />
       {/* gold tooth on a grin */}
       {(mood === "smug" || mood === "gloating") && (

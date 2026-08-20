@@ -448,13 +448,18 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   /** The match begins: same config, same seed, same clock, everywhere. */
   const beginRunning = useCallback(
     (cfg: MatchConfig, atYearIndex: number) => {
+      // The year this room opens on can come off a PEER'S status row (a rejoin reads
+      // the room's clock from presence), and the wire allows far more years than the
+      // story has. Clamped here for the same reason `applyTick` clamps: a room whose
+      // clock starts outside the story prints years that do not exist.
+      const at = Math.min(Math.max(1, atYearIndex), LAST_YEAR_INDEX + 1);
       setConfig(cfg);
       setPhase("running");
-      setRoomYear(Math.max(1, atYearIndex));
+      setRoomYear(at);
       setDeadlineState(Date.now() + cfg.yearSeconds * 1000);
       myStatusRef.current = {
         playerId: ensureSelfId(),
-        yearIndex: Math.max(1, atYearIndex),
+        yearIndex: at,
         netWorth: 0,
         status: "playing",
         ready: false,

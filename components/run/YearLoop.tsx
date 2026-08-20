@@ -37,7 +37,7 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   // null for a solo run — everything below that reads it is additive.
   const match = useMatchCtx();
   const s = run.run;
-  const { choose, advance } = run;
+  const { choose, advance, stillPlaying } = run;
 
   const debt = s?.debt ?? 0;
   const health = s?.life.health ?? 100;
@@ -86,8 +86,15 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   //
   // Reporting the new state to the room is AppShell's job: the ending unmounts
   // this screen in the same commit that produces it.
+  //
+  // `stillPlaying()` is not the same test as `s.status`. The ending unmounts this
+  // screen, but `AnimatePresence mode="wait"` keeps the OLD one on screen — with
+  // the props of its last render, which still say "playing" at the final year —
+  // until its exit finishes, while the room's context around it keeps changing and
+  // re-firing this effect. That stale copy must never drive the live run: it is a
+  // picture of a life that is already over.
   useEffect(() => {
-    if (!match || !s || s.status !== "playing") return;
+    if (!match || !s || s.status !== "playing" || !stillPlaying()) return;
     if (match.roomYearIndex <= yearIndex(s)) return;
     for (const id of s.pendingEvents) {
       if (s.yearChoices[id]) continue;
@@ -101,7 +108,7 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
     // actually turning — would be silent.
     sfx("page");
     advance();
-  }, [match, s, choose, advance, sfx]);
+  }, [match, s, choose, advance, sfx, stillPlaying]);
 
   if (!s) return null;
 
