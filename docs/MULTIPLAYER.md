@@ -63,7 +63,8 @@ live while they are gone.
 A player who lost the tab types the room code again. Join-after-start is allowed
 only for players in the frozen `config.roster`. Recovery sources, best first:
 
-1. this device's own `matchStore` copy,
+1. this device's own `matchStore` copy, when the stored record belongs to this
+   player id,
 2. the acting host's snapshot cache (`snapshotRequest` / `snapshotReply`),
 3. failing both, a rebuild from the shared seed via `initRun` + auto-play.
 
@@ -83,7 +84,11 @@ immediately and spectates the live standings there.
 ### Persistence
 
 Match runs are localStorage-only (`lib/mp/matchStore.ts`, key
-`lifepatch.mp.<ROOMCODE>`, newest 3 rooms kept). They **never** write through
+`lifepatch.mp.<ROOMCODE>`, newest 3 rooms kept). Every record is stamped with the
+`playerId` that wrote it and `loadMatch` refuses one it does not own, so a device
+holding two players for the same room (two tabs under `NEXT_PUBLIC_MP_LOCAL=1`, or
+a guest who later signs in) can never resume somebody else's ledger — the rejoin
+falls through to the host's snapshot instead. They **never** write through
 `lib/saves.ts` — that store is keyed `(user_id, mode)` and would clobber the
 player's solo story save. Finished match runs submit to the existing global
 leaderboard as ordinary `mode: "story"` results through the existing plumbing.

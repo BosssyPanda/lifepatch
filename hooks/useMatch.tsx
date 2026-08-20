@@ -863,17 +863,18 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         // `peerYearIndex` is peer-written and the wire allows far more years than
         // the story has. Never auto-play a returning player past the end of it.
         const target = Math.min(Math.max(roomYearRef.current, peerYearIndex(), 1), LAST_YEAR_INDEX + 1);
-        // Best source first: this device's own copy. Then the acting host's cache.
+        // Best source first: this device's own copy of OUR life — a record another
+        // player on this device wrote is refused, not resumed. Then the host's cache.
         // Failing both, rebuild from the shared seed — auto-play from year one is
         // exactly what the room has been watching anyway.
-        const local = loadMatch(cfg.roomCode)?.state ?? null;
+        const local = loadMatch(cfg.roomCode, selfIdRef.current)?.state ?? null;
         const remote = local ? null : await requestSnapshot();
         const base = local ?? remote ?? initRun("story", cfg.backgroundId, playerName(name), cfg.seed);
         const caught = fastForward(base, target);
         myStateRef.current = caught;
         myStatusRef.current = statusOf(caught, selfIdRef.current, false);
         setResumeState(caught);
-        saveMatch(cfg.roomCode, cfg, caught);
+        saveMatch(cfg.roomCode, selfIdRef.current, cfg, caught);
         applyPeerStatus(myStatusRef.current);
         send({ t: "status", v: MP_PROTOCOL, status: myStatusRef.current });
         send({ t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current, state: caught });
@@ -957,7 +958,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       applyPeerStatus(st);
       snapshotsRef.current.set(id, state);
       const cfg = configRef.current;
-      if (cfg) saveMatch(cfg.roomCode, cfg, state);
+      if (cfg) saveMatch(cfg.roomCode, id, cfg, state);
       send({ t: "status", v: MP_PROTOCOL, status: st });
       send({ t: "snapshot", v: MP_PROTOCOL, playerId: id, state });
       publish();

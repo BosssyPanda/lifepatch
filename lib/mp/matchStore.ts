@@ -19,6 +19,14 @@ import type { RunState } from "@/lib/runEngine";
  */
 
 export type MatchRecord = {
+  /**
+   * Whose life this is. The key is the room, but a device can hold more than one
+   * player id for the same room — two tabs under `NEXT_PUBLIC_MP_LOCAL=1` are two
+   * players sharing one localStorage, and a guest who later signs in changes id.
+   * Without this stamp a rejoin would happily resume whichever life wrote last,
+   * i.e. somebody else's ledger. `loadMatch` refuses a record it doesn't own.
+   */
+  playerId: string;
   config: MatchConfig;
   state: RunState;
   updatedAt: number;
@@ -42,33 +50,42 @@ function storage(): Storage | null {
   }
 }
 
-export function loadMatch(roomCode: string): MatchRecord | null {
+/**
+ * This device's copy of `playerId`'s run in `roomCode`, or null when there isn't
+ * one — including when the record on that key belongs to a different player.
+ * Refusing is the safe answer: the rejoin path falls through to the acting host's
+ * snapshot, which is the same life by determinism.
+ */
+export function loadMatch(roomCode: string, playerId: string): MatchRecord | null {
   const store = storage();
-  if (!store || !isRoomCode(roomCode)) return null;
+  if (!store || !isRoomCode(roomCode) || !playerId) return null;
   try {
     const raw = store.getItem(keyFor(roomCode));
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
     const rec = parsed as Record<string, unknown>;
+    // Whose life is this? A record written by another player on this device is
+    // not ours to resume, however recent it is.
+    if (rec.playerId !== playerId) return null;
     // Run it through the same parsers the wire uses: a stale or half-written
     // record is refused rather than resumed as a corrupt half-state.
     const config = parseMatchConfig(rec.config);
     const state = parseRunState(rec.state);
     if (!config || !state || config.roomCode !== roomCode) return null;
     const updatedAt = typeof rec.updatedAt === "number" && Number.isFinite(rec.updatedAt) ? rec.updatedAt : 0;
-    return { config, state, updatedAt };
+    return { playerId, config, state, updatedAt };
   } catch {
     return null;
   }
 }
 
-export function saveMatch(roomCode: string, config: MatchConfig, state: RunState): void {
+export function saveMatch(roomCode: string, playerId: string, config: MatchConfig, state: RunState): void {
   const store = storage();
-  if (!store || !isRoomCode(roomCode)) return;
+  if (!store || !isRoomCode(roomCode) || !playerId) return;
   let body: string;
   try {
-    const rec: MatchRecord = { config, state, updatedAt: Date.now() };
+    const rec: MatchRecord = { playerId, config, state, updatedAt: Date.now() };
     body = JSON.stringify(rec);
   } catch {
     return;

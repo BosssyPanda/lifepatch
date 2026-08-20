@@ -30,6 +30,9 @@ export type RunOpts = {
   seed?: number;
   /** Set for a match run: routes persistence to the room's store, ending to the podium. */
   matchCode?: string;
+  /** Whose seat this run is. The room's store stamps it so a rejoin can't resume
+   *  a record another player on this device wrote (`lib/mp/matchStore.ts`). */
+  matchPlayerId?: string;
 };
 
 export function useRun(userId: string | null) {
@@ -39,10 +42,15 @@ export function useRun(userId: string | null) {
   const [saving, setSaving] = useState(false);
   /** The room this run belongs to, or null for a solo run. */
   const matchCodeRef = useRef<string | null>(null);
+  /** Our player id inside that room — the owner stamp on every match save. */
+  const matchPlayerIdRef = useRef<string | null>(null);
 
   const persist = useCallback(
     async (r: RunState) => {
       const code = matchCodeRef.current;
+      const playerId = matchPlayerIdRef.current;
+      // The room code alone decides this branch: a match run must never fall
+      // through to the solo store just because its owner id is missing.
       if (code) {
         // A match run must NEVER reach `lib/saves.ts`. That store is keyed
         // (user_id, mode) and a match run is still `mode: "story"`, so routing one
@@ -51,11 +59,13 @@ export function useRun(userId: string | null) {
         // localStorage namespace instead.
         //
         // The config comes from the record `useMatch` writes on each advance; until
-        // that first write lands there is nothing to key a room save by, and the
-        // write is simply skipped (the run is one advance away from being saved
-        // anyway, and a rejoin can always rebuild it from the shared seed).
-        const cfg = loadMatch(code)?.config;
-        if (cfg) saveMatch(code, cfg, r);
+        // that first write lands — or while the record on that key belongs to
+        // another player on this device — there is nothing to key a room save by,
+        // and the write is simply skipped (the run is one advance away from being
+        // saved anyway, and a rejoin can always rebuild it from the shared seed).
+        if (!playerId) return;
+        const cfg = loadMatch(code, playerId)?.config;
+        if (cfg) saveMatch(code, playerId, cfg, r);
         return;
       }
       if (!userId) return;
@@ -109,6 +119,7 @@ export function useRun(userId: string | null) {
     start: useCallback(
       (m: ModeId, backgroundId: string, name: string, opts?: RunOpts) => {
         matchCodeRef.current = opts?.matchCode ?? null;
+        matchPlayerIdRef.current = opts?.matchPlayerId ?? null;
         const r = initRun(m, backgroundId, name, opts?.seed);
         setMode(m);
         setRun(r);
@@ -121,6 +132,7 @@ export function useRun(userId: string | null) {
 
     resume: useCallback((r: RunState, opts?: RunOpts) => {
       matchCodeRef.current = opts?.matchCode ?? null;
+      matchPlayerIdRef.current = opts?.matchPlayerId ?? null;
       setMode(r.mode);
       // Second line of defence: AuthGate already filters incompatible saves out
       // before offering "Continue", but a version mismatch must never reach the
@@ -150,12 +162,14 @@ export function useRun(userId: string | null) {
 
     reset: useCallback(() => {
       matchCodeRef.current = null;
+      matchPlayerIdRef.current = null;
       setRun(null);
       setMode(null);
       setPhase("mode");
     }, []),
     toTitle: useCallback(() => {
       matchCodeRef.current = null;
+      matchPlayerIdRef.current = null;
       setRun(null);
       setMode(null);
       setPhase("intro");
