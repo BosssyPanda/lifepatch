@@ -1,0 +1,5 @@
+{
+  "autoCompactEnabled": true,
+  "precomputeCompactionEnabled": true,
+  "autoCompactWindow": 500000
+}
