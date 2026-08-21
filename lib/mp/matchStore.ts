@@ -35,6 +35,24 @@ export type MatchRecord = {
 const PREFIX = "lifepatch.mp.";
 /** Three rooms is more history than anyone rejoins; the oldest is evicted. */
 const MAX_ROOMS = 3;
+/**
+ * The last room this device ENTERED, whether or not a year has turned in it yet.
+ * A `MatchRecord` needs a life to store, so it is only written once the run
+ * advances — which left the lobby, and the whole of year one, with no way back
+ * after a closed tab. This marker is the room code and nothing else.
+ */
+const RECENT_KEY = `${PREFIX}recent`;
+/** A room the player was already told is gone, so the offer isn't a repeating trap. */
+const DISMISSED_KEY = `${PREFIX}rejoinDismissed`;
+
+/** How long a room this device touched stays offered as a way back in.
+ *  A 21-year match runs well under an hour; a day is generous without being a
+ *  graveyard of dead codes. */
+export const REJOIN_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** A room worth offering as a way back: which one, how fresh, and whether the
+ *  life this device holds in it is already over. */
+export type RecentRoom = { roomCode: string; updatedAt: number; ended: boolean };
 
 function keyFor(roomCode: string): string {
   return `${PREFIX}${roomCode}`;
@@ -114,26 +132,91 @@ export function clearMatch(roomCode: string): void {
 }
 
 /** Every room this device still holds, newest first. */
-export function listMatches(): { roomCode: string; updatedAt: number }[] {
+export function listMatches(): RecentRoom[] {
   const store = storage();
   if (!store) return [];
-  const out: { roomCode: string; updatedAt: number }[] = [];
+  const out: RecentRoom[] = [];
   try {
     for (let i = 0; i < store.length; i++) {
       const key = store.key(i);
       if (!key || !key.startsWith(PREFIX)) continue;
       const roomCode = key.slice(PREFIX.length);
+      // The two bookkeeping keys share the namespace and are not rooms.
+      if (!isRoomCode(roomCode)) continue;
       let updatedAt = 0;
+      let ended = false;
       try {
-        const rec = JSON.parse(store.getItem(key) ?? "null") as { updatedAt?: unknown } | null;
+        const rec = JSON.parse(store.getItem(key) ?? "null") as
+          | { updatedAt?: unknown; state?: { status?: unknown } | null }
+          | null;
         if (rec && typeof rec.updatedAt === "number" && Number.isFinite(rec.updatedAt)) updatedAt = rec.updatedAt;
+        // Read straight off the stored run: a finished life is not something the
+        // player can be sitting in, so it must not warn them off starting a new one.
+        if (rec && rec.state && rec.state.status === "ended") ended = true;
       } catch {}
-      out.push({ roomCode, updatedAt });
+      out.push({ roomCode, updatedAt, ended });
     }
   } catch {
     return [];
   }
   return out.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** Note that this device is in a room, before there is any life to store. */
+export function rememberRoom(roomCode: string): void {
+  const store = storage();
+  if (!store || !isRoomCode(roomCode)) return;
+  try {
+    store.setItem(RECENT_KEY, JSON.stringify({ roomCode, updatedAt: Date.now() }));
+    // Entering a room again is the player disagreeing with an earlier dismissal.
+    if (store.getItem(DISMISSED_KEY) === roomCode) store.removeItem(DISMISSED_KEY);
+  } catch {
+    /* full or blocked store — the code entry is still there */
+  }
+}
+
+/**
+ * Stop offering a room as a way back. Called when the room proved to be gone.
+ * Deliberately NOT `clearMatch`: a handshake can fail for a room that is still
+ * alive, and the record is the player's own ledger — losing it would resume them
+ * into a seed-rebuilt life instead of the one they played.
+ */
+export function dismissRoom(roomCode: string): void {
+  const store = storage();
+  if (!store || !isRoomCode(roomCode)) return;
+  try {
+    store.setItem(DISMISSED_KEY, roomCode);
+  } catch {}
+}
+
+/**
+ * The one room worth offering as a way back in, or null. The newest of "a room we
+ * hold a life in" and "a room we entered", inside the rejoin window, minus one the
+ * player has already been told is gone.
+ */
+export function recentRoom(): RecentRoom | null {
+  const store = storage();
+  if (!store) return null;
+  let out: RecentRoom | null = listMatches()[0] ?? null;
+  try {
+    const raw = JSON.parse(store.getItem(RECENT_KEY) ?? "null") as
+      | { roomCode?: unknown; updatedAt?: unknown }
+      | null;
+    const code = typeof raw?.roomCode === "string" ? raw.roomCode : null;
+    const at = typeof raw?.updatedAt === "number" && Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0;
+    if (code && isRoomCode(code) && (!out || at > out.updatedAt)) {
+      // A room we only entered holds no life yet, so there is none to call over —
+      // unless it is the same room the record above is about.
+      out = { roomCode: code, updatedAt: at, ended: out?.roomCode === code ? out.ended : false };
+    }
+  } catch {
+    /* unreadable marker — the record above still stands */
+  }
+  if (!out || Date.now() - out.updatedAt >= REJOIN_WINDOW_MS) return null;
+  try {
+    if (store.getItem(DISMISSED_KEY) === out.roomCode) return null;
+  } catch {}
+  return out;
 }
 
 /**

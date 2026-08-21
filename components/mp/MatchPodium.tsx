@@ -78,7 +78,11 @@ export function MatchPodium({
   }, [peers, selfId, mine]);
 
   const won = rows.length > 0 && rows[0].playerId === selfId;
-  const stillPlaying = rows.filter((p) => p.status === "playing").length;
+  const open = rows.filter((p) => p.status === "playing");
+  const stillPlaying = open.length;
+  /** Nobody the room can see is still playing: what is left is auto-play. Saying
+   *  "waiting on the room" for that reads as waiting on people. */
+  const ghostsOnly = stillPlaying > 0 && open.every((p) => !p.connected);
 
   useEffect(() => {
     if (!finished || celebratedRef.current) return;
@@ -165,7 +169,7 @@ export function MatchPodium({
         <section aria-label="Live standings" className="mt-8">
           <div className="flex items-baseline justify-between border-b border-hairline pb-2">
             <p className="eyebrow text-secondary">The board, live</p>
-            <TerminalOp label="Waiting on the room" />
+            <TerminalOp label={ghostsOnly ? "Auto-playing the last lives" : "Waiting on the room"} />
           </div>
           <ol className="mt-1">
             {rows.map((p, i) => (

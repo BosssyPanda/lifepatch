@@ -1,18 +1,20 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { CheckIcon } from "@/components/icons";
 import { WithFriendsPanel } from "@/components/mp/WithFriendsPanel";
 import { Badge } from "@/components/ui/Badge";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { NameField, playerName } from "@/components/ui/NameField";
 import { SoundCell } from "@/components/ui/SoundCell";
+import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import { useAudio } from "@/hooks/useAudio";
 import { useMatch } from "@/hooks/useMatch";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { currency } from "@/lib/format";
 import { MODES, type ModeId } from "@/lib/modes";
+import { dismissRoom, recentRoom, type RecentRoom } from "@/lib/mp/matchStore";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSpotlightHandler } from "@/src/motion/useSpotlight";
 import { SPRING, STAGGER } from "@/src/motion/tokens";
@@ -44,6 +46,37 @@ export function Setup({
   const [name, setName] = useState("");
   const [picked, setPicked] = useState<string>(BACKGROUNDS[0].id);
   const chosen = BACKGROUNDS.find((b) => b.id === picked);
+  /**
+   * The room this device is still in, if any. Read once on mount rather than in
+   * the initial state so the server and the first client paint agree.
+   *
+   * It answers two questions on this screen: the panel below offers it back, and
+   * the CTA beside it asks twice before starting a SECOND life — a player who
+   * reloaded mid-match lands here with the room still holding their seat and
+   * ghost-playing them, and the orange button one tap above the way back would
+   * otherwise start a solo run with no hint that the first life still exists.
+   */
+  const [room, setRoom] = useState<RecentRoom | null>(null);
+  useEffect(() => {
+    if (mode !== "story") return;
+    setRoom(recentRoom());
+  }, [mode]);
+  const roomGone = () => {
+    if (room) dismissRoom(room.roomCode);
+    setRoom(null);
+  };
+  const startSolo = () => {
+    audio.sfx("confirm");
+    onStart(picked, playerName(name));
+  };
+  // Only a room whose life is still open can be walked away from by accident.
+  const liveRoom = room && !room.ended ? room.roomCode : null;
+  const armedStart = useArmedAction({
+    label: "Start your life →",
+    armedLabel: liveRoom ? `Still in room ${liveRoom} — tap again to start a solo life` : "Tap again to start a solo life",
+    onConfirm: startSolo,
+    onArm: () => audio.sfx("uitick"),
+  });
 
   return (
     <div className="mx-auto flex min-h-[100svh] w-full max-w-5xl flex-col justify-center px-5 py-14">
@@ -110,12 +143,24 @@ export function Setup({
           size="lg"
           // The CTA copy never changes, and a card is already picked on mount — so the
           // accessible name has to carry which one, the way ModeSelect's visible label does.
-          aria-label={chosen ? `Start your life as ${chosen.name}` : undefined}
+          // Armed, the label IS the message and has to be the accessible name too.
+          aria-label={
+            liveRoom && armedStart.armed
+              ? armedStart.label
+              : chosen
+                ? `Start your life as ${chosen.name}`
+                : undefined
+          }
           disabled={opening}
           aria-describedby={opening ? openingId : undefined}
-          onClick={() => { audio.sfx("confirm"); onStart(picked, playerName(name)); }}
+          onClick={liveRoom ? armedStart.onClick : startSolo}
+          onBlur={liveRoom ? armedStart.onBlur : undefined}
         >
-          Start your life →
+          {/* The label only ever changes for a player who is still in a room, so a
+              solo screen is exactly the screen it has always been. */}
+          <ArmedLabel armed={!!liveRoom && armedStart.armed}>
+            {liveRoom ? armedStart.label : "Start your life →"}
+          </ArmedLabel>
         </NeonButton>
       </div>
 
@@ -133,7 +178,12 @@ export function Setup({
           basis of a fair match, and Infinite has no shared ending to race to. */}
       {mode === "story" && onEnterLobby && (
         <div className="mx-auto mt-10 w-full max-w-md border-t border-hairline pt-8">
-          <WithFriendsPanel name={playerName(name)} onEnterLobby={onEnterLobby} />
+          <WithFriendsPanel
+            name={playerName(name)}
+            onEnterLobby={onEnterLobby}
+            lastRoom={room?.roomCode ?? null}
+            onRoomGone={roomGone}
+          />
         </div>
       )}
     </div>

@@ -4,10 +4,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useMemo } from "react";
 import { AshFall } from "@/components/cinematic/film/AshFall";
 import { MoneyFall } from "@/components/cinematic/MoneyFall";
+import { YearTimer } from "@/components/mp/YearTimer";
 import { useDialog } from "@/components/ui/LedgerDialog";
 import { conceptsForText, conceptTitle } from "@/lib/concepts";
 import { currency } from "@/lib/format";
 import type { LifeChoice, LifeEvent, Outcome } from "@/lib/lifeEvents";
+import { useMatchCtx } from "@/hooks/useMatch";
 import { juiceTier } from "@/src/motion/juice";
 import { DUR, EASE } from "@/src/motion/tokens";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
@@ -92,6 +94,10 @@ export function ConsequenceBeat({
 
   // ---- ledger rows (derivation first, then secondary effects) ---------------
   const rows = buildRows(effect, cash, beat);
+
+  // In a match the room's year keeps running behind this ceremony (see the bottom
+  // rail). Null in every solo run, where nothing below changes.
+  const inMatch = useMatchCtx() !== null;
 
   // ---- the ceremony's clock (phases, count-up, landing, skip) ----------------
   const { phase, done, jolt, flash, fall, figureRef, figureText, skip } = useConsequenceLadder({
@@ -292,8 +298,19 @@ export function ConsequenceBeat({
         isGain ? <MoneyFall count={juice.bills} /> : <AshFall count={juice.bills} />
       )}
 
-      {/* bottom rail — continue affordance */}
+      {/* bottom rail — the shared clock, then the continue affordance.
+          This surface is opaque and full-screen, so in a match it buries BOTH copies
+          of the year countdown (the band under the rail and the sticky lock-in bar)
+          while the room's clock keeps running underneath. Same rule the sticky bar
+          already follows: the countdown travels to wherever the timed decision is.
+          `YearTimer` renders nothing outside a match, and the compact copy is
+          aria-hidden and silent, so it adds no second set of ticks. */}
       <div className="flex items-stretch border-t border-hairline">
+        {inMatch && (
+          <div className="flex items-center px-4 py-3.5 sm:px-6">
+            <YearTimer compact />
+          </div>
+        )}
         <button
           type="button"
           onClick={(e) => {

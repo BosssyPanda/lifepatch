@@ -125,6 +125,17 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
       {match && (
         <div className="border-b border-hairline bg-bg">
           <div className="mx-auto max-w-5xl space-y-3 px-3 py-3 sm:px-5">
+            {/* A rejoin lands the player in a later year holding a net worth they
+                never chose. The room played those years for them, deterministically
+                — but unsaid, that reads as the game having thrown their decisions
+                away. It clears itself on the next year. */}
+            {match.resumeCatchup && (
+              <p role="status" className="voice text-xs leading-snug text-ink-dim">
+                {match.resumeCatchup.to - match.resumeCatchup.from === 1
+                  ? `Year ${match.resumeCatchup.from} was played for you while you were away.`
+                  : `Years ${match.resumeCatchup.from}–${match.resumeCatchup.to - 1} were played for you while you were away.`}
+              </p>
+            )}
             <YearTimer />
             <MatchRail selfNetWorth={netWorth(s)} />
           </div>

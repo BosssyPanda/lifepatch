@@ -293,6 +293,10 @@ function AppShellInner() {
               // a life the room never started.
               onReplay={() => { leaveRoom(); run.start(run.run!.mode, run.run!.backgroundId, run.run!.name); }}
               onTitle={exitToTitle}
+              // Only while the room is still held — and it is, because reading the
+              // report doesn't leave it. If the room dies while they read, the prop
+              // goes away and the effect above keeps podium → report one-way.
+              onBackToStandings={match ? () => run.setPhase("podium") : undefined}
               onAlmanac={openAlmanac}
               onMasteryMap={openMasteryMap}
             />

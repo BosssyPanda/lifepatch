@@ -159,7 +159,11 @@ function PortfolioBreakdown({ run }: { run: RunState }) {
   );
 }
 
-export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: { run: RunState; onReplay: () => void; onTitle: () => void; onAlmanac: () => void; onMasteryMap: () => void }) {
+export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, onBackToStandings }: { run: RunState; onReplay: () => void; onTitle: () => void; onAlmanac: () => void; onMasteryMap: () => void;
+  /** Set only while this run's room is still open: the mirror of the podium's
+   *  "See your life report", so reading your own statement isn't a one-way door
+   *  out of the standings you were watching. Both other exits leave the room. */
+  onBackToStandings?: () => void }) {
   const { mastery } = useProfile();
   const { runGains } = useConceptLearn();
   const { setBrainGlow } = useAudio();
@@ -352,6 +356,11 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap }: 
 
         {/* actions */}
         <motion.div variants={item} className="mt-8 flex flex-wrap gap-3 border-t border-hairline pt-6">
+          {onBackToStandings && (
+            <NeonButton variant="secondary" size="lg" onClick={onBackToStandings}>
+              ← Back to the standings
+            </NeonButton>
+          )}
           <NeonButton variant="primary" size="lg" onClick={onReplay}>
             <ReplayIcon size={18} /> Run it back
           </NeonButton>

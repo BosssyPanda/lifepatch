@@ -19,6 +19,13 @@ import { DUR, EASE, SPRING, STAGGER, stepDelay } from "@/src/motion/tokens";
 
 /** How long the copy confirmation stays up. */
 const COPIED_MS = 1600;
+/**
+ * How long a lobby waits for the host's presence before it stops calling them
+ * "the host we're waiting for" and calls them gone. The join handshake gives up
+ * on a config after 5s, so a host seat still empty well past that is empty for
+ * good, not slow.
+ */
+const HOST_SEAT_GRACE_MS = 8000;
 
 /**
  * The waiting room.
@@ -60,6 +67,24 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
     return () => window.clearTimeout(id);
   }, [copied]);
 
+  /**
+   * A player who joins a room the host has ALREADY left never receives the host's
+   * presence at all, so `peers[hostId]` is missing rather than disconnected — the
+   * "host is gone" test below looks at a row that was never there, and the
+   * newcomer gets the one thing this screen must never show: a spinner waiting on
+   * somebody who is not coming. Presence lands inside the handshake, so a host
+   * seat still absent long after it is absent for good.
+   */
+  const hostId = match?.config?.hostId ?? null;
+  const hostSeatMissing = !!hostId && !!match && !match.peers[hostId];
+  const [hostSeatOverdue, setHostSeatOverdue] = useState(false);
+  useEffect(() => {
+    setHostSeatOverdue(false);
+    if (!hostSeatMissing) return;
+    const id = window.setTimeout(() => setHostSeatOverdue(true), HOST_SEAT_GRACE_MS);
+    return () => window.clearTimeout(id);
+  }, [hostSeatMissing, hostId]);
+
   const config = match?.config ?? null;
   if (!match || !config) return null;
 
@@ -70,6 +95,20 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
     (a, b) => a.joinedAt - b.joinedAt || (a.playerId < b.playerId ? -1 : 1),
   );
   const here = roster.filter((p) => p.connected).length;
+  /**
+   * The lobby's owner, as presence last saw them. Starting the match, the
+   * background and the clock are all `config.hostId`'s alone and none of it
+   * migrates — so a lobby whose host closed their tab cannot start, and telling
+   * everybody else to keep waiting for them is the one thing it must not do.
+   * `hostRow` exists only once presence has actually seen the host, so this can't
+   * fire on a guest's first frame.
+   */
+  const hostRow = match.peers[config.hostId];
+  // Two ways to lose a host: presence saw them leave, or it never saw them at all.
+  const hostGone = (!!hostRow && !hostRow.connected) || hostSeatOverdue;
+  /** Seats that are here in the list but not on the wire. `startMatch` freezes the
+   *  roster from the CONNECTED rows, so starting now leaves these players out. */
+  const away = roster.filter((p) => !p.connected).map((p) => p.name);
   // Only ever draws the seats the room still NEEDS — eight hollow rows would read as
   // eight missing players rather than as headroom.
   const openSlots = Math.max(0, MIN_PLAYERS - roster.length);
@@ -299,6 +338,14 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
                 Waiting for {MIN_PLAYERS - here} more
               </span>
             )}
+            {/* Never disabled on this: nothing prunes an away row, so a friend who
+                wandered off an hour ago would hold the room shut for good. Say what
+                pressing it costs instead. */}
+            {away.length > 0 && (
+              <span className="voice text-xs text-ink-dim">
+                {away.join(", ")} {away.length === 1 ? "is" : "are"} away — starting now leaves them out.
+              </span>
+            )}
             <NeonButton
               variant="primary"
               size="lg"
@@ -309,6 +356,12 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
               Start the match →
             </NeonButton>
           </>
+        ) : hostGone ? (
+          // A spinner here would be a lie: nobody inherits the Start button.
+          <p role="alert" className="voice max-w-xs text-xs leading-snug text-ink-dim">
+            The host left. Nobody else can start this room — wait for them to come back
+            with the code, or leave and open a new one.
+          </p>
         ) : (
           <TerminalOp label="Waiting for the host to start" />
         )}

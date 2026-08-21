@@ -7,16 +7,10 @@ import { NeonButton } from "@/components/ui/LedgerButton";
 import { playerName } from "@/components/ui/NameField";
 import { useAudio } from "@/hooks/useAudio";
 import { useMatch } from "@/hooks/useMatch";
-import { listMatches } from "@/lib/mp/matchStore";
 import { MAX_PLAYERS, MIN_PLAYERS } from "@/lib/mp/protocol";
 import { ROOM_CODE_LENGTH, isRoomCode, normalizeRoomCode } from "@/lib/mp/roomCodes";
 import { createTransport } from "@/lib/mp/transport";
 import { DUR, EASE } from "@/src/motion/tokens";
-
-/** How long a room this device was playing stays offered as a way back in.
- *  A 21-year match runs well under an hour; a day is generous without being a
- *  graveyard of dead codes. */
-const REJOIN_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The entry to a live room, mounted under Setup's solo flow (story only).
@@ -35,8 +29,24 @@ const REJOIN_WINDOW_MS = 24 * 60 * 60 * 1000;
  * LEDGER: the panel carries NO primary (orange) button. Setup's "Start your life"
  * is the primary path on that screen and the accent marks one path per screen —
  * playing with friends is the alternative, so it is stated in secondary.
+ *
+ * The room worth going back to is Setup's to know, not this panel's: the same
+ * answer decides whether the solo CTA above needs to ask twice, and two lookups
+ * would drift the moment one of them learns the room is gone.
  */
-export function WithFriendsPanel({ name, onEnterLobby }: { name: string; onEnterLobby: () => void }) {
+export function WithFriendsPanel({
+  name,
+  onEnterLobby,
+  lastRoom,
+  onRoomGone,
+}: {
+  name: string;
+  onEnterLobby: () => void;
+  /** The last room this device was in, if it is recent enough to still be live. */
+  lastRoom?: string | null;
+  /** That room turned us away — stop offering it. */
+  onRoomGone?: () => void;
+}) {
   const match = useMatch();
   const { sfx } = useAudio();
   const [open, setOpen] = useState(false);
@@ -50,25 +60,11 @@ export function WithFriendsPanel({ name, onEnterLobby }: { name: string; onEnter
    * would hand hydration two different answers.
    */
   const [online, setOnline] = useState(true);
-  /** The last room this device played, if it is recent enough to still be live. */
-  const [lastRoom, setLastRoom] = useState<string | null>(null);
   const codeId = useId();
   const errId = useId();
 
   useEffect(() => {
     setOnline(createTransport() !== null);
-    // A match this device was playing recently. Closing the tab by accident used
-    // to be the end of it: the code only ever appeared in the lobby, so once the
-    // match started there was nothing left to type in here. The room is already
-    // written to this device on every year that turns — so offer it back.
-    try {
-      const recent = listMatches()
-        .filter((m) => Date.now() - m.updatedAt < REJOIN_WINDOW_MS)
-        .sort((a, b) => b.updatedAt - a.updatedAt)[0];
-      if (recent) setLastRoom(recent.roomCode);
-    } catch {
-      /* private mode, no store — the code entry below still works */
-    }
   }, []);
 
   const disabled = busy !== null;
@@ -101,8 +97,9 @@ export function WithFriendsPanel({ name, onEnterLobby }: { name: string; onEnter
       onEnterLobby();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Couldn't join that room.");
-      // The room is gone or finished, so stop offering it as a way back.
-      if (raw === lastRoom) setLastRoom(null);
+      // The room is gone or finished, so stop offering it as a way back — and
+      // remember that, or a reload offers the same dead room all over again.
+      if (raw === lastRoom) onRoomGone?.();
     } finally {
       setBusy(null);
     }

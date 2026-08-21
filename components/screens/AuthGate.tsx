@@ -9,6 +9,7 @@ import { TerminalOp } from "@/components/ui/TerminalOp";
 import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import type { useAuth } from "@/hooks/useAuth";
 import { MODES, type ModeId } from "@/lib/modes";
+import { recentRoom } from "@/lib/mp/matchStore";
 import { loadRunChecked, OUTDATED_SAVE_MESSAGE } from "@/lib/saves";
 import { yearIndex, type RunState } from "@/lib/runEngine";
 
@@ -27,6 +28,7 @@ function SaveActions({
   loadFailed,
   outdated,
   save,
+  roomBack,
   onRetry,
   onResume,
   onNew,
@@ -36,6 +38,8 @@ function SaveActions({
   loadFailed: boolean;
   outdated: boolean;
   save: RunState | null;
+  /** A room this device is still in, if any — see the block below. */
+  roomBack: string | null;
   onRetry: () => void;
   onResume: (state: RunState) => void;
   onNew: () => void;
@@ -72,6 +76,23 @@ function SaveActions({
         <NeonButton variant="primary" size="md" className="w-full" onClick={() => onResume(save)}>
           Continue — Year {yearIndex(save)} (age {save.age})
         </NeonButton>
+        {/* A player who reloaded out of a live match lands here, and neither door
+            above is theirs: "Continue" resumes an unrelated SOLO life, and the only
+            other way through says it erases the save. The room is a third thing, and
+            going to it destroys nothing — `onNew` only opens Setup, where the room
+            is offered back. */}
+        {roomBack && (
+          <div className="border-l-2 border-hairline-strong bg-bg px-3 py-2.5">
+            <p className="voice text-[0.8rem] leading-snug text-secondary">
+              You were in room <span className="num tracking-[0.18em] text-ink">{roomBack}</span>.
+            </p>
+            <div className="mt-2">
+              <NeonButton variant="secondary" size="sm" onClick={onNew}>
+                Go back to it →
+              </NeonButton>
+            </div>
+          </div>
+        )}
         <NeonButton
           variant={overwrite.armed ? "danger" : "secondary"}
           size="md"
@@ -116,6 +137,14 @@ export function AuthGate({
    *  offering a fresh run, which reads as "my save vanished". */
   const [outdated, setOutdated] = useState(false);
   const [retry, setRetry] = useState(0);
+  /** A room this device is still in. Read on mount, so the server and the first
+   *  client paint agree. Story only — the other modes have no rooms. */
+  const [roomBack, setRoomBack] = useState<string | null>(null);
+  useEffect(() => {
+    if (mode !== "story") return;
+    const r = recentRoom();
+    setRoomBack(r && !r.ended ? r.roomCode : null);
+  }, [mode]);
   const errorId = useId();
 
   useEffect(() => {
@@ -260,6 +289,7 @@ export function AuthGate({
                 loadFailed={loadFailed}
                 outdated={outdated}
                 save={save}
+                roomBack={roomBack}
                 onRetry={() => setRetry((n) => n + 1)}
                 onResume={onResume}
                 onNew={onNew}
@@ -286,6 +316,7 @@ export function AuthGate({
                 loadFailed={loadFailed}
                 outdated={outdated}
                 save={save}
+                roomBack={roomBack}
                 onRetry={() => setRetry((n) => n + 1)}
                 onResume={onResume}
                 onNew={onNew}

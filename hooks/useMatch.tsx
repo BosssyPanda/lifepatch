@@ -1,14 +1,14 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { playerName } from "@/components/ui/NameField";
+import { DEFAULT_PLAYER_NAME, playerName } from "@/components/ui/NameField";
 import { useAuth } from "@/hooks/useAuth";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { resolveProgressId } from "@/lib/cloud/identity";
 import { getProfile } from "@/lib/cloud/profiles";
 import { MODES } from "@/lib/modes";
 import { fastForward } from "@/lib/mp/autoResolve";
-import { loadMatch, saveMatch } from "@/lib/mp/matchStore";
+import { loadMatch, rememberRoom, saveMatch } from "@/lib/mp/matchStore";
 import {
   MAX_PLAYERS,
   MIN_PLAYERS,
@@ -78,6 +78,14 @@ export type MatchApi = {
    * `joinRoom` on the `"rejoined"` path; hand it to `run.resume(state, { matchCode })`.
    */
   resumeState: RunState | null;
+  /**
+   * What the room played on this player's behalf while they were gone, set by the
+   * same rejoin: they left at `from` and the room had reached `to` (both
+   * `yearIndex`). Null when nothing was auto-played. The run screen says so —
+   * coming back to a net worth you never chose, with no word about it, reads as
+   * the game having lost your decisions.
+   */
+  resumeCatchup: { from: number; to: number } | null;
   createRoom(name: string): Promise<string>;
   joinRoom(code: string, name: string): Promise<"joined" | "rejoined">;
   setYearSeconds(s: YearSeconds): void;
@@ -97,6 +105,14 @@ const TICK_GRACE_MS = 3000;
 const HANDSHAKE_MS = 5000;
 /** How long a rejoiner waits for the acting host to answer `snapshotRequest`. */
 const SNAPSHOT_WAIT_MS = 4000;
+/**
+ * The year length the room falls back to once NOBODY still in it is playing — only
+ * absent, ghost-played rows are left. At a real year length the players who
+ * finished would watch a life nobody is living take up to twenty minutes to run
+ * out. Short, but not instant: a player on their way back can still land in the
+ * room before it closes.
+ */
+const GHOST_CATCHUP_MS = 1500;
 const POLL_MS = 150;
 
 /**
@@ -233,6 +249,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   const [roomYearIndex, setRoomYearState] = useState(0);
   const [error, setErrorState] = useState<string | null>(null);
   const [resumeState, setResumeState] = useState<RunState | null>(null);
+  const [resumeCatchup, setResumeCatchup] = useState<{ from: number; to: number } | null>(null);
   const [selfId, setSelfIdState] = useState("");
 
   // Mirrors. Timers, transport callbacks and the stable methods all read the ref
@@ -258,6 +275,8 @@ export function MatchProvider({ children }: { children: ReactNode }) {
    *  host migration doesn't lose the absent players' lives. */
   const snapshotsRef = useRef<Map<string, RunState>>(new Map());
   const snapshotWaiterRef = useRef<((s: RunState) => void) | null>(null);
+  /** Absent players we've already asked the room for, so the ask is once per gap. */
+  const snapshotAskedRef = useRef<Set<string>>(new Set());
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -383,11 +402,6 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     });
   }, [updatePeers]);
 
-  const isActingHost = useCallback((): boolean => {
-    const id = selfIdRef.current;
-    return !!id && actingHostOf(configRef.current, peersRef.current, id) === id;
-  }, []);
-
   /**
    * May this id write into the room's game state?
    *
@@ -415,6 +429,8 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       // story prints years that do not exist and fast-forwards lives past the end.
       const capped = Math.min(yi, LAST_YEAR_INDEX + 1);
       if (capped <= roomYearRef.current) return; // stale or duplicate
+      // The notice belongs to the year the player came back into, not to the match.
+      setResumeCatchup(null);
       setRoomYear(capped);
       setDeadlineState(Date.now() + yearSeconds * 1000);
       clearReady();
@@ -430,16 +446,46 @@ export function MatchProvider({ children }: { children: ReactNode }) {
    */
   const ghostPlay = useCallback(
     (toYearIndex: number) => {
+      const stalled: MatchPeer[] = [];
       for (const peer of Object.values(peersRef.current)) {
         if (peer.playerId === selfIdRef.current) continue;
         if (peer.connected || peer.status === "ended") continue;
         const snap = snapshotsRef.current.get(peer.playerId);
-        if (!snap) continue; // nothing to play — their row simply stops moving
+        if (!snap) {
+          stalled.push(peer);
+          continue;
+        }
         const next = fastForward(snap, toYearIndex);
         snapshotsRef.current.set(peer.playerId, next);
         const st = statusOf(next, peer.playerId, true);
         send({ t: "status", v: MP_PROTOCOL, status: st });
         applyPeerStatus(st);
+      }
+      for (const peer of stalled) {
+        // We hold no life for this player, so their row has stopped moving. That
+        // happens to any client that inherited the clock after they left — a
+        // rejoiner starts with an empty cache — so ask the room rather than freeze
+        // them for the rest of the match: any client still holding the snapshot
+        // answers, and the row starts moving again on the next boundary.
+        if (!snapshotAskedRef.current.has(peer.playerId)) {
+          snapshotAskedRef.current.add(peer.playerId);
+          send({ t: "snapshotRequest", v: MP_PROTOCOL, playerId: peer.playerId });
+        }
+        // Until it does, the row must stop claiming to be auto-played. The ghost
+        // mark the previous host left behind prints "Auto-played" on the board
+        // beside a figure that is frozen years in the past; "Away" is the truth.
+        if (peer.ghost && peer.reported) {
+          const st: PeerStatus = {
+            playerId: peer.playerId,
+            yearIndex: peer.yearIndex,
+            netWorth: peer.netWorth,
+            status: peer.status,
+            ready: false,
+          };
+          if (peer.endReason) st.endReason = peer.endReason;
+          applyPeerStatus(st);
+          send({ t: "status", v: MP_PROTOCOL, status: st });
+        }
       }
     },
     [applyPeerStatus, send],
@@ -460,7 +506,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
 
   /** The match begins: same config, same seed, same clock, everywhere. */
   const beginRunning = useCallback(
-    (cfg: MatchConfig, atYearIndex: number) => {
+    (cfg: MatchConfig, atYearIndex: number, fresh = false) => {
       // The year this room opens on can come off a PEER'S status row (a rejoin reads
       // the room's clock from presence), and the wire allows far more years than the
       // story has. Clamped here for the same reason `applyTick` clamps: a room whose
@@ -470,13 +516,22 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       setPhase("running");
       setRoomYear(at);
       setDeadlineState(Date.now() + cfg.yearSeconds * 1000);
-      myStatusRef.current = {
-        playerId: ensureSelfId(),
-        yearIndex: at,
-        netWorth: 0,
-        status: "playing",
-        ready: false,
-      };
+      // Only a match that is STARTING may publish an opening figure. On a rejoin
+      // this runs first (the config arrives off a member's presence, before the
+      // life is recovered), and a fabricated `$0` at the room's current year
+      // replaces the real figure the standings were showing — out-placing everyone
+      // who finished underwater, and permanently, since a lower real year is then
+      // refused as stale. `joinRoom` sets the true status a moment later; until
+      // then this device says nothing about itself.
+      if (fresh) {
+        myStatusRef.current = {
+          playerId: ensureSelfId(),
+          yearIndex: at,
+          netWorth: 0,
+          status: "playing",
+          ready: false,
+        };
+      }
       // Roster members we haven't seen yet still get a row, so the standings are
       // complete from the first frame.
       updatePeers((prev) => {
@@ -506,9 +561,18 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   const adoptConfig = useCallback(
     (cfg: MatchConfig, from: string) => {
       if (cfg.roomCode !== roomRef.current) return;
-      const trusted = from === cfg.hostId || (cfg.startedAt > 0 && cfg.roster.some((r) => r.playerId === from));
-      if (!trusted) return;
       const cur = configRef.current;
+      // Who may define this room? The host always. Once it is running, its own
+      // roster. And in a LOBBY, any member — but only to SEED a client that holds
+      // nothing yet, never to change one that does. Host-only was a dead end: when
+      // the host closed their tab the lobby became unreadable, so nobody could join
+      // a room people were sitting in and the host couldn't get back into their own
+      // ("No room with that code"). Mutation stays host-only, so a member still
+      // can't push a new seed or background onto a room that already has one.
+      const trusted =
+        from === cfg.hostId ||
+        (cfg.startedAt > 0 ? cfg.roster.some((r) => r.playerId === from) : cur === null);
+      if (!trusted) return;
       if (cur && cur.hostId !== cfg.hostId) return;
       if (cfg.startedAt > 0) {
         if (phaseRef.current === "running" || phaseRef.current === "finished") return;
@@ -529,8 +593,11 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         return;
       }
       setConfig(cfg);
+      // Carry it: presence attaches whatever config this client holds, so adopting
+      // without republishing leaves the host as the room's only source of it.
+      publish();
     },
-    [beginRunning, peerYearIndex, setConfig, setError],
+    [beginRunning, peerYearIndex, publish, setConfig, setError],
   );
 
   // ── inbound ───────────────────────────────────────────────────────────────
@@ -556,7 +623,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
             setError("The host started the match without you.");
             return;
           }
-          beginRunning(cfg, 1);
+          beginRunning(cfg, 1, true);
           return;
         }
         case "tick": {
@@ -594,9 +661,26 @@ export function MatchProvider({ children }: { children: ReactNode }) {
           snapshotsRef.current.set(msg.playerId, msg.state);
           return;
         case "snapshotRequest": {
-          if (!isActingHost()) return;
+          // Anyone holding this life may hand it back. "Only the acting host
+          // answers" failed exactly when it was needed: a returning HOST is
+          // re-elected by its own presence before it can ask for its life back, and
+          // its cache went with the tab — so the only eligible answerer was the
+          // asker, and the rejoin silently rebuilt a different life from the seed.
+          // There is no authority to protect here: a snapshot for a player is
+          // either their own report or a byte-identical deterministic fast-forward
+          // of it, and duplicate answers are harmless (the waiter takes the first).
+          if (msg.playerId === selfIdRef.current) return;
+          if (!isRosterMember(msg.playerId)) return;
           const snap = snapshotsRef.current.get(msg.playerId);
-          if (snap) send({ t: "snapshotReply", v: MP_PROTOCOL, playerId: msg.playerId, state: snap });
+          if (!snap) return;
+          send({ t: "snapshotReply", v: MP_PROTOCOL, playerId: msg.playerId, state: snap });
+          // Asked for on behalf of somebody who is still away? Then the asker is an
+          // acting host that inherited an empty ghost-play cache — put it on the
+          // wire as a plain snapshot too, which every client caches.
+          const row = peersRef.current[msg.playerId];
+          if (row && !row.connected) {
+            send({ t: "snapshot", v: MP_PROTOCOL, playerId: msg.playerId, state: snap });
+          }
           return;
         }
         case "snapshotReply": {
@@ -609,7 +693,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [applyPeerStatus, applyTick, beginRunning, isActingHost, isRosterMember, publish, send, setConfig, setError],
+    [applyPeerStatus, applyTick, beginRunning, isRosterMember, publish, send, setConfig, setError],
   );
 
   const handlePresence = useCallback(
@@ -717,6 +801,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     transportRef.current = null;
     roomRef.current = null;
     snapshotsRef.current.clear();
+    snapshotAskedRef.current.clear();
     snapshotWaiterRef.current = null;
     await t?.leave();
   }, [stopTimers]);
@@ -770,6 +855,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     setRoomYear(0);
     setDeadlineState(null);
     setResumeState(null);
+    setResumeCatchup(null);
     updatePeers(() => ({}));
     myStatusRef.current = null;
     myStateRef.current = null;
@@ -808,6 +894,10 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         setPhase("lobby");
         await connect(code, name);
         publish();
+        // Offer it back before the first year turns: the record that normally
+        // carries a room across a closed tab is only written once a year advances,
+        // so a lobby used to be the one place a fumbled tab was unrecoverable.
+        rememberRoom(code);
         return code;
       } catch (e) {
         await teardown();
@@ -859,11 +949,18 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         const cfg = await waitFor(() => configRef.current, HANDSHAKE_MS);
         if (!cfg) {
           // A running room whose roster excludes us never hands us a config at all,
-          // so the timeout has two meanings. Tell them apart.
+          // and a room this device was PLAYING can only go quiet by emptying out —
+          // the room really existed, so "check the letters" blames the player for
+          // a code they were handed by a button. Three meanings, told apart.
           throw new Error(
             startedWithoutMeRef.current
-              ? "That match has already started."
-              : "No room with that code — check the letters and try again.",
+              // Same rule as the roster gate below, and this is the branch the
+              // player it applies to actually reaches: a room that started
+              // without them never hands them a config to check a seat against.
+              ? "That match has already started — only the players who were in the room when it started can rejoin."
+              : loadMatch(code, selfIdRef.current)
+                ? "That room isn't running any more — everyone in it has left."
+                : "No room with that code — check the letters and try again.",
           );
         }
         if (cfg.startedAt === 0) {
@@ -872,13 +969,30 @@ export function MatchProvider({ children }: { children: ReactNode }) {
           if (othersRef.current >= MAX_PLAYERS) {
             throw new Error(`That room is full (${MAX_PLAYERS} players).`);
           }
+          rememberRoom(code);
           return "joined";
         }
 
         // Running match: the roster is the gate. A stranger can't walk in mid-run,
-        // but the player who dropped out of it can.
-        if (!cfg.roster.some((r) => r.playerId === selfIdRef.current)) {
-          throw new Error("That match has already started.");
+        // but the player who dropped out of it can. Say which rule turned them
+        // away — a player who was in the lobby and reloaded while the host started
+        // has no way to tell this from a mistyped code.
+        const seat = cfg.roster.find((r) => r.playerId === selfIdRef.current);
+        if (!seat) {
+          throw new Error(
+            "That match has already started — only the players who were in the room when it started can rejoin.",
+          );
+        }
+        // The room already knows this seat by the name it joined under, and a
+        // returning player lands on a fresh Setup whose name field is empty — so the
+        // anonymous default must not rename them in every standings row and on the
+        // podium. A name they actually retyped still wins.
+        if (playerName(name) === DEFAULT_PLAYER_NAME && selfInfoRef.current) {
+          selfInfoRef.current = { ...selfInfoRef.current, name: seat.name };
+          updatePeers((prev) => {
+            const row = prev[selfIdRef.current];
+            return row ? { ...prev, [selfIdRef.current]: { ...row, name: seat.name } } : prev;
+          });
         }
         // `peerYearIndex` is peer-written and the wire allows far more years than
         // the story has. Never auto-play a returning player past the end of it.
@@ -889,12 +1003,21 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         // exactly what the room has been watching anyway.
         const local = loadMatch(cfg.roomCode, selfIdRef.current)?.state ?? null;
         const remote = local ? null : await requestSnapshot();
-        const base = local ?? remote ?? initRun("story", cfg.backgroundId, playerName(name), cfg.seed);
+        // `sharedEvents` is not optional. A match run takes its cards from the
+        // room's one running order; rebuilt without the flag, this life quietly
+        // starts drawing from a private pool — the exact desync the shared deck
+        // exists to prevent, and it is silent (see lib/mp/protocol.ts).
+        const base = local ?? remote ?? initRun("story", cfg.backgroundId, seat.name, cfg.seed, true);
+        const from = yearIndex(base);
         const caught = fastForward(base, target);
         myStateRef.current = caught;
         myStatusRef.current = statusOf(caught, selfIdRef.current, false);
         setResumeState(caught);
+        // Years the room played for them. Coming back to a later year and a net
+        // worth you never chose, with nothing said about it, reads as lost work.
+        setResumeCatchup(yearIndex(caught) > from ? { from, to: yearIndex(caught) } : null);
         saveMatch(cfg.roomCode, selfIdRef.current, cfg, caught);
+        rememberRoom(cfg.roomCode);
         applyPeerStatus(myStatusRef.current);
         send({ t: "status", v: MP_PROTOCOL, status: myStatusRef.current });
         send({ t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current, state: caught });
@@ -908,7 +1031,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         throw new Error(msg);
       }
     },
-    [applyPeerStatus, connect, peerYearIndex, publish, requestSnapshot, resetState, send, setError, setPhase, teardown, waitFor],
+    [applyPeerStatus, connect, peerYearIndex, publish, requestSnapshot, resetState, send, setError, setPhase, teardown, updatePeers, waitFor],
   );
 
   // ── host lobby controls ───────────────────────────────────────────────────
@@ -946,7 +1069,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     }
     const final: MatchConfig = { ...cur, startedAt: Date.now(), roster };
     send({ t: "start", v: MP_PROTOCOL, config: final });
-    beginRunning(final, 1);
+    beginRunning(final, 1, true);
   }, [beginRunning, send, setError]);
 
   // ── in-run reporting ──────────────────────────────────────────────────────
@@ -1049,12 +1172,28 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     // would push the room N -> N+2 and auto-resolve a year nobody played. Bail and
     // re-decide on the render the resync schedules, where readiness is cleared too.
     if (roomYearRef.current !== roomYearIndex) return;
-    const live = Object.values(peers).filter((p) => p.connected && p.status === "playing");
+    const rows = Object.values(peers);
+    const here = rows.filter((p) => p.connected);
+    const live = here.filter((p) => p.status === "playing");
+    if (live.length === 0) {
+      // Nobody still in the room is playing, so there is nobody left to wait for:
+      // what remains are absent rows this client is ghost-playing. At a real year
+      // length the players who finished sit and watch a life nobody is living take
+      // up to twenty minutes to run out, with no way to hurry it. Shorten the year
+      // instead of skipping to the end outright, so a player on their way back can
+      // still land in the room before it closes.
+      if (here.length === 0) return; // presence hasn't landed yet — never skip at the start
+      if (rows.every((p) => p.status === "ended")) return; // the finish effect owns this
+      if (deadlineAt !== null && deadlineAt - Date.now() > GHOST_CATCHUP_MS) {
+        setDeadlineState(Date.now() + GHOST_CATCHUP_MS);
+      }
+      return;
+    }
     // Readiness is bound to the year it was sent for: a lock-in from the year the
     // room has already left is not consent to skip the year that replaced it.
-    if (live.length === 0 || !live.every((p) => p.ready && p.yearIndex >= roomYearIndex)) return;
+    if (!live.every((p) => p.ready && p.yearIndex >= roomYearIndex)) return;
     emitTick();
-  }, [phase, isHost, peers, roomYearIndex, emitTick]);
+  }, [phase, isHost, peers, roomYearIndex, deadlineAt, emitTick]);
 
   // The room is over when every life in it is over — or when the story runs out.
   useEffect(() => {
@@ -1078,6 +1217,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       roomYearIndex,
       error,
       resumeState,
+      resumeCatchup,
       createRoom,
       joinRoom,
       setYearSeconds,
@@ -1089,7 +1229,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       leaveMatch,
     }),
     [
-      phase, config, peers, selfId, isHost, deadlineAt, roomYearIndex, error, resumeState,
+      phase, config, peers, selfId, isHost, deadlineAt, roomYearIndex, error, resumeState, resumeCatchup,
       createRoom, joinRoom, setYearSeconds, setBackground, startMatch, markReady,
       reportAdvance, reportEnded, leaveMatch,
     ],
