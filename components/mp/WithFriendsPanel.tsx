@@ -7,10 +7,16 @@ import { NeonButton } from "@/components/ui/LedgerButton";
 import { playerName } from "@/components/ui/NameField";
 import { useAudio } from "@/hooks/useAudio";
 import { useMatch } from "@/hooks/useMatch";
+import { listMatches } from "@/lib/mp/matchStore";
 import { MAX_PLAYERS, MIN_PLAYERS } from "@/lib/mp/protocol";
 import { ROOM_CODE_LENGTH, isRoomCode, normalizeRoomCode } from "@/lib/mp/roomCodes";
 import { createTransport } from "@/lib/mp/transport";
 import { DUR, EASE } from "@/src/motion/tokens";
+
+/** How long a room this device was playing stays offered as a way back in.
+ *  A 21-year match runs well under an hour; a day is generous without being a
+ *  graveyard of dead codes. */
+const REJOIN_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * The entry to a live room, mounted under Setup's solo flow (story only).
@@ -44,11 +50,25 @@ export function WithFriendsPanel({ name, onEnterLobby }: { name: string; onEnter
    * would hand hydration two different answers.
    */
   const [online, setOnline] = useState(true);
+  /** The last room this device played, if it is recent enough to still be live. */
+  const [lastRoom, setLastRoom] = useState<string | null>(null);
   const codeId = useId();
   const errId = useId();
 
   useEffect(() => {
     setOnline(createTransport() !== null);
+    // A match this device was playing recently. Closing the tab by accident used
+    // to be the end of it: the code only ever appeared in the lobby, so once the
+    // match started there was nothing left to type in here. The room is already
+    // written to this device on every year that turns — so offer it back.
+    try {
+      const recent = listMatches()
+        .filter((m) => Date.now() - m.updatedAt < REJOIN_WINDOW_MS)
+        .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      if (recent) setLastRoom(recent.roomCode);
+    } catch {
+      /* private mode, no store — the code entry below still works */
+    }
   }, []);
 
   const disabled = busy !== null;
@@ -68,9 +88,8 @@ export function WithFriendsPanel({ name, onEnterLobby }: { name: string; onEnter
     }
   }
 
-  async function join(e: React.FormEvent) {
-    e.preventDefault();
-    if (!isRoomCode(code)) {
+  async function joinCode(raw: string) {
+    if (!isRoomCode(raw)) {
       setErr("A room code is six letters and numbers.");
       return;
     }
@@ -78,13 +97,20 @@ export function WithFriendsPanel({ name, onEnterLobby }: { name: string; onEnter
     setBusy("join");
     sfx("uitick");
     try {
-      await match.joinRoom(code, playerName(name));
+      await match.joinRoom(raw, playerName(name));
       onEnterLobby();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Couldn't join that room.");
+      // The room is gone or finished, so stop offering it as a way back.
+      if (raw === lastRoom) setLastRoom(null);
     } finally {
       setBusy(null);
     }
+  }
+
+  async function join(e: React.FormEvent) {
+    e.preventDefault();
+    await joinCode(code);
   }
 
   return (
@@ -101,6 +127,30 @@ export function WithFriendsPanel({ name, onEnterLobby }: { name: string; onEnter
           {MIN_PLAYERS}–{MAX_PLAYERS} PLAYERS
         </p>
       </div>
+      {/* Somebody who lost a match to a closed tab lands here needing one thing, and
+          it is not a fresh room. Offer the way back first, before the two doors that
+          start something new. */}
+      {online && lastRoom && (
+        <div className="mt-3.5 border-l-2 border-hairline-strong bg-bg2 px-3 py-2.5">
+          <p className="voice text-[0.82rem] leading-snug text-secondary">
+            You were in room{" "}
+            <span className="num tracking-[0.18em] text-ink">{lastRoom}</span>. If it is
+            still running, you can pick your life back up where the room got to.
+          </p>
+          <div className="mt-2.5">
+            <NeonButton
+              variant="secondary"
+              size="sm"
+              onClick={() => void joinCode(lastRoom)}
+              disabled={disabled}
+              loading={busy === "join"}
+            >
+              Rejoin {lastRoom} <ArrowRight size={14} />
+            </NeonButton>
+          </div>
+        </div>
+      )}
+
       <p className="voice mt-2.5 text-sm text-ink/70">
         One room, one seed — the same markets and the same clock for everybody in it.
       </p>

@@ -64,8 +64,17 @@ export function MatchPodium({
   const rows = useMemo(() => {
     if (!peers) return [];
     return Object.values(peers)
-      .map((p) => (p.playerId === selfId ? { ...p, netWorth: mine } : p))
-      .sort((a, b) => b.netWorth - a.netWorth || (a.playerId < b.playerId ? -1 : 1));
+      .map((p) => (p.playerId === selfId ? { ...p, netWorth: mine, reported: true } : p))
+      // A player nobody ever reported for has no result, and no result ranks below
+      // every real one — including the ones that finished underwater. Sorting them
+      // by their placeholder zero used to place a no-show above people who played
+      // the whole match.
+      .sort(
+        (a, b) =>
+          Number(b.reported) - Number(a.reported) ||
+          b.netWorth - a.netWorth ||
+          (a.playerId < b.playerId ? -1 : 1),
+      );
   }, [peers, selfId, mine]);
 
   const won = rows.length > 0 && rows[0].playerId === selfId;
@@ -217,15 +226,29 @@ function Plinth({
         {peer.name}
         {isSelf && <span className="ml-1 eyebrow text-tertiary" style={{ fontSize: "0.5rem" }}>you</span>}
       </p>
-      <p
-        className={`num mt-1 ${rank === 1 ? "text-lg" : "text-base"}`}
-        style={{ color: peer.netWorth >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}
-      >
-        {currency(peer.netWorth)}
-      </p>
-      {rank === 1 && (
+      {peer.reported ? (
+        <p
+          className={`num mt-1 ${rank === 1 ? "text-lg" : "text-base"}`}
+          style={{ color: peer.netWorth >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}
+        >
+          {currency(peer.netWorth)}
+        </p>
+      ) : (
+        <p className={`num mt-1 text-tertiary ${rank === 1 ? "text-lg" : "text-base"}`}>
+          No result
+        </p>
+      )}
+      {rank === 1 && peer.reported && (
         <p className="eyebrow mt-1.5 text-secondary" style={{ fontSize: "0.55rem" }}>
           Took the room
+        </p>
+      )}
+      {/* A placing must never silently look earned. This life was played out by the
+          room after its player left, so the board says so in words — it still ranks,
+          it just doesn't pretend. */}
+      {peer.ghost && peer.reported && (
+        <p className="eyebrow mt-1.5 text-tertiary" style={{ fontSize: "0.55rem" }}>
+          Auto-played
         </p>
       )}
     </motion.li>
@@ -264,14 +287,32 @@ function ResultRow({
         {isSelf && <span className="ml-1.5 eyebrow text-tertiary" style={{ fontSize: "0.55rem" }}>you</span>}
       </span>
       <span className="eyebrow shrink-0 text-tertiary" style={{ fontSize: "0.55rem" }}>
-        {ended ? (END_LABEL[peer.endReason ?? ""] ?? "Done") : away ? (peer.ghost ? "Auto" : "Away") : `Year ${Math.max(1, peer.yearIndex)}`}
+        {/* The ghost mark outlives the ending: a life the room finished on its
+            player's behalf reads "Auto-played", not just "Retired", so the figure
+            beside it is never mistaken for one somebody sat and earned. */}
+        {!peer.reported
+          ? "Never played"
+          : peer.ghost
+            ? "Auto-played"
+            : ended
+              ? (END_LABEL[peer.endReason ?? ""] ?? "Done")
+              : away
+                ? "Away"
+                : `Year ${Math.max(1, peer.yearIndex)}`}
       </span>
-      <span
-        className="num w-[6rem] shrink-0 text-right text-sm"
-        style={{ color: peer.netWorth >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}
-      >
-        <AnimatedNumber value={peer.netWorth} format={currency} />
-      </span>
+      {peer.reported ? (
+        <span
+          className="num w-[6rem] shrink-0 text-right text-sm"
+          style={{ color: peer.netWorth >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}
+        >
+          <AnimatedNumber value={peer.netWorth} format={currency} />
+        </span>
+      ) : (
+        <span className="num w-[6rem] shrink-0 text-right text-sm text-tertiary">
+          <span aria-hidden>—</span>
+          <span className="sr-only">no result</span>
+        </span>
+      )}
     </motion.li>
   );
 }

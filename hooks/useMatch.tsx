@@ -50,7 +50,17 @@ import { initRun, netWorth, yearIndex, type RunState } from "@/lib/runEngine";
  */
 
 /** A row in the live standings: who they are, where they are, and whether they're here. */
-export type MatchPeer = PeerInfo & PeerStatus & { connected: boolean };
+/**
+ * `reported` is the difference between "$0" and "no result".
+ *
+ * A rostered player who never sends a status — closed the tab in the gap between
+ * start and their first year, never loaded the run — used to sit at a placeholder
+ * netWorth of 0. Zero is not neutral in this game: a Broke Grad opens at −$22,500,
+ * and a real player can finish six figures underwater. So the placeholder quietly
+ * out-placed people who played the whole match. A row nobody has ever reported for
+ * is ranked last and says so, instead of pretending to a figure.
+ */
+export type MatchPeer = PeerInfo & PeerStatus & { connected: boolean; reported: boolean };
 
 export type MatchApi = {
   phase: MatchPhase | null;
@@ -156,6 +166,7 @@ function blankPeer(info: PeerInfo, connected: boolean): MatchPeer {
     status: "playing",
     ready: false,
     connected,
+    reported: false,
   };
 }
 
@@ -353,6 +364,8 @@ export function MatchProvider({ children }: { children: ReactNode }) {
           endReason: st.endReason,
           ghost: st.ghost,
           connected: base ? base.connected : st.ghost !== true,
+          // Somebody has now spoken for this player — the figure is real.
+          reported: true,
         };
         return { ...prev, [st.playerId]: row };
       });
@@ -654,6 +667,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
             row.ready = p.status.ready && p.status.yearIndex >= roomYearRef.current;
             row.endReason = p.status.endReason;
             row.ghost = p.status.ghost;
+            row.reported = true;
           }
           next[p.playerId] = row;
         }
@@ -675,6 +689,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
             ready: mine?.ready ?? was?.ready ?? false,
             endReason: mine?.endReason ?? was?.endReason,
             connected: true,
+            reported: mine !== null || (was?.reported ?? false),
           };
         }
         for (const r of configRef.current?.roster ?? []) if (!next[r.playerId]) next[r.playerId] = blankPeer(r, false);

@@ -139,7 +139,8 @@ export function useRun(userId: string | null) {
       (m: ModeId, backgroundId: string, name: string, opts?: RunOpts) => {
         matchCodeRef.current = opts?.matchCode ?? null;
         matchPlayerIdRef.current = opts?.matchPlayerId ?? null;
-        const r = initRun(m, backgroundId, name, opts?.seed);
+        // A room deals one card to the whole table; a solo life deals its own.
+        const r = initRun(m, backgroundId, name, opts?.seed, opts?.matchCode != null);
         setMode(m);
         liveRef.current = r;
         setRun(r);

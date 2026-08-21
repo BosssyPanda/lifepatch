@@ -33,8 +33,15 @@ export function MatchRail({ selfNetWorth }: { selfNetWorth: number }) {
   const rows = useMemo(() => {
     if (!peers) return [];
     return Object.values(peers)
-      .map((p) => (p.playerId === selfId ? { ...p, netWorth: Math.round(selfNetWorth) } : p))
-      .sort((a, b) => b.netWorth - a.netWorth || (a.playerId < b.playerId ? -1 : 1));
+      .map((p) => (p.playerId === selfId ? { ...p, netWorth: Math.round(selfNetWorth), reported: true } : p))
+      // No result ranks below every real one — see MatchPodium for why a
+      // placeholder zero must not out-place a player who is genuinely underwater.
+      .sort(
+        (a, b) =>
+          Number(b.reported) - Number(a.reported) ||
+          b.netWorth - a.netWorth ||
+          (a.playerId < b.playerId ? -1 : 1),
+      );
   }, [peers, selfId, selfNetWorth]);
 
   const selfRank = rows.findIndex((r) => r.playerId === selfId);
@@ -63,11 +70,18 @@ export function MatchRail({ selfNetWorth }: { selfNetWorth: number }) {
 
   return (
     <section aria-label="Live standings" className="paper w-full p-2.5">
-      <div className="flex items-baseline justify-between border-b border-hairline pb-1.5">
-        <p className="eyebrow text-secondary" style={{ fontSize: "0.56rem" }}>
-          The room
+      <div className="flex items-baseline justify-between gap-2 border-b border-hairline pb-1.5">
+        {/* The code stays on screen for the whole match, not just the lobby. It is
+            the only way back in after a tab closes by accident, and it is how you
+            read the room out to someone who wants to watch. Hiding it once the
+            match starts meant the door locked behind everybody. */}
+        <p className="eyebrow shrink-0 text-secondary" style={{ fontSize: "0.56rem" }}>
+          Room{" "}
+          <span className="num tracking-[0.18em] text-ink" style={{ fontSize: "0.62rem" }}>
+            {match?.config?.roomCode ?? ""}
+          </span>
         </p>
-        <p className="num text-[0.58rem] tracking-[0.16em] text-tertiary">
+        <p className="num shrink-0 text-[0.58rem] tracking-[0.16em] text-tertiary">
           {rows.length} IN THE ROOM
         </p>
       </div>
@@ -111,7 +125,9 @@ function StandingRow({ peer, rank, isSelf }: { peer: MatchPeer; rank: number; is
       )}
       {away && (
         <span className="eyebrow shrink-0 text-tertiary" style={{ fontSize: "0.5rem" }}>
-          {peer.ghost ? "Auto" : "Away"}
+          {/* "Away" means someone who was here and left. A seat that never reported
+              at all has not been away — it has been empty the whole time. */}
+          {peer.ghost ? "Auto" : peer.reported ? "Away" : "Absent"}
         </span>
       )}
       {ended && (
@@ -121,14 +137,24 @@ function StandingRow({ peer, rank, isSelf }: { peer: MatchPeer; rank: number; is
       )}
       {/* Relative year only — calendar years are an end-of-run reveal (lib/modes.ts). */}
       <span className="num w-7 shrink-0 text-right text-[0.62rem] text-tertiary">
-        Y{Math.max(1, peer.yearIndex)}
+        {peer.reported ? `Y${Math.max(1, peer.yearIndex)}` : "—"}
       </span>
-      <span
-        className="num w-[5.5rem] shrink-0 text-right text-xs"
-        style={{ color: peer.netWorth >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}
-      >
-        <AnimatedNumber value={peer.netWorth} format={currency} />
-      </span>
+      {/* Nobody has reported for this seat, so there is no figure to print. A dash
+          says that; a $0 would be a claim, and a false one — it sits above every
+          player who is genuinely underwater. */}
+      {peer.reported ? (
+        <span
+          className="num w-[5.5rem] shrink-0 text-right text-xs"
+          style={{ color: peer.netWorth >= 0 ? "var(--color-gain)" : "var(--color-loss)" }}
+        >
+          <AnimatedNumber value={peer.netWorth} format={currency} />
+        </span>
+      ) : (
+        <span className="num w-[5.5rem] shrink-0 text-right text-xs text-tertiary">
+          <span aria-hidden>—</span>
+          <span className="sr-only">no result yet</span>
+        </span>
+      )}
     </li>
   );
 }

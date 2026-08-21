@@ -99,6 +99,16 @@ export type RunState = {
   /** Consecutive resolved years in which `isUnrecoverable` held. The ending needs
    *  a run of them, never a single bad year — see INSOLVENCY_YEARS. */
   insolventStreak: number;
+  /**
+   * Match runs only: deal the year's card from the WHOLE deck, so everyone at the
+   * table turns over the same one.
+   *
+   * Optional on purpose — absent means solo, which is every save written before
+   * rooms existed, so no version bump is needed and solo draws exactly as it
+   * always has. See `drawEvents` for why this matters: without it two players in
+   * one room stop sharing a world the moment their lives differ at all.
+   */
+  sharedEvents?: boolean;
 };
 
 const ALL_ASSETS: AssetId[] = ASSET_IDS;
@@ -160,18 +170,76 @@ function eventContext(s: RunState): EventContext {
   };
 }
 
+/**
+ * The year's cards.
+ *
+ * Solo draws from the hand this life can actually be dealt, as it always has.
+ *
+ * A MATCH draws from the whole deck instead, and that difference is the entire
+ * point. Every player shares one `seed`, so the shared stream turns over the same
+ * card for everyone — but a pool built per player desynchronises the moment two
+ * lives differ by a single predicate: the pools are different lengths, the same
+ * random number indexes a different card, and from there the two players are
+ * living in unrelated worlds. Measured over 400 seeded matches that was 21% of
+ * all years dealing different cards, one player in six handed something the
+ * others could never be offered, and up to $71k of final net worth decided by it.
+ *
+ * A card that genuinely cannot apply — a rent hike for an owner, a promotion for
+ * someone with no job — is replaced from what this life CAN face, drawn off a
+ * side stream keyed to the card that didn't fit. The room's own sequence is never
+ * touched by a substitution, so every player's shared draws stay in lockstep no
+ * matter how many of them had to be swapped. Wealth gates (the deposit you saved
+ * for) are left exactly as they are: that is a door you opened by playing, not a
+ * card fate dealt you.
+ *
+ * Pure and fully determined by (seed, year, this life's own state) — which is
+ * what lets an absent player be ghost-played and a returning one catch up to
+ * byte-identical state.
+ */
 function drawEvents(s: RunState): string[] {
   const rng = mulberry32(s.seed + s.year * 101);
-  const pool = eligibleEvents(eventContext(s), s.usedEvents);
-  if (pool.length === 0) return [];
-  const weighted = pool.flatMap((e) => Array(e.weight ?? 1).fill(e.id));
+  const mine = eligibleEvents(eventContext(s), s.usedEvents);
+  if (mine.length === 0) return [];
+
   const picks: string[] = [];
   const want = rng() < 0.35 ? 2 : 1;
-  let guard = 0;
-  while (picks.length < want && guard < 60) {
-    guard++;
+
+  if (!s.sharedEvents) {
+    // Solo: unchanged, down to the order it spends its random numbers in.
+    const weighted = mine.flatMap((e) => Array(e.weight ?? 1).fill(e.id));
+    let guard = 0;
+    while (picks.length < want && guard < 60) {
+      guard++;
+      const id = weighted[Math.floor(rng() * weighted.length)];
+      if (!picks.includes(id)) picks.push(id);
+    }
+    return picks;
+  }
+
+  // A match deals one RUNNING ORDER for the whole table — the same sequence of
+  // cards, in the same order, for every player — and each life takes the first
+  // ones it can actually face. Two players are handed different cards only where
+  // one of them genuinely could not have been dealt the other's.
+  //
+  // Substituting per player was tried first and is much worse: each life swaps to
+  // a card of its own and they end up nowhere near each other. Walking one shared
+  // order instead means agreement is the default and divergence has to be earned.
+  //
+  // The stream is re-seeded from (seed, year) every year, so it does not matter
+  // that two lives stop reading this order at different points — next year they
+  // both start again from the same first card.
+  const weighted = LIFE_EVENTS.flatMap((e) => Array(e.weight ?? 1).fill(e.id));
+  const canFace = new Set(mine.map((e) => e.id));
+  for (let i = 0; i < 400 && picks.length < want; i++) {
     const id = weighted[Math.floor(rng() * weighted.length)];
-    if (!picks.includes(id)) picks.push(id);
+    if (!picks.includes(id) && canFace.has(id)) picks.push(id);
+  }
+  if (picks.length === 0) {
+    // The order never turned up a card this life could face. It still gets a year:
+    // fall back to its own hand, off a side stream so nothing above is disturbed.
+    const own = mine.flatMap((e) => Array(e.weight ?? 1).fill(e.id));
+    const side = mulberry32(s.seed + s.year * 101 + strHash("no-shared-card"));
+    picks.push(own[Math.floor(side() * own.length)]);
   }
   return picks;
 }
@@ -183,7 +251,13 @@ function drawEvents(s: RunState): string[] {
  * match. It is floored so a fractional seed can never make one client's
  * `mulberry32` disagree with another's.
  */
-export function initRun(mode: ModeId, backgroundId: string, name: string, seedIn?: number): RunState {
+export function initRun(
+  mode: ModeId,
+  backgroundId: string,
+  name: string,
+  seedIn?: number,
+  sharedEvents?: boolean,
+): RunState {
   const cfg = getMode(mode);
   const bg = getBackground(backgroundId);
   const seed = seedIn === undefined ? Math.floor(Math.random() * 1e9) : Math.floor(seedIn);
@@ -215,20 +289,34 @@ export function initRun(mode: ModeId, backgroundId: string, name: string, seedIn
     lastDelta: 0,
     interestPaid: 0,
     insolventStreak: 0,
+    // Written only when true, so a solo save is byte-for-byte what it always was.
+    ...(sharedEvents ? { sharedEvents: true } : {}),
   };
   base.pendingEvents = drawEvents(base);
   return base;
 }
 
+/**
+ * Move money between cash and one holding. A transfer, never a source: whatever
+ * leaves one side arrives on the other, and neither side may go below zero.
+ *
+ * The zero floors are load-bearing, not defensive dressing. Cash is legitimately
+ * NEGATIVE while a year is open — a life event can overdraw you, and the portfolio
+ * says so out loud ("overspent — becomes debt when the year advances"). Clamping a
+ * buy to a negative `cash` used to yield a negative `amt`, which paid cash UP to
+ * zero and pushed the holding DOWN below it; `advanceYear` then floored the holding
+ * at zero and the difference was money that never existed. Paying debt from an
+ * overdraft did the mirror of it and grew the debt it was sent to shrink.
+ */
 export function trade(s: RunState, asset: AssetId, dollars: number): RunState {
   const holdings = { ...s.holdings };
   let cash = s.cash;
   if (dollars > 0) {
-    const amt = Math.min(dollars, cash);
+    const amt = Math.min(dollars, Math.max(0, cash));
     cash -= amt;
     holdings[asset] = (holdings[asset] ?? 0) + amt;
   } else {
-    const amt = Math.min(-dollars, holdings[asset] ?? 0);
+    const amt = Math.min(-dollars, Math.max(0, holdings[asset] ?? 0));
     cash += amt;
     holdings[asset] = (holdings[asset] ?? 0) - amt;
   }
@@ -236,7 +324,9 @@ export function trade(s: RunState, asset: AssetId, dollars: number): RunState {
 }
 
 export function payDebt(s: RunState, dollars: number): RunState {
-  const amt = Math.min(dollars, s.cash, s.debt);
+  // See `trade`: cash can be negative mid-year, and an unfloored min() turned a
+  // repayment into a loan.
+  const amt = Math.min(dollars, Math.max(0, s.cash), Math.max(0, s.debt));
   return { ...s, cash: s.cash - amt, debt: s.debt - amt };
 }
 

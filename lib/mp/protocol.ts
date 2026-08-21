@@ -350,6 +350,11 @@ export function parseRunState(raw: unknown): RunState | null {
   if (typeof raw.endReason === "string" && (END_REASONS as string[]).includes(raw.endReason)) {
     state.endReason = raw.endReason as EndReason;
   }
+  // A snapshot only ever crosses the wire inside a match, and a match deals from
+  // the shared deck. Carrying the flag keeps a ghost-played or rejoined life
+  // drawing the same cards as the players who stayed — drop it and a returning
+  // player quietly starts living in a different world from the room.
+  if (raw.sharedEvents === true) state.sharedEvents = true;
   return state;
 }
 
