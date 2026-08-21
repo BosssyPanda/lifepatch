@@ -197,6 +197,26 @@ renders a disabled state instead of a broken Create button.
   new API route, no new dependency — Realtime ships inside the existing
   `@supabase/supabase-js`.
 
+## 3a. Getting back into a room after a closed tab
+
+The room code stays on screen for the whole match — it sits in the header of the
+live standings rail, not just the lobby. That is deliberate: it is the only way
+back in after a tab closes by accident, and it is how you read the room out to
+someone who wants to join.
+
+If a player does lose their tab, the "Play with friends" panel offers the room
+this device was last playing (read from `lifepatch.mp.<CODE>`, within 24h) as a
+one-tap **Rejoin**. Their life is recovered from that record — or from the host's
+snapshot — and fast-forwarded to the room's current year.
+
+Identity survives a tab close in production because the player id comes from
+`localStorage` (`lifepatch.deviceId`). Under `NEXT_PUBLIC_MP_LOCAL=1` ONLY, a
+per-tab `sessionStorage` nonce is appended so two tabs on one device count as two
+players — which means a closed tab in local testing returns as a *different*
+player and is correctly refused. When scripting that path, capture
+`sessionStorage["lifepatch.mp.tab"]` **after the match has started** (it is minted
+on the first room action, not at Setup) and re-seed it before the first paint.
+
 Without the env vars, online play degrades gracefully: the "Play with friends"
 panel shows *"Online play needs the cloud connection — this build doesn't have
 one configured."* and solo play is untouched.
