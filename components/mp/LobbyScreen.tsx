@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { SoundCell } from "@/components/ui/SoundCell";
 import { TerminalOp } from "@/components/ui/TerminalOp";
+import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import { useAudio } from "@/hooks/useAudio";
 import { useMatchCtx, type MatchPeer } from "@/hooks/useMatch";
 import { BACKGROUNDS, getBackground } from "@/lib/backgrounds";
@@ -26,6 +27,11 @@ const COPIED_MS = 1600;
  * good, not slow.
  */
 const HOST_SEAT_GRACE_MS = 8000;
+/**
+ * How long Start stays armed once it has asked about an away player. Longer than
+ * `useArmedAction`'s 3s house window on purpose — see `HostStart`.
+ */
+const ARM_START_MS = 7000;
 
 /**
  * The waiting room.
@@ -315,6 +321,14 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
         </p>
       </section>
 
+      {/* Not an alert and not loss-red: nothing is wrong and nothing is refused —
+          this tab is simply not the one the room is listening to. */}
+      {match.openElsewhere && (
+        <p className="voice mx-auto mt-5 max-w-sm text-center text-xs leading-snug text-ink-dim">
+          This room is also open in another tab on this device. That tab holds the seat.
+        </p>
+      )}
+
       {match.error && (
         <p role="alert" className="mt-5 font-body text-[0.82rem] leading-snug text-loss">
           <span aria-hidden>▲ </span>
@@ -332,30 +346,7 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
           ← Leave the room
         </NeonButton>
         {hosting ? (
-          <>
-            {!ready && (
-              <span id={hintId} className="voice text-xs text-ink-dim">
-                Waiting for {MIN_PLAYERS - here} more
-              </span>
-            )}
-            {/* Never disabled on this: nothing prunes an away row, so a friend who
-                wandered off an hour ago would hold the room shut for good. Say what
-                pressing it costs instead. */}
-            {away.length > 0 && (
-              <span className="voice text-xs text-ink-dim">
-                {away.join(", ")} {away.length === 1 ? "is" : "are"} away — starting now leaves them out.
-              </span>
-            )}
-            <NeonButton
-              variant="primary"
-              size="lg"
-              disabled={!ready}
-              aria-describedby={ready ? undefined : hintId}
-              onClick={() => { sfx("uitick"); match.startMatch(); }}
-            >
-              Start the match →
-            </NeonButton>
-          </>
+          <HostStart away={away} here={here} ready={ready} hintId={hintId} onStart={() => match.startMatch()} />
         ) : hostGone ? (
           // A spinner here would be a lie: nobody inherits the Start button.
           <p role="alert" className="voice max-w-xs text-xs leading-snug text-ink-dim">
@@ -367,6 +358,112 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Start, and the question it has to ask first.
+ *
+ * `startMatch` freezes the roster from the CONNECTED rows, so a player showing
+ * away is left out of the match for good — a consequence that earns the house's
+ * two-tap confirmation (`useArmedAction`, the same idiom as AuthGate's overwrite)
+ * rather than a line of text beside the button that a host in a hurry reads after
+ * the fact.
+ *
+ * It is never DISABLED for it, though: nothing prunes an away row, so a friend who
+ * wandered off an hour ago must not be able to hold the room shut for good. The
+ * only thing that greys this button is the two-player minimum, as before.
+ *
+ * Its own component so the arming hook can live below this screen's early return.
+ */
+function HostStart({
+  away,
+  here,
+  ready,
+  hintId,
+  onStart,
+}: {
+  /** Names of the seats Start would leave behind. Empty means nothing to ask. */
+  away: string[];
+  /** Seats actually on the wire — the only ones the minimum counts. */
+  here: number;
+  ready: boolean;
+  hintId: string;
+  onStart: () => void;
+}) {
+  const { sfx } = useAudio();
+  const fire = () => { sfx("uitick"); onStart(); };
+  /**
+   * One name reads as a person; several read as a count. Seven names of up to 24
+   * characters each, joined into a button label, wrap the CTA off a 390px screen —
+   * and the roster directly above this button already marks every one of them
+   * "Away", so the count is a pointer at a list the host is already looking at.
+   */
+  const who = away.length === 1 ? away[0] : `${away.length} players`;
+  const start = useArmedAction({
+    label: "Start the match →",
+    armedLabel: `Tap again to start without ${who}`,
+    onConfirm: fire,
+    onArm: () => sfx("uitick"),
+    // Longer than the house 3s. Every other armed control asks the host about
+    // their OWN last action ("really overwrite your save?"), which needs no
+    // reading. This one names another person and the honest response is to look
+    // back up at the roster before answering — at 3s the question times out
+    // mid-glance and the next tap re-arms instead of starting, which reads as a
+    // button that refuses to work.
+    timeoutMs: ARM_START_MS,
+  });
+  const asking = away.length > 0;
+  // Everybody came back, so the question no longer has an answer. Left armed, the
+  // next tap would confirm something that has stopped being true.
+  const reset = start.reset;
+  useEffect(() => {
+    if (!asking) reset();
+  }, [asking, reset]);
+
+  const armed = asking && start.armed;
+  /**
+   * Why the button is grey. `here` counts only CONNECTED rows, so a host whose
+   * only friend just closed their tab is told to wait for "1 more" while that
+   * friend's name sits in the roster right above — which reads as needing a
+   * stranger to turn up, and nothing ever prunes the away row, so the wait would
+   * have no end. Name the away seat instead: the count is the same, the reason
+   * for it is not.
+   */
+  const need = MIN_PLAYERS - here;
+  const hint = asking
+    ? `${who} is away and doesn't count — you need ${need} more here to start`
+    : `Waiting for ${need} more`;
+  return (
+    <>
+      {!ready && (
+        <span id={hintId} className="voice max-w-[16rem] text-xs leading-snug text-ink-dim">
+          {hint}
+        </span>
+      )}
+      <NeonButton
+        // The armed label is the question the host has to READ, so it cannot sit on
+        // the accent fill: ink on orange measures 1.12:1 and DESIGN.md § Palette
+        // hard rule 1 allows only paper there. `danger` puts the red on the page
+        // ground instead (5.4:1) and knocks the label out in paper on hover — the
+        // same swap AuthGate and CashflowGame make for their armed CTAs. The screen
+        // keeps one accent path either way: this button is the only one on it.
+        variant={armed ? "danger" : "primary"}
+        size="lg"
+        disabled={!ready}
+        aria-describedby={ready ? undefined : hintId}
+        // Armed, the label IS the message, so it has to be the accessible name too.
+        aria-label={armed ? start.label : undefined}
+        onClick={asking ? start.onClick : fire}
+        onBlur={asking ? start.onBlur : undefined}
+      >
+        {/* The label only ever changes while somebody is away, so a room with
+            everyone present is exactly the room it has always been. */}
+        <ArmedLabel>
+          {asking ? start.label : "Start the match →"}
+        </ArmedLabel>
+      </NeonButton>
+    </>
   );
 }
 

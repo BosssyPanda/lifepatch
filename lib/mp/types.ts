@@ -39,6 +39,17 @@ export type MatchConfig = {
 
 export type PeerStatus = {
   playerId: string;
+  /**
+   * Which SESSION of that player wrote this row.
+   *
+   * In production the player id is the DEVICE (`lifepatch.deviceId`), so two tabs
+   * are one player id and the id alone cannot say which of them is speaking. The
+   * room listens to whichever session presence last seated (see
+   * `hooks/useMatch.tsx`) and ignores the other. Optional on the wire on purpose:
+   * a peer on an older build sends none, and a ghost row is written FOR an absent
+   * player by the acting host, which is nobody's session.
+   */
+  sessionId?: string;
   yearIndex: number;
   netWorth: number;
   status: "playing" | "ended";

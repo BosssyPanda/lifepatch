@@ -85,6 +85,14 @@ export function MatchRail({ selfNetWorth }: { selfNetWorth: number }) {
           {rows.length} IN THE ROOM
         </p>
       </div>
+      {/* Not an alert and not loss-red: nothing is wrong and nothing is refused —
+          this tab is simply not the one the room is listening to, so the figures
+          it is about to broadcast will not reach the seat. */}
+      {match.openElsewhere && (
+        <p className="voice mt-1 text-[0.72rem] leading-snug text-ink-dim">
+          This room is also open in another tab on this device. That tab holds the seat.
+        </p>
+      )}
       <ol className="mt-0.5">
         {rows.map((p, i) => (
           <StandingRow key={p.playerId} peer={p} rank={i + 1} isSelf={p.playerId === selfId} />

@@ -80,13 +80,23 @@ export function useArmedAction({
 }
 
 /**
- * The label slot for an armed control: a polite live region so the "tap again" state is
- * announced rather than only seen, tinted loss-red once hot.
+ * The label slot for an armed control: a polite live region, so the "tap again" state
+ * is announced rather than only seen.
+ *
+ * It sets no colour of its own, deliberately. It used to force `text-loss`, which is
+ * INK — and ink cannot be laid over a fill without breaking DESIGN.md § Palette hard
+ * rule 1 ("knockout is paper, never ink"). It broke twice over: red on the accent
+ * fill of a `primary` CTA measures 1.12:1, and red on the loss fill a `danger`
+ * button takes on hover measures 1:1 — the sentence the player is being asked to
+ * read simply is not there. The control itself is the only thing that knows what
+ * ground the label is sitting on, so the control owns the colour: every call site
+ * already paints its own armed state (`AuthGate`, `CashflowGame`, `Setup` and
+ * `LobbyScreen` swap the variant to `danger`, whose own `hover:text-bg` then does
+ * the knockout properly; `AdvanceBar` sets `text-loss` on its bare button). The
+ * label inherits, and is legible in every state of all five.
+ *
+ * Colour was never the only channel here anyway — the words themselves change.
  */
-export function ArmedLabel({ armed, children }: { armed: boolean; children: ReactNode }) {
-  return (
-    <span aria-live="polite" className={armed ? "text-loss" : undefined}>
-      {children}
-    </span>
-  );
+export function ArmedLabel({ children }: { children: ReactNode }) {
+  return <span aria-live="polite">{children}</span>;
 }

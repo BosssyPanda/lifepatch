@@ -85,7 +85,7 @@ export function AdvanceBar({
             onBlur={endRun.onBlur}
             className={`${HIT} eyebrow transition-colors ${endRun.armed ? "text-loss" : "text-ink-dim hover:text-loss"}`}
           >
-            <ArmedLabel armed={endRun.armed}>{endRun.label}</ArmedLabel>
+            <ArmedLabel>{endRun.label}</ArmedLabel>
           </button>
           {canRetire && (
             <button

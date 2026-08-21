@@ -1,3 +1,4 @@
+import { DEFAULT_PLAYER_NAME } from "@/components/ui/NameField";
 import { parseMatchConfig, parseRunState } from "./protocol";
 import { isRoomCode } from "./roomCodes";
 import type { MatchConfig } from "./types";
@@ -44,6 +45,15 @@ const MAX_ROOMS = 3;
 const RECENT_KEY = `${PREFIX}recent`;
 /** A room the player was already told is gone, so the offer isn't a repeating trap. */
 const DISMISSED_KEY = `${PREFIX}rejoinDismissed`;
+/**
+ * What this device last called itself. Deliberately OUTSIDE the `lifepatch.mp.`
+ * room namespace: a name belongs to the device, not to a room, and solo Setup
+ * reads it too. It sits in this file only because this is where the localStorage
+ * plumbing for the `lifepatch.` keys already lives.
+ */
+const NAME_KEY = "lifepatch.playerName";
+/** The same cap the name input enforces (`components/ui/NameField.tsx`). */
+const MAX_NAME = 24;
 
 /** How long a room this device touched stays offered as a way back in.
  *  A 21-year match runs well under an hour; a day is generous without being a
@@ -176,6 +186,47 @@ export function rememberRoom(roomCode: string): void {
 }
 
 /**
+ * Remember what to call this player next time.
+ *
+ * The running-match rejoin takes a returning player's name off the frozen roster,
+ * which is wire-authoritative. A LOBBY has no frozen roster and presence is
+ * self-authored, so a player who reloads out of one has nothing to take their name
+ * back from: they land on an empty Setup field, rejoin as the anonymous default,
+ * and the rest of the match is played as "PLAYER" in every rail and on the podium.
+ * This device's own memory is the only source left.
+ *
+ * Written when a name is COMMITTED — a run starts, a room is opened or joined —
+ * never per keystroke, so a half-typed name is never what comes back. Guests
+ * included: none of this depends on being signed in.
+ *
+ * The anonymous fallback is not a name. Storing it would prefill the field with
+ * "PLAYER" for somebody who never typed anything, which reads as a choice they
+ * made rather than the placeholder it is.
+ */
+export function rememberPlayerName(name: string): void {
+  const store = storage();
+  if (!store) return;
+  const clean = name.trim().slice(0, MAX_NAME);
+  try {
+    if (!clean || clean === DEFAULT_PLAYER_NAME) store.removeItem(NAME_KEY);
+    else store.setItem(NAME_KEY, clean);
+  } catch {
+    /* full or blocked store — the field just starts empty, as it always did */
+  }
+}
+
+/** What this device last called itself, or "" when it has never said. */
+export function lastPlayerName(): string {
+  const store = storage();
+  if (!store) return "";
+  try {
+    return (store.getItem(NAME_KEY) ?? "").trim().slice(0, MAX_NAME);
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Stop offering a room as a way back. Called when the room proved to be gone.
  * Deliberately NOT `clearMatch`: a handshake can fail for a room that is still
  * alive, and the record is the player's own ledger — losing it would resume them
@@ -187,6 +238,28 @@ export function dismissRoom(roomCode: string): void {
   try {
     store.setItem(DISMISSED_KEY, roomCode);
   } catch {}
+}
+
+/**
+ * Stop offering a room the player deliberately WALKED OUT of.
+ *
+ * `rememberRoom` marks the newest room this device entered, and that marker
+ * outranks every stored life — so opening a second room and leaving it again
+ * replaced the offer with the empty room just abandoned, while the match this
+ * device is still seated in (and still being ghost-played in) fell off the
+ * screen entirely, leaving no route back but a code somebody else has to read
+ * out. Only the marker goes: the stored life is the player's own ledger and
+ * `listMatches` still offers it, which is the whole point.
+ */
+export function forgetRoom(roomCode: string): void {
+  const store = storage();
+  if (!store || !isRoomCode(roomCode)) return;
+  try {
+    const raw = JSON.parse(store.getItem(RECENT_KEY) ?? "null") as { roomCode?: unknown } | null;
+    if (raw && raw.roomCode === roomCode) store.removeItem(RECENT_KEY);
+  } catch {
+    /* unreadable marker — nothing to withdraw */
+  }
 }
 
 /**

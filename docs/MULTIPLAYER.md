@@ -78,13 +78,28 @@ the app via `MatchApi.resumeState`.
 
 `lobby` → host taps Start (`start {config}` with the frozen roster) → `running`
 → `finished` when every run has `status === "ended"` or the room clock passes
-the story's last year. A player whose run ends early goes to the podium
+the story's last year. `beginRunning` prunes the local peer map to the frozen
+roster on both the host and every guest, so a lobby member who was away at Start
+leaves no phantom behind: their row can never move (non-roster statuses and
+snapshots are refused), so left in place it kept a plinth on the podium *and*
+made "every run has ended" unreachable, grinding the room out year by year at
+`GHOST_CATCHUP_MS` instead of ending it. A player whose run ends early goes to the podium
 immediately and spectates the live standings there.
 
 ### Persistence
 
 Match runs are localStorage-only (`lib/mp/matchStore.ts`, key
-`lifepatch.mp.<ROOMCODE>`, newest 3 rooms kept). Every record is stamped with the
+`lifepatch.mp.<ROOMCODE>`, newest 3 rooms kept). The same module also keeps
+`lifepatch.playerName` — the last name this device committed (starting a run,
+opening or joining a room), which prefills Setup's name field. That prefill is
+per **device**, not per room, so a rejoin into a running match never reads it:
+`joinRoom` adopts `seat.name` off the frozen roster unconditionally. Deferring to
+"a name they actually retyped" is not possible once the field starts full — a
+player who touched any other room in between would come back wearing that room's
+name, in every rail and on the podium, beside the player it was borrowed from. A lobby has no
+frozen roster and presence is self-authored, so it is the only thing that stops a
+player who reloads out of a **lobby** coming back as "PLAYER" for the rest of the
+match. The anonymous fallback is never stored. Every record is stamped with the
 `playerId` that wrote it and `loadMatch` refuses one it does not own, so a device
 holding two players for the same room (two tabs under `NEXT_PUBLIC_MP_LOCAL=1`, or
 a guest who later signs in) can never resume somebody else's ledger — the rejoin
@@ -107,11 +122,35 @@ codes are 6 characters from a 31-glyph alphabet with no 0/O/1/I/L
 
 ### Presence
 
-Each member tracks `{ v, playerId, name, avatarSeed, joinedAt, status?, config? }`.
+Each member tracks
+`{ v, playerId, sessionId?, name, avatarSeed, joinedAt, status?, config? }`.
 The presence key is `${playerId}#${tabNonce}` so two tabs on one device are two
 connections but one player (the UI dedupes by `playerId`). Every member
 republishes the config in presence once running, so a rejoiner can read the
 whole room off **any** member — there is no table to ask.
+
+**Sessions.** In production the player id *is* the device (`lifepatch.deviceId`),
+so two tabs are one player id and both would claim the seat — the room would
+watch one row flip between two lives, and the first tab to finish would close the
+seat under the other. `sessionId` is minted once per mounted `useMatch` (per tab,
+per mount) and rides both presence and `status`. Among the rows sharing a player
+id the dedupe still prefers the one carrying `status`, then the **newest**
+`joinedAt`, and an exact `joinedAt` tie is broken by comparing the tokens — the
+order has to be *total*, because presence rows arrive in per-client order
+(`presenceState()` keys) and half a room seating one session while half seats the
+other is the very split this mechanism removes. That row's session owns the seat;
+a `status` **or `snapshot`** from any other session of the same player is
+ignored, and the losing tab also stops writing this device's
+`lifepatch.mp.<ROOM>` record. Fencing the seat without fencing the life behind it
+was not enough: the standings would follow one tab while the stored life — the
+one a rejoin resumes and ghost-play fast-forwards — was whichever tab wrote last.
+Newest-wins is also what stops the row a hard tab close left behind
+being preferred for the seconds before presence prunes it. The field is
+**optional on the wire and additive** — `MP_PROTOCOL` is unchanged, and a peer
+that sends none is treated exactly as before, which is also why a ghost row (the
+acting host writing for an absent player) carries none. The losing tab is *told*
+— a plain line in the lobby and in the standings rail — and never blocked:
+a lingering dead row must not be able to refuse a rejoin.
 
 ### Broadcast messages
 
@@ -123,7 +162,7 @@ All carry `v: MP_PROTOCOL`; a mismatched version is dropped, never coerced.
 | `start` | host | `{ config }` incl. the frozen roster |
 | `tick` | acting host | `{ yearIndex, yearSeconds }` |
 | `status` | each client | `PeerStatus` on ready / advance / end; ghost rows from the acting host |
-| `snapshot` | each client | `{ playerId, state: RunState }` after each advance |
+| `snapshot` | each client | `{ playerId, state: RunState, sessionId? }` after each advance |
 | `snapshotRequest` / `snapshotReply` | rejoiner ⇄ acting host | own last snapshot |
 
 ### Validation posture
@@ -144,6 +183,14 @@ refuses any snapshot whose `version !== RUN_VERSION`. On top of the parsers,
 - only the lobby host may define the config, and mid-match only roster members
   may republish it — no one can hand the room a new seed;
 - a presence row may only carry its author's own status;
+- for one player id, only the session presence currently seats may write status
+  **or snapshot** — one carrying no `sessionId` is taken as before (an older
+  build, or the acting host's ghost row, which speaks for somebody else and so
+  carries none). The gate is applied by the receiver using the sender's token,
+  so it is a two-tab coordination mechanism and **not** a security boundary: it
+  takes effect per client on that client's first reload after deploy, and rooms
+  that are live at deploy time keep the old behaviour for members who have not
+  reloaded;
 - the room seats 8: a ninth is turned away at `joinRoom`, at the presence
   merge, and at the status merge; rosters are capped and de-duplicated in the
   parser because the roster is also the rejoin gate;
@@ -259,7 +306,10 @@ Open two tabs on the app. In both: Story → Setup → enter distinct names.
    lobbies show both players.
 3. **Host controls** — Tab A changes year timer (30/45/60/90) and background;
    Tab B sees the picks land read-only. B has no controls.
-4. **Start** — Tab A: Start. Both tabs enter the run simultaneously, same
+4. **Start** — Tab A: Start. If any lobby row shows "Away", Start asks first:
+   one tap arms it ("Tap again to start without KIT"), the second starts. It is
+   never disabled for an away row, and disarms itself if everyone comes back.
+   Both tabs enter the run simultaneously, same
    background, and the year timer counts down in both. The UI shows
    "Year N · Age NN" — never a calendar year.
 5. **Play** — make different choices in each tab. The match rail shows both

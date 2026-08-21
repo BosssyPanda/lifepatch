@@ -55,6 +55,14 @@ export function playerIdOfPresenceKey(key: string): string {
 export type PresencePayload = {
   v: number;
   playerId: string;
+  /**
+   * This tab's session — see `PeerStatus.sessionId`. Among the rows sharing a
+   * player id the NEWEST session owns the seat, which is also what stops a row
+   * left behind by a hard tab close being preferred for the seconds before
+   * presence prunes it. Additive and optional, so a peer that doesn't send one
+   * is treated exactly as it was before the field existed.
+   */
+  sessionId?: string;
   name: string;
   avatarSeed: string;
   joinedAt: number;
@@ -66,7 +74,17 @@ export type ConfigMsg = { t: "config"; v: number; config: MatchConfig };
 export type StartMsg = { t: "start"; v: number; config: MatchConfig };
 export type TickMsg = { t: "tick"; v: number; yearIndex: number; yearSeconds: YearSeconds };
 export type StatusMsg = { t: "status"; v: number; status: PeerStatus };
-export type SnapshotMsg = { t: "snapshot"; v: number; playerId: string; state: RunState };
+/**
+ * A whole life, for the ghost-play cache and for handing back to a rejoiner.
+ *
+ * `sessionId` is the same additive, optional token `PeerStatus` carries, and for
+ * the same reason: two tabs of one device share a player id, so without it the
+ * cache behind a seat is last-writer-wins even once the standings row is fenced —
+ * the room follows one tab and the returning player is handed the other tab's
+ * life. Stamped ONLY on a snapshot of our own life; the acting host relaying an
+ * absent player's cached life speaks for somebody else and carries none.
+ */
+export type SnapshotMsg = { t: "snapshot"; v: number; playerId: string; state: RunState; sessionId?: string };
 export type SnapshotRequestMsg = { t: "snapshotRequest"; v: number; playerId: string };
 export type SnapshotReplyMsg = { t: "snapshotReply"; v: number; playerId: string; state: RunState };
 
@@ -120,6 +138,17 @@ function playerId(v: unknown): string | null {
   return s && PLAYER_ID_RE.test(s) ? s : null;
 }
 
+/**
+ * A per-tab, per-mount session token. Same charset and cap as a player id — it
+ * rides the same wire and ends up in the same string comparisons. Returns
+ * `undefined` rather than null for the absent case, because absent is legal:
+ * every reader has to keep working without one.
+ */
+function sessionToken(v: unknown): string | undefined {
+  const s = str(v, MAX_ID);
+  return s && PLAYER_ID_RE.test(s) ? s : undefined;
+}
+
 /** The room's one naming rule, shared with Setup and the leaderboard. */
 function peerName(v: unknown): string {
   return playerName(typeof v === "string" ? v.slice(0, MAX_NAME) : "");
@@ -170,6 +199,8 @@ export function parsePeerStatus(raw: unknown): PeerStatus | null {
   };
   if (reason) out.endReason = reason;
   if (raw.ghost === true) out.ghost = true;
+  const session = sessionToken(raw.sessionId);
+  if (session) out.sessionId = session;
   return out;
 }
 
@@ -364,6 +395,8 @@ export function parsePresence(raw: unknown): PresencePayload | null {
   const info = parsePeerInfo(raw);
   if (!info) return null;
   const out: PresencePayload = { v: MP_PROTOCOL, ...info };
+  const session = sessionToken(raw.sessionId);
+  if (session) out.sessionId = session;
   const status = parsePeerStatus(raw.status);
   // A member may only speak for itself — a presence row claiming someone else's
   // status is the cheap way to fake a leaderboard, so it is dropped.
@@ -399,11 +432,19 @@ export function parseMessage(raw: unknown): MpMessage | null {
       const status = parsePeerStatus(raw.status);
       return status ? { t: "status", v: MP_PROTOCOL, status } : null;
     }
-    case "snapshot":
+    case "snapshot": {
+      const id = playerId(raw.playerId);
+      const state = parseRunState(raw.state);
+      if (!id || !state) return null;
+      const out: SnapshotMsg = { t: "snapshot", v: MP_PROTOCOL, playerId: id, state };
+      const session = sessionToken(raw.sessionId);
+      if (session) out.sessionId = session;
+      return out;
+    }
     case "snapshotReply": {
       const id = playerId(raw.playerId);
       const state = parseRunState(raw.state);
-      return id && state ? { t: raw.t, v: MP_PROTOCOL, playerId: id, state } : null;
+      return id && state ? { t: "snapshotReply", v: MP_PROTOCOL, playerId: id, state } : null;
     }
     case "snapshotRequest": {
       const id = playerId(raw.playerId);

@@ -1,14 +1,14 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { DEFAULT_PLAYER_NAME, playerName } from "@/components/ui/NameField";
+import { playerName } from "@/components/ui/NameField";
 import { useAuth } from "@/hooks/useAuth";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { resolveProgressId } from "@/lib/cloud/identity";
 import { getProfile } from "@/lib/cloud/profiles";
 import { MODES } from "@/lib/modes";
 import { fastForward } from "@/lib/mp/autoResolve";
-import { loadMatch, rememberRoom, saveMatch } from "@/lib/mp/matchStore";
+import { forgetRoom, loadMatch, rememberPlayerName, rememberRoom, saveMatch } from "@/lib/mp/matchStore";
 import {
   MAX_PLAYERS,
   MIN_PLAYERS,
@@ -86,6 +86,15 @@ export type MatchApi = {
    * the game having lost your decisions.
    */
   resumeCatchup: { from: number; to: number } | null;
+  /**
+   * Another tab on this device has this room open and presence seated it after
+   * us, so the room is listening to that one.
+   *
+   * A NOTICE, never a gate. A tab that closed hard leaves its presence row behind
+   * for seconds, and refusing to join, start or report on the strength of one
+   * would break exactly the rejoin this whole path exists for.
+   */
+  openElsewhere: boolean;
   createRoom(name: string): Promise<string>;
   joinRoom(code: string, name: string): Promise<"joined" | "rejoined">;
   setYearSeconds(s: YearSeconds): void;
@@ -155,6 +164,35 @@ function tabScopedId(base: string): string {
   }
 }
 
+/**
+ * One tab's turn at a seat.
+ *
+ * `tabScopedId` above only splits tabs under `NEXT_PUBLIC_MP_LOCAL=1`. In
+ * PRODUCTION the player id comes from localStorage and is the DEVICE, so two tabs
+ * are one player id and both believe they own the seat: each filters out presence
+ * rows carrying its own id and never sees the other, while the rest of the room
+ * watches one row flip between two different lives — and the first tab to finish
+ * closes the seat, ending the match for everybody while the other is still
+ * playing. A session token, minted per mounted provider and carried on presence
+ * and `status`, is what tells the two of them apart.
+ */
+function newSessionId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+/**
+ * Of two presence rows for ONE player id, is `p` the later session?
+ *
+ * Newest `joinedAt` wins, and the session token breaks an exact tie so that every
+ * client in the room reaches the same answer regardless of the order its transport
+ * hands presence rows over. A row with no token sorts below one that has it: an
+ * older build cannot take the seat from a client that can actually be told apart.
+ */
+function newerSession(p: PresencePayload, prev: PresencePayload): boolean {
+  if (p.joinedAt !== prev.joinedAt) return p.joinedAt > prev.joinedAt;
+  return (p.sessionId ?? "") > (prev.sessionId ?? "");
+}
+
 /** A stable avatar for players with no profile row (every guest). FNV-1a → 8 hex. */
 function seedFromId(id: string): string {
   let h = 0x811c9dc5;
@@ -186,7 +224,13 @@ function blankPeer(info: PeerInfo, connected: boolean): MatchPeer {
   };
 }
 
-function statusOf(state: RunState, playerId: string, ghost: boolean): PeerStatus {
+/**
+ * A status row: our own, or a ghost row the acting host writes for an absent
+ * player. `sessionId` is ours to stamp and only ours — a ghost row speaks FOR
+ * somebody else, so it carries none and every peer takes it exactly as it always
+ * did.
+ */
+function statusOf(state: RunState, playerId: string, ghost: boolean, sessionId?: string): PeerStatus {
   const out: PeerStatus = {
     playerId,
     yearIndex: yearIndex(state),
@@ -194,6 +238,7 @@ function statusOf(state: RunState, playerId: string, ghost: boolean): PeerStatus
     status: state.status,
     ready: false,
   };
+  if (sessionId) out.sessionId = sessionId;
   if (state.endReason) out.endReason = state.endReason;
   if (ghost) out.ghost = true;
   return out;
@@ -251,6 +296,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   const [resumeState, setResumeState] = useState<RunState | null>(null);
   const [resumeCatchup, setResumeCatchup] = useState<{ from: number; to: number } | null>(null);
   const [selfId, setSelfIdState] = useState("");
+  const [openElsewhere, setOpenElsewhere] = useState(false);
 
   // Mirrors. Timers, transport callbacks and the stable methods all read the ref
   // (they outlive the render that made them); React state exists for the UI.
@@ -279,6 +325,16 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   const snapshotAskedRef = useRef<Set<string>>(new Set());
   const tickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** This tab's session (see `newSessionId`). A ref is the whole implementation:
+   *  per tab and per mount is exactly what "session" means here. Minted lazily so
+   *  a player who never opens a room pays nothing, and only once. */
+  const sessionRef = useRef("");
+  if (!sessionRef.current) sessionRef.current = newSessionId();
+  /** Which session presence last showed owning each player id. A `status` from a
+   *  different session of the same player is a losing tab, and is ignored. */
+  const sessionOwnersRef = useRef<Map<string, string>>(new Map());
+  /** `openElsewhere`, readable from callbacks that must not re-create on it. */
+  const openElsewhereRef = useRef(false);
 
   // ── mirrored setters ──────────────────────────────────────────────────────
   const setPhase = useCallback((p: MatchPhase | null) => {
@@ -332,7 +388,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       avatarSeed: avatarSeedRef.current,
       joinedAt: Date.now(),
     };
-    const out: PresencePayload = { v: MP_PROTOCOL, ...info };
+    const out: PresencePayload = { v: MP_PROTOCOL, ...info, sessionId: sessionRef.current };
     if (myStatusRef.current) out.status = myStatusRef.current;
     // Every member republishes the config, so a rejoiner can read the whole room off
     // ANY member's presence — there is no table to ask.
@@ -526,16 +582,33 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       if (fresh) {
         myStatusRef.current = {
           playerId: ensureSelfId(),
+          sessionId: sessionRef.current,
           yearIndex: at,
           netWorth: 0,
           status: "playing",
           ready: false,
         };
       }
-      // Roster members we haven't seen yet still get a row, so the standings are
-      // complete from the first frame.
+      /**
+       * The roster IS the match. Two things follow, and both are this one place.
+       *
+       * Roster members we haven't seen yet still get a row, so the standings are
+       * complete from the first frame — and anyone NOT in it loses theirs. A lobby
+       * member showing away is left out of the frozen roster deliberately (the
+       * host is asked to confirm exactly that), but nothing else pruned them:
+       * `updatePeers` only ever marks a row disconnected, so the excluded player
+       * stayed in the rail as "no result yet" and took a plinth on the final
+       * podium. Worse, that row is seeded `status: "playing"` and can never move —
+       * every status and snapshot for a non-roster id is refused — so "the room is
+       * over when every life in it is over" could never be true, and the room
+       * ground out its remaining years at `GHOST_CATCHUP_MS` each instead of
+       * ending. Dropping the row here fixes the rail, the podium and the hang at
+       * once, on the host and on every guest, because both reach this function.
+       */
       updatePeers((prev) => {
-        const next = { ...prev };
+        const seated = cfg.startedAt > 0 ? new Set(cfg.roster.map((r) => r.playerId)) : null;
+        const next: Record<string, MatchPeer> = {};
+        for (const [id, p] of Object.entries(prev)) if (!seated || seated.has(id)) next[id] = p;
         for (const r of cfg.roster) if (!next[r.playerId]) next[r.playerId] = blankPeer(r, false);
         return next;
       });
@@ -644,22 +717,42 @@ export function MatchProvider({ children }: { children: ReactNode }) {
           applyTick(Math.min(msg.yearIndex, seen + 1), msg.yearSeconds);
           return;
         }
-        case "status":
+        case "status": {
           // Only the acting host speaks for someone else (a ghost row), nobody
           // speaks for us, and only a player this room admitted speaks at all.
           if (msg.status.playerId === selfIdRef.current) return;
           if (!isRosterMember(msg.status.playerId)) return;
+          // And for one player, only the session presence currently seats. Two tabs
+          // share one player id in production and both keep reporting; without this
+          // the row the whole room is watching flips between two different lives,
+          // and the first tab to end closes the seat under the other one. A status
+          // carrying no session is an older build or a ghost row the acting host
+          // wrote for an absent player — taken, exactly as before.
+          const owner = sessionOwnersRef.current.get(msg.status.playerId);
+          if (msg.status.sessionId && owner && msg.status.sessionId !== owner) return;
           applyPeerStatus(msg.status);
           return;
-        case "snapshot":
+        }
+        case "snapshot": {
           // Our own entry is written locally by `report`; a peer claiming to hold our
           // life is either confused or hostile, and either way we already have it.
           // Every other entry is a whole RunState held in memory, so the cache is
           // bounded by the roster and holds nothing before the match starts.
           if (msg.playerId === selfIdRef.current) return;
           if (!isRosterMember(msg.playerId)) return;
+          // And the same session fence as `status` above — because the seat and the
+          // LIFE behind it have to be the same tab's. This cache is what ghost-play
+          // fast-forwards from and what a rejoiner is handed when its own record is
+          // missing, so leaving it last-writer-wins meant the room could watch one
+          // tab's figures all match and then hand the returning player the other
+          // tab's life. Fails open on an absent token for exactly the reasons
+          // `status` does: an older build, and the acting host's sessionless ghost
+          // rows, both still land.
+          const owner = sessionOwnersRef.current.get(msg.playerId);
+          if (msg.sessionId && owner && msg.sessionId !== owner) return;
           snapshotsRef.current.set(msg.playerId, msg.state);
           return;
+        }
         case "snapshotRequest": {
           // Anyone holding this life may hand it back. "Only the acting host
           // answers" failed exactly when it was needed: a returning HOST is
@@ -698,18 +791,54 @@ export function MatchProvider({ children }: { children: ReactNode }) {
 
   const handlePresence = useCallback(
     (members: unknown[]) => {
+      const me = selfIdRef.current;
       const rows = new Map<string, PresencePayload>();
       for (const raw of members) {
         const p = parsePresence(raw);
         if (!p) continue;
-        // Two tabs, one player: keep whichever row is actually carrying game state.
+        // Two tabs, one player: keep whichever row is actually carrying game state,
+        // and among equals the one that sat down LAST. Newest rather than oldest
+        // because a tab that closed hard leaves its presence row behind for a few
+        // seconds — preferring the older row hands the seat to a session that is
+        // already gone, and freezes the standings row on its last figure.
+        //
+        // The last clause makes the order TOTAL. `joinedAt` is `Date.now()` inside
+        // a user-initiated `connect()`, so two sessions can share a millisecond —
+        // and a `>` that stops there keeps whichever row this client happened to
+        // iterate first, which is per-client object order in the Supabase
+        // transport (`presenceState()` keys). Half the room would then seat one
+        // session and half the other, which is precisely the split this whole
+        // mechanism exists to remove. Comparing the tokens breaks the tie the same
+        // way everywhere, exactly as the two roster sorts already fall back to
+        // `playerId`.
         const prev = rows.get(p.playerId);
-        if (!prev || (!prev.status && p.status) || (!!prev.status === !!p.status && p.joinedAt <= prev.joinedAt)) {
+        if (!prev || (!prev.status && p.status) || (!!prev.status === !!p.status && newerSession(p, prev))) {
           rows.set(p.playerId, p);
         }
       }
+      // Which session speaks for each player right now. `handleMessage` drops a
+      // `status` from any other session of the same player, so two tabs sharing one
+      // player id stop overwriting one standings row with two different lives — and
+      // the first of them to finish stops closing the seat under the other.
+      const owners = sessionOwnersRef.current;
+      owners.clear();
+      for (const [id, row] of rows) if (row.sessionId) owners.set(id, row.sessionId);
+      /**
+       * "Another tab holds the seat" — read off the row that actually WON above,
+       * never recomputed from a weaker rule.
+       *
+       * It used to be decided by `joinedAt` alone while the seat was decided
+       * status-first and only then by `joinedAt`, so the two could disagree: a
+       * second tab part-way through the rejoin handshake publishes presence
+       * before it has a status (`connect()` runs with `myStatusRef` null), and
+       * for that whole window the tab the player is really using was told it was
+       * the dead one — advice which, taken, closes the live run. One expression,
+       * one decision, and the notice can no longer contradict the room.
+       */
+      const mine = me ? rows.get(me) : undefined;
+      setOpenElsewhere(!!mine?.sessionId && mine.sessionId !== sessionRef.current);
+      openElsewhereRef.current = !!mine?.sessionId && mine.sessionId !== sessionRef.current;
 
-      const me = selfIdRef.current;
       const cfg = configRef.current;
       // Once the match is running the roster IS the room. Before that, seats go to
       // the first arrivals — a ninth player is never seated, here or in the counter.
@@ -802,6 +931,8 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     roomRef.current = null;
     snapshotsRef.current.clear();
     snapshotAskedRef.current.clear();
+    sessionOwnersRef.current.clear();
+    openElsewhereRef.current = false;
     snapshotWaiterRef.current = null;
     await t?.leave();
   }, [stopTimers]);
@@ -818,6 +949,10 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         joinedAt: Date.now(),
       };
       selfInfoRef.current = info;
+      // The name this device is now playing under, kept for the next Setup. A
+      // player who reloads out of a LOBBY has no frozen roster to take their name
+      // back from and returns as "PLAYER" — see `rememberPlayerName`.
+      rememberPlayerName(info.name);
       // Best effort and off the critical path: a signed-in player wears the avatar
       // the rest of the social layer already knows them by. A guest has no row (and
       // must not create one), and `seedFromId` is a perfectly good stable fallback.
@@ -856,6 +991,8 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     setDeadlineState(null);
     setResumeState(null);
     setResumeCatchup(null);
+    setOpenElsewhere(false);
+    openElsewhereRef.current = false;
     updatePeers(() => ({}));
     myStatusRef.current = null;
     myStateRef.current = null;
@@ -863,6 +1000,10 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   }, [setConfig, setPhase, setRoomYear, updatePeers]);
 
   const leaveMatch = useCallback(() => {
+    // Walking out is the player saying they are done with this room, so it stops
+    // being the one Setup offers back. The stored life stays — see `forgetRoom`.
+    const left = configRef.current?.roomCode;
+    if (left) forgetRoom(left);
     void teardown();
     resetState();
     setError(null);
@@ -983,11 +1124,22 @@ export function MatchProvider({ children }: { children: ReactNode }) {
             "That match has already started — only the players who were in the room when it started can rejoin.",
           );
         }
-        // The room already knows this seat by the name it joined under, and a
-        // returning player lands on a fresh Setup whose name field is empty — so the
-        // anonymous default must not rename them in every standings row and on the
-        // podium. A name they actually retyped still wins.
-        if (playerName(name) === DEFAULT_PLAYER_NAME && selfInfoRef.current) {
+        /**
+         * The room already knows this seat, by the name it was frozen into the
+         * roster under — so a rejoin ADOPTS that name rather than carrying one in.
+         *
+         * This used to defer to any name that wasn't the anonymous default, on the
+         * premise that "a returning player lands on a fresh Setup whose name field
+         * is empty". Setup now prefills that field from `lifepatch.playerName`,
+         * which is per DEVICE and not per room, so the premise is false: a player
+         * who opened any other room in between comes back through an untouched
+         * field carrying somebody else's name, and it lands in every rail and on
+         * the podium — twice, next to the player it was borrowed from. Renaming a
+         * seat mid-match has no upside worth that: the standings have been showing
+         * this name for the whole run, and the life underneath is unchanged either
+         * way (`seat.name` is also what a seed rebuild below is initialised with).
+         */
+        if (selfInfoRef.current && selfInfoRef.current.name !== seat.name) {
           selfInfoRef.current = { ...selfInfoRef.current, name: seat.name };
           updatePeers((prev) => {
             const row = prev[selfIdRef.current];
@@ -1011,7 +1163,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         const from = yearIndex(base);
         const caught = fastForward(base, target);
         myStateRef.current = caught;
-        myStatusRef.current = statusOf(caught, selfIdRef.current, false);
+        myStatusRef.current = statusOf(caught, selfIdRef.current, false, sessionRef.current);
         setResumeState(caught);
         // Years the room played for them. Coming back to a later year and a net
         // worth you never chose, with nothing said about it, reads as lost work.
@@ -1020,7 +1172,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         rememberRoom(cfg.roomCode);
         applyPeerStatus(myStatusRef.current);
         send({ t: "status", v: MP_PROTOCOL, status: myStatusRef.current });
-        send({ t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current, state: caught });
+        send({ t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current, state: caught, sessionId: sessionRef.current });
         publish();
         return "rejoined";
       } catch (e) {
@@ -1077,6 +1229,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     if (phaseRef.current !== "running") return;
     const base = myStatusRef.current ?? {
       playerId: selfIdRef.current,
+      sessionId: sessionRef.current,
       yearIndex: roomYearRef.current,
       netWorth: 0,
       status: "playing" as const,
@@ -1096,14 +1249,34 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       if (phaseRef.current === null) return;
       const id = selfIdRef.current;
       myStateRef.current = state;
-      const st = statusOf(state, id, false);
+      const st = statusOf(state, id, false, sessionRef.current);
       myStatusRef.current = st;
       applyPeerStatus(st);
       snapshotsRef.current.set(id, state);
+      /**
+       * Everything above is LOCAL: this tab keeps playing, keeps its own cache and
+       * keeps showing the player their own figures. The two writes below are the
+       * ones the SEAT owns, and a tab presence has not seated must not make them.
+       *
+       * `saveMatch` keys on (room, playerId), which two tabs of one device both
+       * satisfy, and every peer's snapshot cache is keyed the same way. Left open,
+       * the room's standings would follow the seated session while the life stored
+       * under that seat — the one a rejoin resumes and ghost-play fast-forwards —
+       * was whichever tab wrote last. The seat and the life behind it are fenced
+       * by the same fact now.
+       *
+       * `publish()` still runs either way. A presence row is this tab saying it is
+       * here, which is true; every peer's dedupe drops it in favour of the seated
+       * row, and the moment the seated tab goes the row is already fresh and this
+       * tab takes over with nothing lost.
+       */
+      const shared = !openElsewhereRef.current;
       const cfg = configRef.current;
-      if (cfg) saveMatch(cfg.roomCode, id, cfg, state);
-      send({ t: "status", v: MP_PROTOCOL, status: st });
-      send({ t: "snapshot", v: MP_PROTOCOL, playerId: id, state });
+      if (shared && cfg) saveMatch(cfg.roomCode, id, cfg, state);
+      if (shared) {
+        send({ t: "status", v: MP_PROTOCOL, status: st });
+        send({ t: "snapshot", v: MP_PROTOCOL, playerId: id, state, sessionId: sessionRef.current });
+      }
       publish();
     },
     [applyPeerStatus, publish, send],
@@ -1218,6 +1391,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       error,
       resumeState,
       resumeCatchup,
+      openElsewhere,
       createRoom,
       joinRoom,
       setYearSeconds,
@@ -1230,7 +1404,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     }),
     [
       phase, config, peers, selfId, isHost, deadlineAt, roomYearIndex, error, resumeState, resumeCatchup,
-      createRoom, joinRoom, setYearSeconds, setBackground, startMatch, markReady,
+      openElsewhere, createRoom, joinRoom, setYearSeconds, setBackground, startMatch, markReady,
       reportAdvance, reportEnded, leaveMatch,
     ],
   );

@@ -100,7 +100,7 @@ function SaveActions({
           onClick={overwrite.onClick}
           onBlur={overwrite.onBlur}
         >
-          <ArmedLabel armed={overwrite.armed}>{overwrite.label}</ArmedLabel>
+          <ArmedLabel>{overwrite.label}</ArmedLabel>
         </NeonButton>
       </>
     );

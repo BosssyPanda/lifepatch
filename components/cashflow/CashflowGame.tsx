@@ -147,7 +147,7 @@ export function CashflowGame({
             onClick={exit.onClick}
             onBlur={exit.onBlur}
           >
-            <ArmedLabel armed={exit.armed}>{exit.label}</ArmedLabel>
+            <ArmedLabel>{exit.label}</ArmedLabel>
           </NeonButton>
         </div>
       </div>

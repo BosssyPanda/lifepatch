@@ -14,7 +14,7 @@ import { useMatch } from "@/hooks/useMatch";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { currency } from "@/lib/format";
 import { MODES, type ModeId } from "@/lib/modes";
-import { dismissRoom, recentRoom, type RecentRoom } from "@/lib/mp/matchStore";
+import { dismissRoom, lastPlayerName, recentRoom, rememberPlayerName, type RecentRoom } from "@/lib/mp/matchStore";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSpotlightHandler } from "@/src/motion/useSpotlight";
 import { SPRING, STAGGER } from "@/src/motion/tokens";
@@ -44,6 +44,19 @@ export function Setup({
   const opening = match.phase !== null;
   const openingId = useId();
   const [name, setName] = useState("");
+  /**
+   * The name this device last played under. Read on mount rather than in the
+   * initial state, for the same reason `room` below is: the server paints no
+   * localStorage, and the first client paint has to agree with it.
+   *
+   * SOLO-VISIBLE, and deliberately so — it is also the only fix available for a
+   * player who reloads out of a LOBBY, where presence is self-authored and there
+   * is no frozen roster to take a name back from (see lib/mp/matchStore).
+   */
+  useEffect(() => {
+    const last = lastPlayerName();
+    if (last) setName((cur) => cur || last);
+  }, []);
   const [picked, setPicked] = useState<string>(BACKGROUNDS[0].id);
   const chosen = BACKGROUNDS.find((b) => b.id === picked);
   /**
@@ -67,6 +80,8 @@ export function Setup({
   };
   const startSolo = () => {
     audio.sfx("confirm");
+    // A name is committed here, not while it is being typed.
+    rememberPlayerName(name);
     onStart(picked, playerName(name));
   };
   // Only a room whose life is still open can be walked away from by accident.
@@ -139,7 +154,13 @@ export function Setup({
       <div className="mt-9 flex items-center justify-center gap-3">
         <NeonButton variant="ghost" size="sm" onClick={onBack}>← Back</NeonButton>
         <NeonButton
-          variant="primary"
+          // Armed, this button asks a question the player has to READ, and a red
+          // label cannot sit on the accent fill (DESIGN.md § Palette, hard rule 1 —
+          // ink on orange measures 1.12:1). The fill hands back for exactly the
+          // window in which this is a question, the same swap AuthGate makes.
+          // Reachable ONLY for a player still sitting in a room: a solo screen
+          // never arms, so it is exactly the screen it has always been.
+          variant={liveRoom && armedStart.armed ? "danger" : "primary"}
           size="lg"
           // The CTA copy never changes, and a card is already picked on mount — so the
           // accessible name has to carry which one, the way ModeSelect's visible label does.
@@ -158,7 +179,7 @@ export function Setup({
         >
           {/* The label only ever changes for a player who is still in a room, so a
               solo screen is exactly the screen it has always been. */}
-          <ArmedLabel armed={!!liveRoom && armedStart.armed}>
+          <ArmedLabel>
             {liveRoom ? armedStart.label : "Start your life →"}
           </ArmedLabel>
         </NeonButton>
