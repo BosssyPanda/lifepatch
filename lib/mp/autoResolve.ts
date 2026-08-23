@@ -108,6 +108,22 @@ export function resolveAllPending(s: RunState): RunState {
  * to work moves that to 6% and 4.0 of 6 — a little below the middle of the table,
  * which is what being away should cost: something, but not the game.
  *
+ * WHAT THAT DOES NOT CLAIM. "Below the middle" is measured against a table of
+ * STRANGERS. The other question — is a given player richer for having walked away? —
+ * is separate, and was measured separately: same seed, same player, same policy up
+ * to the year they left, then auto-played to the end. For six of seven plausible
+ * policies, leaving beat staying on 27-52% of seeds: neutral, or mildly costly. For
+ * one it was 93% — a player who BOTH hoards a large cash buffer AND commits only a
+ * third of what is left is playing worse than this default, and any default that is
+ * not itself last-by-construction will beat them. Split those two traits apart and
+ * it falls to 36% and 41%, so it takes both together.
+ *
+ * That is not tunable away. The only rule neutral for every player is one that plays
+ * worse than the worst of them, which is the bug this replaced. Continuing the
+ * player's OWN revealed allocation was tried and is worse than it sounds: a fresh run
+ * holds nothing, so the ghost never starts, and placing collapses back to 5.1 of 6
+ * with 72% last places.
+ *
  * WHY IT IS NOT IN `resolveAllPending`. That is also the path for a player who is
  * RIGHT HERE and simply let the year's clock run out (`components/run/YearLoop`).
  * Answering an event for them is the timer's job; buying them an index position is

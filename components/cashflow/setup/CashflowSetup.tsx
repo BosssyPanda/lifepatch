@@ -1,11 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { SoundCell } from "@/components/ui/SoundCell";
 import { NameField, playerName } from "@/components/ui/NameField";
+import { lastPlayerName, rememberPlayerName } from "@/lib/mp/matchStore";
 import { useAudio } from "@/hooks/useAudio";
 import { DREAMS } from "@/lib/cashflow/dreams";
 import { PROFESSIONS } from "@/lib/cashflow/professions";
@@ -42,6 +43,19 @@ export function CashflowSetup({
   const [prof, setProf] = useState<string | null>(null);
   const [dream, setDream] = useState<string | null>(null);
   const [name, setName] = useState("");
+  /**
+   * The name this device last played under, exactly as Story's Setup reads it.
+   *
+   * The two setups used to disagree: Story remembered you and Rat Race did not, so
+   * naming yourself once still meant retyping it here every single time. Read on
+   * mount rather than in the initial state — the server paints no localStorage, and
+   * the first client paint has to agree with it. SOLO-VISIBLE, deliberately: the
+   * name belongs to the device, not to a mode.
+   */
+  useEffect(() => {
+    const last = lastPlayerName();
+    if (last) setName((cur) => cur || last);
+  }, []);
 
   return (
     <div className="mx-auto min-h-[100svh] w-full max-w-5xl px-4 py-10">
@@ -164,7 +178,14 @@ export function CashflowSetup({
               variant="primary"
               size="lg"
               disabled={!dream}
-              onClick={() => { audio.sfx("confirm"); audio.unlock("gameplay"); onBegin(prof!, dream!, playerName(name)); }}
+              onClick={() => {
+                audio.sfx("confirm");
+                audio.unlock("gameplay");
+                // Committed, not typed: the same rule Story uses, so a half-typed
+                // name never becomes the one this device is remembered by.
+                rememberPlayerName(name);
+                onBegin(prof!, dream!, playerName(name));
+              }}
             >
               Enter the Rat Race →
             </NeonButton>
