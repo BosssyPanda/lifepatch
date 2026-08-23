@@ -158,15 +158,11 @@ function AppShellInner() {
     startedRoomRef.current = cfg.roomCode;
     if (match.resumeState) {
       // Rejoin: the hook already caught this life up to the room's year.
-      run.resume(match.resumeState, { matchCode: cfg.roomCode, matchPlayerId: match.selfId });
+      run.resume(match.resumeState, { matchCode: cfg.roomCode });
       return;
     }
     const name = playerName(match.peers[match.selfId]?.name ?? "");
-    const r = run.start("story", cfg.backgroundId, name, {
-      seed: cfg.seed,
-      matchCode: cfg.roomCode,
-      matchPlayerId: match.selfId,
-    });
+    const r = run.start("story", cfg.backgroundId, name, { seed: cfg.seed, matchCode: cfg.roomCode });
     // Seed the standings row now instead of a render later, and mark it reported
     // so the effect above doesn't send the same year twice.
     reportedRef.current = matchSig(r);

@@ -431,8 +431,9 @@ function HostStart({
    * for it is not.
    */
   const need = MIN_PLAYERS - here;
+  // `who` is either one person's name or a count of them, so the verb has to follow.
   const hint = asking
-    ? `${who} is away and doesn't count — you need ${need} more here to start`
+    ? `${who} ${away.length === 1 ? "is away and doesn't" : "are away and don't"} count — you need ${need} more here to start`
     : `Waiting for ${need} more`;
   return (
     <>

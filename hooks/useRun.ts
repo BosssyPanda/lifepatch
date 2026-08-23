@@ -14,7 +14,6 @@ import {
   type RunState,
 } from "@/lib/runEngine";
 import { saveRun } from "@/lib/saves";
-import { loadMatch, saveMatch } from "@/lib/mp/matchStore";
 import type { AssetId } from "@/lib/markets";
 import type { LifeChoice } from "@/lib/lifeEvents";
 
@@ -28,11 +27,9 @@ export type Phase = "intro" | "mode" | "auth" | "setup" | "run" | "recap" | "rep
 export type RunOpts = {
   /** The room's shared world. Every player in a match starts from this number. */
   seed?: number;
-  /** Set for a match run: routes persistence to the room's store, ending to the podium. */
+  /** Set for a match run: the room owns this run's persistence, and its ending
+   *  goes to the podium rather than to the solo recap. */
   matchCode?: string;
-  /** Whose seat this run is. The room's store stamps it so a rejoin can't resume
-   *  a record another player on this device wrote (`lib/mp/matchStore.ts`). */
-  matchPlayerId?: string;
 };
 
 export function useRun(userId: string | null) {
@@ -42,8 +39,6 @@ export function useRun(userId: string | null) {
   const [saving, setSaving] = useState(false);
   /** The room this run belongs to, or null for a solo run. */
   const matchCodeRef = useRef<string | null>(null);
-  /** Our player id inside that room — the owner stamp on every match save. */
-  const matchPlayerIdRef = useRef<string | null>(null);
   /**
    * The live run, readable from a closure that is holding a STALE copy of it.
    *
@@ -56,25 +51,24 @@ export function useRun(userId: string | null) {
 
   const persist = useCallback(
     async (r: RunState) => {
-      const code = matchCodeRef.current;
-      const playerId = matchPlayerIdRef.current;
       // The room code alone decides this branch: a match run must never fall
-      // through to the solo store just because its owner id is missing.
-      if (code) {
+      // through to the solo store just because something else about it is missing.
+      if (matchCodeRef.current) {
         // A match run must NEVER reach `lib/saves.ts`. That store is keyed
         // (user_id, mode) and a match run is still `mode: "story"`, so routing one
         // through it would overwrite the player's own story save with a run they
-        // were handed the host's background and seed for. The room keeps its own
-        // localStorage namespace instead.
+        // were handed the host's background and seed for.
         //
-        // The config comes from the record `useMatch` writes on each advance; until
-        // that first write lands — or while the record on that key belongs to
-        // another player on this device — there is nothing to key a room save by,
-        // and the write is simply skipped (the run is one advance away from being
-        // saved anyway, and a rejoin can always rebuild it from the shared seed).
-        if (!playerId) return;
-        const cfg = loadMatch(code, playerId)?.config;
-        if (cfg) saveMatch(code, playerId, cfg, r);
+        // It writes nothing HERE either: the room owns its own record, keyed
+        // (room, playerId), and `useMatch`'s `report()` is its one writer. That
+        // covers everything this used to — `components/AppShell.tsx` reports every
+        // new year, retirement, quit and ending off the run signature, and
+        // `onStartRun` reports the opening state — and it writes behind the seat
+        // fence, so a second tab of the same device that presence has NOT seated
+        // cannot overwrite the life a rejoin will resume. Saving from here as well
+        // put two writers on that one key with only one of them fenced, and which
+        // life came back was a race between the tab the player was really in and
+        // the tab that was auto-playing itself.
         return;
       }
       if (!userId) return;
@@ -138,7 +132,6 @@ export function useRun(userId: string | null) {
     start: useCallback(
       (m: ModeId, backgroundId: string, name: string, opts?: RunOpts) => {
         matchCodeRef.current = opts?.matchCode ?? null;
-        matchPlayerIdRef.current = opts?.matchPlayerId ?? null;
         // A room deals one card to the whole table; a solo life deals its own.
         const r = initRun(m, backgroundId, name, opts?.seed, opts?.matchCode != null);
         setMode(m);
@@ -153,7 +146,6 @@ export function useRun(userId: string | null) {
 
     resume: useCallback((r: RunState, opts?: RunOpts) => {
       matchCodeRef.current = opts?.matchCode ?? null;
-      matchPlayerIdRef.current = opts?.matchPlayerId ?? null;
       setMode(r.mode);
       // Second line of defence: AuthGate already filters incompatible saves out
       // before offering "Continue", but a version mismatch must never reach the
@@ -188,7 +180,6 @@ export function useRun(userId: string | null) {
 
     reset: useCallback(() => {
       matchCodeRef.current = null;
-      matchPlayerIdRef.current = null;
       liveRef.current = null;
       setRun(null);
       setMode(null);
@@ -196,7 +187,6 @@ export function useRun(userId: string | null) {
     }, []),
     toTitle: useCallback(() => {
       matchCodeRef.current = null;
-      matchPlayerIdRef.current = null;
       liveRef.current = null;
       setRun(null);
       setMode(null);

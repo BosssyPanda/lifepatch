@@ -97,7 +97,12 @@ export function ConsequenceBeat({
 
   // In a match the room's year keeps running behind this ceremony (see the bottom
   // rail). Null in every solo run, where nothing below changes.
-  const inMatch = useMatchCtx() !== null;
+  //
+  // The deadline, not the room, is what the rail asks about: `YearTimer` renders
+  // nothing once the clock stops, and a room that has FINISHED while this ceremony
+  // is on screen left the cell holding it padding an empty column.
+  const match = useMatchCtx();
+  const showClock = match?.deadlineAt != null;
 
   // ---- the ceremony's clock (phases, count-up, landing, skip) ----------------
   const { phase, done, jolt, flash, fall, figureRef, figureText, skip } = useConsequenceLadder({
@@ -306,7 +311,7 @@ export function ConsequenceBeat({
           `YearTimer` renders nothing outside a match, and the compact copy is
           aria-hidden and silent, so it adds no second set of ticks. */}
       <div className="flex items-stretch border-t border-hairline">
-        {inMatch && (
+        {showClock && (
           <div className="flex items-center px-4 py-3.5 sm:px-6">
             <YearTimer compact />
           </div>

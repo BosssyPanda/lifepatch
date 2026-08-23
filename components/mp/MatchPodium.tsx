@@ -295,7 +295,9 @@ function ResultRow({
             player's behalf reads "Auto-played", not just "Retired", so the figure
             beside it is never mistaken for one somebody sat and earned. */}
         {!peer.reported
-          ? "Never played"
+          // A row this client has never had a word for is not the same as a seat
+          // nobody ever played: see `pending` in `hooks/useMatch.tsx`.
+          ? (peer.pending ? "Away" : "Never played")
           : peer.ghost
             ? "Auto-played"
             : ended

@@ -141,7 +141,13 @@ export function AuthGate({
    *  client paint agree. Story only — the other modes have no rooms. */
   const [roomBack, setRoomBack] = useState<string | null>(null);
   useEffect(() => {
-    if (mode !== "story") return;
+    // Story only — the other modes have no rooms — and leaving story has to CLEAR
+    // it: this screen is reused for every mode, so a stale offer would follow the
+    // player into a mode that cannot honour it.
+    if (mode !== "story") {
+      setRoomBack(null);
+      return;
+    }
     const r = recentRoom();
     setRoomBack(r && !r.ended ? r.roomCode : null);
   }, [mode]);

@@ -6,7 +6,7 @@ import { ArrowRight, CloseIcon } from "@/components/icons";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { playerName } from "@/components/ui/NameField";
 import { useAudio } from "@/hooks/useAudio";
-import { useMatch } from "@/hooks/useMatch";
+import { RoomRefusedError, useMatch } from "@/hooks/useMatch";
 import { MAX_PLAYERS, MIN_PLAYERS } from "@/lib/mp/protocol";
 import { ROOM_CODE_LENGTH, isRoomCode, normalizeRoomCode } from "@/lib/mp/roomCodes";
 import { createTransport } from "@/lib/mp/transport";
@@ -97,9 +97,15 @@ export function WithFriendsPanel({
       onEnterLobby();
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : "Couldn't join that room.");
-      // The room is gone or finished, so stop offering it as a way back — and
-      // remember that, or a reload offers the same dead room all over again.
-      if (raw === lastRoom) onRoomGone?.();
+      // Withdrawing the offer deletes the one tap that gets somebody back into a
+      // live match — the whole reason this row exists — so it takes proof, not a
+      // failure. `RoomRefusedError` is the room answering and turning this device
+      // away: it started without us, or the frozen roster has no seat for us, and
+      // no amount of trying again will change either. Everything else that lands
+      // here is a five-second handshake running out, which a room full of people
+      // whose tabs are in the background produces just as readily as a room that
+      // has emptied. Say what happened and leave the way back on the screen.
+      if (raw === lastRoom && e2 instanceof RoomRefusedError) onRoomGone?.();
     } finally {
       setBusy(null);
     }

@@ -95,15 +95,37 @@ export function MatchRail({ selfNetWorth }: { selfNetWorth: number }) {
       )}
       <ol className="mt-0.5">
         {rows.map((p, i) => (
-          <StandingRow key={p.playerId} peer={p} rank={i + 1} isSelf={p.playerId === selfId} />
+          <StandingRow key={p.playerId} peer={p} rank={i + 1} isSelf={p.playerId === selfId} roomYear={roomYear} />
         ))}
       </ol>
     </section>
   );
 }
 
-function StandingRow({ peer, rank, isSelf }: { peer: MatchPeer; rank: number; isSelf: boolean }) {
+function StandingRow({
+  peer,
+  rank,
+  isSelf,
+  roomYear,
+}: {
+  peer: MatchPeer;
+  rank: number;
+  isSelf: boolean;
+  roomYear: number;
+}) {
   const ended = peer.status === "ended";
+  /**
+   * Is somebody still playing this life for them, right now?
+   *
+   * The ghost mark says a figure came from auto-play; it does not say auto-play is
+   * still happening. Whoever holds the clock can only fast-forward a life it holds
+   * a snapshot of, and a client that inherited the clock after its player left
+   * starts with an empty cache — so the row stops moving while the last mark left
+   * on it still reads "Auto". A ghost row that has fallen behind the room's year is
+   * nobody's business any more, and "Away" is what that is. It comes back on its
+   * own when the snapshot lands and the row starts moving again.
+   */
+  const auto = peer.ghost === true && peer.yearIndex >= roomYear;
   // "Away" and "auto" are stated in words, not by fading the row: a dimmed name at
   // this size drops straight through the contrast floor (DESIGN.md § Palette).
   const away = !peer.connected && !ended;
@@ -133,9 +155,12 @@ function StandingRow({ peer, rank, isSelf }: { peer: MatchPeer; rank: number; is
       )}
       {away && (
         <span className="eyebrow shrink-0 text-tertiary" style={{ fontSize: "0.5rem" }}>
-          {/* "Away" means someone who was here and left. A seat that never reported
-              at all has not been away — it has been empty the whole time. */}
-          {peer.ghost ? "Auto" : peer.reported ? "Away" : "Absent"}
+          {/* "Away" means someone who was here and left — including a seat this
+              client has simply never heard about, which is every absent player on
+              a rail that has just rejoined (`pending`). "Absent" is the stronger
+              claim, and it is only true of a seat the room itself has never had a
+              word for: empty the whole match. */}
+          {auto ? "Auto" : peer.reported || peer.pending ? "Away" : "Absent"}
         </span>
       )}
       {ended && (
