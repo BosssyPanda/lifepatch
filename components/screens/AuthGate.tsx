@@ -14,6 +14,44 @@ import { loadRunChecked, OUTDATED_SAVE_MESSAGE } from "@/lib/saves";
 import { yearIndex, type RunState } from "@/lib/runEngine";
 
 /**
+ * The way back into a live match, offered on the gate a reloaded player lands on.
+ *
+ * Neither door beside it is theirs: "Continue" resumes an unrelated SOLO life, and
+ * the only other way through says it erases the save. The room is a third thing,
+ * and going to it destroys nothing — `onNew` only opens Setup, where the room is
+ * offered back.
+ *
+ * It is its own component because it has to appear in EVERY terminal state of
+ * `SaveActions`, not just the one with a save. It used to be inline in the `save`
+ * branch, which meant a player with no solo story save never saw it — and that is
+ * precisely the player it exists for. Someone whose only story runs have been match
+ * runs has nothing in `lib/saves`, so they reloaded out of a live match onto a
+ * screen offering them one button, "Begin a new life", with their actual life
+ * nowhere on it. The same held for a save this engine cannot read and for a save
+ * lookup that failed: the room is local and owes the cloud nothing, so neither
+ * state is a reason to withdraw it.
+ *
+ * Not rendered while the lookup is still running — that state resolves on its own
+ * in a moment, and a door that appears and then jumps as the real answer lands is
+ * worse than one that waits.
+ */
+function RoomBack({ code, onNew }: { code: string | null; onNew: () => void }) {
+  if (!code) return null;
+  return (
+    <div className="border-l-2 border-hairline-strong bg-bg px-3 py-2.5">
+      <p className="voice text-[0.8rem] leading-snug text-secondary">
+        You were in room <span className="num tracking-[0.18em] text-ink">{code}</span>.
+      </p>
+      <div className="mt-2">
+        <NeonButton variant="secondary" size="sm" onClick={onNew}>
+          Go back to it →
+        </NeonButton>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The three things that can be true of a save, and what to offer for each: a run to
  * continue, a run this engine can no longer read, or nothing yet — plus the failure
  * case, which is deliberately NOT treated as "no save" (starting fresh over a save
@@ -55,6 +93,7 @@ function SaveActions({
         <NeonButton variant="secondary" size="md" className="w-full" onClick={onRetry}>
           Try again
         </NeonButton>
+        <RoomBack code={roomBack} onNew={onNew} />
       </>
     );
   }
@@ -67,6 +106,7 @@ function SaveActions({
         <NeonButton variant="primary" size="md" className="w-full" onClick={onNew}>
           Begin a new life →
         </NeonButton>
+        <RoomBack code={roomBack} onNew={onNew} />
       </>
     );
   }
@@ -76,23 +116,7 @@ function SaveActions({
         <NeonButton variant="primary" size="md" className="w-full" onClick={() => onResume(save)}>
           Continue — Year {yearIndex(save)} (age {save.age})
         </NeonButton>
-        {/* A player who reloaded out of a live match lands here, and neither door
-            above is theirs: "Continue" resumes an unrelated SOLO life, and the only
-            other way through says it erases the save. The room is a third thing, and
-            going to it destroys nothing — `onNew` only opens Setup, where the room
-            is offered back. */}
-        {roomBack && (
-          <div className="border-l-2 border-hairline-strong bg-bg px-3 py-2.5">
-            <p className="voice text-[0.8rem] leading-snug text-secondary">
-              You were in room <span className="num tracking-[0.18em] text-ink">{roomBack}</span>.
-            </p>
-            <div className="mt-2">
-              <NeonButton variant="secondary" size="sm" onClick={onNew}>
-                Go back to it →
-              </NeonButton>
-            </div>
-          </div>
-        )}
+        <RoomBack code={roomBack} onNew={onNew} />
         <NeonButton
           variant={overwrite.armed ? "danger" : "secondary"}
           size="md"
@@ -106,9 +130,12 @@ function SaveActions({
     );
   }
   return (
-    <NeonButton variant="primary" size="md" className="w-full" onClick={onNew}>
-      Begin a new life →
-    </NeonButton>
+    <>
+      <NeonButton variant="primary" size="md" className="w-full" onClick={onNew}>
+        Begin a new life →
+      </NeonButton>
+      <RoomBack code={roomBack} onNew={onNew} />
+    </>
   );
 }
 
