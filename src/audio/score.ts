@@ -230,12 +230,23 @@ export const CHORDS = [
 ] as const satisfies readonly (readonly Pitch[])[];
 
 /**
- * Sub-bass roots, one per segment, an octave (or two) under the voicings.
- * C2 for segment 7 rather than C1: below ~40 Hz the sine stops reading as a
- * pitch on laptop speakers and just eats headroom.
+ * The held bass root, one per segment.
+ *
+ * These are exactly the beat-1 notes of `BASS_LINE`, deliberately: the sub is a
+ * REINFORCEMENT of the march bass, sustaining underneath while that line walks,
+ * not a separate drone an octave below it.
+ *
+ * It used to be an octave lower (D1 = 36.71 Hz), and that was the single worst
+ * decision in the score. A continuous sine down there is nearly inaudible as a
+ * PITCH — most laptop and phone speakers cannot reproduce it at all — while
+ * carrying enormous energy: measured across the gameplay bed, 95.6% of all
+ * spectral energy sat below 150 Hz, and the sub stem alone was 93.8% of the
+ * mix. What a listener got was a deep rumble with music faintly on top of it,
+ * which is exactly what it was reported as. Up here the same line is a bass note
+ * you can actually hear, on the speakers people actually have.
  */
 export const ROOTS = [
-  "D1", "Bb1", "G1", "A1", "D1", "F1", "C2", "A1",
+  "D2", "Bb1", "G2", "A1", "D2", "F2", "C2", "A1",
 ] as const satisfies readonly Pitch[];
 
 /**
@@ -521,12 +532,12 @@ export const GRIDS = {
  * in this game sounds like a room rather than like a dropped audio context.
  */
 export const PRESETS = {
-  intro:     { bass: 0.5,  brass: 0.45, keys: 0.15, snare: 0.45, ticks: 0.3,  lead: 0,    tension: 0.5,  air: 0.06, counter: 0    },
+  intro:     { bass: 0.38, brass: 0.45, keys: 0.24, snare: 0.45, ticks: 0.3,  lead: 0,    tension: 0.32, air: 0.06, counter: 0    },
   title:     { bass: 0.5,  brass: 0.55, keys: 0.3,  snare: 0.5,  ticks: 0.3,  lead: 0.7,  tension: 0,    air: 0.06, counter: 0.25 },
   menu:      { bass: 0.35, brass: 0.3,  keys: 0.45, snare: 0.12, ticks: 0.12, lead: 0.15, tension: 0,    air: 0.06, counter: 0.15 },
-  gameplay:  { bass: 0.36, brass: 0.25, keys: 0.42, snare: 0.12, ticks: 0.1,  lead: 0,    tension: 0,    air: 0.06, counter: 0    },
+  gameplay:  { bass: 0.26, brass: 0.28, keys: 0.5,  snare: 0.12, ticks: 0.1,  lead: 0,    tension: 0,    air: 0.06, counter: 0    },
   recapGood: { bass: 0.45, brass: 0.5,  keys: 0.5,  snare: 0.35, ticks: 0.2,  lead: 0.55, tension: 0,    air: 0.06, counter: 0.5  },
-  recapBad:  { bass: 0.5,  brass: 0.35, keys: 0.2,  snare: 0.3,  ticks: 0.1,  lead: 0,    tension: 0.55, air: 0.06, counter: 0    },
+  recapBad:  { bass: 0.38, brass: 0.35, keys: 0.3,  snare: 0.3,  ticks: 0.1,  lead: 0,    tension: 0.36, air: 0.06, counter: 0    },
 } as const satisfies Record<ScorePhaseId, Record<StemId, number>>;
 
 /**
@@ -551,12 +562,20 @@ export interface IntensityRamp {
  * Per-phase intensity behaviour. Phases absent from this table ignore intensity
  * entirely and simply use their `PRESETS` row.
  *
- * **gameplay** is the adaptive core. As financial stress climbs: the bass gets
- * heavier, the piano recedes (the tune-ish element gets out of the way), the
- * snare and typewriters crowd in, and past 0.45 the economy's m2 grind starts to
- * bleed through. Nothing new is introduced at high intensity — it is the same
- * material leaning on the player harder, which is why it never feels like the
- * game changed soundtrack mid-thought.
+ * **gameplay** is the adaptive core. As financial stress climbs the snare and
+ * typewriters crowd in, the piano recedes a little, and past 0.45 the economy's
+ * m2 grind starts to bleed through. Nothing new is introduced at high intensity —
+ * it is the same material leaning on the player harder, which is why it never
+ * feels like the game changed soundtrack mid-thought.
+ *
+ * The bass barely moves (0.26 -> 0.33 across the whole range), and that is a
+ * correction. It used to climb to 0.52 while the piano fell to 0.29, on the
+ * theory that "heavier" means "more low end". Measured, that made the stressed
+ * bed the most low-tilted mix in the game by a wide margin — the player got
+ * rumble rather than pressure, and the piano they were supposed to be thinking
+ * over was buried under it. Stress is carried by the parts with TRANSIENTS, the
+ * snare and the ticks, because urgency is a rhythmic sensation and not a
+ * spectral one.
  *
  * **intro** is here because the cold open is supposed to BUILD. `ColdOpen`
  * escalates intensity beat by beat; without these rows that escalation is
@@ -566,16 +585,16 @@ export interface IntensityRamp {
  */
 export const INTENSITY_RULES = {
   gameplay: {
-    bass:    { base: 0.36, perIntensity: 0.18 },
-    keys:    { base: 0.42, perIntensity: -0.15 },
+    bass:    { base: 0.26, perIntensity: 0.08 },
+    keys:    { base: 0.5,  perIntensity: -0.1 },
     snare:   { base: 0.12, perIntensity: 0.3 },
     ticks:   { base: 0.1,  perIntensity: 0.25 },
-    tension: { base: 0,    perIntensity: 1.1, threshold: 0.45 },
+    tension: { base: 0,    perIntensity: 0.7, threshold: 0.45 },
   },
   intro: {
     snare:   { base: 0.45, perIntensity: 0.3 },
     ticks:   { base: 0.3,  perIntensity: 0.22 },
-    tension: { base: 0.5,  perIntensity: 0.3 },
+    tension: { base: 0.32, perIntensity: 0.18 },
   },
 } as const satisfies Partial<Record<ScorePhaseId, Partial<Record<StemId, IntensityRamp>>>>;
 
@@ -661,7 +680,7 @@ export const VOICES = {
     modulation: { type: "sine" },
     envelope: { attack: 0.003, decay: 0.55, sustain: 0.05, release: 0.8 },
     modulationEnvelope: { attack: 0.002, decay: 0.25, sustain: 0.02, release: 0.4 },
-    volume: -14,
+    volume: -1,
   },
 
   /** The tune. Two oscillators, drive, tempo-synced delay. */
@@ -670,7 +689,7 @@ export const VOICES = {
     /** `under` = dB below the A voice: the beating partner, never the equal. */
     b: { type: "square", detune: 7, under: 4 },
     envelope: { attack: 0.008, decay: 0.3, sustain: 0.55, release: 0.35 },
-    volume: -12,
+    volume: -17,
     /** Light asymmetric drive — edge, not distortion. */
     drive: 0.12,
     delay: { time: "8n", feedback: 0.2, wet: 0.18 },
@@ -685,11 +704,21 @@ export const VOICES = {
     dcBlock: { hz: 25, rolloff: -12 },
   },
 
-  /** Sine sub on the segment roots. Long release so the low end never gaps. */
+  /**
+   * Sine sub, holding the segment root under the walking march bass.
+   *
+   * `highpass` is on the whole bass STEM, not on this voice alone. Nothing
+   * musical lives below 30 Hz — the lowest note in the bass is A1 at 55 Hz — but
+   * a sine's attack transient and the summed envelopes of two voices put energy
+   * down there anyway, where it is inaudible on every speaker anyone owns and
+   * still eats headroom on the way to the master. 30 Hz is a full octave below
+   * the lowest note, so it removes only what nobody can hear.
+   */
   subBass: {
     oscillator: { type: "sine" },
     envelope: { attack: 0.04, decay: 0.3, sustain: 0.9, release: 0.8 },
-    volume: -8,
+    volume: -16,
+    highpass: { hz: 30, rolloff: -12 },
   },
 
   /**
@@ -701,7 +730,7 @@ export const VOICES = {
     /** `under` = dB below the A voice. The buzz is a seasoning, not a layer. */
     b: { type: "sawtooth", gain: 0.25, under: 8 },
     envelope: { attack: 0.005, decay: 0.25, sustain: 0.4, release: 0.25 },
-    volume: -14,
+    volume: -22,
   },
 
   /**
@@ -711,8 +740,8 @@ export const VOICES = {
    * a tone-only snare is a tom.
    */
   snare: {
-    noise: { type: "white", attack: 0.001, decay: 0.09, volume: -18 },
-    body: { type: "triangle", frequency: 220, attack: 0.001, decay: 0.12, volume: -24 },
+    noise: { type: "white", attack: 0.001, decay: 0.09, volume: -9 },
+    body: { type: "triangle", frequency: 220, attack: 0.001, decay: 0.12, volume: -15 },
     highpass: 400,
   },
 
@@ -726,7 +755,7 @@ export const VOICES = {
     highpass: 4800,
     attack: 0.001,
     decay: 0.012,
-    volume: -20,
+    volume: -6,
   },
 
   /** The low stamp on every fourth downbeat. */
@@ -736,7 +765,7 @@ export const VOICES = {
     octaves: 4,
     attack: 0.001,
     decay: 0.12,
-    volume: -14,
+    volume: -9,
   },
 
   /** The carriage-return bell. */
@@ -744,7 +773,7 @@ export const VOICES = {
     oscillator: { type: "triangle" },
     attack: 0.002,
     decay: 0.35,
-    volume: -24,
+    volume: -10,
   },
 
   /**
@@ -754,9 +783,19 @@ export const VOICES = {
    * A2/A#2 pair so it now grinds against the tonic rather than beside it.
    */
   tension: {
-    a: { note: "D2", type: "sawtooth", volume: -14 },
-    b: { note: "Eb2", type: "sawtooth", volume: -16 },
-    filter: { type: "lowpass", frequency: 700 },
+    a: { note: "D2", type: "sawtooth", volume: -21 },
+    b: { note: "Eb2", type: "sawtooth", volume: -23 },
+    /**
+     * The cutoff sits at 1300 Hz rather than the 700 it started at.
+     *
+     * These two saws are 4.36 Hz apart, so they beat — that is the intended
+     * "grinding" quality, and it is also the thing most at risk of being heard
+     * as a deep throb in the chest rather than as unease in the room. Opening
+     * the filter passes more of the upper harmonics, which moves the character
+     * of the beat upward without retuning the interval: the grind stays, the
+     * throb goes. The level cut does the rest.
+     */
+    filter: { type: "lowpass", frequency: 1300 },
     lfo: { rate: 0.07, depth: 180 },
   },
 
@@ -764,7 +803,7 @@ export const VOICES = {
   air: {
     noise: { type: "pink" },
     filter: { type: "bandpass", frequency: 1200, Q: 0.6 },
-    volume: -20,
+    volume: -13,
   },
 
   /**
@@ -791,7 +830,7 @@ export const VOICES = {
      */
     envelope: { attack: 0.6, decay: 0.4, sustain: 0.8, release: 1.4 },
     tremolo: { rate: 6 / CYCLE_SECONDS, depth: 0.45 },
-    volume: -20,
+    volume: -7,
   },
 } as const;
 
@@ -830,7 +869,17 @@ export type VoiceBook = typeof VOICES;
  */
 export const MIX = {
   master: 0.85,
-  music: 1,
+  /**
+   * The music bus runs above unity, which is gain staging rather than a mistake.
+   *
+   * Rebalancing the stems removed a great deal of sub-bass energy — energy a
+   * listener experienced as rumble rather than as music — and taking it out
+   * dropped the measured loudness of every bed by 3 to 6 LUFS. Left alone, the
+   * score would simply have become quieter than the sound effects sitting on top
+   * of it. This puts the perceived level back roughly where it was, except that
+   * what is now loud is the march.
+   */
+  music: 1.25,
   accent: 0.9,
   sfx: 0.9,
   ambience: 0.8,

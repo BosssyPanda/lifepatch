@@ -77,15 +77,20 @@
     leadB.maxPolyphony = score.POLYPHONY.lead;
 
     // --- bass: sine sub for the weight + a march "oom" for phone speakers
-    const sub = new Tone.Synth({ ...V.subBass }).connect(stems.bass);
+    const bassHP = new Tone.Filter({
+      type: "highpass", frequency: V.subBass.highpass.hz, rolloff: V.subBass.highpass.rolloff,
+    }).connect(stems.bass);
+    const sub = new Tone.Synth({
+      oscillator: V.subBass.oscillator, envelope: V.subBass.envelope, volume: V.subBass.volume,
+    }).connect(bassHP);
     const marchA = new Tone.Synth({
       oscillator: { type: V.marchBass.a.type }, envelope: V.marchBass.envelope,
       volume: V.marchBass.volume,
-    }).connect(stems.bass);
+    }).connect(bassHP);
     const marchB = new Tone.Synth({
       oscillator: { type: V.marchBass.b.type }, envelope: V.marchBass.envelope,
       volume: V.marchBass.volume - V.marchBass.b.under,
-    }).connect(stems.bass);
+    }).connect(bassHP);
 
     // --- snare: noise crack + tuned body, high-passed to leave the low end alone
     const snareHP = new Tone.Filter(V.snare.highpass, "highpass").connect(stems.snare);

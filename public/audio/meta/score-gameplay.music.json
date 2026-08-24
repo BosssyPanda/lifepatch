@@ -27,9 +27,9 @@
     { "name": "carriage-return", "bar": 16, "sec": 35 }
   ],
   "stems": [
-    { "id": "bass", "file": "procedural:Tone.Synth(sine sub on ROOTS) + triangle/saw march oom (BASS_LINE)", "role": "bass", "defaultGain": 0.36 },
-    { "id": "brass", "file": "procedural:Tone.PolySynth(fatsawtooth x3, spread 24) + lowpass filter-envelope swell 380->1600Hz", "role": "harmony", "defaultGain": 0.25 },
-    { "id": "keys", "file": "procedural:Tone.FMSynth(harmonicity 3.01, modIndex 10) — compressed upright, KEYS_FIGURES", "role": "harmony", "defaultGain": 0.42 },
+    { "id": "bass", "file": "procedural:Tone.Synth(sine sub on ROOTS) + triangle/saw march oom (BASS_LINE)", "role": "bass", "defaultGain": 0.26 },
+    { "id": "brass", "file": "procedural:Tone.PolySynth(fatsawtooth x3, spread 24) + lowpass filter-envelope swell 380->1600Hz", "role": "harmony", "defaultGain": 0.28 },
+    { "id": "keys", "file": "procedural:Tone.FMSynth(harmonicity 3.01, modIndex 10) — compressed upright, KEYS_FIGURES", "role": "harmony", "defaultGain": 0.5 },
     { "id": "snare", "file": "procedural:white-noise transient + 220Hz triangle body, highpass 400Hz (SNARE_PATTERN)", "role": "rhythm", "defaultGain": 0.12 },
     { "id": "ticks", "file": "procedural:12ms noise clack highpass 4800Hz + D2 stamp-thock + carriage-return zip/ding", "role": "rhythm", "defaultGain": 0.1 },
     { "id": "lead", "file": "procedural:pulse(0.35)+square(detune 7c) -> drive 0.12 -> FeedbackDelay('8n')", "role": "melody", "defaultGain": 0 },

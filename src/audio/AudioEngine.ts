@@ -266,17 +266,25 @@ export class AudioEngine {
 
     // --- bass: sine sub for the weight, plus a march "oom" that survives a
     //     phone speaker where the sub is simply gone ---
-    this.sub = new Tone.Synth({ ...V.subBass }).connect(this.stems.bass);
+    const bassHP = new Tone.Filter({
+      type: "highpass", frequency: V.subBass.highpass.hz, rolloff: V.subBass.highpass.rolloff,
+    }).connect(this.stems.bass);
+    this.sub = new Tone.Synth({
+      oscillator: { ...V.subBass.oscillator },
+      envelope: { ...V.subBass.envelope },
+      volume: V.subBass.volume,
+    }).connect(bassHP);
     this.marchA = new Tone.Synth({
       oscillator: { type: V.marchBass.a.type },
       envelope: { ...V.marchBass.envelope },
       volume: V.marchBass.volume,
-    }).connect(this.stems.bass);
+    }).connect(bassHP);
     this.marchB = new Tone.Synth({
       oscillator: { type: V.marchBass.b.type },
       envelope: { ...V.marchBass.envelope },
       volume: V.marchBass.volume - V.marchBass.b.under,
-    }).connect(this.stems.bass);
+    }).connect(bassHP);
+    this.musicNodes.push(bassHP);
 
     // --- snare: noise crack + tuned body, high-passed to leave the low end
     //     to the bass (noise alone is a "tss", tone alone is a tom) ---

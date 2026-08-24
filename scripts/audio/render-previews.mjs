@@ -29,7 +29,7 @@ import { fileURLToPath } from "url";
 import {
   CHORDS, ROOTS, LEAD_THEME, KEYS_FIGURES, COUNTER_LINE, COUNTER_NOTE_VALUE,
   BASS_LINE, SNARE_PATTERN, TICKS_PATTERN, TICK_STAMP_BARS, CARRIAGE_RETURN,
-  GRIDS, PRESETS, INTENSITY_RULES, VOICES, STINGERS, STINGER_TIMBRES,
+  GRIDS, PRESETS, INTENSITY_RULES, VOICES, STINGERS, STINGER_TIMBRES, STEM_IDS,
   STINGER_ENVELOPE_CAP, STINGER_MAX_SOUNDING_SEC, STING_TONES, rampGain,
   MIX, POLYPHONY, VELOCITY, STINGER_PRIMITIVES, SFX_PRIMITIVES, stingerSoundingSec,
   SCORE_BPM_REF, BEATS_PER_BAR, BARS_PER_SEGMENT, SECONDS_PER_BAR, SECONDS_PER_BEAT,
@@ -51,6 +51,31 @@ function arg(flag, fallback) {
 }
 const OUT_DIR = arg("--out", path.join(REPO, ".preview-audio"));
 const ONLY = arg("--only", null)?.split(",").map((s) => s.trim());
+
+/**
+ * `--solo <phase>` renders one file per stem, that stem alone at its phase gain
+ * and every other stem silent.
+ *
+ * This exists because "the bed has a deep ringing in it" is not a question you
+ * can answer from a mix. Nine layers are playing; the only way to say WHICH one
+ * is making a sound — rather than guess from a spectrum and then "fix" the
+ * wrong layer — is to listen to them one at a time and measure them one at a
+ * time. It is the audio equivalent of bisecting.
+ */
+const SOLO_PHASE = arg("--solo", null);
+
+/**
+ * `--solo-gain 1` renders each soloed stem at a fixed gain instead of its phase
+ * gain, which is what makes stems COMPARABLE.
+ *
+ * A stem's phase gain is a fader position; what you need in order to set fader
+ * positions honestly is each stem's loudness at the SAME fader position. Without
+ * this you cannot tell a layer that is quiet because its fader is down from one
+ * that is quiet because its voice is intrinsically weak — and a preset table
+ * written in the belief that 0.42 means the same thing for the piano as for the
+ * sub is a table that does not mean what it says.
+ */
+const SOLO_GAIN = arg("--solo-gain", null);
 
 function chromiumPath() {
   const found = globSync("/opt/pw-browsers/chromium-*/chrome-linux/chrome");
@@ -93,6 +118,15 @@ const CUES = [
   { id: "12-stings-reveal", stings: ["good", "bad", "warning", "neutral"], tailSec: 1.2,
     note: "Outcome reveal chimes. good: C-major triad → D major (the win colour). bad: A+D# → D+Eb (D# was the one pitch genuinely foreign to D minor). warning: D+G (a 4th) → A+Bb (a minor 2nd, the same grind the tension stem uses). neutral: unchanged." },
 ];
+
+/** One cue per stem, that stem alone. See `--solo`. */
+function soloCues(phase) {
+  return STEM_IDS.map((id, i) => ({
+    id: `solo-${String(i + 1).padStart(2, "0")}-${id}`,
+    phase, solo: id, cycles: 1, tailSec: 2,
+    note: `"${id}" alone, at its ${phase} gain, every other stem silent.`,
+  }));
+}
 
 /**
  * Resolve a phase + intensity to the stem gains the engine would ramp to.
@@ -314,7 +348,7 @@ console.log(`Tone.js ${toneVersion} · ${SCORE_BPM_REF} BPM · cycle ${CYCLE_SEC
 const summary = [];
 let failures = 0;
 
-for (const cue of CUES) {
+for (const cue of (SOLO_PHASE ? soloCues(SOLO_PHASE) : CUES)) {
   if (ONLY && !ONLY.includes(cue.id)) continue;
 
   // How long the cue's own material lasts, before `tailSec` of ring-out. The
@@ -333,7 +367,14 @@ for (const cue of CUES) {
   const totalSamples = Math.round((musicSec + cue.tailSec) * SAMPLE_RATE);
   const duration = totalSamples / SAMPLE_RATE;
 
-  const gains = cue.phase ? stemGainsFor(cue.phase, cue.intensity ?? 0) : null;
+  let gains = cue.phase ? stemGainsFor(cue.phase, cue.intensity ?? 0) : null;
+  if (gains && cue.solo) {
+    // Default: the soloed stem keeps exactly the gain the phase would give it,
+    // so its level here is the level it contributes to that mix. With
+    // --solo-gain it is forced to a common value instead, for calibration.
+    const g = SOLO_GAIN !== null ? Number(SOLO_GAIN) : gains[cue.solo];
+    gains = Object.fromEntries(STEM_IDS.map((id) => [id, id === cue.solo ? g : 0]));
+  }
 
   process.stdout.write(`  ${cue.id} … `);
   const rendered = await page.evaluate(
