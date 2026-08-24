@@ -3,16 +3,40 @@
 import * as Tone from "tone";
 import type { AmbienceId, SfxName, StingTone } from "./sfxBank";
 import { SCORE_BPM } from "./tempo";
+import {
+  BASS_LINE, BRAIN_GLOW, CARRIAGE_RETURN, CHORDS, COUNTER_LINE, COUNTER_NOTE_VALUE,
+  GRIDS, INTENSITY_RULES, KEYS_FIGURES, LEAD_THEME, PRESETS, ROOTS, SNARE_PATTERN,
+  STINGERS, STINGER_TIMBRES, STING_TONES, SWELL_STEM, TICKS_PATTERN, TICK_STAMP_BARS,
+  VOICES, rampGain,
+  type IntensityRamp, type StemId, type StingerSpec, type StingerTimbre,
+} from "./score";
 
 /**
- * LifePatch adaptive score — one continuous "tense lo-fi documentary" piece in
- * A minor @ 76 BPM that morphs between game phases. See .claude/audio/qc/cue-plan.md.
+ * LifePatch adaptive score — "The Debtor's March": one continuous defiant march
+ * in D minor @ 108 BPM that morphs between game phases by gain alone.
+ * See `.claude/audio/qc/cue-plan.md`.
+ *
+ * **This file owns no music.** Every pitch, pattern, gain, voice parameter and
+ * stinger lives in `src/audio/score.ts`; what is here is the wiring that plays
+ * it. The offline preview renderer (`scripts/audio/render-previews.mjs`) builds
+ * the same graph from the same data, which is the only reason a preview WAV can
+ * be trusted to sound like the game — so retuning the score is a data edit and
+ * never an engine edit.
+ *
+ * The bed is nine stems (bass, brass, keys, snare, ticks, lead, tension, air,
+ * counter) over a 16-bar harmonic cycle of 35.556s. All nine always PLAY; the
+ * phase mix decides which are audible, which is what makes a phase change a set
+ * of ramps rather than a re-scheduling.
  *
  * Hard rules:
  *  - The Transport never stops between screens; phase/intensity changes only
  *    RAMP stem gains, so music is seamless (never a hard cut).
  *  - Every teardown fades first (see dispose()).
- *  - All material is original (generic tonal voicings, no transcribed works).
+ *  - No accent may still be sounding a bar after it fires (score.ts's
+ *    STINGER_MAX_SOUNDING_SEC). Sustained chord stacks with nowhere to go are
+ *    what the player heard as "loud beeping"; every accent here is a pluck.
+ *  - All material is original (composed for this project — no samples, nothing
+ *    transcribed).
  */
 
 export type ScorePhase = "intro" | "title" | "menu" | "gameplay" | "recapGood" | "recapBad";
@@ -22,45 +46,39 @@ export type AccentKind =
   | "rise" | "thud" | "stampGood" | "stampBad"
   // v2 learning/social milestones (celebratory, grid-quantized)
   | "mastered" | "levelup" | "streak"
-  // Addendum B: the money-consequence land motif (build→impact→settle, A minor)
+  // Addendum B: the money-consequence land motif (build→impact→settle, D minor)
   | "consequence";
 
-type StemId = "sub" | "pad" | "rhodes" | "tick" | "crackle" | "tension" | "warmth" | "lead";
-
-// --- musical material (A minor, 76 BPM, 8-bar / 4-segment cycle) ---
 // The tempo is shared with the visual beat grid (src/audio/tempo.ts) so the
 // ceremonies can land their phase boundaries on the same instants as the score.
 const BPM = SCORE_BPM;
-// chord voicings per 2-bar segment: Am(add9) → Fmaj7 → Cmaj7 → G6/B
-const CHORDS: string[][] = [
-  ["A3", "C4", "E4", "B4"],
-  ["F3", "A3", "C4", "E4"],
-  ["C4", "E4", "G4", "B4"],
-  ["B3", "D4", "G4", "E4"],
-];
-const ROOTS = ["A1", "F1", "C2", "B1"]; // sub follows the bass root per segment
-// 4-note Rhodes leitmotif (1 b3 5 4) placed over the 2-bar segment, sparse.
-const MOTIF: (string | null)[] = ["A4", null, "C5", null, "E5", null, "D5", null];
 
-// The signature "LifePatch theme" — an original 4-bar A-minor hook carried by
-// the lead voice, restated over the harmony cycle. Only audible in the `title`
-// phase (its stem is silent everywhere else). Spacious, hopeful-tense.
-const TITLE_MOTIF: (string | null)[] = [
-  "A4", null, "C5", null, "E5", null, null, null, // bar 1 — Am, rising
-  "D5", null, "C5", null, "A4", null, null, null, // bar 2 — settle back
-  "C5", null, "F5", null, "E5", null, null, null, // bar 3 — lift over F
-  "D5", null, null, "B4", null, "A4", null, null, // bar 4 — resolve home
-];
+/**
+ * The accents whose material is data (see `STINGERS` in score.ts). `riser` and
+ * `rise` are excluded: they are filtered-noise sweeps with no pitch material at
+ * all, so there is nothing for a score to say about them and the engine keeps
+ * owning them outright (see `riser()`).
+ */
+type StingerKind = Exclude<AccentKind, "riser" | "rise">;
 
-// phase → target gain per stem (intensity adjusts gameplay further)
-const PRESETS: Record<ScorePhase, Record<StemId, number>> = {
-  intro:     { sub: 0.5,  pad: 0.5,  rhodes: 0.18, tick: 0.4,  crackle: 0.06, tension: 0.5,  warmth: 0.0, lead: 0.0  },
-  title:     { sub: 0.4,  pad: 0.5,  rhodes: 0.32, tick: 0.18, crackle: 0.06, tension: 0.0,  warmth: 0.28, lead: 0.72 },
-  menu:      { sub: 0.35, pad: 0.45, rhodes: 0.5,  tick: 0.15, crackle: 0.06, tension: 0.0,  warmth: 0.1, lead: 0.0  },
-  gameplay:  { sub: 0.4,  pad: 0.4,  rhodes: 0.25, tick: 0.3,  crackle: 0.06, tension: 0.0,  warmth: 0.0, lead: 0.0  },
-  recapGood: { sub: 0.45, pad: 0.5,  rhodes: 0.6,  tick: 0.25, crackle: 0.06, tension: 0.0,  warmth: 0.6, lead: 0.0  },
-  recapBad:  { sub: 0.5,  pad: 0.4,  rhodes: 0.2,  tick: 0.2,  crackle: 0.06, tension: 0.55, warmth: 0.0, lead: 0.0  },
-};
+/** An accent voice built from `STINGER_TIMBRES` (the piano-ish one is FM). */
+type PluckVoice = Tone.PolySynth<Tone.Synth> | Tone.PolySynth<Tone.FMSynth>;
+
+/**
+ * The intensity rows for a phase, or `undefined` when the phase ignores
+ * intensity entirely. `INTENSITY_RULES` is deliberately partial — only
+ * `gameplay` and `intro` respond — so this is the single place that knows how
+ * to ask it about a phase which may not be in it.
+ */
+function intensityRulesFor(phase: ScorePhase): Partial<Record<StemId, IntensityRamp>> | undefined {
+  return (INTENSITY_RULES as Partial<Record<ScorePhase, Partial<Record<StemId, IntensityRamp>>>>)[phase];
+}
+
+/** Transpose a note name down an octave ("C#5" → "C#4"), for octave doubles. */
+function octaveDown(note: string): string {
+  const m = /^([A-G][#b]?)(\d)$/.exec(note);
+  return m ? `${m[1]}${Math.max(0, Number(m[2]) - 1)}` : note;
+}
 
 /**
  * Global floor between repeats of the money / tick foley, in ms — the same
@@ -100,17 +118,31 @@ export class AudioEngine {
   private stems!: Record<StemId, Tone.Gain>;
   private currentAmb: { id: AmbienceId; out: Tone.Gain; dispose: () => void } | null = null;
 
-  // voices
-  private pad!: Tone.PolySynth;
+  // voices — one per entry of score.ts's VOICES book
+  /** Chord voicings. PolySynth of MONOsynths so each voice gets the filter env. */
+  private brass!: Tone.PolySynth<Tone.MonoSynth>;
+  private keys!: Tone.PolySynth<Tone.FMSynth>;
+  /** The tune, two detuned oscillators beating against each other. */
+  private leadA!: Tone.PolySynth<Tone.Synth>;
+  private leadB!: Tone.PolySynth<Tone.Synth>;
   private sub!: Tone.Synth;
-  private rhodes!: Tone.FMSynth;
-  private lead!: Tone.Synth;
-  private kick!: Tone.MembraneSynth;
-  private hat!: Tone.NoiseSynth;
-  private crackleNoise!: Tone.Noise;
+  private marchA!: Tone.Synth;
+  private marchB!: Tone.Synth;
+  private snareNoise!: Tone.NoiseSynth;
+  private snareBody!: Tone.Synth;
+  private tick!: Tone.NoiseSynth;
+  private stampThock!: Tone.MembraneSynth;
+  private ding!: Tone.Synth;
   private tensionA!: Tone.Oscillator;
   private tensionB!: Tone.Oscillator;
-  private warmthOsc!: Tone.Oscillator;
+  private airNoise!: Tone.Noise;
+  private counter!: Tone.Synth;
+  /** The carriage-return zip, built once and re-automated per cycle (see start). */
+  private zipNoise!: Tone.Noise;
+  private zipGain!: Tone.Gain;
+  private zipFilter!: Tone.Filter;
+  /** Filters/effects/LFOs the voices run through; torn down with them. */
+  private musicNodes: { dispose(): void }[] = [];
   /** Pooled coin-ping voices (see `ping`), round-robined by `pingIdx`. */
   private pings: Tone.MetalSynth[] = [];
   private pingIdx = 0;
@@ -162,122 +194,246 @@ export class AudioEngine {
 
     // per-stem gains start silent and ramp in via setPhase()
     this.stems = {
-      sub: new Tone.Gain(0).connect(this.musicBus),
-      pad: new Tone.Gain(0).connect(this.musicBus),
-      rhodes: new Tone.Gain(0).connect(this.musicBus),
-      tick: new Tone.Gain(0).connect(this.musicBus),
-      crackle: new Tone.Gain(0).connect(this.musicBus),
-      tension: new Tone.Gain(0).connect(this.musicBus),
-      warmth: new Tone.Gain(0).connect(this.musicBus),
+      bass: new Tone.Gain(0).connect(this.musicBus),
+      brass: new Tone.Gain(0).connect(this.musicBus),
+      keys: new Tone.Gain(0).connect(this.musicBus),
+      snare: new Tone.Gain(0).connect(this.musicBus),
+      ticks: new Tone.Gain(0).connect(this.musicBus),
       lead: new Tone.Gain(0).connect(this.musicBus),
+      tension: new Tone.Gain(0).connect(this.musicBus),
+      air: new Tone.Gain(0).connect(this.musicBus),
+      counter: new Tone.Gain(0).connect(this.musicBus),
     };
 
-    // --- harmony pad: warm detuned saws, soft low-pass ---
-    const padFilter = new Tone.Filter(900, "lowpass").connect(this.stems.pad);
-    this.pad = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: "fatsawtooth", count: 3, spread: 22 },
-      envelope: { attack: 1.1, decay: 0.5, sustain: 0.85, release: 3 },
-      volume: -10,
-    }).connect(padFilter);
+    const V = VOICES;
+    const G = GRIDS;
 
-    // --- sub bass (sine), follows the root ---
-    this.sub = new Tone.Synth({
-      oscillator: { type: "sine" },
-      envelope: { attack: 0.06, decay: 0.3, sustain: 0.9, release: 1.2 },
-      volume: -6,
-    }).connect(this.stems.sub);
-
-    // --- Rhodes-ish electric piano (FM) for the leitmotif ---
-    const rhodesChorus = new Tone.Chorus(1.2, 2.5, 0.3).start().connect(this.stems.rhodes);
-    this.rhodes = new Tone.FMSynth({
-      harmonicity: 2.01,
-      modulationIndex: 6,
-      oscillator: { type: "sine" },
-      modulation: { type: "sine" },
-      envelope: { attack: 0.004, decay: 0.7, sustain: 0.08, release: 1.4 },
-      modulationEnvelope: { attack: 0.01, decay: 0.4, sustain: 0.1, release: 0.6 },
-      volume: -9,
-    }).connect(rhodesChorus);
-
-    // --- percussion: soft kick on the 1, hat tick on the beat ---
-    this.kick = new Tone.MembraneSynth({
-      pitchDecay: 0.05, octaves: 5,
-      envelope: { attack: 0.001, decay: 0.32, sustain: 0 },
-      volume: -8,
-    }).connect(this.stems.tick);
-    const hatHP = new Tone.Filter(2000, "highpass").connect(this.stems.tick);
-    this.hat = new Tone.NoiseSynth({
-      noise: { type: "white" },
-      envelope: { attack: 0.001, decay: 0.03, sustain: 0 },
-      volume: -22,
-    }).connect(hatHP);
-
-    // --- always-on vinyl/tape crackle (the glue) ---
-    const crackleBP = new Tone.Filter(1600, "bandpass").connect(this.stems.crackle);
-    crackleBP.Q.value = 0.6;
-    this.crackleNoise = new Tone.Noise({ type: "pink", volume: -20 }).connect(crackleBP).start();
-
-    // --- tension drone: two detuned oscillators a semitone apart (b9 grind) ---
-    const tensionFilter = new Tone.Filter(700, "lowpass").connect(this.stems.tension);
-    this.tensionA = new Tone.Oscillator("A2", "sawtooth").connect(tensionFilter);
-    this.tensionB = new Tone.Oscillator("A#2", "sawtooth").connect(tensionFilter);
-    this.tensionA.volume.value = -14; this.tensionB.volume.value = -16;
-    this.tensionA.start(); this.tensionB.start();
-
-    // --- warmth shimmer: high major-6th sine, breathes via a slow tremolo ---
-    const warmthTrem = new Tone.Tremolo(0.15, 0.5).start().connect(this.stems.warmth);
-    this.warmthOsc = new Tone.Oscillator("F#5", "triangle").connect(warmthTrem);
-    this.warmthOsc.volume.value = -22;
-    this.warmthOsc.start();
-
-    // --- title lead: a bright bell-pluck carrying the signature theme. Routed
-    //     through a tempo-synced delay for shimmer; silent until the `title`
-    //     phase ramps its stem up (the sequence always runs underneath). ---
-    const leadDelay = new Tone.FeedbackDelay("8n.", 0.26).connect(this.stems.lead);
-    leadDelay.wet.value = 0.26;
-    this.lead = new Tone.Synth({
-      oscillator: { type: "triangle" },
-      envelope: { attack: 0.005, decay: 0.45, sustain: 0.12, release: 1.2 },
-      volume: -11,
-    }).connect(leadDelay);
-
-    // --- scheduled musical loops (route to stem gains, so muting = ramp gain) ---
-    // chords + sub: advance segment every 2 measures
-    const harmonyLoop = new Tone.Loop((time) => {
-      const chord = CHORDS[this.seg];
-      const root = ROOTS[this.seg];
-      this.pad.triggerAttackRelease(chord, "2m", time);
-      this.sub.triggerAttackRelease(root, "1m", time);
-      this.sub.triggerAttackRelease(root, "1m", time + Tone.Time("1m").toSeconds());
-      this.seg = (this.seg + 1) % CHORDS.length;
-    }, "2m").start(0);
-
-    // rhodes motif: sparse 8th-note sequence, restated each 2 measures
-    const motifSeq = new Tone.Sequence(
-      (time, note) => {
-        if (note) this.rhodes.triggerAttackRelease(note, "8n", time, 0.8);
+    // --- brass: a PolySynth of MONOsynths, because the filter ENVELOPE has to
+    //     be per voice. That sweep (380 → 1600Hz in 50ms, falling back over
+    //     350ms) is the "bwah" that separates a brass section leaning into a
+    //     chord from a pad. `octaves` is derived so base × 2^octaves is the
+    //     score's stated peak. ---
+    this.brass = new Tone.PolySynth(Tone.MonoSynth, {
+      volume: V.brass.volume,
+      oscillator: { ...V.brass.oscillator },
+      envelope: { ...V.brass.envelope },
+      filter: { type: V.brass.filter.type, Q: V.brass.filter.Q, rolloff: -12 },
+      filterEnvelope: {
+        attack: V.brass.filter.envAttack,
+        decay: V.brass.filter.envDecay,
+        sustain: 0.45,
+        release: 0.6,
+        baseFrequency: V.brass.filter.base,
+        octaves: Math.log2(V.brass.filter.peak / V.brass.filter.base),
+        exponent: 2,
       },
-      MOTIF, "8n",
-    ).start(0);
-    motifSeq.loop = true;
+    }).connect(this.stems.brass);
+    this.brass.maxPolyphony = 16;
 
-    // pulse: kick on beat 1 of each bar, hat on every beat
-    const pulseLoop = new Tone.Loop((time) => {
-      this.hat.triggerAttackRelease("32n", time);
-    }, "4n").start(0);
-    const kickLoop = new Tone.Loop((time) => {
-      this.kick.triggerAttackRelease("A1", "8n", time);
-    }, "1m").start(0);
+    // --- keys: the compressed upright, FM, hammer-then-decay ---
+    this.keys = new Tone.PolySynth(Tone.FMSynth, { ...V.keys }).connect(this.stems.keys);
+    this.keys.maxPolyphony = 12;
 
-    // title theme: the signature leitmotif, restated every 4 bars. Always
-    // scheduled but inaudible until the `title` phase opens the lead stem.
-    const titleSeq = new Tone.Sequence(
-      (time, note) => { if (note) this.lead.triggerAttackRelease(note, "8n", time, 0.9); },
-      TITLE_MOTIF, "8n",
-    ).start(0);
-    titleSeq.loop = true;
+    // --- lead: two detuned oscillators → drive → tempo-synced delay. Drive sits
+    //     BEFORE the delay so the echoes repeat an already-shaped note instead
+    //     of re-distorting every tail.
+    //     The high-pass is a DC blocker, and it is not optional: the A voice is
+    //     a pulse at 35% duty, and a pulse whose duty is not 50% has a non-zero
+    //     mean by construction (measured +0.0225 on the title render, tracking
+    //     the lead's gain exactly). DC is inaudible on its own but it eats
+    //     headroom on the side it leans toward, so the anthem clipped earlier
+    //     than its level suggested. 25Hz is far below the lowest lead note
+    //     (D4 = 293Hz), so it removes the offset and nothing anyone can hear. ---
+    const leadDC = new Tone.Filter({ type: "highpass", frequency: 25, rolloff: -12 })
+      .connect(this.stems.lead);
+    const leadDelay = new Tone.FeedbackDelay({
+      delayTime: V.lead.delay.time, feedback: V.lead.delay.feedback, wet: V.lead.delay.wet,
+    }).connect(leadDC);
+    const leadDrive = new Tone.Distortion({ distortion: V.lead.drive, oversample: "2x" })
+      .connect(leadDelay);
+    this.leadA = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: V.lead.a.type, width: V.lead.a.width },
+      envelope: { ...V.lead.envelope },
+      volume: V.lead.volume,
+    }).connect(leadDrive);
+    this.leadB = new Tone.PolySynth(Tone.Synth, {
+      oscillator: { type: V.lead.b.type },
+      envelope: { ...V.lead.envelope },
+      volume: V.lead.volume - 4,
+      detune: V.lead.b.detune,
+    }).connect(leadDrive);
+    this.leadA.maxPolyphony = 8;
+    this.leadB.maxPolyphony = 8;
+    this.musicNodes.push(leadDC, leadDelay, leadDrive);
 
-    this.loops = [harmonyLoop, motifSeq, pulseLoop, kickLoop, titleSeq];
+    // --- bass: sine sub for the weight, plus a march "oom" that survives a
+    //     phone speaker where the sub is simply gone ---
+    this.sub = new Tone.Synth({ ...V.subBass }).connect(this.stems.bass);
+    this.marchA = new Tone.Synth({
+      oscillator: { type: V.marchBass.a.type },
+      envelope: { ...V.marchBass.envelope },
+      volume: V.marchBass.volume,
+    }).connect(this.stems.bass);
+    this.marchB = new Tone.Synth({
+      oscillator: { type: V.marchBass.b.type },
+      envelope: { ...V.marchBass.envelope },
+      volume: V.marchBass.volume - 8,
+    }).connect(this.stems.bass);
+
+    // --- snare: noise crack + tuned body, high-passed to leave the low end
+    //     to the bass (noise alone is a "tss", tone alone is a tom) ---
+    const snareHP = new Tone.Filter(V.snare.highpass, "highpass").connect(this.stems.snare);
+    this.snareNoise = new Tone.NoiseSynth({
+      noise: { type: V.snare.noise.type },
+      envelope: { attack: 0.001, decay: V.snare.noise.decay, sustain: 0 },
+      volume: V.snare.noise.volume,
+    }).connect(snareHP);
+    this.snareBody = new Tone.Synth({
+      oscillator: { type: V.snare.body.type },
+      envelope: { attack: 0.001, decay: V.snare.body.decay, sustain: 0 },
+      volume: V.snare.body.volume,
+    }).connect(snareHP);
+    this.musicNodes.push(snareHP);
+
+    // --- ticks: typewriter clacks, the 4-bar stamp, the carriage-return bell ---
+    const tickHP = new Tone.Filter(V.tick.highpass, "highpass").connect(this.stems.ticks);
+    this.tick = new Tone.NoiseSynth({
+      noise: { type: V.tick.noise.type },
+      envelope: { attack: 0.001, decay: V.tick.decay, sustain: 0 },
+      volume: V.tick.volume,
+    }).connect(tickHP);
+    this.stampThock = new Tone.MembraneSynth({
+      pitchDecay: V.stampThock.pitchDecay, octaves: V.stampThock.octaves,
+      envelope: { attack: 0.001, decay: V.stampThock.decay, sustain: 0 },
+      volume: V.stampThock.volume,
+    }).connect(this.stems.ticks);
+    this.ding = new Tone.Synth({
+      oscillator: { ...V.carriageDing.oscillator },
+      envelope: { attack: 0.002, decay: V.carriageDing.decay, sustain: 0 },
+      volume: V.carriageDing.volume,
+    }).connect(this.stems.ticks);
+    this.musicNodes.push(tickHP);
+
+    // --- tension: two saws a minor second apart (D2 + Eb2) under a slow filter
+    //     LFO. min/max fully define the cutoff — connecting a signal to
+    //     filter.frequency overrides the filter's own value — so the breathing
+    //     is expressed as a range around the score's stated cutoff. ---
+    const tensionFilter = new Tone.Filter(V.tension.filter.frequency, V.tension.filter.type)
+      .connect(this.stems.tension);
+    const tensionLfo = new Tone.LFO({
+      frequency: V.tension.lfo.rate,
+      min: V.tension.filter.frequency - V.tension.lfo.depth,
+      max: V.tension.filter.frequency + V.tension.lfo.depth,
+      type: "sine",
+    });
+    tensionLfo.connect(tensionFilter.frequency);
+    tensionLfo.start();
+    this.tensionA = new Tone.Oscillator(V.tension.a.note, V.tension.a.type).connect(tensionFilter);
+    this.tensionB = new Tone.Oscillator(V.tension.b.note, V.tension.b.type).connect(tensionFilter);
+    this.tensionA.volume.value = V.tension.a.volume;
+    this.tensionB.volume.value = V.tension.b.volume;
+    this.tensionA.start(); this.tensionB.start();
+    this.musicNodes.push(tensionFilter, tensionLfo);
+
+    // --- air: the always-on room (the crackle's successor). Why silence in
+    //     this game sounds like a room and not a dropped audio context. ---
+    const airFilter = new Tone.Filter({
+      type: V.air.filter.type, frequency: V.air.filter.frequency, Q: V.air.filter.Q,
+    }).connect(this.stems.air);
+    this.airNoise = new Tone.Noise({ type: V.air.noise.type, volume: V.air.volume }).connect(airFilter);
+    this.airNoise.start();
+    this.musicNodes.push(airFilter);
+
+    // --- counter: the countermelody, breathing through a slow tremolo. A
+    //     Tremolo that is never started does not modulate at all. ---
+    const counterTrem = new Tone.Tremolo(V.counter.tremolo.rate, V.counter.tremolo.depth)
+      .connect(this.stems.counter);
+    counterTrem.start();
+    this.counter = new Tone.Synth({
+      oscillator: { ...V.counter.oscillator },
+      envelope: { attack: 0.6, decay: 0.4, sustain: 0.8, release: 1.4 },
+      volume: V.counter.volume,
+    }).connect(counterTrem);
+    this.musicNodes.push(counterTrem);
+
+    // -----------------------------------------------------------------------
+    // Scheduled patterns. Every one routes to a stem gain, so muting a layer is
+    // a ramp and never a re-schedule; and every callback forwards its own `time`
+    // argument, which is what keeps scheduling sample-accurate rather than
+    // quantized to whenever the callback happened to run.
+    // -----------------------------------------------------------------------
+
+    // harmony: chord voicing + sub root + counter tone, one segment per 2 bars
+    const harmonyLoop = new Tone.Loop((time) => {
+      const seg = this.seg;
+      this.brass.triggerAttackRelease([...CHORDS[seg]], "2m", time, 0.8);
+      this.sub.triggerAttackRelease(ROOTS[seg], "2m", time, 0.9);
+      this.counter.triggerAttackRelease(COUNTER_LINE[seg], COUNTER_NOTE_VALUE, time, 0.7);
+      this.seg = (seg + 1) % CHORDS.length;
+    }, G.harmony.subdivision).start(0);
+
+    // the tune — always scheduled, audible only where the phase opens `lead`
+    const leadSeq = new Tone.Sequence<string | null>((time, note) => {
+      if (!note) return;
+      this.leadA.triggerAttackRelease(note, "8n", time, 0.85);
+      this.leadB.triggerAttackRelease(note, "8n", time, 0.6);
+    }, [...LEAD_THEME], G.lead.subdivision).start(0);
+
+    // the piano's comping figures (the tune's shadow, an octave down)
+    const keysSeq = new Tone.Sequence<string | null>((time, note) => {
+      if (!note) return;
+      this.keys.triggerAttackRelease(note, "8n", time, 0.7);
+    }, [...KEYS_FIGURES], G.keys.subdivision).start(0);
+
+    // the march "oom": root on 1, fifth on 3
+    const bassSeq = new Tone.Sequence<string>((time, note) => {
+      this.marchA.triggerAttackRelease(note, "4n", time, 0.85);
+      this.marchB.triggerAttackRelease(note, "4n", time, 0.5);
+    }, [...BASS_LINE], G.bass.subdivision).start(0);
+
+    // Velocities, not pitches: 0 is a rest, and the ghost notes are what make
+    // the pattern a march rather than a metronome. NoiseSynth takes velocity as
+    // its THIRD argument (it has no note), unlike every pitched voice here.
+    const snareSeq = new Tone.Sequence<number>((time, v) => {
+      if (!v) return;
+      this.snareNoise.triggerAttackRelease(V.snare.noise.decay, time, v);
+      this.snareBody.triggerAttackRelease(V.snare.body.frequency, V.snare.body.decay, time, v * 0.8);
+    }, [...SNARE_PATTERN], G.snare.subdivision).start(0);
+
+    const ticksSeq = new Tone.Sequence<number>((time, v) => {
+      if (!v) return;
+      this.tick.triggerAttackRelease(V.tick.decay, time, v);
+    }, [...TICKS_PATTERN], G.ticks.subdivision).start(0);
+
+    // The 4-bar stamp: one Loop per stamped bar, each firing once per cycle.
+    // (The offline renderer schedules these as absolute-time triggers because
+    // its transport ends; here it runs forever, so a Loop is the honest form.)
+    const stampLoops = TICK_STAMP_BARS.map((bar) => new Tone.Loop((time) => {
+      this.stampThock.triggerAttackRelease(V.stampThock.note, "8n", time, 0.9);
+    }, `${GRIDS.harmony.bars}m`).start(`${bar}m`));
+
+    // The once-per-cycle carriage return, on the last beat of the last bar: the
+    // page finishing right as the next one starts. The noise, its band-pass and
+    // its gain are built ONCE here and only re-automated in the callback —
+    // allocating a fresh graph every 35 seconds forever is how a long session
+    // ends up with thousands of dead nodes.
+    const cr = CARRIAGE_RETURN;
+    this.zipFilter = new Tone.Filter({ type: "bandpass", frequency: cr.zip.fromHz, Q: 3 })
+      .connect(this.stems.ticks);
+    this.zipGain = new Tone.Gain(0).connect(this.zipFilter);
+    this.zipNoise = new Tone.Noise("white").connect(this.zipGain);
+    this.zipNoise.start();
+    const zipPeak = Math.pow(10, cr.zip.volume / 20) * 4;
+    const carriageLoop = new Tone.Loop((time) => {
+      this.ding.triggerAttackRelease(cr.ding, "8n", time, 0.7);
+      this.zipFilter.frequency.setValueAtTime(cr.zip.fromHz, time);
+      this.zipFilter.frequency.exponentialRampToValueAtTime(cr.zip.toHz, time + cr.zip.durationSec);
+      this.zipGain.gain.setValueAtTime(0, time);
+      this.zipGain.gain.linearRampToValueAtTime(zipPeak, time + cr.zip.durationSec * 0.6);
+      this.zipGain.gain.linearRampToValueAtTime(0, time + cr.zip.durationSec);
+    }, `${GRIDS.harmony.bars}m`).start(`${cr.bar}:${cr.beat}:0`);
+
+    this.loops = [harmonyLoop, leadSeq, keysSeq, bassSeq, snareSeq, ticksSeq, ...stampLoops, carriageLoop];
 
     // Pooled coin pings, built once instead of per call (see `ping`).
     this.pings = Array.from({ length: PING_VOICES }, () =>
@@ -288,6 +444,18 @@ export class AudioEngine {
     transportOwner = this;
     this.started = true;
     this.setPhase(initialPhase, 0.6);
+
+    // Dev-only probe for the headless audio journey (scripts/qa/): which phase
+    // the engine actually reached is otherwise invisible from outside the React
+    // tree, and "the music changed" is exactly the assertion a smoke test wants
+    // to make. A getter, so it never goes stale; never read by app code, and
+    // never defined in a production build.
+    if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+      Object.defineProperty(window, "__lpAudio", {
+        configurable: true,
+        get: () => ({ phase: this.phase, intensity: this.intensity, started: this.started }),
+      });
+    }
   }
 
   /**
@@ -309,19 +477,35 @@ export class AudioEngine {
     });
   }
 
-  /** 0..1 adaptive intensity (mainly affects the gameplay mix). */
+  /**
+   * 0..1 adaptive intensity — financial stress in `gameplay`, the cold open's
+   * beat-by-beat build in `intro`.
+   *
+   * Which stems move, and by how much, is `INTENSITY_RULES` in score.ts; a phase
+   * that is absent from that table ignores intensity entirely and keeps its
+   * preset row. (This used to return early unless the phase was `gameplay`,
+   * which meant `ColdOpen`'s escalation was inaudible — it set a number nothing
+   * read. The rule lives in the score now so the engine and the offline renderer
+   * cannot disagree about what the cold open does.)
+   *
+   * Same no-`cancelScheduledValues` rationale as setPhase.
+   */
   setIntensity(level: number, fade = 1.4): void {
     this.intensity = Math.max(0, Math.min(1, level));
-    if (!this.started || this.phase !== "gameplay") return;
+    if (!this.started) return;
+    const rules = intensityRulesFor(this.phase);
+    if (!rules) return;
     const target = this.targetGains();
     const now = Tone.now();
-    (["tension", "warmth", "rhodes", "tick", "sub"] as StemId[]).forEach((id) => {
+    (Object.keys(rules) as StemId[]).forEach((id) => {
       this.stems[id].gain.linearRampTo(target[id], fade, now);
     });
   }
 
   /**
-   * Brief warmth swell (e.g. a win) that settles back.
+   * Brief warmth swell (e.g. a win) that settles back. The warmth of this score
+   * is the countermelody (`SWELL_STEM`), which is why the method keeps its name
+   * while the stem it opens has changed — ~25 call sites say `swellWarmth()`.
    *
    * The settle is a timer rather than a pre-scheduled second ramp: by the time
    * the swell ends the phase may have moved on, and the restore has to aim at
@@ -331,39 +515,48 @@ export class AudioEngine {
    */
   swellWarmth(amount = 0.5, hold = 1.8): void {
     if (!this.started) return;
-    this.stems.warmth.gain.linearRampTo(amount, 0.4, Tone.now());
+    this.stems[SWELL_STEM].gain.linearRampTo(amount, 0.4, Tone.now());
     if (this.swellTimer !== null) clearTimeout(this.swellTimer);
     this.swellTimer = setTimeout(() => {
       this.swellTimer = null;
       if (!this.started) return;
-      this.stems.warmth.gain.linearRampTo(this.targetGains().warmth, 1.2, Tone.now());
+      this.stems[SWELL_STEM].gain.linearRampTo(this.targetGains()[SWELL_STEM], 1.2, Tone.now());
     }, hold * 1000);
   }
 
+  /**
+   * The mix the current phase/intensity/glow asks for — the whole dramaturgy of
+   * the score, and none of it decided here: `PRESETS` is the phase row,
+   * `INTENSITY_RULES` + `rampGain` are how a stem answers stress (the engine
+   * must not own that arithmetic, or a preview could drift from the game by a
+   * rounding convention), and `BRAIN_GLOW` is the one-directional warming.
+   */
   private targetGains(): Record<StemId, number> {
-    const base = { ...PRESETS[this.phase] };
-    if (this.phase === "gameplay") {
-      const i = this.intensity;
-      base.tension = Math.max(base.tension, (i - 0.45) > 0 ? (i - 0.45) * 1.1 : 0);
-      base.warmth = base.warmth; // swells handled separately
-      base.tick = 0.22 + i * 0.22;
-      base.rhodes = 0.3 - i * 0.12; // motif recedes as it gets tense
-      base.sub = 0.36 + i * 0.18;
-    } else if (this.phase === "menu" || this.phase === "recapGood" || this.phase === "title") {
-      // a richer Money Brain glows the calm bed warmer (one gentle layer, no churn)
-      base.warmth += this.brainGlow * 0.22;
-      base.pad += this.brainGlow * 0.08;
+    const base: Record<StemId, number> = { ...PRESETS[this.phase] };
+    const rules = intensityRulesFor(this.phase);
+    if (rules) {
+      (Object.keys(rules) as StemId[]).forEach((id) => {
+        const ramp = rules[id];
+        if (ramp) base[id] = rampGain(ramp, this.intensity);
+      });
+    }
+    if ((BRAIN_GLOW.phases as readonly ScorePhase[]).includes(this.phase)) {
+      (Object.keys(BRAIN_GLOW.perStem) as StemId[]).forEach((id) => {
+        const per = BRAIN_GLOW.perStem[id as keyof typeof BRAIN_GLOW.perStem] ?? 0;
+        base[id] = Math.max(0, Math.min(1, base[id] + this.brainGlow * per));
+      });
     }
     return base;
   }
 
-  /** 0..1 Money-Brain progress. Warms the calm (menu/recap) bed a touch. */
+  /** 0..1 Money-Brain progress. Warms the calm (menu/title/recap) bed a touch. */
   setBrainGlow(level: number, fade = 1.6): void {
     this.brainGlow = Math.max(0, Math.min(1, level));
-    if (!this.started || (this.phase !== "menu" && this.phase !== "recapGood")) return;
+    if (!this.started) return;
+    if (!(BRAIN_GLOW.phases as readonly ScorePhase[]).includes(this.phase)) return;
     const target = this.targetGains();
     const now = Tone.now();
-    (["warmth", "pad"] as StemId[]).forEach((id) => {
+    (Object.keys(BRAIN_GLOW.perStem) as StemId[]).forEach((id) => {
       this.stems[id].gain.linearRampTo(target[id], fade, now);
     });
   }
@@ -382,63 +575,101 @@ export class AudioEngine {
   }
 
   private fireAccent(kind: AccentKind, at: number): void {
-    const bus = this.accentBus;
-    const mk = {
-      membrane: (note: string, dur: string, vol = 0) => {
-        const m = new Tone.MembraneSynth({ pitchDecay: 0.06, octaves: 6, volume: vol }).connect(bus);
-        m.triggerAttackRelease(note, dur, at);
-        this.disposeLater(m, 2.5);
-      },
-      noiseHit: (dur: number, hp: number, vol = -6) => {
-        const n = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.002, decay: dur, sustain: 0 }, volume: vol });
-        const f = new Tone.Filter(hp, "highpass").connect(bus);
-        n.connect(f);
-        n.triggerAttackRelease(dur, at);
-        this.disposeLater(n, dur + 1); this.disposeLater(f, dur + 1.1);
-      },
-      chord: (notes: string[], type: "sine" | "triangle" | "sawtooth" | "square", dur: string, vol = -8) => {
-        const p = new Tone.PolySynth(Tone.Synth, { oscillator: { type }, envelope: { attack: 0.01, decay: 0.6, sustain: 0.3, release: 2 }, volume: vol }).connect(bus);
-        p.triggerAttackRelease(notes, dur, at);
-        this.disposeLater(p, 4);
-      },
-    };
+    // The two noise sweeps have no pitch material, so the score has nothing to
+    // say about them and they stay here.
+    if (kind === "riser") { this.riser(at); return; }
+    if (kind === "rise") { this.riser(at, 0.7); return; }
+    this.fireStinger(kind, at);
+  }
 
-    switch (kind) {
-      case "thump": mk.membrane("A1", "4n", -2); mk.noiseHit(0.12, 200, -14); break;
-      case "hit": mk.membrane("F1", "4n", 0); mk.noiseHit(0.2, 120, -8); break;
-      case "stab": mk.chord(["A3", "A#3", "E4"], "sawtooth", "8n", -10); mk.membrane("A1", "8n", -4); break;
-      case "riser": this.riser(at); break;
-      case "title": mk.membrane("A1", "2n", 0); mk.chord(["A3", "C4", "E4", "A4", "E5"], "triangle", "1m", -6); mk.noiseHit(0.5, 300, -10); break;
-      case "rise": this.riser(at, 0.7); break;
-      case "thud": mk.membrane("C1", "4n", -4); mk.noiseHit(0.18, 90, -16); break;
-      case "stampGood": mk.chord(["C4", "E4", "G4", "C5"], "triangle", "1m", -6); mk.membrane("C2", "2n", -2); break;
-      case "stampBad": mk.chord(["A3", "A#3", "D#4"], "sawtooth", "1m", -7); mk.membrane("A1", "2n", -2); mk.noiseHit(0.4, 120, -12); break;
-      // concept newly mastered: a bright minor-triad climb that lands a major-6th shimmer up top
-      case "mastered": this.arpAccent(["A4", "C5", "E5", "A5"], at, 0.075, "triangle", -8); mk.membrane("A2", "4n", -7); mk.chord(["A5", "C6"], "triangle", "4n", -16); break;
-      // mastery level rose again: a higher, faster restatement
-      case "levelup": this.arpAccent(["C5", "E5", "G5", "C6"], at, 0.06, "triangle", -9); mk.chord(["C6", "E6"], "triangle", "4n", -14); break;
-      // streak kept alive: a warm, confident two-step with a soft kick (the "fire")
-      case "streak": mk.membrane("F1", "4n", -5); this.arpAccent(["E4", "A4", "C5"], at, 0.05, "triangle", -9); break;
-      // Addendum B: the money consequence lands. A deep tonic stamp + paper transient
-      // (impact), a resolving E–D–C–A descent to the tonic (the figure "coming to rest"),
-      // and a low A-minor settle chord held a bar. Original; A minor; grid-quantized.
-      case "consequence":
-        mk.membrane("A1", "2n", -3);
-        mk.noiseHit(0.14, 160, -14);
-        this.arpAccent(["E5", "D5", "C5", "A4"], at, 0.07, "triangle", -9);
-        mk.chord(["A2", "E3", "A3", "C4"], "triangle", "1m", -12);
-        break;
+  /**
+   * Render one entry of `STINGERS` — the accent's material, entirely as data.
+   *
+   * There is deliberately no "hold a chord" primitive here any more. Every
+   * accent is a pluck, a membrane, a noise transient or a snare ruff, each of
+   * which is physically incapable of the failure this rewrite exists to remove:
+   * the old `title` / `stampGood` / `stampBad` accents held PolySynth chord
+   * stacks for a full measure over a beating drone, which is what the player was
+   * describing as "loud beeping". See STINGER_MAX_SOUNDING_SEC in score.ts.
+   */
+  private fireStinger(kind: StingerKind, at: number): void {
+    const bus = this.accentBus;
+    const spec: StingerSpec = STINGERS[kind];
+
+    for (const layer of spec.layers) {
+      const t0 = at + (layer.atSec ?? 0);
+      switch (layer.kind) {
+        case "pluck": {
+          this.pluck(layer.timbre).triggerAttackRelease([...layer.notes], layer.duration, t0, 0.9);
+          if (layer.octaveDoubleVolume !== undefined) {
+            this.pluck(layer.timbre, layer.octaveDoubleVolume)
+              .triggerAttackRelease(layer.notes.map(octaveDown), layer.duration, t0, 0.8);
+          }
+          break;
+        }
+        case "arp": {
+          const v = this.pluck(layer.timbre);
+          layer.notes.forEach((n, i) => v.triggerAttackRelease(n, layer.duration, t0 + i * layer.stepSec, 0.9));
+          if (layer.octaveDoubleVolume !== undefined) {
+            const d = this.pluck(layer.timbre, layer.octaveDoubleVolume);
+            layer.notes.forEach((n, i) => d.triggerAttackRelease(octaveDown(n), layer.duration, t0 + i * layer.stepSec, 0.8));
+          }
+          break;
+        }
+        case "membrane": {
+          const m = new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 5, volume: layer.volume }).connect(bus);
+          m.triggerAttackRelease(layer.note, layer.duration, t0);
+          this.disposeLater(m, 2.5);
+          break;
+        }
+        case "noise": {
+          const f = new Tone.Filter(layer.highpassHz, "highpass").connect(bus);
+          const n = new Tone.NoiseSynth({
+            noise: { type: "white" },
+            envelope: { attack: 0.002, decay: layer.durationSec, sustain: 0 },
+            volume: layer.volume,
+          }).connect(f);
+          n.triggerAttackRelease(layer.durationSec, t0);
+          this.disposeLater(n, layer.durationSec + 1); this.disposeLater(f, layer.durationSec + 1.1);
+          break;
+        }
+        case "ruff": {
+          const hp = new Tone.Filter(400, "highpass").connect(bus);
+          const s = new Tone.NoiseSynth({
+            noise: { type: "white" },
+            envelope: { attack: 0.001, decay: 0.07, sustain: 0 },
+            volume: layer.volume,
+          }).connect(hp);
+          layer.velocities.forEach((v, i) => s.triggerAttackRelease(0.07, t0 + i * layer.stepSec, v));
+          this.disposeLater(s, 2.5); this.disposeLater(hp, 2.6);
+          break;
+        }
+      }
     }
   }
 
-  /** Ascending one-shot notes for celebratory accents (each disposes itself). */
-  private arpAccent(notes: string[], at: number, step: number, type: "sine" | "triangle" | "square" | "sawtooth", vol: number): void {
+  /**
+   * One accent voice from `STINGER_TIMBRES`, disposed once it has rung out.
+   *
+   * `volume` overrides the timbre's own level, which is what an octave-doubling
+   * layer uses to sit its lower copy underneath the original.
+   */
+  private pluck(timbre: StingerTimbre, volume?: number): PluckVoice {
     const bus = this.accentBus;
-    notes.forEach((n, i) => {
-      const s = new Tone.Synth({ oscillator: { type }, envelope: { attack: 0.004, decay: 0.5, sustain: 0.12, release: 0.8 }, volume: vol }).connect(bus);
-      s.triggerAttackRelease(n, "8n", at + i * step);
-      this.disposeLater(s, i * step + 2);
-    });
+    let v: PluckVoice;
+    if (timbre === "keysPluck") {
+      v = new Tone.PolySynth(Tone.FMSynth, { ...STINGER_TIMBRES.keysPluck }).connect(bus);
+    } else {
+      const t = STINGER_TIMBRES[timbre];
+      v = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { ...t.oscillator },
+        envelope: { ...t.envelope },
+        volume: t.volume,
+      }).connect(bus);
+    }
+    if (volume !== undefined) v.volume.value = volume;
+    this.disposeLater(v, 3);
+    return v;
   }
 
   private riser(at: number, len = 1.4): void {
@@ -523,15 +754,24 @@ export class AudioEngine {
     }
   }
 
-  /** Reveal sting keyed to an outcome tone. */
+  /**
+   * Reveal sting keyed to an outcome tone.
+   *
+   * The one place this rewrite is deliberately conservative: shapes, durations,
+   * envelopes and levels are the originals to the digit, because players have
+   * already learned what these mean. Only the pitches moved, into D minor —
+   * `STING_TONES` in score.ts holds them (`neutral` is A4 = the dominant, so it
+   * was already in the new key and has not changed at all).
+   */
   playSting(tone: StingTone): void {
     if (!this.started) return;
     const at = Tone.now() + 0.01;
+    const s = STING_TONES;
     switch (tone) {
-      case "good": [523.25, 659.25, 783.99].forEach((f, i) => this.blip(at + i * 0.06, f, "triangle", 0.5, -10)); break;
-      case "bad": this.chordShot(["A3", "D#4"], "sawtooth", 0.6, -10, at); this.thock(at, "A1", -4); break;
-      case "warning": this.chordShot(["D5", "G5"], "triangle", 0.4, -12, at); break;
-      case "neutral": this.blip(at, 440, "sine", 0.35, -14); break;
+      case "good": s.good.freqs.forEach((f, i) => this.blip(at + i * s.good.stepSec, f, s.good.wave, s.good.durationSec, s.good.volume)); break;
+      case "bad": this.chordShot([...s.bad.notes], s.bad.wave, s.bad.durationSec, s.bad.volume, at); this.thock(at, s.bad.thock.note, s.bad.thock.volume); break;
+      case "warning": this.chordShot([...s.warning.notes], s.warning.wave, s.warning.durationSec, s.warning.volume, at); break;
+      case "neutral": this.blip(at, s.neutral.freq, s.neutral.wave, s.neutral.durationSec, s.neutral.volume); break;
     }
   }
 
@@ -628,19 +868,24 @@ export class AudioEngine {
       case "amb_office": bed("pink", 520, "lowpass", -26); hum(60, -30); every("8n", (t) => { if (Math.random() < 0.5) this.ambTickInto(out, t, 3500); }); break;
       case "amb_room": bed("brown", 420, "lowpass", -24); hum(55, -32); break;
       case "amb_keys": bed("pink", 600, "lowpass", -27); every("4n", (t) => { if (Math.random() < 0.35) this.ambTickInto(out, t, 2600); }); break;
-      case "amb_hospital": bed("pink", 2400, "highpass", -34); every("2n", (t) => this.ambBeepInto(out, t, 880)); break;
-      case "amb_coins": bed("white", 3200, "bandpass", -34, 1.5); every("2n", (t) => { if (Math.random() < 0.4) this.ambBeepInto(out, t, 2000, 0.05); }); break;
-      case "amb_feed": bed("pink", 700, "lowpass", -30); every("1n", (t) => { if (Math.random() < 0.5) this.ambBeepInto(out, t, 1320, 0.08); }); break;
+      // The beeps are retuned into D minor and de-fanged, and they fire less
+      // often than the probabilities used to say: these intervals are transport-
+      // relative, so raising the tempo from 76 to 108 BPM already fires them ~42%
+      // more often. Holding the perceived density steady means asking for less.
+      case "amb_hospital": bed("pink", 2400, "highpass", -34); every("2n", (t) => { if (Math.random() < 0.6) this.ambBeepInto(out, t, 587.33); }); break;
+      case "amb_coins": bed("white", 3200, "bandpass", -34, 1.5); every("2n", (t) => { if (Math.random() < 0.3) this.ambBeepInto(out, t, 1760, 0.05); }); break;
+      case "amb_feed": bed("pink", 700, "lowpass", -30); every("1n", (t) => { if (Math.random() < 0.35) this.ambBeepInto(out, t, 1174.66, 0.08); }); break;
       case "amb_unease": {
+        // the score's own m2 grind (D2 + Eb2), an octave down and far quieter
         const fa = new Tone.Filter(300, "lowpass").connect(out);
         const fb = new Tone.Filter(300, "lowpass").connect(out);
-        const a = new Tone.Oscillator("A1", "sawtooth").connect(fa);
-        const b = new Tone.Oscillator("A#1", "sawtooth").connect(fb);
+        const a = new Tone.Oscillator("D2", "sawtooth").connect(fa);
+        const b = new Tone.Oscillator("Eb2", "sawtooth").connect(fb);
         a.volume.value = -26; b.volume.value = -28; a.start(); b.start();
         parts.push(a, b, fa, fb);
         break;
       }
-      case "amb_shimmer": { const trem = new Tone.Tremolo(0.2, 0.6).start().connect(out); const o = new Tone.Oscillator("E5", "triangle").connect(trem); o.volume.value = -30; o.start(); parts.push(o, trem); break; }
+      case "amb_shimmer": { const trem = new Tone.Tremolo(0.2, 0.6).start().connect(out); const o = new Tone.Oscillator("A5", "triangle").connect(trem); o.volume.value = -30; o.start(); parts.push(o, trem); break; }
       case "amb_hiss": bed("pink", 2200, "bandpass", -30, 0.7); break;
     }
 
@@ -659,7 +904,7 @@ export class AudioEngine {
     this.disposeLater(n, 0.6); this.disposeLater(f, 0.7);
   }
   private ambBeepInto(out: Tone.Gain, at: number, freq: number, dur = 0.12): void {
-    const s = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: dur, sustain: 0, release: 0.05 }, volume: -28 }).connect(out);
+    const s = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: dur, sustain: 0, release: 0.05 }, volume: -32 }).connect(out);
     s.triggerAttackRelease(freq, dur, at);
     this.disposeLater(s, dur + 0.6);
   }
@@ -695,7 +940,15 @@ export class AudioEngine {
       this.loops.forEach((l) => { try { l.dispose(); } catch {} });
       try { this.currentAmb?.dispose(); } catch {}
       this.currentAmb = null;
-      [this.pad, this.sub, this.rhodes, this.lead, this.kick, this.hat, this.crackleNoise, this.tensionA, this.tensionB, this.warmthOsc].forEach((n) => { try { n.dispose(); } catch {} });
+      [
+        this.brass, this.keys, this.leadA, this.leadB, this.sub, this.marchA, this.marchB,
+        this.snareNoise, this.snareBody, this.tick, this.stampThock, this.ding,
+        this.tensionA, this.tensionB, this.airNoise, this.counter,
+        this.zipNoise, this.zipGain, this.zipFilter,
+      ].forEach((n) => { try { n.dispose(); } catch {} });
+      // filters, delay, drive, tremolo, LFO — the things the voices run through
+      this.musicNodes.forEach((n) => { try { n.dispose(); } catch {} });
+      this.musicNodes = [];
       this.pings.forEach((p) => { try { p.dispose(); } catch {} });
       this.pings = [];
       Object.values(this.stems).forEach((g) => { try { g.dispose(); } catch {} });
