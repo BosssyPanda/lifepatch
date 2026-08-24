@@ -1,15 +1,18 @@
-// Deterministic, cursor-threaded RNG (mirrors lib/runEngine's mulberry32) so a
-// run is fully replayable from its seed and easy to debug.
+// Cursor-threaded RNG for the board game: the cursor lives in CashflowState and
+// advances on every draw, so a run replays from (seed, cursor).
+//
+// The generator itself comes from `lib/rng` — it used to be a second copy of
+// `mulberry32`, identical by hand rather than by import, which is the kind of
+// duplication that forks a replay from the run it claims to reproduce.
+//
+// NOTE this is a DIFFERENT discipline from the life sim's: `runEngine` addresses its
+// draws by coordinate `(seed, year, salt)`, so a year can be computed without the ones
+// before it. Here the cursor is state, and a purchase advances it — which is why two
+// boards on one seed diverge as soon as their purchase counts differ.
 
-export function mulberry32(seed: number) {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import { mulberry32 } from "../rng";
+
+export { mulberry32 };
 
 /** A single 0..1 draw for (seed, cursor). Same inputs → same output. */
 export function rngAt(seed: number, cursor: number): number {

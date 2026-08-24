@@ -27,6 +27,7 @@ import {
 } from "./lifeEvents";
 import { ASSET_IDS, type AssetId, macroEvent, sp500Return, yearReturns } from "./markets";
 import { getMode, type ModeId } from "./modes";
+import { mulberry32, strHash } from "./rng";
 
 /**
  * Save/engine format. BUMP THIS whenever `RunState`'s shape or the economy
@@ -115,22 +116,6 @@ const ALL_ASSETS: AssetId[] = ASSET_IDS;
 
 function emptyHoldings(): Record<AssetId, number> {
   return ALL_ASSETS.reduce((a, id) => ((a[id] = 0), a), {} as Record<AssetId, number>);
-}
-
-function mulberry32(seed: number) {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function strHash(str: string): number {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
-  return h;
 }
 
 export function yearIndex(s: RunState): number {
