@@ -47,6 +47,10 @@ export function resultFromRun(run: RunState): NewResult {
       seed: run.seed,
       backgroundId: run.backgroundId,
       engine: RUN_VERSION,
+      // The Daily Ledger stays `mode: "story"` — its board is a filter on this
+      // field, not a fourth mode, so the table's own check constraint, its policies
+      // and its index are all untouched.
+      ...(run.daily ? { daily: run.daily } : {}),
       // Replayed: the run re-simulated, on this device, from its own action log,
       // and landed on the score it is claiming. Written only when that succeeded —
       // an absent flag makes no claim either way, which is the honest reading for

@@ -116,7 +116,18 @@ export function replayRun(t: ReplayTicket, opts: ReplayOpts = {}): RunState | nu
 
   for (let i = 0; i < t.journal.length; i++) {
     const entry = t.journal[i];
-    if (s.status !== "playing") return null; // the journal outlived the life
+    if (s.status !== "playing") {
+      // A verification replay must track the recorded life exactly: a journal that
+      // outlives it is a desync, and there is nothing honest to return.
+      //
+      // A COUNTERFACTUAL is different, and this distinction was missing. The ghost
+      // is subject to the same rules as the life it shadows — including the forced
+      // pro-rata liquidation and the insolvency ending — so a different allocation
+      // can genuinely end it sooner. That is a result, not a disagreement. Hand back
+      // the shorter life; `ghostFor` marks it `truncated` and the report says the
+      // other version ran out of road first.
+      return opts.allocate ? s : null;
+    }
     if (s.year !== entry.y) return null; // desync — refuse, never interpolate
 
     // The forced deal. See this file's note.

@@ -4,13 +4,16 @@ import { motion } from "framer-motion";
 import { useEffect, useMemo, useState } from "react";
 import { BrainIcon, CheckIcon, FreedomIcon, ReplayIcon, TrophyIcon } from "@/components/icons";
 import { BoardView } from "@/components/cashflow/board/BoardView";
+import { DailyStrip } from "@/components/screens/DailyStrip";
 import { NeonButton } from "@/components/ui/LedgerButton";
 import { SoundCell } from "@/components/ui/SoundCell";
 import { StreakChip } from "@/components/social/StreakChip";
 import { useAudio } from "@/hooks/useAudio";
 import { RAT_BOARD, RAT_SQUARE_META } from "@/lib/cashflow/board";
+import type { DailyPuzzle } from "@/lib/daily";
 import { FIRST_YEAR, LAST_YEAR, sp500Return } from "@/lib/markets";
 import { MODES, type ModeId } from "@/lib/modes";
+import type { RunState } from "@/lib/runEngine";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSpotlightHandler } from "@/src/motion/useSpotlight";
 import { EASE, SPRING } from "@/src/motion/tokens";
@@ -22,11 +25,14 @@ export function ModeSelect({
   onBack,
   onLeaderboard,
   onMasteryMap,
+  onDaily,
 }: {
   onChoose: (mode: ModeId) => void;
   onBack: () => void;
   onLeaderboard: () => void;
   onMasteryMap: () => void;
+  /** Start, resume or re-read today's Daily Ledger. */
+  onDaily: (puzzle: DailyPuzzle, resume: RunState | null) => void;
 }) {
   const audio = useAudio();
   const { reduced } = useMotionCtx();
@@ -45,7 +51,10 @@ export function ModeSelect({
         <div className="mx-auto mt-5 h-px w-24 bg-ink" />
       </motion.div>
 
-      <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Above the cards, never a fourth one — see components/screens/DailyStrip.tsx. */}
+      <DailyStrip onPlay={onDaily} />
+
+      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {modes.map((id, i) => {
           const m = MODES[id];
           const Icon = ICON[id];

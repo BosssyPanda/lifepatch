@@ -116,6 +116,8 @@ const engine = R("runEngine");
 const replay = R("replay");
 const protocol = R("mp/protocol");
 const buildResult = R("cloud/buildResult");
+const daily = R("daily");
+const dailyShare = R("dailyShare");
 const { BACKGROUNDS } = R("backgrounds");
 
 /** Assets a player could actually have bought that year (crypto is gated to 2011+). */
@@ -333,4 +335,121 @@ check("P7 a finished run's result row carries its own provenance", () => {
     eq(blind.seed, s.seed, `seed ${seed}: the seed is recorded either way`);
   }
   if (verified < 20) throw new Error(`only ${verified} finished runs checked`);
+});
+
+// ── the Daily Ledger ────────────────────────────────────────────────────────
+// Everyone playing today has to be playing the SAME thing, and the grid they post
+// afterwards has to give nothing away to anyone who has not played it yet.
+check("P8 a date fixes the day's world, and nothing else does", () => {
+  const seen = new Map();
+  let d = Date.UTC(2026, 0, 1);
+  for (let i = 0; i < 800; i++, d += 86_400_000) {
+    const date = new Date(d).toISOString().slice(0, 10);
+    const a = daily.dailyFor(date);
+    const b = daily.dailyFor(date);
+    deepEq(a, b, `${date}: two calls disagreed`);
+    eq(a.number, i + 1, `${date}: puzzle number`);
+    eq(a.seed >= 0, true, `${date}: negative seed ${a.seed}`);
+    // Adjacent days must not be adjacent seeds — that is the whole reason the seed
+    // hashes the date instead of counting the puzzles.
+    const prev = seen.get(i - 1);
+    if (prev !== undefined && Math.abs(prev - a.seed) < 1000) {
+      throw new Error(`${date}: seed ${a.seed} sits next to yesterday's ${prev}`);
+    }
+    for (const [j, s2] of seen) if (s2 === a.seed) throw new Error(`${date}: seed collides with day ${j + 1}`);
+    seen.set(i, a.seed);
+    // The background rotates through every background, so no start is over-served.
+    eq(a.backgroundId, BG_IDS[i % BG_IDS.length], `${date}: background rotation`);
+  }
+  // Before the epoch there is no puzzle, and junk is not a date.
+  eq(daily.dailyFor("2025-12-31"), null, "a date before the epoch");
+  eq(daily.dailyFor("not-a-date"), null, "junk");
+  eq(daily.dailyFor(""), null, "empty");
+});
+
+check("P8b two devices on one date deal the same first hand", () => {
+  let d = Date.UTC(2026, 3, 1);
+  for (let i = 0; i < 40; i++, d += 86_400_000) {
+    const date = new Date(d).toISOString().slice(0, 10);
+    const p = daily.dailyFor(date);
+    const a = engine.initRun("story", p.backgroundId, "A", p.seed, false, { daily: date });
+    const b = engine.initRun("story", p.backgroundId, "B", p.seed, false, { daily: date });
+    deepEq(a.pendingEvents, b.pendingEvents, `${date}: the opening hand differs`);
+    eq(a.daily, date, `${date}: the run does not know which day it is`);
+    // A weak-spot bias would break exactly this — everyone's day must be identical.
+    eq(a.weakSpots, undefined, `${date}: a daily carried a personal bias`);
+    eq(a.sharedEvents, undefined, `${date}: a daily was dealt as a match`);
+  }
+});
+
+check("P8c the share grid says how you played and nothing about the market", () => {
+  let graded = 0;
+  for (let seed = 700; seed < 760; seed++) {
+    const date = new Date(Date.UTC(2026, 0, 1) + (seed - 700) * 86_400_000).toISOString().slice(0, 10);
+    const p = daily.dailyFor(date);
+    let s = engine.initRun("story", p.backgroundId, "A", p.seed, false, { daily: date });
+    const rand = rng.mulberry32(seed);
+    while (s.status === "playing") {
+      for (const id of [...s.pendingEvents]) {
+        const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+        if (ev) s = engine.applyLifeChoice(s, id, ev.choices[Math.floor(rand() * ev.choices.length)] ?? ev.choices[0]);
+      }
+      if (rand() < 0.5) s = engine.trade(s, "index", Math.round(rand() * 5000));
+      s = engine.advanceYear(s);
+    }
+    const share = dailyShare.dailyShare(s, "https://example.test/r/1");
+    if (!share) throw new Error(`${date}: a finished daily produced no grid`);
+    graded++;
+    // One cell per year the ghost survived to grade. It usually lives the whole run;
+    // an all-index allocation does occasionally go under first, and then the grid
+    // covers what could be compared and the screen says why it is short.
+    const ghost = replay.ghostFor(s);
+    eq(share.cells.length, Math.min(s.history.length, ghost.points.length), `${date}: a cell per graded year`);
+    eq(share.years, s.history.length, `${date}: years lived`);
+    eq(share.ungraded, s.history.length - share.cells.length, `${date}: ungraded years`);
+    if (share.cells.length === 0) throw new Error(`${date}: an empty grid`);
+    // The count of ungraded years never rides on the clipboard: it is a fact about
+    // what the market did to an all-index life, and a stranger must not read it.
+    if (share.ungraded > 0 && /index version|went under|ungraded/i.test(share.text)) {
+      throw new Error(`${date}: the pasted grid explained why it was short`);
+    }
+    // The one thing the grid must never carry: a calendar year. Every year this run
+    // crossed, checked against the whole block.
+    for (const h of s.history) {
+      if (share.text.includes(String(h.year))) {
+        throw new Error(`${date}: the grid leaked the year ${h.year}`);
+      }
+    }
+    // Nor the run's seed, which would hand someone the whole world.
+    if (share.text.includes(String(p.seed))) throw new Error(`${date}: the grid leaked the seed`);
+    // A run that never traded still grades: it is behind an index it never bought.
+    for (const c of share.cells) {
+      if (c !== "ahead" && c !== "level" && c !== "behind") throw new Error(`${date}: bad cell ${c}`);
+    }
+    // Not a daily, no grid.
+    eq(dailyShare.dailyShare({ ...s, daily: undefined }), null, `${date}: a non-daily produced a grid`);
+  }
+  if (graded < 50) throw new Error(`only ${graded} grids graded`);
+});
+
+check("P8d a daily run's result row is filed under its day", () => {
+  const date = "2026-05-05";
+  const p = daily.dailyFor(date);
+  let s = engine.initRun("story", p.backgroundId, "A", p.seed, false, { daily: date });
+  while (s.status === "playing") {
+    for (const id of [...s.pendingEvents]) {
+      const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+      if (ev) s = engine.applyLifeChoice(s, id, ev.choices[0]);
+    }
+    s = engine.advanceYear(s);
+  }
+  const m = buildResult.resultFromRun(s).metrics;
+  eq(m.daily, date, "metrics.daily");
+  eq(buildResult.resultFromRun(s).mode, "story", "a daily is still a story run");
+  eq(m.backgroundId, p.backgroundId, "the day's background is on the row");
+  eq(m.seed, p.seed, "the day's seed is on the row");
+  eq(m.verified, 1, "a daily played straight through did not replay");
+  // And an ordinary story run files under no day at all.
+  const plain = engine.initRun("story", "student", "A", 4242);
+  eq(plain.daily, undefined, "an ordinary run claimed a day");
 });

@@ -18,6 +18,7 @@ import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
 import { DEBT_RATE, TAKE_HOME } from "@/lib/economy";
+import { dailyShare, GRID_ROW, gridGlyph, gridSummary } from "@/lib/dailyShare";
 import { ghostFor, GHOST_BUFFER_MONTHS } from "@/lib/replay";
 import { annualExpenses, homeEquity, netWorth, operatingCashFlow, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
@@ -196,6 +197,12 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
   // before the engine journalled, or one that came back from a room), and the
   // section simply does not render rather than printing a gap it cannot compute.
   const ghost = useMemo(() => ghostFor(run), [run]);
+  // A daily run also gets the grid: one cell per year, you against that ghost.
+  // Null for every other run, and for a daily whose ghost could not be built.
+  //
+  // Rebuilt when `shareUrl` resolves. `useShareUrl` starts at the bare origin and
+  // upgrades to this run's own statement link a second or two later, so a block
+  // built once at mount would put the wrong URL on every clipboard.
   const firstYear = hist[0]?.year ?? run.startYear;
   const lastYear = hist[hist.length - 1]?.year ?? run.startYear;
   const best = [...hist].sort((a, b) => b.portfolioDelta - a.portfolioDelta)[0];
@@ -215,6 +222,8 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
 
   // Rebuilt every render, this redrew ShareCard's whole 1080×1920 canvas on every
   // parent tick — and this screen has running counters.
+  const share = useMemo(() => dailyShare(run, shareUrl), [run, shareUrl]);
+
   const shareData = useMemo(
     () => ({
       verdict: klass.title,
@@ -317,6 +326,9 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
           </motion.div>
         )}
 
+        {/* the daily's grid — right after the ghost it is built from */}
+        {share && <DailyGrid share={share} />}
+
         {/* final portfolio */}
         <motion.div variants={item}>
           <SectionLabel>Where your money ended up</SectionLabel>
@@ -393,8 +405,11 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
               ← Back to the standings
             </NeonButton>
           )}
+          {/* "Run it back" is a lie on a daily statement: today's world is spent, and
+              this button starts a fresh Story run with its own random seed. It says
+              so rather than implying a second attempt at the same puzzle. */}
           <NeonButton variant="primary" size="lg" onClick={onReplay}>
-            <ReplayIcon size={18} /> Run it back
+            <ReplayIcon size={18} /> {run.daily ? "Start a fresh Story run" : "Run it back"}
           </NeonButton>
           <NeonButton variant="secondary" size="lg" onClick={() => setShareOpen(true)}>Share ↗</NeonButton>
           <NeonButton variant="secondary" size="md" onClick={onAlmanac}>Almanac</NeonButton>
@@ -404,5 +419,77 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
 
       {shareOpen && <ShareCard data={shareData} onClose={() => setShareOpen(false)} />}
     </div>
+  );
+}
+
+/**
+ * The daily's grid: one cell per year, you against your own index ghost.
+ *
+ * The glyphs differ in SHAPE — filled triangle up, bar, filled triangle down — not
+ * in colour, because this block exists to be pasted into places that strip every
+ * bit of styling, and because a coloured square would carry no meaning at all in
+ * monochrome. They are rendered in the ink scale for the same reason: gain and loss
+ * green/red would read as "the market went up", and the cell says nothing of the
+ * kind. It says how YOU did against it.
+ *
+ * The text on the clipboard and the text on screen come from one function
+ * (`lib/dailyShare.ts`), so the grid a player sees and the grid they paste cannot
+ * drift apart.
+ */
+function DailyGrid({ share }: { share: NonNullable<ReturnType<typeof dailyShare>> }) {
+  const { sfx } = useAudio();
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(share.text);
+      setCopied(true);
+      sfx("uitick");
+    } catch {
+      // No clipboard API, or no permission. The grid is selectable text right there.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <motion.div variants={item}>
+      <SectionLabel>Daily Ledger · No. {share.number}</SectionLabel>
+      {/* One figure, one label. The glyphs themselves are hidden from assistive tech
+          — read out, they are twenty-one geometry names and no meaning — and the
+          count they encode is what the label says instead.
+
+          A real CSS grid rather than a letter-spaced string: U+25AC (▬) is a wide
+          glyph, and six level years in a row fused into one continuous bar that
+          could not be counted. One cell per column, fixed width, so the block reads
+          as a grid at any zoom and matches the spaced text on the clipboard. */}
+      <figure role="img" aria-label={gridSummary(share.cells)} className="m-0 mt-3">
+        <div
+          className="grid w-max gap-x-2.5 gap-y-1.5"
+          style={{ gridTemplateColumns: `repeat(${GRID_ROW}, 1.1rem)` }}
+        >
+          {share.cells.map((c, i) => (
+            <span key={i} aria-hidden className="num text-center text-[1.05rem] leading-none text-ink">
+              {gridGlyph(c)}
+            </span>
+          ))}
+        </div>
+      </figure>
+      <p className="voice mt-3 text-[0.92rem] text-secondary">
+        ▲ ahead of the index that year · ▬ level · ▼ behind. No calendar years, so it
+        spoils nothing for anyone still playing today.
+      </p>
+      {share.ungraded > 0 && (
+        <p className="voice mt-1 text-[0.92rem] text-secondary">
+          {share.ungraded === 1 ? "Your last year has" : `Your last ${share.ungraded} years have`}{" "}
+          no cell: the index version of this life went under before you did, so after that
+          there was nothing left to measure you against.
+        </p>
+      )}
+      <div className="mt-4">
+        <NeonButton variant="secondary" size="md" onClick={copy}>
+          {copied ? "Copied ✓" : "Copy the grid"}
+        </NeonButton>
+      </div>
+    </motion.div>
   );
 }

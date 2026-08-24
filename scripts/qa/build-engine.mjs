@@ -31,6 +31,8 @@ const ENTRIES = [
   "lib/verdict.ts",
   "lib/palette.ts",
   "lib/replay.ts",
+  "lib/daily.ts",
+  "lib/dailyShare.ts",
   "lib/cloud/buildResult.ts",
   "lib/mp/autoResolve.ts",
   "lib/mp/protocol.ts",

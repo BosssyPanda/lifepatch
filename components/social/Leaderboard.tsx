@@ -12,6 +12,7 @@ import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
 import { BACKGROUNDS } from "@/lib/backgrounds";
+import { todaysDaily } from "@/lib/daily";
 import { listFriendIds } from "@/lib/cloud/friends";
 import { getProfiles } from "@/lib/cloud/profiles";
 import { topResults, type LeaderboardScope } from "@/lib/cloud/results";
@@ -44,6 +45,17 @@ const SCOPE_TABS: { id: LeaderboardScope; label: string }[] = [
   { id: "week", label: "This week" },
   { id: "friends", label: "Friends" },
 ];
+
+/**
+ * Today's puzzle, offered on the Story board only.
+ *
+ * This is the board the whole verification effort was aiming at: one seed, one
+ * background, one length, for everybody who played today. Nothing has to be
+ * normalised because nothing differs — which is why the daily board needs no
+ * computed baseline and the general board is only ever segmented, never scored
+ * against an invented par.
+ */
+const DAILY_TAB: { id: LeaderboardScope; label: string } = { id: "daily", label: "Today" };
 
 /**
  * The normalising axis. A life that opens with $6,000 and no debt and one that
@@ -98,7 +110,7 @@ export function Leaderboard({
   const { sfx } = useAudio();
   const { reduced } = useMotionCtx();
   const [mode, setMode] = useState<GameMode>(initialMode);
-  const [scope, setScope] = useState<LeaderboardScope>("all");
+  const [scopePick, setScope] = useState<LeaderboardScope>("all");
   const [backgroundPick, setBackground] = useState<string>(ALL_BACKGROUNDS);
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
@@ -117,11 +129,24 @@ export function Leaderboard({
     }
   }, [open, initialMode]);
 
-  // The Rat Race has no backgrounds. The filter is neutralised for that board by
-  // derivation rather than by resetting state in an effect: an effect would let one
+  // Today's date after mount, never during render. `/leaderboard` is server
+  // rendered, and a clock read on both sides disagrees across midnight UTC — a
+  // hydration mismatch that would make a tab appear and vanish. Same discipline the
+  // Opening screen uses for `sessionStorage`.
+  const [today, setToday] = useState<string | null>(null);
+  useEffect(() => setToday(todaysDaily()?.date ?? null), []);
+
+  // Two filters that do not exist on every board. Both are neutralised by
+  // DERIVATION rather than by resetting state in an effect: an effect would let one
   // fetch go out with the stale filter still armed, and the player would watch the
   // board come back empty before it corrected itself.
-  const showBackgrounds = mode !== "cashflow";
+  //
+  // The daily is a Story run, so its board only exists behind the Story tab; and it
+  // fixes the background for everyone, so there is nothing left to segment on it.
+  const showDaily = mode === "story" && today !== null;
+  const scope: LeaderboardScope = showDaily || scopePick !== "daily" ? scopePick : "all";
+  const scopeTabs = showDaily ? [...SCOPE_TABS, DAILY_TAB] : SCOPE_TABS;
+  const showBackgrounds = mode !== "cashflow" && scope !== "daily";
   const background = showBackgrounds ? backgroundPick : ALL_BACKGROUNDS;
 
   const profileId = profile?.id ?? null;
@@ -139,6 +164,7 @@ export function Leaderboard({
           scope,
           friendIds,
           backgroundId: background === ALL_BACKGROUNDS ? undefined : background,
+          daily: today ?? undefined,
         });
         const profs = await getProfiles(top.map((r) => r.userId));
         if (!active) return;
@@ -160,7 +186,7 @@ export function Leaderboard({
     return () => {
       active = false;
     };
-  }, [open, mode, scope, background, profileId, sfx, retry]);
+  }, [open, mode, scope, background, today, profileId, sfx, retry]);
 
   const metric = scoreMetric(mode);
   const isPage = chrome === "page";
@@ -179,7 +205,7 @@ export function Leaderboard({
         className={`${gutter} pt-4`}
       />
       <LedgerTabs
-        items={SCOPE_TABS}
+        items={scopeTabs}
         value={scope}
         onChange={setScope}
         label="Leaderboard range"
@@ -200,7 +226,9 @@ export function Leaderboard({
       )}
 
       <p className={`voice ${gutter} pt-3 text-xs text-secondary`}>
-        Best run per player, ranked by {metric}.
+        {scope === "daily"
+          ? `Today's puzzle — the same seed, the same opening and the same twenty-one years for everyone on this board. Ranked by ${metric}.`
+          : `Best run per player, ranked by ${metric}.`}
         {background !== ALL_BACKGROUNDS && " Only runs that recorded which background they started from appear here."}
       </p>
       {/* Only explain a mark that is actually on screen — a legend over an empty
@@ -401,7 +429,9 @@ function EmptyState({ scope, reduced }: { scope: LeaderboardScope; reduced: bool
       ? "No friends added yet. Share your friend code to race together."
       : scope === "week"
         ? "No runs this week. Finish a run to claim the top spot."
-        : "No runs yet. Finish a run to be the first on the board.";
+        : scope === "daily"
+          ? "Nobody has filed today's ledger yet. Play it and the board starts with you."
+          : "No runs yet. Finish a run to be the first on the board.";
   return (
     <motion.div
       key={scope}

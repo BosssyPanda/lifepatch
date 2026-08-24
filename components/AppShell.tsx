@@ -14,6 +14,8 @@ import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
+import type { DailyPuzzle } from "@/lib/daily";
+import { lastPlayerName } from "@/lib/mp/matchStore";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
@@ -98,6 +100,30 @@ function AppShellInner() {
   const [masteryMounted, setMasteryMounted] = useState(false);
   const openMasteryMap = () => { audio.sfx("modal"); setMasteryMounted(true); setMasteryOpen(true); };
   const { resetRun } = useConceptLearn();
+
+  /**
+   * The Daily Ledger's one entry point.
+   *
+   * It skips the auth gate and the setup screen on purpose: the day fixes the seed
+   * AND the background, so there is nothing on either screen left to decide, and
+   * asking anyway would just be two taps between the player and a run that is
+   * already fully specified. The name comes from whatever this device last played
+   * under — the daily is a puzzle, not an identity.
+   *
+   * A finished day resumes into its own report rather than starting a second
+   * attempt; `useRun.resume` routes an ended run there by itself.
+   */
+  const startDaily = (puzzle: DailyPuzzle, resume: RunState | null) => {
+    audio.sfx("confirm");
+    if (resume) {
+      run.resume(resume);
+      return;
+    }
+    run.start("story", puzzle.backgroundId, playerName(lastPlayerName()), {
+      seed: puzzle.seed,
+      daily: puzzle.date,
+    });
+  };
 
   // The Rat Race mode is a fully self-contained board game with its own internal
   // phase machine — hand off to it as soon as it's chosen (skip LifePatch auth).
@@ -235,7 +261,13 @@ function AppShellInner() {
 
         {phase === "mode" && (
           <motion.div key="mode" {...wipe}>
-            <ModeSelect onChoose={run.chooseMode} onBack={run.toTitle} onLeaderboard={() => openLeaderboard("story")} onMasteryMap={openMasteryMap} />
+            <ModeSelect
+              onChoose={run.chooseMode}
+              onBack={run.toTitle}
+              onLeaderboard={() => openLeaderboard("story")}
+              onMasteryMap={openMasteryMap}
+              onDaily={startDaily}
+            />
           </motion.div>
         )}
 

@@ -13,6 +13,7 @@ import {
   trade,
   type RunState,
 } from "@/lib/runEngine";
+import { writeDaily } from "@/lib/dailySave";
 import { saveRun } from "@/lib/saves";
 import type { AssetId } from "@/lib/markets";
 import type { LifeChoice } from "@/lib/lifeEvents";
@@ -30,6 +31,8 @@ export type RunOpts = {
   /** Set for a match run: the room owns this run's persistence, and its ending
    *  goes to the podium rather than to the solo recap. */
   matchCode?: string;
+  /** `YYYY-MM-DD` (UTC): this is the Daily Ledger's run for that day. */
+  daily?: string;
 };
 
 export function useRun(userId: string | null) {
@@ -69,6 +72,15 @@ export function useRun(userId: string | null) {
         // put two writers on that one key with only one of them fenced, and which
         // life came back was a race between the tab the player was really in and
         // the tab that was auto-playing itself.
+        return;
+      }
+      // A daily run is `mode: "story"` too, and `lib/saves.ts` is keyed
+      // (userId, mode) — so letting one through here would overwrite the player's
+      // own Story life with the day's puzzle. The fence reads the RUN, not a ref:
+      // a ref can go stale against the state it is supposed to describe, and this
+      // one would do so silently, in the direction that destroys a save.
+      if (r.daily) {
+        writeDaily(r.daily, r);
         return;
       }
       if (!userId) return;
@@ -133,7 +145,9 @@ export function useRun(userId: string | null) {
       (m: ModeId, backgroundId: string, name: string, opts?: RunOpts) => {
         matchCodeRef.current = opts?.matchCode ?? null;
         // A room deals one card to the whole table; a solo life deals its own.
-        const r = initRun(m, backgroundId, name, opts?.seed, opts?.matchCode != null);
+        const r = initRun(m, backgroundId, name, opts?.seed, opts?.matchCode != null, {
+          daily: opts?.daily,
+        });
         setMode(m);
         liveRef.current = r;
         setRun(r);

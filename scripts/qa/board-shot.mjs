@@ -10,6 +10,10 @@
 // the shot is the mixed board — three tab strips, a filter that hides rows, and a
 // mark that must read in monochrome.
 import { Run, BASE as BASE_URL, DESKTOP, MOBILE } from "./harness.mjs";
+import { createRequire } from "module";
+import { OUT } from "./build-engine.mjs";
+
+const daily = createRequire(`${OUT}/`)(`${OUT}/lib/daily.js`);
 
 const viewport = process.env.QA_VIEWPORT === "mobile" ? MOBILE : DESKTOP;
 const tag = process.env.QA_VIEWPORT === "mobile" ? "mobile" : "desktop";
@@ -17,8 +21,31 @@ const tag = process.env.QA_VIEWPORT === "mobile" ? "mobile" : "desktop";
 const BACKGROUNDS = ["student", "trade", "hustler"];
 const VERDICTS = ["Rich Enough", "Comfortable", "Broke but Free", "Buried in Debt"];
 
+const TODAY = daily.todaysDaily()?.date ?? null;
+
 function rows() {
   const out = [];
+  // Four of today's puzzle, filed by four different players, so the Today board is
+  // a real board rather than a single row.
+  for (let i = 0; i < 4 && TODAY; i++) {
+    out.push({
+      id: `local-d${i}`,
+      userId: `player-${i}`,
+      mode: "story",
+      score: 480_000 - i * 37_000,
+      verdict: VERDICTS[i % VERDICTS.length],
+      metrics: {
+        netWorth: 480_000 - i * 37_000,
+        age: 43,
+        seed: 99_000 + i,
+        backgroundId: BACKGROUNDS[0],
+        engine: 6,
+        verified: 1,
+        daily: TODAY,
+      },
+      createdAt: new Date(`${TODAY}T09:00:00Z`).toISOString(),
+    });
+  }
   for (let i = 0; i < 14; i++) {
     // Every third row is a legacy row: no background, no replay, nothing claimed.
     const legacy = i % 3 === 2;
@@ -90,6 +117,28 @@ async function main() {
       run.finding("HIGH", "board", "the Rat Race board does not say what its number is");
     }
     await run.snap("03-board-ratrace");
+  }
+
+  // Today's puzzle: its own board, and no background strip on it — the day fixes
+  // the opening for everybody, so there is nothing left to segment.
+  await page.goto(`${BASE_URL}/leaderboard`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1600);
+  if (!TODAY) {
+    run.finding("HIGH", "board", "there is no daily today — check DAILY_EPOCH");
+  } else if (!(await run.clickTab("^today$", { wait: 1600 }))) {
+    run.finding("HIGH", "board", "the Story board offers no Today tab");
+  } else {
+    const n = await page.locator("ol li").count();
+    console.log(`  today's board: ${n} rows`);
+    if (n !== 4) run.finding("HIGH", "board", `Today should show the 4 seeded daily rows, showed ${n}`);
+    const t = (await run.text()).toLowerCase();
+    if (t.includes("any start")) run.finding("HIGH", "board", "the background strip survived onto the daily board");
+    if (!t.includes("today's puzzle")) run.finding("HIGH", "board", "the daily board does not say what it is");
+    await run.snap("05-board-today");
+    // And it must not exist behind Infinite, which has no daily.
+    await run.clickTab("^infinite$", { wait: 1400 });
+    const inf = await run.text();
+    if (/\bTODAY\b/.test(inf)) run.finding("HIGH", "board", "the Today tab survived onto the Infinite board");
   }
 
   // The same board inside the in-game overlay, which is a card with a height
