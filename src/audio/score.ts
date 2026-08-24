@@ -939,12 +939,10 @@ export const STINGERS = {
     layers: [
       // Levels are set from the offline render, not by ear: a four-note pluck
       // and a membrane landing on the same instant sum, and at -8/-3 this
-      // stinger peaked at +1.2 dBFS — i.e. it was clipping the moment a player
-      // heard "you did well". 4 dB down puts it under -1 dBFS with headroom to
-      // spare and costs nothing perceptually, since it is still the loudest
-      // single event in its scene.
-      { kind: "pluck", notes: ["D4", "F#4", "A4", "D5"], timbre: "trianglePluck", duration: "8n", volume: -16 },
-      { kind: "membrane", note: "D2", duration: "8n", volume: -11 },
+      // stinger peaked at +1.2 dBFS — it was clipping at the exact moment a
+      // player was told they had done well.
+      { kind: "pluck", notes: ["D4", "F#4", "A4", "D5"], timbre: "trianglePluck", duration: "8n", volume: -10 },
+      { kind: "membrane", note: "D2", duration: "8n", volume: -6 },
     ],
   },
 

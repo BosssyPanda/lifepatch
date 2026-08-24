@@ -600,7 +600,7 @@ export class AudioEngine {
       const t0 = at + (layer.atSec ?? 0);
       switch (layer.kind) {
         case "pluck": {
-          this.pluck(layer.timbre).triggerAttackRelease([...layer.notes], layer.duration, t0, 0.9);
+          this.pluck(layer.timbre, layer.volume).triggerAttackRelease([...layer.notes], layer.duration, t0, 0.9);
           if (layer.octaveDoubleVolume !== undefined) {
             this.pluck(layer.timbre, layer.octaveDoubleVolume)
               .triggerAttackRelease(layer.notes.map(octaveDown), layer.duration, t0, 0.8);
@@ -608,7 +608,7 @@ export class AudioEngine {
           break;
         }
         case "arp": {
-          const v = this.pluck(layer.timbre);
+          const v = this.pluck(layer.timbre, layer.volume);
           layer.notes.forEach((n, i) => v.triggerAttackRelease(n, layer.duration, t0 + i * layer.stepSec, 0.9));
           if (layer.octaveDoubleVolume !== undefined) {
             const d = this.pluck(layer.timbre, layer.octaveDoubleVolume);

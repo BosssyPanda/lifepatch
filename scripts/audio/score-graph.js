@@ -237,26 +237,33 @@
   function buildStinger(bus, score, id, at) {
     const spec = score.STINGERS[id];
     const T = score.STINGER_TIMBRES;
-    const voice = (timbre) => {
+    // `volume` overrides the timbre's own level. It must be honoured for every
+    // layer kind: a `pluck`/`arp` layer that silently ignored its own volume
+    // made those fields dead data, and tuning them changed neither this
+    // preview nor the game — which is exactly the kind of divergence that
+    // turns a preview into a lie.
+    const voice = (timbre, volume) => {
       const t = T[timbre];
-      return timbre === "keysPluck"
+      const v = timbre === "keysPluck"
         ? new Tone.PolySynth(Tone.FMSynth, { ...t }).connect(bus)
         : new Tone.PolySynth(Tone.Synth, { oscillator: t.oscillator, envelope: t.envelope, volume: t.volume }).connect(bus);
+      if (volume !== undefined) v.volume.value = volume;
+      return v;
     };
     for (const layer of spec.layers) {
       const t0 = at + (layer.atSec ?? 0);
       if (layer.kind === "pluck") {
-        const v = voice(layer.timbre);
+        const v = voice(layer.timbre, layer.volume);
         v.triggerAttackRelease(layer.notes, layer.duration, t0, 0.9);
         if (layer.octaveDoubleVolume !== undefined) {
-          const d = voice(layer.timbre); d.volume.value = layer.octaveDoubleVolume;
+          const d = voice(layer.timbre, layer.octaveDoubleVolume);
           d.triggerAttackRelease(layer.notes.map(down), layer.duration, t0, 0.8);
         }
       } else if (layer.kind === "arp") {
-        const v = voice(layer.timbre);
+        const v = voice(layer.timbre, layer.volume);
         layer.notes.forEach((n, i) => v.triggerAttackRelease(n, layer.duration, t0 + i * layer.stepSec, 0.9));
         if (layer.octaveDoubleVolume !== undefined) {
-          const d = voice(layer.timbre); d.volume.value = layer.octaveDoubleVolume;
+          const d = voice(layer.timbre, layer.octaveDoubleVolume);
           layer.notes.forEach((n, i) => d.triggerAttackRelease(down(n), layer.duration, t0 + i * layer.stepSec, 0.8));
         }
       } else if (layer.kind === "membrane") {
