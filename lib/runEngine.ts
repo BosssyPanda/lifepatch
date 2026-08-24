@@ -37,6 +37,12 @@ import { mulberry32, strHash } from "./rng";
  *          mandatory debt service, three unreachable assets removed.
  *   5 → 6: `interestPaid` and `insolventStreak` — the receipt and the counter
  *          behind the insolvency ending (see `isUnrecoverable`).
+ *   6 → 6: `journal`, `weakSpots` and `daily` were added as OPTIONAL fields and
+ *          deliberately did NOT bump this. A save written before them carries none
+ *          of them, and every path that reads one treats absent as "decline" — the
+ *          draw falls back to the weights it always used, and replay/ghost/verify
+ *          return null. Same reasoning `sharedEvents` already makes below. Bumping
+ *          would have invalidated every live save to buy nothing.
  */
 export const RUN_VERSION = 6;
 
@@ -59,6 +65,57 @@ export type YearRecord = {
 };
 
 export type MarketYear = { year: number; returns: Record<AssetId, number> };
+
+/**
+ * One recorded action inside a year, in the order it was applied.
+ *
+ * Tuples, not `{kind, …}` records. This rides in every save: a 21-year story
+ * journal is ~5KB encoded this way and roughly three times that as objects, and an
+ * Infinite run has no fixed length.
+ *
+ * A trade records the dollars the player ASKED FOR, never the clamped amount.
+ * `trade` floors against `Math.max(0, cash)` — so the clamp is a function of the
+ * state it lands in, and a counterfactual replay lands in a different state on
+ * purpose. Recording the intent lets the clamp be recomputed; recording the outcome
+ * would bake one life's cash position into another's.
+ */
+export type JournalAct =
+  | readonly ["c", eventId: string, choiceId: string, outcomeIdx: number]
+  | readonly ["t", asset: AssetId, dollars: number]
+  | readonly ["d", dollars: number];
+
+/**
+ * What one year of a life actually consisted of.
+ *
+ * `deal` exists because `drawEvents` reads this life's own cash (see its note): a
+ * replay that re-draws is handed different cards, and is therefore not the same
+ * life. `acts` is ORDERED because `trade` and `payDebt` clamp against cash and stop
+ * commuting the moment a clamp bites — a map keyed by event id cannot express a year.
+ */
+export type YearJournal = {
+  /** The calendar year this entry covers. Entry `i` must be `startYear + i`. */
+  y: number;
+  /** Exactly what `drawEvents` dealt for this year. */
+  deal: string[];
+  /** Choices, trades and debt payments, in the order they happened. */
+  acts: JournalAct[];
+  /**
+   * Set only on a year the run ENDED inside. `retire` and `quitRun` never call
+   * `advanceYear`, so this entry has no matching `history` record — but its acts
+   * did move money into the final net worth, and a replay has to apply them. This
+   * is why the journal cannot be checked by length alone.
+   */
+  end?: "retire" | "quit";
+};
+
+/**
+ * A ceiling on one year's actions. A year past it is a script, not a player.
+ *
+ * Blowing it DROPS the journal rather than truncating it. A truncated journal is
+ * the one genuinely dangerous state: it still passes every structural check while
+ * replaying to a different number. Absent is honest; partial is a lie.
+ */
+export const MAX_ACTS_PER_YEAR = 200;
 
 export type RunStatus = "playing" | "ended";
 export type EndReason = "story-complete" | "retired" | "quit" | "died" | "insolvent";
@@ -110,12 +167,80 @@ export type RunState = {
    * one room stop sharing a world the moment their lives differ at all.
    */
   sharedEvents?: boolean;
+  /**
+   * Every year of this life, as it was actually played — the one thing the seed
+   * does not already fix.
+   *
+   * Optional, and its absence is MEANINGFUL: it means "written by an engine that
+   * did not journal, or round-tripped through a parser that drops it".
+   * `lib/mp/protocol.ts` rebuilds `RunState` field by field, and
+   * `lib/mp/matchStore` loads this device's own record through that same parser, so
+   * a run that came back from a room has no journal and never will.
+   *
+   * Journaling NEVER starts mid-run. A journal covering part of a run is worse than
+   * none, because there is exactly one moment at which it passes a naive check.
+   * Every reader goes through `hasFullJournal` and declines otherwise.
+   */
+  journal?: YearJournal[];
+  /**
+   * The concepts this run was told to favour, snapshotted at `initRun`.
+   *
+   * In the STATE rather than read live, so the same run replays to the same draws
+   * on any machine and at any later date. Ignored entirely when `sharedEvents` is
+   * set — a per-player bias would desynchronise a room.
+   */
+  weakSpots?: string[];
+  /** The UTC date of the Daily Ledger puzzle this run is an attempt at. */
+  daily?: string;
 };
 
 const ALL_ASSETS: AssetId[] = ASSET_IDS;
 
 function emptyHoldings(): Record<AssetId, number> {
   return ALL_ASSETS.reduce((a, id) => ((a[id] = 0), a), {} as Record<AssetId, number>);
+}
+
+/**
+ * Append to the OPEN year's entry.
+ *
+ * Silently no-ops on a state with no journal, and that IS the compatibility story:
+ * a v6 save and a run that came back through `parseRunState` both keep playing
+ * exactly as they did, and every reader downstream declines rather than guessing.
+ */
+function record(s: RunState, act: JournalAct): RunState {
+  const j = s.journal;
+  if (!j || j.length === 0) return s;
+  const open = j[j.length - 1];
+  if (open.y !== s.year || open.end) return s;
+  if (open.acts.length >= MAX_ACTS_PER_YEAR) return { ...s, journal: undefined };
+  return { ...s, journal: [...j.slice(0, -1), { ...open, acts: [...open.acts, act] }] };
+}
+
+/** Mark the open year on a run that ended without ever turning it. */
+function sealEnd(s: RunState, end: "retire" | "quit"): YearJournal[] | undefined {
+  const j = s.journal;
+  if (!j || j.length === 0) return j;
+  const open = j[j.length - 1];
+  if (open.y !== s.year || open.end) return j;
+  return [...j.slice(0, -1), { ...open, end }];
+}
+
+/**
+ * Does this journal cover the whole run? The precondition for every reader.
+ *
+ * The check is per-entry YEAR IDENTITY, not length. Length alone gets three of the
+ * five terminal states wrong — a live run, a retired run and a quit run each carry
+ * one open entry past `history` — and it can be satisfied by a journal that
+ * restarted mid-run: a room snapshot delivered at year one, re-journalled from
+ * there and fast-forwarded, marches both counters together forever while describing
+ * a life that began somewhere else. `y[i] === startYear + i` closes that.
+ */
+export function hasFullJournal(s: RunState): s is RunState & { journal: YearJournal[] } {
+  const j = s.journal;
+  if (!j || j.length === 0) return false;
+  for (let i = 0; i < j.length; i++) if (j[i].y !== s.startYear + i) return false;
+  const openTail = s.status === "playing" || j[j.length - 1].end !== undefined;
+  return j.length === s.history.length + (openTail ? 1 : 0);
 }
 
 export function yearIndex(s: RunState): number {
@@ -242,6 +367,8 @@ export function initRun(
   name: string,
   seedIn?: number,
   sharedEvents?: boolean,
+  /** Additive: a sixth positional would have been a trap for the next caller. */
+  opts?: { weakSpots?: string[]; daily?: string },
 ): RunState {
   const cfg = getMode(mode);
   const bg = getBackground(backgroundId);
@@ -276,8 +403,13 @@ export function initRun(
     insolventStreak: 0,
     // Written only when true, so a solo save is byte-for-byte what it always was.
     ...(sharedEvents ? { sharedEvents: true } : {}),
+    ...(opts?.weakSpots?.length ? { weakSpots: [...opts.weakSpots] } : {}),
+    ...(opts?.daily ? { daily: opts.daily } : {}),
   };
   base.pendingEvents = drawEvents(base);
+  // Year one's entry opens here, and journaling only ever begins here — a journal
+  // that starts mid-run is the one shape that can pass a check while lying.
+  base.journal = [{ y: base.year, deal: [...base.pendingEvents], acts: [] }];
   return base;
 }
 
@@ -305,14 +437,15 @@ export function trade(s: RunState, asset: AssetId, dollars: number): RunState {
     cash += amt;
     holdings[asset] = (holdings[asset] ?? 0) - amt;
   }
-  return { ...s, cash, holdings };
+  // The dollars ASKED FOR, not `amt` — see `JournalAct`.
+  return record({ ...s, cash, holdings }, ["t", asset, dollars]);
 }
 
 export function payDebt(s: RunState, dollars: number): RunState {
   // See `trade`: cash can be negative mid-year, and an unfloored min() turned a
   // repayment into a loan.
   const amt = Math.min(dollars, Math.max(0, s.cash), Math.max(0, s.debt));
-  return { ...s, cash: s.cash - amt, debt: s.debt - amt };
+  return record({ ...s, cash: s.cash - amt, debt: s.debt - amt }, ["d", dollars]);
 }
 
 export function allEventsResolved(s: RunState): boolean {
@@ -388,7 +521,7 @@ export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice
     mortgage = HOME_PRICE - HOME_DOWN_PAYMENT;
   }
 
-  return {
+  return record({
     ...s,
     cash: s.cash + (e.cash ?? 0),
     debt: Math.max(0, s.debt + (e.debt ?? 0)),
@@ -406,7 +539,7 @@ export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice
     flags,
     usedEvents: s.usedEvents.includes(eventId) ? s.usedEvents : [...s.usedEvents, eventId],
     yearChoices: { ...s.yearChoices, [eventId]: `${choice.id}|${idx}` },
-  };
+  }, ["c", eventId, choice.id, idx]);
 }
 
 /** Prices since year one of the run. Expenses inflate; a flat cost curve made
@@ -659,14 +792,22 @@ export function advanceYear(s: RunState): RunState {
     yearChoices: {},
   };
   if (status === "playing") next.pendingEvents = drawEvents(next);
+  // The year just resolved needs nothing: its acts were appended as they happened.
+  // All that is left is to open the next one, with the hand it was dealt.
+  if (s.journal && status === "playing") {
+    next.journal = [...s.journal, { y: nextYear, deal: [...next.pendingEvents], acts: [] }];
+  }
   return next;
 }
 
+// Both of these end a life INSIDE a year rather than by turning it, so the open
+// journal entry has no matching `history` row — and its acts still moved money into
+// the final number. It is marked, not dropped; a replay has to apply it and then stop.
 export function retire(s: RunState): RunState {
-  return { ...s, status: "ended", endReason: "retired" };
+  return { ...s, status: "ended", endReason: "retired", journal: sealEnd(s, "retire") };
 }
 export function quitRun(s: RunState): RunState {
-  return { ...s, status: "ended", endReason: "quit" };
+  return { ...s, status: "ended", endReason: "quit", journal: sealEnd(s, "quit") };
 }
 /**
  * The number: 25× a year of expenses, invested. The 4% rule, which is the whole

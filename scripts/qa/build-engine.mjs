@@ -10,7 +10,7 @@
 // relative paths on the way out, because tsc resolves that alias for TYPES only and
 // emits the specifier untouched.
 import { execFileSync } from "child_process";
-import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "fs";
 import path from "path";
 
 export const OUT = process.env.QA_ENGINE_OUT ?? "/tmp/lifepatch-engine";
@@ -30,7 +30,9 @@ const ENTRIES = [
   "lib/runEngine.ts",
   "lib/verdict.ts",
   "lib/palette.ts",
+  "lib/replay.ts",
   "lib/mp/autoResolve.ts",
+  "lib/mp/protocol.ts",
 ];
 
 function walk(dir, out = []) {
@@ -59,6 +61,10 @@ export function buildEngine({ extra = [] } = {}) {
         strict: true,
         skipLibCheck: true,
         esModuleInterop: true,
+        // `lib/mp/protocol.ts` reaches one component deep (NameField, for the single
+        // name-normalising rule both the wire and the setup screen have to agree on),
+        // so the compiler needs JSX even though nothing here renders anything.
+        jsx: "react-jsx",
         // Types only — the emitted specifier keeps the alias, and the rewrite below
         // turns it into a path Node can actually resolve.
         baseUrl: ROOT,
@@ -70,6 +76,12 @@ export function buildEngine({ extra = [] } = {}) {
   );
 
   execFileSync("npx", ["tsc", "-p", cfg], { stdio: "inherit", cwd: ROOT });
+
+  // The compiled tree lives outside the repo, so Node cannot walk up to the real
+  // node_modules. One symlink is cheaper than vendoring or bundling.
+  try {
+    symlinkSync(path.join(ROOT, "node_modules"), path.join(OUT, "node_modules"), "junction");
+  } catch {}
 
   // `require("@/lib/x")` → the real relative path from this file's directory.
   for (const file of walk(path.join(OUT, "lib"))) {

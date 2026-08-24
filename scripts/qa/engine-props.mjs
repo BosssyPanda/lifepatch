@@ -105,3 +105,203 @@ export function report() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) report();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The journal + replay properties. These are the gate the ghost line and
+// verified results stand on: if a recorded run and its replay ever disagree,
+// every feature built on them is quietly reporting a number nothing generated.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const engine = R("runEngine");
+const replay = R("replay");
+const protocol = R("mp/protocol");
+const { BACKGROUNDS } = R("backgrounds");
+
+/** Assets a player could actually have bought that year (crypto is gated to 2011+). */
+function tradableIn(year) {
+  const ids = ["savings", "bonds", "index", "realEstate", "gold"];
+  return year >= 2011 ? [...ids, "crypto"] : ids;
+}
+
+/**
+ * Play a whole life under a scripted policy, off its own seeded stream so the
+ * whole suite is reproducible. Policies are deliberately varied: a run that never
+ * trades and a run that thrashes exercise completely different clamp paths in
+ * `trade`/`payDebt`, and those clamps are the reason the journal has to be ordered.
+ */
+function playRun({ seed, mode = "story", backgroundId = "student", policy = "chaos", maxYears = 60 }) {
+  const rand = rng.mulberry32(seed ^ 0x5f3759df);
+  let s = engine.initRun(mode, backgroundId, "Prop", seed);
+  for (let n = 0; n < maxYears && s.status === "playing"; n++) {
+    for (const id of [...s.pendingEvents]) {
+      const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+      if (!ev) continue;
+      const pick = ev.choices[Math.floor(rand() * ev.choices.length)] ?? ev.choices[0];
+      s = engine.applyLifeChoice(s, id, pick);
+    }
+    if (policy === "index") {
+      s = replay.indexEverything(s);
+    } else if (policy === "chaos") {
+      const moves = Math.floor(rand() * 4);
+      for (let i = 0; i < moves; i++) {
+        const opts = tradableIn(s.year);
+        const asset = opts[Math.floor(rand() * opts.length)];
+        // Deliberately unclamped and sometimes absurd — asking for more than you
+        // hold is exactly the path the journal has to record as INTENT.
+        const dollars = Math.round((rand() * 2 - 0.7) * 20000);
+        s = engine.trade(s, asset, dollars);
+      }
+      if (rand() < 0.3) s = engine.payDebt(s, Math.round(rand() * 6000));
+    }
+    if (policy === "quit" && n === 5) return engine.quitRun(s);
+    if (policy === "retire" && engine.canRetire(s)) return engine.retire(s);
+    s = engine.advanceYear(s);
+  }
+  return s;
+}
+
+const POLICIES = ["idle", "index", "chaos", "quit", "retire"];
+const BG_IDS = BACKGROUNDS.map((b) => b.id);
+
+console.log("\nJournal + replay");
+
+check("P4 the journal invariant holds after every engine call", () => {
+  for (let seed = 1; seed <= 120; seed++) {
+    const policy = POLICIES[seed % POLICIES.length];
+    const bg = BG_IDS[seed % BG_IDS.length];
+    const mode = seed % 3 === 0 ? "infinite" : "story";
+    const s = playRun({ seed, mode, backgroundId: bg, policy, maxYears: 45 });
+    if (!engine.hasFullJournal(s)) {
+      throw new Error(`seed ${seed} ${mode}/${bg}/${policy}: journal ${s.journal?.length} vs history ${s.history.length}, status ${s.status}`);
+    }
+  }
+});
+
+check("P1 a run replays to itself, field for field, journal included", () => {
+  for (let seed = 1; seed <= 120; seed++) {
+    const policy = POLICIES[seed % POLICIES.length];
+    const bg = BG_IDS[seed % BG_IDS.length];
+    const mode = seed % 3 === 0 ? "infinite" : "story";
+    const s = playRun({ seed, mode, backgroundId: bg, policy, maxYears: 45 });
+    const t = replay.ticketFor(s);
+    if (!t) throw new Error(`seed ${seed}: no ticket`);
+    const r = replay.replayRun(t);
+    if (!r) throw new Error(`seed ${seed} ${mode}/${bg}/${policy}: replay refused`);
+    deepEq(r, s, `seed ${seed} ${mode}/${bg}/${policy}`);
+  }
+});
+
+check("P1b verifyResult accepts the true score and rejects a nudged one", () => {
+  for (let seed = 200; seed < 240; seed++) {
+    const s = playRun({ seed, policy: "chaos", maxYears: 45 });
+    const t = replay.ticketFor(s);
+    const nw = engine.netWorth(s);
+    if (!replay.verifyResult(t, nw)) throw new Error(`seed ${seed}: true score rejected`);
+    if (replay.verifyResult(t, nw + 1)) throw new Error(`seed ${seed}: +$1 accepted`);
+    if (replay.verifyResult(t, nw - 1)) throw new Error(`seed ${seed}: -$1 accepted`);
+  }
+});
+
+check("P2 rollOutcome ignores state — the ghost's whole basis", () => {
+  // The same choice, at the same year, on the same seed, from two states that
+  // differ in every money field. If this ever fails, a counterfactual is silently
+  // a different life and the ghost line must not ship.
+  let compared = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const base = engine.initRun("story", "student", "A", seed);
+    for (const ev of engine.LIFE_EVENTS) {
+      for (const choice of ev.choices) {
+        if (choice.outcomes.length < 2) continue;
+        const rich = { ...base, cash: 900000, debt: 0, salary: 400000, holdings: { ...base.holdings, index: 500000 }, pendingEvents: [ev.id] };
+        const poor = { ...base, cash: 0, debt: 250000, salary: 1, holdings: base.holdings, pendingEvents: [ev.id] };
+        const a = engine.applyLifeChoice(rich, ev.id, choice);
+        const b = engine.applyLifeChoice(poor, ev.id, choice);
+        eq(a.yearChoices[ev.id], b.yearChoices[ev.id], `${ev.id}/${choice.id} @ seed ${seed}`);
+        compared++;
+      }
+    }
+  }
+  if (compared < 500) throw new Error(`only ${compared} outcome rolls compared`);
+});
+
+check("P3 acts do not commute once a clamp bites", () => {
+  // The reason `acts` is an ordered list and not a map. If someone ever "simplifies"
+  // it into per-asset totals, this fails.
+  const base = engine.initRun("story", "student", "A", 42);
+  const s = { ...base, cash: 1000, debt: 5000 };
+  const tradeFirst = engine.payDebt(engine.trade(s, "index", 1000), 1000);
+  const debtFirst = engine.trade(engine.payDebt(s, 1000), "index", 1000);
+  if (tradeFirst.holdings.index === debtFirst.holdings.index && tradeFirst.debt === debtFirst.debt) {
+    throw new Error("order stopped mattering — the clamp path is gone");
+  }
+  eq(tradeFirst.holdings.index, 1000, "trade-first put the cash in the index");
+  eq(debtFirst.holdings.index, 0, "debt-first left nothing to invest");
+});
+
+check("P5 a run with no journal plays on, and every reader declines", () => {
+  let s = engine.initRun("story", "hustler", "Legacy", 7);
+  s = { ...s, journal: undefined }; // a v6 save, or a run back from a room
+  for (let n = 0; n < 21 && s.status === "playing"; n++) {
+    for (const id of [...s.pendingEvents]) {
+      const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+      if (ev) s = engine.applyLifeChoice(s, id, ev.choices[0]);
+    }
+    s = engine.trade(s, "index", 2500);
+    s = engine.payDebt(s, 500);
+    s = engine.advanceYear(s);
+  }
+  eq(s.journal, undefined, "journaling restarted mid-run");
+  eq(engine.hasFullJournal(s), false, "hasFullJournal");
+  eq(replay.ticketFor(s), null, "ticketFor");
+  eq(replay.ghostFor(s), null, "ghostFor");
+});
+
+check("P4b the wire parser drops the journal, and that degrades to a decline", () => {
+  // `lib/mp/protocol.parseRunState` rebuilds RunState field by field, and
+  // `matchStore.loadMatch` runs this device's own record through it too. The
+  // journal cannot survive that — the point is that it fails CLOSED.
+  const s = playRun({ seed: 99, policy: "chaos", maxYears: 21 });
+  if (!engine.hasFullJournal(s)) throw new Error("fixture has no journal");
+  const wire = protocol.parseRunState(JSON.parse(JSON.stringify(s)));
+  if (!wire) throw new Error("parseRunState rejected a valid run");
+  eq(wire.journal, undefined, "journal survived the wire");
+  eq(engine.hasFullJournal(wire), false, "hasFullJournal after the wire");
+  eq(replay.ticketFor(wire), null, "ticketFor after the wire");
+});
+
+check("P6 the ghost is the same life, with different money", () => {
+  let drawn = 0;
+  for (let seed = 300; seed < 360; seed++) {
+    const s = playRun({ seed, policy: seed % 2 ? "chaos" : "idle", maxYears: 45 });
+    const g = replay.ghostFor(s);
+    if (!g) continue;
+    drawn++;
+    if (g.points.length > s.history.length) throw new Error(`seed ${seed}: ghost outlived the run`);
+    // Same cards, same choices — re-derive the counterfactual and compare its
+    // per-year deal against the journal it was forced onto.
+    const t = replay.ticketFor(s);
+    const ghost = replay.replayRun(t, { allocate: replay.indexEverything });
+    deepEq(ghost.life, s.life, `seed ${seed}: the ghost lived a different life`);
+    eq(ghost.age, s.age, `seed ${seed}: age`);
+    eq(ghost.history.length, s.history.length, `seed ${seed}: years lived`);
+    eq(ghost.endReason, s.endReason, `seed ${seed}: ending`);
+    eq(g.gap, Math.round(engine.netWorth(s)) - g.final, `seed ${seed}: gap arithmetic`);
+  }
+  if (drawn < 50) throw new Error(`only ${drawn} ghosts drawn`);
+});
+
+check("P6b spare cash never exceeds the cash on hand", () => {
+  for (let seed = 400; seed < 440; seed++) {
+    let s = engine.initRun("story", BG_IDS[seed % BG_IDS.length], "A", seed);
+    for (let n = 0; n < 21 && s.status === "playing"; n++) {
+      const spare = replay.spareCash(s);
+      if (spare < 0) throw new Error(`seed ${seed} y${n}: negative spare ${spare}`);
+      if (spare > Math.max(0, s.cash)) throw new Error(`seed ${seed} y${n}: spare ${spare} > cash ${s.cash}`);
+      for (const id of [...s.pendingEvents]) {
+        const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+        if (ev) s = engine.applyLifeChoice(s, id, ev.choices[0]);
+      }
+      s = engine.advanceYear(s);
+    }
+  }
+});
