@@ -374,7 +374,7 @@ Every gate in this pass required: `npm run typecheck`, `npm run lint`,
 
 Final state: typecheck clean · lint clean but for one pre-existing
 `<img>` warning · production build succeeds · palette **57/57** ·
-engine properties **22/22** · all five browser journeys **0 high, 0 console
+engine properties **23/23** · all five browser journeys **0 high, 0 console
 errors** at both viewports.
 
 Two gates in that list are new, and both existed only on paper before:
@@ -384,10 +384,15 @@ Two gates in that list are new, and both existed only on paper before:
   `scripts/qa/palette-audit.mjs`, it checks `app/globals.css` and `lib/palette.ts`
   against each other as well as measuring every pairing, and it fails on a single
   drifted hex digit — verified by drifting one.
-- **The engine property suite** reported after its first section rather than its
-  last, so eighteen of its twenty-two checks could print `FAIL` and still exit 0.
-  Verified with a deliberately broken assertion, then fixed. A gate that cannot
-  fail is worse than no gate, because it is trusted.
+- **The engine property suite** had two ways of passing without meaning it, both
+  found by deliberately breaking the code under test and watching it pass anyway.
+  It reported after its first section rather than its last, so eighteen of its
+  checks could print `FAIL` and still exit 0. And it — along with all four browser
+  journeys — imported the compiled engine's output directory without building it,
+  so a script run on its own drove whatever tsc had last left in `/tmp`; the engine
+  under test was three hours older than the tree. Both fixed, both re-verified by
+  repeating the sabotage. A gate that cannot fail, or that tests a stale copy, is
+  worse than no gate — because it is trusted.
 
 Beyond that: ~1.5M engine state transitions asserted, 3,000-seed market
 distributions, a 58,388-run-year replay behind the insolvency threshold, and a
