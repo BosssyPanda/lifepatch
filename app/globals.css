@@ -23,8 +23,10 @@
    The LEDGER ground stays; the ink gets a press behind it. Warm near-black
    paper, one safety-orange signature, a sparing acid chartreuse, and print
    red/green that still mean nothing but money. Contrast figures are measured,
-   not estimated — `scratchpad/palette-audit.js` re-runs all 28 checks, and
-   `lib/palette.ts` mirrors every value for the surfaces CSS cannot reach. */
+   not estimated — `node scripts/qa/palette-audit.mjs` re-runs them all, and
+   `lib/palette.ts` mirrors every value for the surfaces CSS cannot reach. The
+   audit checks that mirror too: change a hex here and the gate fails until the
+   same edit lands there, in the same commit. */
 @theme {
   --color-bg: #131110; /* warm near-black paper */
   --color-bg2: #1a1714; /* framed panel */
@@ -265,8 +267,10 @@ body {
 /* ---------------- Focus ring ----------------
    The signature orange is also the "you are here" of the keyboard: 2px, offset 2px,
    the same geometry as before — only the hue changed. Measured, not assumed:
-   accent on bg 6.04:1, on bg2 5.72:1, on bg3 5.36:1, so the ring clears WCAG 1.4.11
-   on every ground the app paints (`scratchpad/palette-audit.js`).
+   accent on bg 6.04:1, on bg2 5.72:1, on bg3 5.37:1, so the ring clears WCAG 1.4.11
+   on every ground the app paints (`node scripts/qa/palette-audit.mjs`, which asserts
+   all three). The bg3 figure read 5.36 here until the audit was rebuilt and measured
+   it at 5.3683 — a truncation, not a drift, and corrected so the gate can assert it.
 
    The one place it cannot work is on top of itself. A control that is ITSELF an
    accent fill (the primary CTA, the bracketed terminal CTA, the finale wordmark)

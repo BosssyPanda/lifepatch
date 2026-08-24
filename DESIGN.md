@@ -63,13 +63,15 @@ and fourth money colour and must never be used to grade a number.
   Orange is *not* a verdict tier. The old warm-brown/olive/amber seal hexes are SPENT-era
   legacy and must not come back.
 - No cool blues/purples, no warm browns, no second orange, no gradients as decoration — flat
-  fields only. Every value above is audited: `node scratchpad/palette-audit.js` re-runs all 52
-  contrast checks — the original 28, every pairing the accent sweep introduced (the ring on
-  each ground, the CTA's two states, the selection outline over its wash, and chartreuse over
-  the chip, toast and meter grounds), and the life sim's insolvency warning panel (a
-  `border-loss/60` frame was drafted for it and measured 2.56:1 on bg2, so it ships as a
-  hairline frame with a solid loss left rule at 5.09:1). A pairing that has not been measured
-  does not ship. A palette change means all three of `app/globals.css`
+  fields only. Every value above is audited: `node scripts/qa/palette-audit.mjs` re-runs all 57
+  checks — the mirror between `app/globals.css` and `lib/palette.ts`, every pairing on all
+  three grounds, the knockout rule in both directions, and the pairings the ghost line, the
+  daily grid and the weak-spot section introduced. A pairing that has not been measured
+  does not ship. (This audit was cited here as `scratchpad/palette-audit.js` for months and
+  that file was never committed — the gate could not be run by anyone. It is committed now,
+  and it fails on a single drifted digit. Two figures from the accent sweep are worth keeping
+  in the record: a `border-loss/60` frame drafted for the insolvency panel measured 2.56:1 on
+  bg2, so it ships as a hairline frame with a solid loss left rule at 5.09:1.) A palette change means all three of `app/globals.css`
   (`@theme`), `lib/palette.ts` and this section, in the same commit; a change to WHERE a colour
   is spent means this section too.
 
