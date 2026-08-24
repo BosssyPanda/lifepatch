@@ -7,6 +7,7 @@
 // means a recorded run and its replay disagree, which is the one thing none of the
 // verification features may ever do.
 import { createRequire } from "module";
+import { readFileSync } from "fs";
 import { OUT } from "./build-engine.mjs";
 
 const require = createRequire(`${OUT}/`);
@@ -104,7 +105,8 @@ export function report() {
   if (failures) process.exit(1);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) report();
+// Deliberately NOT reported here — see the bottom of the file. This block used to
+// be the whole gate, and reporting where it ends is what broke it.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The journal + replay properties. These are the gate the ghost line and
@@ -118,6 +120,7 @@ const protocol = R("mp/protocol");
 const buildResult = R("cloud/buildResult");
 const daily = R("daily");
 const dailyShare = R("dailyShare");
+const eventConcepts = R("eventConcepts");
 const { BACKGROUNDS } = R("backgrounds");
 
 /** Assets a player could actually have bought that year (crypto is gated to 2011+). */
@@ -453,3 +456,137 @@ check("P8d a daily run's result row is filed under its day", () => {
   const plain = engine.initRun("story", "student", "A", 4242);
   eq(plain.daily, undefined, "an ordinary run claimed a day");
 });
+
+// ── weak spots ──────────────────────────────────────────────────────────────
+// A bias on the cards you are dealt is the most dangerous thing in this pass: it
+// touches `drawEvents`, which every replay, every verification and every match
+// stands on. These four checks are the fence around it.
+check("P9 a run with no weak spots deals exactly what it dealt before", () => {
+  const golden = JSON.parse(readFileSync(new URL("./golden-draws.json", import.meta.url), "utf8"));
+  for (let seed = 1; seed <= 120; seed++) {
+    const mode = seed % 2 ? "infinite" : "story";
+    let s = engine.initRun(mode, BG_IDS[seed % 3], "G", seed);
+    const rand = rng.mulberry32(seed);
+    const deals = [];
+    let n = 0;
+    while (s.status === "playing" && n < 30) {
+      deals.push(s.pendingEvents.join(","));
+      for (const id of [...s.pendingEvents]) {
+        const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+        if (ev) s = engine.applyLifeChoice(s, id, ev.choices[Math.floor(rand() * ev.choices.length)] ?? ev.choices[0]);
+      }
+      if (rand() < 0.5) s = engine.trade(s, "index", Math.round(rand() * 4000));
+      s = engine.advanceYear(s);
+      n++;
+    }
+    eq(deals.join("|"), golden[seed - 1], `seed ${seed}: the draw moved`);
+  }
+});
+
+check("P9b a match is dealt in lockstep however the seats differ", () => {
+  // The regression the bias could cause, and the one the docblock on drawEvents
+  // quantifies: 21% of years dealing different cards, up to $71k of net worth.
+  const spots = Object.keys(
+    engine.LIFE_EVENTS.reduce((acc, e) => {
+      for (const c of eventConcepts.conceptsForEvent(e.id)) acc[c] = 1;
+      return acc;
+    }, {}),
+  );
+  if (spots.length < 4) throw new Error(`only ${spots.length} concepts are reachable from events`);
+  for (let seed = 900; seed < 940; seed++) {
+    let a = engine.initRun("story", "student", "A", seed, true, { weakSpots: [spots[0], spots[1]] });
+    let b = engine.initRun("story", "student", "B", seed, true, { weakSpots: [spots[2], spots[3]] });
+    let c = engine.initRun("story", "student", "C", seed, true);
+    const answer = (s) => {
+      for (const id of [...s.pendingEvents]) {
+        const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+        if (ev) s = engine.applyLifeChoice(s, id, ev.choices[0]);
+      }
+      return engine.advanceYear(s);
+    };
+    for (let y = 0; y < 21 && a.status === "playing"; y++) {
+      deepEq(a.pendingEvents, b.pendingEvents, `seed ${seed} y${y}: two seats, different cards`);
+      deepEq(a.pendingEvents, c.pendingEvents, `seed ${seed} y${y}: a seat with no weak spots drifted`);
+      a = answer(a);
+      b = answer(b);
+      c = answer(c);
+    }
+  }
+});
+
+check("P9c the bias actually favours the cards it says it does", () => {
+  // Pick a concept several events teach, so the effect is measurable.
+  const byConcept = {};
+  for (const e of engine.LIFE_EVENTS) {
+    for (const c of eventConcepts.conceptsForEvent(e.id)) (byConcept[c] ??= []).push(e.id);
+  }
+  const [concept, ids] = Object.entries(byConcept).sort((x, y) => y[1].length - x[1].length)[0];
+  const target = new Set(ids);
+
+  const count = (weakSpots) => {
+    let hits = 0;
+    let dealt = 0;
+    for (let seed = 1; seed <= 400; seed++) {
+      let s = engine.initRun("story", BG_IDS[seed % 3], "A", seed, false, weakSpots ? { weakSpots } : undefined);
+      for (let y = 0; y < 21 && s.status === "playing"; y++) {
+        for (const id of s.pendingEvents) {
+          dealt++;
+          if (target.has(id)) hits++;
+        }
+        for (const id of [...s.pendingEvents]) {
+          const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+          if (ev) s = engine.applyLifeChoice(s, id, ev.choices[0]);
+        }
+        s = engine.advanceYear(s);
+      }
+    }
+    return hits / dealt;
+  };
+
+  const before = count(null);
+  const after = count([concept]);
+  console.log(`       "${concept}" (${ids.length} cards): ${(before * 100).toFixed(1)}% → ${(after * 100).toFixed(1)}% of draws`);
+  if (!(after > before * 1.15)) throw new Error(`the bias did nothing: ${before} → ${after}`);
+  // A nudge, not a curriculum. Past this it stops being a life sim.
+  if (after > 0.75) throw new Error(`the bias took over the deck: ${after}`);
+});
+
+check("P9d a replay reproduces a biased run exactly", () => {
+  const byConcept = {};
+  for (const e of engine.LIFE_EVENTS) {
+    for (const c of eventConcepts.conceptsForEvent(e.id)) (byConcept[c] ??= []).push(e.id);
+  }
+  const spots = Object.keys(byConcept).slice(0, 2);
+  for (let seed = 950; seed < 990; seed++) {
+    let s = engine.initRun("story", BG_IDS[seed % 3], "A", seed, false, { weakSpots: spots });
+    const rand = rng.mulberry32(seed);
+    while (s.status === "playing") {
+      for (const id of [...s.pendingEvents]) {
+        const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+        if (ev) s = engine.applyLifeChoice(s, id, ev.choices[Math.floor(rand() * ev.choices.length)] ?? ev.choices[0]);
+      }
+      if (rand() < 0.5) s = engine.trade(s, "index", Math.round(rand() * 4000));
+      s = engine.advanceYear(s);
+    }
+    const t = replay.ticketFor(s);
+    deepEq(t.weakSpots, spots, `seed ${seed}: the ticket lost the bias`);
+    const again = replay.replayRun(t);
+    if (!again) throw new Error(`seed ${seed}: a biased run would not replay`);
+    eq(Math.round(engine.netWorth(again)), Math.round(engine.netWorth(s)), `seed ${seed}: replayed to a different number`);
+    eq(replay.verifyResult(t, engine.netWorth(s)), true, `seed ${seed}: verification declined`);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// One report, after everything.
+//
+// This file used to call `report()` at the end of the PRNG block, which was correct
+// while that block WAS the file. The journal and replay properties were appended
+// below it, and the call stayed where it was — so the gate printed "4/4 checks
+// passed", ran the other eighteen, and exited 0 whether they passed or failed. A
+// deliberately broken assertion confirmed it: `FAIL P9d …` on stdout, exit code 0.
+//
+// A gate that cannot fail is worse than no gate, because it is trusted. The report
+// belongs at the bottom, after the last check, and nowhere else.
+// ─────────────────────────────────────────────────────────────────────────────
+report();

@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { resolvePlayerId, resolveProgressId } from "@/lib/cloud/identity";
 import { recordConcepts } from "@/lib/cloud/mastery";
 import { markSeen } from "@/lib/cloud/seen";
+import { recordAttempt } from "@/lib/weakSpots";
 
 /**
  * The learning bus. Gameplay calls `learn(conceptIds, { applied })` whenever a
@@ -15,9 +16,24 @@ import { markSeen } from "@/lib/cloud/seen";
  *  - applied (good outcome / correct quiz / bought asset) raises mastery level
  *    via recordConcepts (cloud MASTERED track, mastery-only).
  * `runGains` collects concepts leveled this run for the end-of-run summary.
+ *
+ * Mastery only ever goes up, which is the right shape for "what have you learned"
+ * and no use at all for "what do you keep getting wrong" — level 0 means both
+ * "never met this" and "met it four times and blew it every time". So a caller that
+ * knows how the moment actually WENT passes `tone`, and the other half of the
+ * record is kept beside it (`lib/weakSpots.ts`).
  */
 
-type LearnOpts = { applied?: boolean };
+type LearnOpts = {
+  applied?: boolean;
+  /**
+   * How the moment went, when the caller knows. `good` is a hit, `bad`/`warning` a
+   * miss, and `neutral` is neither — a neutral outcome is a card whose writing
+   * declined to grade the decision, and scoring it either way would put noise into
+   * a number the report says out loud. Absent (a quiz, a purchase) records nothing.
+   */
+  tone?: "good" | "bad" | "warning" | "neutral";
+};
 
 type ConceptCtx = {
   learn: (conceptIds: string[], opts?: LearnOpts) => void;
@@ -53,6 +69,11 @@ export function ConceptLearnProvider({ children }: { children: ReactNode }) {
 
       const newly = markSeen(ids);
       if (newly.length > 0) setQueue((q) => [...q, ...newly]);
+
+      // The hit/miss half of the record, local and per progress id.
+      if (opts?.tone === "good" || opts?.tone === "bad" || opts?.tone === "warning") {
+        recordAttempt(resolveProgressId(user?.id ?? null), ids, opts.tone === "good");
+      }
 
       if (opts?.applied) {
         const id = resolveProgressId(user?.id ?? null);

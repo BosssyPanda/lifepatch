@@ -11,8 +11,10 @@ import { SoundCell } from "@/components/ui/SoundCell";
 import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
+import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
+import { resolveProgressId } from "@/lib/cloud/identity";
 import { conceptTitle } from "@/lib/concepts";
 import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
@@ -22,6 +24,8 @@ import { dailyShare, GRID_ROW, gridGlyph, gridSummary } from "@/lib/dailyShare";
 import { ghostFor, GHOST_BUFFER_MONTHS } from "@/lib/replay";
 import { annualExpenses, homeEquity, netWorth, operatingCashFlow, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
+import { eventTeachesAny } from "@/lib/eventConcepts";
+import { rankWeakSpots, readTallies, type WeakSpot } from "@/lib/weakSpots";
 import { STAGGER } from "@/src/motion/tokens";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: STAGGER.list, delayChildren: STAGGER.loose } } };
@@ -168,6 +172,39 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
   onBackToStandings?: () => void }) {
   const { mastery } = useProfile();
   const { runGains } = useConceptLearn();
+  const { user } = useAuth();
+  /**
+   * What keeps going wrong, read after mount.
+   *
+   * The tallies are localStorage, which the server cannot see, and every one of
+   * this run's own outcomes has already been written into them by the time the
+   * report exists — so this is the state INCLUDING the life just finished, which is
+   * what makes the sentence about the next run true.
+   */
+  const [weakSpots, setWeakSpots] = useState<WeakSpot[]>([]);
+  useEffect(() => {
+    setWeakSpots(rankWeakSpots(readTallies(resolveProgressId(user?.id ?? null))));
+  }, [user]);
+  /**
+   * How many of this run's cards were actually about a weak spot — counted, not
+   * claimed. The bias makes those cards LIKELIER; it does not guarantee one was
+   * ever dealt, so the sentence below states the deck's weighting (true by
+   * construction) and only quotes a figure when the journal can back it. A run
+   * resumed from a save that predates the journal quotes nothing.
+   */
+  const [dealtCards, biasedCards] = useMemo(() => {
+    const weak = run.weakSpots;
+    if (!weak?.length || !run.journal) return [0, 0];
+    let dealt = 0;
+    let biased = 0;
+    for (const y of run.journal) {
+      for (const id of y.deal) {
+        dealt++;
+        if (eventTeachesAny(id, weak)) biased++;
+      }
+    }
+    return [dealt, biased];
+  }, [run.weakSpots, run.journal]);
   const { setBrainGlow } = useAudio();
   const [shareOpen, setShareOpen] = useState(false);
   const shareUrl = useShareUrl(run);
@@ -397,6 +434,44 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
             <BrainIcon size={13} /> View your Money Brain →
           </button>
         </motion.div>
+
+        {/* Weak spots.
+            In the INK scale, not chartreuse: that hue has exactly four sanctioned
+            homes (the streak chip, the Money Brain meter, the mastery ticks and the
+            concept toast) and a fifth is a contract change, not a styling choice.
+            Not loss-red either — this is a gap, not a loss, and the register the
+            house uses for a gap names it without scolding. */}
+        {(weakSpots.length > 0 || (run.weakSpots?.length ?? 0) > 0) && (
+          <motion.div variants={item}>
+            <SectionLabel>Weak spots</SectionLabel>
+            {run.weakSpots && run.weakSpots.length > 0 && (
+              <p className="font-body text-[0.9rem] leading-snug text-secondary">
+                This run&rsquo;s deck was already weighted toward{" "}
+                <span className="text-ink">{run.weakSpots.map(conceptTitle).join(" and ")}</span>
+                {biasedCards ? ` — ${biasedCards} of the ${dealtCards} cards it dealt you were about them` : ""}.
+              </p>
+            )}
+            {weakSpots.length > 0 && (
+              <>
+                <div className={run.weakSpots?.length ? "mt-3" : ""}>
+                  {weakSpots.map((w) => (
+                    <LedgerRow
+                      key={w.conceptId}
+                      label={conceptTitle(w.conceptId)}
+                      value={`${w.tally.miss} of ${w.tally.hit + w.tally.miss} went badly`}
+                      size="0.82rem"
+                    />
+                  ))}
+                </div>
+                <p className="voice mt-3 text-[0.95rem] leading-snug text-secondary">
+                  {weakSpots.length === 1
+                    ? "This is the concept your decisions keep going wrong on. Your next run will deal more cards about it — the deck knows, and now so do you."
+                    : "These are the two concepts your decisions keep going wrong on. Your next run will deal more cards about them — the deck knows, and now so do you."}
+                </p>
+              </>
+            )}
+          </motion.div>
+        )}
 
         {/* actions */}
         <motion.div variants={item} className="mt-8 flex flex-wrap gap-3 border-t border-hairline pt-6">

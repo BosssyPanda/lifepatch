@@ -16,6 +16,7 @@ import {
   TAKE_HOME,
   WAGE_GROWTH,
 } from "./economy";
+import { eventTeachesAny } from "./eventConcepts";
 import { clamp } from "./format";
 import {
   eligibleEvents,
@@ -23,6 +24,7 @@ import {
   LIFE_EVENTS,
   type EventContext,
   type LifeChoice,
+  type LifeEvent,
   type Outcome,
 } from "./lifeEvents";
 import { ASSET_IDS, type AssetId, macroEvent, sp500Return, yearReturns } from "./markets";
@@ -281,6 +283,30 @@ function eventContext(s: RunState): EventContext {
 }
 
 /**
+ * How many slots an event gets in the solo pool.
+ *
+ * `WEAK_SPOT_WEIGHT` is deliberately small. This is a nudge, not a curriculum: at
+ * ×2 a weak-spot card is roughly twice as likely to be dealt as it was, which is
+ * enough to be felt over a run and not enough to turn a life sim into a drill. The
+ * player is told it is happening (`components/screens/LifeReport.tsx`), which is
+ * the other half of the deal — a silent bias on the cards you are dealt would be a
+ * game lying about its own randomness.
+ *
+ * Reads `s.weakSpots`, which `initRun` SNAPSHOTS at the start of the run and
+ * nothing mutates afterwards. That is what keeps `drawEvents` a pure function of
+ * the run state, and therefore keeps a replay valid: a live read of localStorage
+ * would make the same seed deal different cards on a different day.
+ */
+export const WEAK_SPOT_WEIGHT = 2;
+
+function weightFor(e: LifeEvent, s: RunState): number {
+  const base = e.weight ?? 1;
+  const weak = s.weakSpots;
+  if (!weak || weak.length === 0) return base;
+  return eventTeachesAny(e.id, weak) ? base * WEAK_SPOT_WEIGHT : base;
+}
+
+/**
  * The year's cards.
  *
  * Solo draws from the hand this life can actually be dealt, as it always has.
@@ -315,8 +341,16 @@ function drawEvents(s: RunState): string[] {
   const want = rng() < 0.35 ? 2 : 1;
 
   if (!s.sharedEvents) {
-    // Solo: unchanged, down to the order it spends its random numbers in.
-    const weighted = mine.flatMap((e) => Array(e.weight ?? 1).fill(e.id));
+    // Solo: the same draw it has always been, with one addition — cards about the
+    // concepts this player keeps getting wrong come up more often.
+    //
+    // The multiplier is an INTEGER on the existing weight, so the pool is still
+    // built the same way and the stream is still spent in the same order; a card
+    // with no weak-spot concept occupies exactly the slots it always did. With an
+    // empty `weakSpots` (a match, the daily, a player with no record yet) every
+    // weight is multiplied by one and the draw is byte-identical to before — which
+    // `scripts/qa/golden-draws.json` pins over 120 runs.
+    const weighted = mine.flatMap((e) => Array(weightFor(e, s)).fill(e.id));
     let guard = 0;
     while (picks.length < want && guard < 60) {
       guard++;
