@@ -31,6 +31,7 @@ const ENTRIES = [
   "lib/verdict.ts",
   "lib/palette.ts",
   "lib/replay.ts",
+  "lib/cloud/buildResult.ts",
   "lib/mp/autoResolve.ts",
   "lib/mp/protocol.ts",
 ];
@@ -65,6 +66,12 @@ export function buildEngine({ extra = [] } = {}) {
         // name-normalising rule both the wire and the setup screen have to agree on),
         // so the compiler needs JSX even though nothing here renders anything.
         jsx: "react-jsx",
+        // `lib/supabase.ts` (reached through lib/cloud/buildResult.ts) reads
+        // `process.env` — the app's own tsconfig has node types, this one needs
+        // them said out loud because it declares its own compilerOptions wholesale.
+        // The config file lives in OUT, so tsc would look for @types beside it.
+        types: ["node"],
+        typeRoots: [path.join(ROOT, "node_modules/@types")],
         // Types only — the emitted specifier keeps the alias, and the rewrite below
         // turns it into a path Node can actually resolve.
         baseUrl: ROOT,

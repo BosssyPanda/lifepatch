@@ -12,6 +12,7 @@ const tag = process.env.QA_VIEWPORT === "mobile" ? "mobile" : "desktop";
 
 async function landing(run) {
   const page = await run.open(viewport);
+  await run.settle();
   await run.snap("01-landing-hero");
 
   const text = await run.text();

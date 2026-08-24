@@ -52,7 +52,12 @@ export function LedgerTabs<T extends string>({
   const type = size === "md" ? "display-caps text-sm tracking-[0.08em]" : "eyebrow text-[0.62rem]";
 
   return (
-    <div role="tablist" aria-label={label} className={`flex gap-1 ${className}`}>
+    // `flex-wrap`, not a scroller: the strip is `whitespace-nowrap` and `shrink-0`,
+    // so at 390px a three-tab row already ran 23px past the viewport and a four-tab
+    // row ran 213px past it — putting whole controls off screen with nothing to
+    // scroll them back. Wrapping keeps every tab reachable and needs no scroll
+    // affordance, which the ledger has no vocabulary for.
+    <div role="tablist" aria-label={label} className={`flex flex-wrap gap-1 ${className}`}>
       {items.map((t, i) => {
         const on = t.id === value;
         return (

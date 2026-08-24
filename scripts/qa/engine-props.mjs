@@ -115,6 +115,7 @@ if (import.meta.url === `file://${process.argv[1]}`) report();
 const engine = R("runEngine");
 const replay = R("replay");
 const protocol = R("mp/protocol");
+const buildResult = R("cloud/buildResult");
 const { BACKGROUNDS } = R("backgrounds");
 
 /** Assets a player could actually have bought that year (crypto is gated to 2011+). */
@@ -304,4 +305,32 @@ check("P6b spare cash never exceeds the cash on hand", () => {
       s = engine.advanceYear(s);
     }
   }
+});
+
+// ── the result row a board actually stores ──────────────────────────────────
+// P1b proves `verifyResult` can tell a true score from a nudged one. This proves
+// the wiring above it: that a finished run's row carries what a reader needs to
+// judge it, and that the replayed flag is claimed only when the replay ran.
+check("P7 a finished run's result row carries its own provenance", () => {
+  let verified = 0;
+  for (let seed = 500; seed < 560; seed++) {
+    const mode = seed % 2 ? "infinite" : "story";
+    const bg = BG_IDS[seed % BG_IDS.length];
+    const s = playRun({ seed, mode, backgroundId: bg, policy: POLICIES[seed % POLICIES.length], maxYears: 45 });
+    if (s.status !== "ended") continue;
+    const m = buildResult.resultFromRun(s).metrics;
+    eq(m.seed, s.seed, `seed ${seed}: metrics.seed`);
+    eq(m.backgroundId, bg, `seed ${seed}: metrics.backgroundId`);
+    eq(m.engine, engine.RUN_VERSION, `seed ${seed}: metrics.engine`);
+    // A run played through in one sitting always has its whole log, so this is the
+    // path every new row takes.
+    eq(m.verified, 1, `seed ${seed}: a complete run did not replay`);
+    verified++;
+    // The one thing the flag must never do is survive the log going missing —
+    // that is what an older save, or a state that crossed the wire, looks like.
+    const blind = buildResult.resultFromRun({ ...s, journal: undefined }).metrics;
+    eq(blind.verified, undefined, `seed ${seed}: claimed a replay with no log`);
+    eq(blind.seed, s.seed, `seed ${seed}: the seed is recorded either way`);
+  }
+  if (verified < 20) throw new Error(`only ${verified} finished runs checked`);
 });

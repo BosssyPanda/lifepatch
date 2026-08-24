@@ -38,6 +38,23 @@ rooms table. See [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
 On a hosted deploy, `NEXT_PUBLIC_*` values are inlined at **build** time — setting
 them in your host's dashboard takes effect only on the next deploy.
 
+### Optional index for the segmented boards
+
+The leaderboard can narrow to one starting background, and a run's share link is
+found by its seed. Both filter inside `metrics`, which PostgREST exposes as a real
+column (`metrics->>backgroundId`), so **`schema.sql` covers everything and nothing
+here is required**. If the `results` table ever grows past the point where those
+filters are comfortable, two expression indexes are the fix:
+
+```sql
+create index if not exists results_background_idx
+  on public.results ((metrics->>'backgroundId'));
+create index if not exists results_seed_idx
+  on public.results (user_id, (metrics->>'seed'));
+```
+
+Safe to run at any time on a live table.
+
 ## Notes
 
 Historical returns are curated and approximate (easy to refine in `lib/markets.ts`); individual stocks are era-tuned and brand-free. Not financial advice — it's a game.

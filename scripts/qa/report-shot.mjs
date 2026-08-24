@@ -63,14 +63,7 @@ async function main() {
     },
   });
 
-  // The Gate crossfades out rather than unmounting, so a click timed on the raw
-  // 1.2s boot lands on a button that is on its way off screen — and restarts the
-  // cold open instead of opening the mode select. Wait for the title to actually
-  // own the screen before touching anything.
-  await page
-    .waitForFunction(() => !document.body.innerText.includes("Best with sound"), null, { timeout: 15_000 })
-    .catch(() => run.finding("HIGH", "boot", "the title screen never replaced the gate"));
-
+  await run.settle();
   if (!(await run.click("begin a run", { wait: 1600 }))) run.finding("HIGH", "nav", "no CTA into the mode select");
   // The mode cards lead with their eyebrow ("FINITE · HAS AN ENDING"), not the
   // mode's name, so they are picked positionally — Story is first.

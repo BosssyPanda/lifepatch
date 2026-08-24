@@ -11,11 +11,13 @@ import { LedgerTabs, tabId } from "@/components/ui/LedgerTabs";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
 import { useProfile } from "@/hooks/useProfile";
+import { BACKGROUNDS } from "@/lib/backgrounds";
 import { listFriendIds } from "@/lib/cloud/friends";
 import { getProfiles } from "@/lib/cloud/profiles";
 import { topResults, type LeaderboardScope } from "@/lib/cloud/results";
 import type { GameMode, Profile, ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
+import { scoreMetric } from "@/lib/scoreLabel";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 
@@ -31,10 +33,10 @@ const listItemReduced = { hidden: { opacity: 0 }, show: { opacity: 1 } };
 // gold / silver / bronze discs for the top three (from the warm token palette)
 const MEDALS = ["var(--color-ink)", "var(--color-secondary)", "var(--color-tertiary)"];
 
-const MODE_TABS: { id: GameMode; label: string; metric: string }[] = [
-  { id: "story", label: "Story", metric: "net worth" },
-  { id: "infinite", label: "Infinite", metric: "net worth" },
-  { id: "cashflow", label: "Rat Race", metric: "passive income" },
+const MODE_TABS: { id: GameMode; label: string }[] = [
+  { id: "story", label: "Story" },
+  { id: "infinite", label: "Infinite" },
+  { id: "cashflow", label: "Rat Race" },
 ];
 
 const SCOPE_TABS: { id: LeaderboardScope; label: string }[] = [
@@ -43,8 +45,34 @@ const SCOPE_TABS: { id: LeaderboardScope; label: string }[] = [
   { id: "friends", label: "Friends" },
 ];
 
-function formatScore(mode: GameMode, score: number): string {
-  return mode === "cashflow" ? `${currency(score)}/mo` : currency(score);
+/**
+ * The normalising axis. A life that opens with $6,000 and no debt and one that
+ * opens with $1,500 and a $24,000 loan are not the same contest, and a single
+ * ranked column silently treats them as one. Narrowing to a background is the
+ * honest comparison — no computed baseline, no invented "par" figure, which
+ * `DESIGN.md` § Data honesty would not allow anyway.
+ *
+ * The Rat Race has professions rather than backgrounds, so the strip is not shown
+ * on that board.
+ */
+const ALL_BACKGROUNDS = "all";
+const BACKGROUND_TABS = [
+  { id: ALL_BACKGROUNDS, label: "Any start" },
+  ...BACKGROUNDS.map((b) => ({ id: b.id, label: b.name.replace(/^The /, "") })),
+];
+
+/**
+ * The replayed mark. A glyph, not a colour — `DESIGN.md`: colour is never the only
+ * channel — and it is deliberately not a badge, a pill or a shield. It says one
+ * narrow, true thing, and the legend under the tabs says exactly that thing.
+ */
+const VERIFIED_MARK = "\u2713";
+
+// Every board's score is a dollar amount. The Rat Race column used to print its
+// figure as `$…/mo`, but that score is net worth plus a year of cash flow — a
+// balance sheet, not a wage. No suffix: see lib/scoreLabel.ts.
+function formatScore(score: number): string {
+  return currency(score);
 }
 
 export function Leaderboard({
@@ -71,6 +99,7 @@ export function Leaderboard({
   const { reduced } = useMotionCtx();
   const [mode, setMode] = useState<GameMode>(initialMode);
   const [scope, setScope] = useState<LeaderboardScope>("all");
+  const [backgroundPick, setBackground] = useState<string>(ALL_BACKGROUNDS);
   const [rows, setRows] = useState<ResultRow[]>([]);
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [loading, setLoading] = useState(true);
@@ -88,6 +117,13 @@ export function Leaderboard({
     }
   }, [open, initialMode]);
 
+  // The Rat Race has no backgrounds. The filter is neutralised for that board by
+  // derivation rather than by resetting state in an effect: an effect would let one
+  // fetch go out with the stale filter still armed, and the player would watch the
+  // board come back empty before it corrected itself.
+  const showBackgrounds = mode !== "cashflow";
+  const background = showBackgrounds ? backgroundPick : ALL_BACKGROUNDS;
+
   const profileId = profile?.id ?? null;
 
   useEffect(() => {
@@ -99,7 +135,11 @@ export function Leaderboard({
       try {
         const friendIds =
           scope === "friends" && profileId ? await listFriendIds(profileId) : [];
-        const top = await topResults(mode, { scope, friendIds });
+        const top = await topResults(mode, {
+          scope,
+          friendIds,
+          backgroundId: background === ALL_BACKGROUNDS ? undefined : background,
+        });
         const profs = await getProfiles(top.map((r) => r.userId));
         if (!active) return;
         setRows(top);
@@ -120,9 +160,9 @@ export function Leaderboard({
     return () => {
       active = false;
     };
-  }, [open, mode, scope, profileId, sfx, retry]);
+  }, [open, mode, scope, background, profileId, sfx, retry]);
 
-  const metric = MODE_TABS.find((t) => t.id === mode)?.metric ?? "score";
+  const metric = scoreMetric(mode);
   const isPage = chrome === "page";
   // The page breathes at the section rhythm the rest of the site uses; the dialog stays tight
   // because it is a card, not a document.
@@ -147,10 +187,30 @@ export function Leaderboard({
         size="sm"
         className={`${gutter} pt-2`}
       />
+      {showBackgrounds && (
+        <LedgerTabs
+          items={BACKGROUND_TABS}
+          value={background}
+          onChange={setBackground}
+          label="Leaderboard starting background"
+          panelId={panelId}
+          size="sm"
+          className={`${gutter} pt-2`}
+        />
+      )}
 
       <p className={`voice ${gutter} pt-3 text-xs text-secondary`}>
         Best run per player, ranked by {metric}.
+        {background !== ALL_BACKGROUNDS && " Only runs that recorded which background they started from appear here."}
       </p>
+      {/* Only explain a mark that is actually on screen — a legend over an empty
+          board, or over rows that all predate the check, is chrome for nothing. */}
+      {rows.some((r) => r.metrics.verified === 1) && (
+        <p className={`voice ${gutter} pt-1 text-xs text-tertiary`}>
+          <span aria-hidden>{VERIFIED_MARK}</span> replayed — the run re-simulated to the
+          score it claims, on the device that played it. It is a self-check, not a proof.
+        </p>
+      )}
     </>
   );
 
@@ -193,7 +253,15 @@ export function Leaderboard({
             </span>
             <span className="text-right">
               <span className="display-caps block text-sm text-ink">
-                <AnimatedNumber value={r.score} format={(n) => formatScore(mode, n)} />
+                {r.metrics.verified === 1 && (
+                  <>
+                    <span aria-hidden className="mr-1 align-middle text-[0.72em] text-secondary">
+                      {VERIFIED_MARK}
+                    </span>
+                    <span className="sr-only">Replayed. </span>
+                  </>
+                )}
+                <AnimatedNumber value={r.score} format={formatScore} />
               </span>
               <span className="block text-[0.65rem] uppercase tracking-wide text-secondary">
                 {r.verdict}

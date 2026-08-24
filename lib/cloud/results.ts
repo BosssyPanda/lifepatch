@@ -17,6 +17,16 @@ export type TopOptions = {
   scope?: LeaderboardScope;
   friendIds?: string[];
   limit?: number;
+  /**
+   * Narrow the board to one starting background, so a run that began with a
+   * student loan is not ranked against one that began with cash.
+   *
+   * Rows written before the background was recorded carry no `backgroundId` and
+   * are therefore excluded by any value here — correctly: their starting position
+   * is unknown, and guessing one would invent game data. The board says so rather
+   * than quietly dropping them.
+   */
+  backgroundId?: string;
 };
 
 function fromRow(row: Record<string, unknown>): ResultRow {
@@ -94,6 +104,7 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
   const limit = opts.limit ?? DEFAULT_LIMIT;
   const scope = opts.scope ?? "all";
   const friendIds = opts.friendIds ?? [];
+  const background = opts.backgroundId;
 
   if (scope === "friends" && friendIds.length === 0) return [];
 
@@ -105,12 +116,18 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
       .order("score", { ascending: false });
     if (scope === "week") query = query.gte("created_at", weekAgoIso());
     if (scope === "friends") query = query.in("user_id", friendIds);
+    // `metrics->>backgroundId` is Postgres' text arrow, which PostgREST exposes as
+    // a filterable column — the filter runs in the database, not over a page of
+    // rows this client happened to fetch. Unindexed by design (no new SQL is
+    // required to run this build); README carries the optional expression index.
+    if (background) query = query.eq("metrics->>backgroundId", background);
     // Over-fetch so best-per-user dedupe still fills the board.
     const { data } = await query.limit(limit * 5);
     return bestPerUser((data ?? []).map(fromRow)).slice(0, limit);
   }
 
   let rows = readLocal().filter((r) => r.mode === mode);
+  if (background) rows = rows.filter((r) => r.metrics.backgroundId === background);
   if (scope === "week") {
     const cutoff = weekAgoIso();
     rows = rows.filter((r) => r.createdAt >= cutoff);

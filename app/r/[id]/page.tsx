@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
+import { BACKGROUNDS } from "@/lib/backgrounds";
 import { getResult } from "@/lib/cloud/results";
 import { isCloud } from "@/lib/supabase";
 import type { ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
+import { scoreLabel } from "@/lib/scoreLabel";
 import { VERDICTS } from "@/lib/verdict";
 
 /**
@@ -23,6 +25,32 @@ function verdictHex(title: string): string {
   return "var(--color-ink)";
 }
 
+/**
+ * Where the number came from.
+ *
+ * A leaderboard figure with no provenance is an assertion. These four lines are
+ * everything that fixes the world this run was played in — which background it
+ * opened from, the seed that fixed its markets and its cards, the engine build
+ * that resolved them, and whether the run re-simulated to the score it claims.
+ *
+ * The replay check runs on the player's own device before the row is posted, so it
+ * catches a corrupted or half-recorded run, not a determined forger. The line says
+ * so. Overstating it would be the one thing worse than not checking at all.
+ *
+ * Rows written before any of this was recorded simply omit the lines they lack —
+ * an absent field claims nothing, which is the correct thing for it to claim.
+ */
+function provenanceRows(row: ResultRow): { label: string; value: string }[] {
+  const m = row.metrics ?? {};
+  const out: { label: string; value: string }[] = [];
+  const bg = BACKGROUNDS.find((b) => b.id === m.backgroundId);
+  if (bg) out.push({ label: "Started as", value: bg.name });
+  if (m.seed !== undefined) out.push({ label: "World seed", value: String(m.seed) });
+  if (m.engine !== undefined) out.push({ label: "Engine", value: `build ${m.engine}` });
+  if (m.verified === 1) out.push({ label: "Replayed", value: "re-simulated to this score" });
+  return out;
+}
+
 const MODE_LABEL: Record<string, string> = {
   story: "Story run",
   infinite: "Infinite run",
@@ -31,14 +59,14 @@ const MODE_LABEL: Record<string, string> = {
 
 function statRows(row: ResultRow): { label: string; value: string }[] {
   const m = row.metrics ?? {};
-  const scoreRow =
-    row.mode === "cashflow"
-      ? { label: "Passive income / mo", value: currency(row.score) }
-      : { label: "Final net worth", value: currency(row.score) };
+  const scoreRow = { label: scoreLabel(row.mode), value: currency(row.score) };
   if (row.mode === "cashflow") {
+    // The score's own two parts, directly under it: it is net worth plus twelve
+    // paydays, and printing the pieces is what stops the total reading as a wage.
     return [
       scoreRow,
       { label: "Net worth", value: currency(Number(m.netWorth ?? 0)) },
+      { label: "Cash flow / mo", value: currency(Number(m.payday ?? 0)) },
       { label: "Turns", value: String(m.turns ?? "—") },
       { label: "Monthly expenses", value: currency(Number(m.expenses ?? 0)) },
     ];
@@ -96,9 +124,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const row = isCloud ? await getResult(id).catch(() => null) : null;
   if (!row) return { title: "LifePatch — Survive the Internet Economy" };
   const title = `LIFEPATCH — ${row.verdict}`;
-  const description = `Run closed: ${row.verdict}. ${
-    row.mode === "cashflow" ? "Passive income" : "Final net worth"
-  } ${currency(row.score)}. Survive the internet economy — run your own life.`;
+  const description = `Run closed: ${row.verdict}. ${scoreLabel(row.mode)} ${currency(
+    row.score,
+  )}. Survive the internet economy — run your own life.`;
   return {
     title,
     description,
@@ -124,6 +152,7 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
     series.length > 1 && Number.isFinite(startYear)
       ? series.map((v, i) => ({ year: startYear + i, netWorth: v }))
       : null;
+  const provenance = provenanceRows(row);
 
   return (
     <main className={PAGE}>
@@ -167,6 +196,26 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
             <div className="mt-2">
               <AnnotatedLifeChart points={chartPoints} />
             </div>
+          </div>
+        )}
+
+        {/* provenance — what fixed this world, and whether the run replayed */}
+        {provenance.length > 0 && (
+          <div className="mt-9">
+            <p className="eyebrow text-secondary">Provenance</p>
+            <div className="mt-2 flex flex-col gap-2">
+              {provenance.map((s) => (
+                <div key={s.label} className="flex items-baseline gap-3">
+                  <span className="eyebrow text-tertiary">{s.label}</span>
+                  <span className="rule-dotted h-px grow" aria-hidden />
+                  <span className="num text-[0.72rem] text-ink-dim">{s.value}</span>
+                </div>
+              ))}
+            </div>
+            <p className="voice mt-3 text-xs text-tertiary">
+              The replay runs on the device that played the run, before the row is posted. It
+              catches a run that does not add up. It is not a proof against a determined forger.
+            </p>
           </div>
         )}
 
