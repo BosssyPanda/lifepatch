@@ -10,8 +10,10 @@
 // proves both halves: what the deck already did, and what it will do next.
 import { Run, DESKTOP, MOBILE } from "./harness.mjs";
 import { createRequire } from "module";
-import { OUT } from "./build-engine.mjs";
+import { engineDir } from "./build-engine.mjs";
 
+// Builds the engine if the tree has moved past what is compiled — see build-engine.mjs.
+const OUT = engineDir();
 const require = createRequire(`${OUT}/`);
 const engine = require(`${OUT}/lib/runEngine.js`);
 const eventConcepts = require(`${OUT}/lib/eventConcepts.js`);

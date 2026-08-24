@@ -8,8 +8,10 @@
 // verification features may ever do.
 import { createRequire } from "module";
 import { readFileSync } from "fs";
-import { OUT } from "./build-engine.mjs";
+import { engineDir } from "./build-engine.mjs";
 
+// Builds the engine if the tree has moved past what is compiled — see build-engine.mjs.
+const OUT = engineDir();
 const require = createRequire(`${OUT}/`);
 const R = (m) => require(`${OUT}/lib/${m}.js`);
 
@@ -294,6 +296,48 @@ check("P6 the ghost is the same life, with different money", () => {
     eq(g.gap, Math.round(engine.netWorth(s)) - g.final, `seed ${seed}: gap arithmetic`);
   }
   if (drawn < 50) throw new Error(`only ${drawn} ghosts drawn`);
+});
+
+check("P6c the ghost repays the debt the player repaid", () => {
+  // The ghost changes ONE variable: where the investable money went. It replays the
+  // player's voluntary debt payments verbatim, because letting it skip those too
+  // would make it a different debt strategy as well — carrying 7% interest the
+  // player had cleared — and the gap on the report would stop isolating anything.
+  //
+  // Asserted by removing them: a ticket with its "d" acts stripped must produce a
+  // DIFFERENT ghost. If the driver were quietly skipping them, the two would agree.
+  let tested = 0;
+  for (let seed = 700; seed < 800 && tested < 12; seed++) {
+    let st = engine.initRun("story", BG_IDS[seed % BG_IDS.length], "A", seed);
+    const rand = rng.mulberry32(seed);
+    while (st.status === "playing") {
+      for (const id of [...st.pendingEvents]) {
+        const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+        if (ev) st = engine.applyLifeChoice(st, id, ev.choices[Math.floor(rand() * ev.choices.length)] ?? ev.choices[0]);
+      }
+      // Pay down debt whenever there is both a balance and the cash to touch it.
+      if (st.debt > 0 && st.cash > 2000) st = engine.payDebt(st, Math.min(st.debt, Math.floor(st.cash / 2)));
+      st = engine.advanceYear(st);
+    }
+    const t = replay.ticketFor(st);
+    if (!t) continue;
+    const paid = t.journal.reduce((n, y) => n + y.acts.filter((a) => a[0] === "d").length, 0);
+    if (paid === 0) continue;
+    tested++;
+
+    const withPayments = replay.replayRun(t, { allocate: replay.indexEverything });
+    const stripped = replay.replayRun(
+      { ...t, journal: t.journal.map((y) => ({ ...y, acts: y.acts.filter((a) => a[0] !== "d") })) },
+      { allocate: replay.indexEverything },
+    );
+    if (!withPayments || !stripped) throw new Error(`seed ${seed}: a ghost would not replay`);
+    const a = Math.round(engine.netWorth(withPayments));
+    const b = Math.round(engine.netWorth(stripped));
+    if (a === b) {
+      throw new Error(`seed ${seed}: dropping ${paid} debt payments changed nothing — the ghost is skipping them`);
+    }
+  }
+  if (tested < 8) throw new Error(`only ${tested} runs actually repaid debt — the check proved little`);
 });
 
 check("P6b spare cash never exceeds the cash on hand", () => {

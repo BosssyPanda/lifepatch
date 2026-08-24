@@ -151,6 +151,15 @@ export function replayRun(t: ReplayTicket, opts: ReplayOpts = {}): RunState | nu
         if (opts.allocate) continue; // the counterfactual buys its own way
         s = trade(s, act[1], act[2]);
       } else {
+        // Debt payments replay VERBATIM, even for a counterfactual, and that is the
+        // difference between a comparison and a muddle. The ghost exists to answer
+        // one question — what if the money you invested had gone into the index —
+        // so exactly one variable may move. Let it skip the player's payments too
+        // and it becomes a different debt strategy as well, carrying 7% interest
+        // the player had cleared, and the gap stops meaning anything.
+        //
+        // `spareCash` is built to match: it subtracts the lender's MINIMUM, which is
+        // not optional, and leaves voluntary payments to arrive here as recorded acts.
         s = payDebt(s, act[1]);
       }
     }

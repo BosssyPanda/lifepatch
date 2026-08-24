@@ -105,6 +105,53 @@ export function buildEngine({ extra = [] } = {}) {
   return OUT;
 }
 
+/**
+ * The compiled engine, rebuilt when the tree has moved past it.
+ *
+ * Every consumer of this module used to `import { OUT }` and require straight out of
+ * it, which builds nothing — so a script run on its own drove whatever happened to be
+ * left in /tmp from an earlier build. That was found by sabotaging `lib/replay.ts` and
+ * watching the property suite pass anyway: the engine under test was three hours old.
+ *
+ * A stale gate is the same failure as a gate that cannot fail. It reports on code that
+ * is not the code in front of you, and it reports PASS.
+ *
+ * Staleness is decided by mtime rather than by rebuilding unconditionally, because the
+ * browser journeys import this too and none of them should pay a tsc run to open a
+ * page. Newest source newer than newest output ⇒ rebuild. Missing output ⇒ rebuild.
+ */
+let resolved = null;
+
+function newest(dir, ext) {
+  let t = 0;
+  const stack = [dir];
+  while (stack.length) {
+    const d = stack.pop();
+    let names;
+    try {
+      names = readdirSync(d);
+    } catch {
+      return Infinity; // unreadable or absent — treat as infinitely new, i.e. rebuild
+    }
+    for (const name of names) {
+      const p = path.join(d, name);
+      const st = statSync(p);
+      if (st.isDirectory()) stack.push(p);
+      else if (p.endsWith(ext)) t = Math.max(t, st.mtimeMs);
+    }
+  }
+  return t;
+}
+
+export function engineDir() {
+  if (resolved) return resolved;
+  const src = newest(path.join(ROOT, "lib"), ".ts");
+  const out = newest(path.join(OUT, "lib"), ".js");
+  if (src === Infinity || out === Infinity || out === 0 || src > out) buildEngine();
+  resolved = OUT;
+  return OUT;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   buildEngine();
   console.log(`engine → ${OUT}/lib`);

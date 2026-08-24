@@ -11,8 +11,10 @@
 // mark that must read in monochrome.
 import { Run, BASE as BASE_URL, DESKTOP, MOBILE } from "./harness.mjs";
 import { createRequire } from "module";
-import { OUT } from "./build-engine.mjs";
+import { engineDir } from "./build-engine.mjs";
 
+// Builds the engine if the tree has moved past what is compiled — see build-engine.mjs.
+const OUT = engineDir();
 const daily = createRequire(`${OUT}/`)(`${OUT}/lib/daily.js`);
 
 const viewport = process.env.QA_VIEWPORT === "mobile" ? MOBILE : DESKTOP;

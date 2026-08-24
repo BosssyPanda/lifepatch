@@ -358,7 +358,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
             <p className="voice mt-3 text-[0.95rem] leading-snug text-secondary">
               {ghost.truncated
                 ? `The other version ran out of road before you did — there is nothing to compare after ${ghost.points[ghost.points.length - 1].year}.`
-                : `Same life, same cards, same choices — only the money moved differently. ${GHOST_BUFFER_MONTHS} months of costs stay in cash; everything above that goes into the index, every year.`}
+                : `Same life, same cards, same choices, and the same payments to your debt — only what was left over moved differently. ${GHOST_BUFFER_MONTHS} months of costs stay in cash; everything above that goes into the index, every year.`}
             </p>
           </motion.div>
         )}

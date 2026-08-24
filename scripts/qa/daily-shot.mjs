@@ -10,8 +10,10 @@
 // UI is twenty minutes of clicking and this gate has to run on every commit.
 import { Run, BASE as BASE_URL, DESKTOP, MOBILE } from "./harness.mjs";
 import { createRequire } from "module";
-import { OUT } from "./build-engine.mjs";
+import { engineDir } from "./build-engine.mjs";
 
+// Builds the engine if the tree has moved past what is compiled — see build-engine.mjs.
+const OUT = engineDir();
 const require = createRequire(`${OUT}/`);
 const engine = require(`${OUT}/lib/runEngine.js`);
 const daily = require(`${OUT}/lib/daily.js`);

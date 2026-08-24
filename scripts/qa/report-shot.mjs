@@ -13,8 +13,10 @@
 // headlessly and seeded straight into the save slot the guest path reads.
 import { createRequire } from "module";
 import { Run, DESKTOP, MOBILE } from "./harness.mjs";
-import { OUT } from "./build-engine.mjs";
+import { engineDir } from "./build-engine.mjs";
 
+// Builds the engine if the tree has moved past what is compiled — see build-engine.mjs.
+const OUT = engineDir();
 const require = createRequire(`${OUT}/`);
 const engine = require(`${OUT}/lib/runEngine.js`);
 const replay = require(`${OUT}/lib/replay.js`);
