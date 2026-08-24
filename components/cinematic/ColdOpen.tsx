@@ -28,14 +28,14 @@ const BillVortex = dynamic(
  * motion. Audio escalates per beat exactly as before (accents + intensity).
  *
  * ── quantized cuts, with the reading floor intact ────────────────────────────
- * Each beat's hold is extended to the next BEAT of the score (789ms at 76 BPM),
- * never shortened: the authored `ms` in lib/cinematic are reading-time floors,
- * and rounding to the *nearest* boundary would happily cut a line short — the
- * one thing those floors exist to prevent. Snapping up to a whole BAR was the
- * first instinct and it is wrong here: with the floors in play a bar-ceiling
- * adds up to 3.1s of dead screen per line (the whole film grows ~40%), which is
- * precisely the dead beat this trade-off is supposed to avoid. A beat-ceiling
- * costs ~400ms a line and still puts every cut on the grid.
+ * Each beat's hold is extended to the next BEAT of the score (555.6ms at
+ * 108 BPM), never shortened: the authored `ms` in lib/cinematic are reading-time
+ * floors, and rounding to the *nearest* boundary would happily cut a line short
+ * — the one thing those floors exist to prevent. Snapping up to a whole BAR was
+ * the first instinct and it is wrong here: with the floors in play a bar-ceiling
+ * adds up to 2.2s of dead screen per line, which is precisely the dead beat this
+ * trade-off is supposed to avoid. A beat-ceiling costs ~280ms a line at worst
+ * and still puts every cut on the grid.
  *
  * The next beat's accent is also requested a pre-roll BEFORE its cut, so the
  * engine's 8th-note quantization resolves it onto the cut instead of up to a

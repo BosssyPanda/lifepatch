@@ -723,10 +723,23 @@ export const VOICES = {
     volume: -20,
   },
 
-  /** The countermelody: a triangle breathing through a slow tremolo. */
+  /**
+   * The countermelody: a triangle breathing through a slow tremolo.
+   *
+   * The rate is 6 / CYCLE_SECONDS rather than a round 0.18 Hz so that exactly
+   * six breaths fit one 16-bar cycle. At 0.18 it fitted 6.4 times and so began
+   * each cycle on a different part of its swell.
+   *
+   * Honesty about what this did and did not fix: it was tried as a cure for a
+   * cycle-to-cycle envelope correlation of 0.84 and moved that number not at
+   * all. The residual variation is the noise stems (`air`, and the per-hit
+   * randomness of snare and ticks), which cannot repeat and are not supposed
+   * to. The rate is kept anyway because a modulation that divides the loop is
+   * the more defensible default, and the 0.011 Hz change is inaudible.
+   */
   counter: {
     oscillator: { type: "triangle" },
-    tremolo: { rate: 0.18, depth: 0.45 },
+    tremolo: { rate: 6 / CYCLE_SECONDS, depth: 0.45 },
     volume: -20,
   },
 } as const;
@@ -924,8 +937,14 @@ export const STINGERS = {
   stampGood: {
     soundingSec: 0.9,
     layers: [
-      { kind: "pluck", notes: ["D4", "F#4", "A4", "D5"], timbre: "trianglePluck", duration: "8n", volume: -8 },
-      { kind: "membrane", note: "D2", duration: "8n", volume: -3 },
+      // Levels are set from the offline render, not by ear: a four-note pluck
+      // and a membrane landing on the same instant sum, and at -8/-3 this
+      // stinger peaked at +1.2 dBFS — i.e. it was clipping the moment a player
+      // heard "you did well". 4 dB down puts it under -1 dBFS with headroom to
+      // spare and costs nothing perceptually, since it is still the loudest
+      // single event in its scene.
+      { kind: "pluck", notes: ["D4", "F#4", "A4", "D5"], timbre: "trianglePluck", duration: "8n", volume: -16 },
+      { kind: "membrane", note: "D2", duration: "8n", volume: -11 },
     ],
   },
 
@@ -933,9 +952,12 @@ export const STINGERS = {
   stampBad: {
     soundingSec: 0.85,
     layers: [
-      { kind: "pluck", notes: ["D4", "Eb4", "A3"], timbre: "sawPluck", duration: "8n", volume: -9 },
-      { kind: "membrane", note: "D1", duration: "8n", volume: -2 },
-      { kind: "noise", durationSec: 0.15, highpassHz: 140, volume: -12 },
+      // Same clipping correction as `stampGood` (this one peaked at +0.4 dBFS).
+      // A saw cluster is already the harshest timbre in the set; letting it
+      // clip on top of that reads as a fault in the game, not as a verdict.
+      { kind: "pluck", notes: ["D4", "Eb4", "A3"], timbre: "sawPluck", duration: "8n", volume: -13 },
+      { kind: "membrane", note: "D1", duration: "8n", volume: -6 },
+      { kind: "noise", durationSec: 0.15, highpassHz: 140, volume: -15 },
     ],
   },
 

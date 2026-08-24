@@ -16,7 +16,7 @@ import { useAudio } from "./useAudio";
  *
  * `AudioEngine.accent()` already quantizes every cinematic hit to the transport's
  * next 8th, but every visual timeline in the app is a hand-written setTimeout
- * ladder in milliseconds. At 76 BPM (beat = 789ms, bar = 3.158s) the two only
+ * ladder in milliseconds. At 108 BPM (beat = 555.6ms, bar = 2.222s) the two only
  * agree by accident. This hook hands a ceremony the same grid the music is on,
  * built on the (previously unused) `BeatClock` math.
  *
@@ -28,7 +28,7 @@ import { useAudio } from "./useAudio";
  *     grid via `audio.grid()`, so a visual boundary and the accent quantized to
  *     the same boundary land on one instant.
  *   • The Transport is not running (never unlocked): the clock anchors an
- *     identical 789ms grid at `performance.now()` the first time the ceremony
+ *     identical 555.6ms grid at `performance.now()` the first time the ceremony
  *     asks for a time — i.e. at the moment the ceremony starts.
  *
  * Same tempo, same unit lengths, same number of beats per phase either way. Only

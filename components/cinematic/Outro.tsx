@@ -36,12 +36,12 @@ import { YearsScene } from "./outro/YearsScene";
  *
  * ── cut on the downbeat ──────────────────────────────────────────────────────
  * The scene ladder is quantized: every cut lands on a BAR of the running score
- * (3.158s at 76 BPM) and each scene's accent is requested a pre-roll early so the
+ * (2.222s at 108 BPM) and each scene's accent is requested a pre-roll early so the
  * engine's 8th-note quantization resolves it onto that same downbeat instead of
- * the 8th after it. The authored durations were already within half a bar of one
- * (2200 / 3000 / 3800 / 4200), so the film's total length is unchanged — the cuts
- * simply stop landing between beats. Boundaries are snapped CUMULATIVELY, so
- * rounding never accumulates into drift.
+ * the 8th after it. The authored durations sit close enough to whole bars of that
+ * grid (2200 / 3000 / 3800 / 4200) that the film's total length is effectively
+ * unchanged — the cuts simply stop landing between beats. Boundaries are snapped
+ * CUMULATIVELY, so rounding never accumulates into drift.
  */
 
 type Scene = "closed" | "years" | "swing" | "line" | "verdict" | "receipt";

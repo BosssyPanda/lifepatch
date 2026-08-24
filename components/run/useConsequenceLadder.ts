@@ -18,7 +18,7 @@ import { useSkippable } from "@/src/motion/useSkippable";
  *
  * ── beat-lock (see hooks/useBeatClock) ───────────────────────────────────────
  * The ladder below used to be raw milliseconds (140 / 470 / 1010 + an 1100ms
- * count) while the score runs at 76 BPM and quantizes its accents to the
+ * count) while the score runs at 108 BPM and quantizes its accents to the
  * transport's 8ths — so the picture and the music agreed by luck. Each boundary
  * now SNAPS to the nearest beat (or 8th) of that same grid: same shape, same
  * feel, but the landing is a downbeat and the `consequence` accent detonates on

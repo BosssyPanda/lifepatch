@@ -1,52 +1,94 @@
 {
   "cueId": "title-theme",
-  "name": "LifePatch Theme (signature title)",
-  "role": "Front-door identity hook — plays on the title hero behind the 3D internet-economy world; the recurring 'sit down and play' moment.",
-  "emotionalTarget": "curious, cinematic, hopeful-tense",
-  "engine": "src/audio/AudioEngine.ts (Tone.js synth — no samples)",
+  "name": "The Debtor's March (signature title anthem)",
+  "role": "Front-door identity hook — plays on the title hero behind the 3D internet-economy world; the recurring 'sit down and play' moment. This is the one phase where the march is unambiguously heroic.",
+  "emotionalTarget": "defiant, satirical, cinematic — bureaucratic menace with a grin; a hook a teenager can hum back after one listen",
+  "engine": "src/audio/AudioEngine.ts (Tone.js synth — no samples), built from the data in src/audio/score.ts",
   "phase": "title",
-  "bpm": 76,
-  "key": "A minor",
+  "bpm": 108,
+  "key": "D minor",
   "timeSignature": "4/4",
-  "bars": 8,
-  "leitmotif": {
-    "lengthBars": 4,
-    "subdivision": "8n",
-    "notes": ["A4","C5","E5","D5","C5","A4","C5","F5","E5","D5","B4","A4"],
-    "shape": "rise over Am → settle → lift over F → resolve home (restated every 4 bars over the 8-bar harmony cycle)"
-  },
-  "harmony": ["Am(add9)", "Fmaj7", "Cmaj7", "G6/B"],
+  "bars": 16,
   "loop": {
     "type": "continuous",
-    "note": "Transport never stops between screens; the lead sequence runs underneath at all times and is opened only by the `title` phase stem gain. No hard cut, no seam."
+    "startSec": 0,
+    "endSec": 35.555556,
+    "startBar": 1,
+    "endBar": 17,
+    "note": "Transport never stops between screens; the lead sequence runs underneath at all times and is opened only by the `title` phase stem gain. No hard cut, no seam. The seam is glued musically as well as electrically: bar 16 rests on A4 and then restates 'A4 A4' on its last two 8ths as an anacrusis into bar 1's 'D4 D4', so the loop point sits inside a rhythmic gesture rather than between two of them. 108 BPM gives 24,500 samples per beat at 44.1kHz exactly (bar 98,000, cycle 1,568,000), so offline renders trim to bit-exact loop points."
   },
+  "leitmotif": {
+    "lengthBars": 16,
+    "subdivision": "8n",
+    "slots": 128,
+    "range": "D4-E5",
+    "cell": "D4 D4 F4 - A4 ('da-da-DAH — DAH'): two pickup 8ths into a held note on beat 2, answered on beat 3",
+    "notesSource": "The authoritative 128-slot rhythm (pitch or null per 8th) is LEAD_THEME in src/audio/score.ts. `notes` below is that line with the rests removed — the pitch contour only, for singing/checking. Do not schedule from it.",
+    "notes": ["D4","D4","F4","A4","Bb4","A4","F4","D4","D4","D4","F4","Bb4","C5","Bb4","A4","F4","G4","G4","G4","Bb4","A4","F4","G4","A4","A4","A4","B4","C#5","E5","D5","C#5","A4","A4","A4","A4","G4","F4","G4","F4","E4","D4","F4","A4","C5","D5","C5","A4","F4","E4","E4","G4","C5","C5","D5","E5","E5","C#5","D5","B4","A4","A4","A4"],
+    "shape": "The cell recurs in bars 1, 3, 5, 9 and 13 — the ear learns one gesture and then follows where it is transplanted. Bars 5-6 are the rubber-stamp figure G4-G4-G4 ('DENIED-DENIED-DENIED'). Bar 7 charges up the dominant (B4 is a Dorian 6th smuggled inside A major, so the climb reads as nerve rather than menace) and bar 8 peaks on C#5 over the A-major chord — the grin, the brand note. Bars 9-16 are the debtor's half: 'we're still here' (three A4s), the descent home, the F-triad climb, and a final cadence back through C#5 onto the dominant.",
+    "signatureColors": {
+      "C#": "raised leading tone at every cadence — the 'defiant grin'. It is why this reads as a march with somewhere to go rather than a modal drone on D.",
+      "F#": "D-major / picardy brightening, RESERVED for wins (stampGood, the `good` reveal sting, the recapGood colour). Never appears in the tune itself."
+    }
+  },
+  "countermelody": {
+    "stem": "counter",
+    "noteValue": "2m",
+    "notes": ["A4","F4","G4","E4","F4","A4","G4","C#5"],
+    "shape": "One sustained tone per 2-bar segment, each a chord tone or colour of its segment. The cycle always ends on C#5, so whatever else is in the mix the last thing said before the loop turns over is the leading tone."
+  },
+  "harmony": ["Dm", "Bbmaj7", "Gm", "A", "Dm", "F", "C", "A7"],
+  "harmonyRoman": "i - bVImaj7 - iv - V - i - III - bVII - V7 (2 bars each; ends UNRESOLVED on the dominant so the loop restart is the resolution)",
+  "voicings": [
+    ["D3","A3","D4","F4"],
+    ["Bb2","F3","A3","D4"],
+    ["G2","D3","G3","Bb3"],
+    ["A2","E3","A3","C#4"],
+    ["D3","A3","D4","F4"],
+    ["F3","A3","C4","F4"],
+    ["C3","G3","C4","E4"],
+    ["A2","G3","C#4","E4"]
+  ],
+  "roots": ["D1","Bb1","G1","A1","D1","F1","C2","A1"],
+  "sections": [
+    { "name": "the-state", "startBar": 1, "endBar": 9, "startSec": 0, "endSec": 17.777778, "note": "menace — the institution closing in" },
+    { "name": "the-debtor", "startBar": 9, "endBar": 17, "startSec": 17.777778, "endSec": 35.555556, "note": "defiance — the player answering" }
+  ],
   "stems": {
-    "lead": 0.72,
-    "pad": 0.5,
-    "rhodes": 0.32,
-    "sub": 0.4,
-    "tick": 0.18,
-    "warmth": 0.28,
-    "crackle": 0.06,
-    "tension": 0.0
+    "bass": 0.5,
+    "brass": 0.55,
+    "keys": 0.3,
+    "snare": 0.5,
+    "ticks": 0.3,
+    "lead": 0.7,
+    "tension": 0.0,
+    "air": 0.06,
+    "counter": 0.25
   },
-  "leadVoice": "Tone.Synth (triangle) → tempo-synced FeedbackDelay('8n.', fb 0.26, wet 0.26), volume -11dB. Bright bell-pluck.",
-  "intensityLayers": "Single static arrangement (the title is not a gameplay morph). Money-Brain `brainGlow` warms warmth+pad a touch for returning players.",
+  "leadVoice": "Dual detuned oscillators — pulse (width 0.35) + square at +7 cents — into a light asymmetric drive (0.12) and a tempo-synced FeedbackDelay('8n', fb 0.2, wet 0.18), volume -12dB. The beating between two slightly-apart waves is what makes it read as something BLOWN; a single clean oscillator would sound like the old bell-pluck.",
+  "brassVoice": "PolySynth(fatsawtooth x3, spread 24) through a lowpass FILTER ENVELOPE sweeping 380 -> 1600Hz in 50ms and falling back over 350ms, volume -13dB. That 'bwah' swell is the entire difference between 'ledger orchestra' and 'ambient wash'.",
+  "intensityLayers": "None — `title` is absent from INTENSITY_RULES, so it is a single static arrangement (the title is not a gameplay morph) and simply uses its PRESETS row. Money-Brain `brainGlow` warms counter (+0.22) and brass (+0.08) for returning players.",
   "cuePoints": {
-    "reveal": "accent('title') fires once on title mount (membrane A1 + Am triad chord + noise swell) as the 3D economy resolves."
+    "reveal": "accent('title') fires once on title mount as the 3D economy resolves: A4 -> C#5 -> D5 as three crisp 8ths at 180ms (brass-pluck, doubled one octave down) over a D2 membrane boom and a four-hit snare ruff. ~1.1s, and then silence — the title card gets a gesture, not a drone. It is literally the tune's own cadence, so the stinger and the theme are the same idea.",
+    "phraseStamps": "Low stamp-thock on bars 1/5/9/13 (0s / 8.888889s / 17.777778s / 26.666667s), each preceded by the snare's 16th ruff — the 16-bar cycle gets an audible 4-bar pulse without any change of material.",
+    "carriageReturn": "Bar 16 beat 4 (35.0s): a band-passed noise zip (1600 -> 5200Hz, 180ms) and a bell ding — the page finishing, right as the next one starts."
   },
   "transitions": {
-    "in": "ColdOpen → setPhase('title') crossfade (finishCold).",
-    "out": "Leaving the title (Choose your run) → AppShell sets phase 'menu' on the mode screen — clean stem-gain ramp."
+    "in": "ColdOpen -> setPhase('title') crossfade (finishCold). The intro's tension layer (0.5) ramps to 0 and the lead ramps 0 -> 0.7: the theme has not been earned during the cold open, and arrives when it has.",
+    "out": "Leaving the title (Choose your run) -> AppShell sets phase 'menu' on the mode screen — clean stem-gain ramp; the lead drops 0.7 -> 0.15 and the piano takes the foreground. Same piece, heard from the filing room next door.",
+    "quantize": "Phase changes are gain ramps over 0.9-1.5s and are bar-agnostic; only accents are quantized (to the next 8th, requested ACCENT_PREROLL_MS = 120ms early)."
   },
-  "accessibility": "Respects global mute (master gain ramp) and is silent until a user gesture starts the engine. Reduced-motion does not silence audio; the user's stored mute preference defaults on under prefers-reduced-motion/data.",
-  "originality": "Original generic tonal voicings composed for this engine. No transcribed, sampled, or copied melodies/beats/riffs.",
+  "accessibility": "Respects global mute (master gain ramp) and is silent until a user gesture starts the engine. Mute only ramps the master gain, so the Transport — and therefore the visual beat grid every cinematic derives from — keeps running for muted players and pacing is identical. Reduced-motion does not silence audio; the user's stored mute preference defaults on under prefers-reduced-motion/data.",
+  "originality": "Original composition for LifePatch. No transcribed, sampled, or copied melodies, beats, riffs, drops or arrangements. Papers, Please and Undertale were mood and instrumentation references only — nothing from either was reproduced.",
   "license": "Original work, in-repo synth. No third-party samples or external sources.",
   "qc": {
     "loopClean": true,
     "beatLocked": true,
-    "noClipping": "buses pre-master at <=0.9; lead -11dB; verify no >0dBFS sum at title",
+    "sampleExact": "44100 x 60 / 108 = 24,500 samples per beat exactly; bar = 98,000; 16-bar cycle = 1,568,000. Asserted by the offline renderer before it trusts a loop point.",
+    "noClipping": "buses pre-master at <=0.9; lead -12dB, brass -13dB; verify no >0dBFS sum at title with the `title` accent stacked on the full anthem mix",
+    "accentCannotHang": "accent('title') soundingSec 1.1 <= STINGER_MAX_SOUNDING_SEC (2.222s); brassPluck envelope (a .008 / d .3 / s .04 / r .4) inside STINGER_ENVELOPE_CAP. This is the regression test for the held-chord 'beeping' this replaced.",
     "rampedGains": true,
-    "muteRespected": true
+    "muteRespected": true,
+    "phoneSpeakerCheck": "required — the sine sub is inaudible on a phone, so the march bass (triangle+saw) has to carry the low end on its own"
   }
 }

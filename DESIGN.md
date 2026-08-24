@@ -227,6 +227,9 @@ these four surfaces stays strict LEDGER.
 
 - Synth-only (Tone.js engine in `src/audio/`), gesture-gated, mute persisted (`lp_muted`).
   No sampled music. SFX ids live in `src/audio/sfxBank.ts` (`stamp`, `uitick`, `page`…).
+- One continuous score — **"The Debtor's March"**, a defiant satirical march in D minor at
+  108 BPM (16-bar loop). Nine stems crossfade per screen; the march is the player's music,
+  the `tension` layer is the economy's. All material in `src/audio/score.ts`.
 
 ## Accessibility
 

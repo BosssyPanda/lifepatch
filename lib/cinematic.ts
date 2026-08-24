@@ -77,8 +77,8 @@ export const RECAP_SCENES: RecapScene[] = [
  * Scene-2 pacing atoms (flip-all-years, pause-on-milestones — director's pick).
  *
  * Both are beat subdivisions of the score rather than round numbers: one 16th
- * per year (197ms, was 140) and a dotted-8th dwell on a milestone (592ms, was
- * 600), so a replay that fits its slot lands every digit flip on the grid with
+ * per year (138.9ms at 108 BPM) and a dotted-8th dwell on a milestone (416.7ms),
+ * so a replay that fits its slot lands every digit flip on the grid with
  * no snapping at all — the cumulative offsets are whole 16ths by construction.
  * Long runs still get compressed proportionally to fit the scene cap (see
  * Outro's YearsScene); at ~90ms per year nothing is perceptibly on a grid

@@ -1,41 +1,49 @@
 {
   "id": "score-recap",
-  "title": "LifePatch — Outro Recap (verdict-keyed)",
-  "bpm": 76,
-  "key": "A minor (warm/major on a good verdict)",
+  "title": "The Debtor's March — Outro Recap (verdict-keyed)",
+  "bpm": 108,
+  "key": "D minor (D major colour on a good verdict — the picardy F#)",
   "timeSignature": "4/4",
-  "bars": 8,
+  "bars": 16,
   "loopStartBar": 1,
-  "loopEndBar": 9,
+  "loopEndBar": 17,
   "loopStartSec": 0,
-  "loopEndSec": 25.263158,
+  "loopEndSec": 35.555556,
   "sections": [
-    { "name": "recap", "startBar": 1, "endBar": 7, "startSec": 0, "endSec": 18.947368 },
-    { "name": "verdict-stamp", "startBar": 7, "endBar": 9, "startSec": 18.947368, "endSec": 25.263158 }
+    { "name": "recap", "startBar": 1, "endBar": 9, "startSec": 0, "endSec": 17.777778 },
+    { "name": "verdict-stamp", "startBar": 9, "endBar": 17, "startSec": 17.777778, "endSec": 35.555556 }
   ],
   "cuePoints": [
     { "name": "scene-cut", "bar": 1, "sec": 0 },
-    { "name": "verdict", "bar": 7, "sec": 18.947368 }
+    { "name": "phrase-2-stamp", "bar": 5, "sec": 8.888889 },
+    { "name": "verdict", "bar": 9, "sec": 17.777778 },
+    { "name": "phrase-4-stamp", "bar": 13, "sec": 26.666667 },
+    { "name": "half-cadence", "bar": 15, "sec": 31.111111 },
+    { "name": "carriage-return", "bar": 16, "sec": 35 }
   ],
   "stems": [
-    { "id": "sub", "file": "procedural:Tone.Synth(sine)", "role": "bass", "defaultGain": 0.45 },
-    { "id": "pad", "file": "procedural:Tone.PolySynth(fatsawtooth)", "role": "harmony", "defaultGain": 0.5 },
-    { "id": "rhodes", "file": "procedural:Tone.FMSynth", "role": "melody", "defaultGain": 0.6 },
-    { "id": "warmth", "file": "procedural:major6-shimmer", "role": "harmony", "defaultGain": 0.6 },
-    { "id": "tension", "file": "procedural:detuned-saw-cluster", "role": "tension", "defaultGain": 0.55 },
-    { "id": "crackle", "file": "procedural:Tone.Noise(pink)", "role": "ambience", "defaultGain": 0.06 }
+    { "id": "bass", "file": "procedural:Tone.Synth(sine sub on ROOTS) + triangle/saw march oom (BASS_LINE)", "role": "bass", "defaultGain": 0.45 },
+    { "id": "brass", "file": "procedural:Tone.PolySynth(fatsawtooth x3, spread 24) + lowpass filter-envelope swell 380->1600Hz", "role": "harmony", "defaultGain": 0.5 },
+    { "id": "keys", "file": "procedural:Tone.FMSynth(harmonicity 3.01, modIndex 10) — compressed upright, KEYS_FIGURES", "role": "harmony", "defaultGain": 0.5 },
+    { "id": "snare", "file": "procedural:white-noise transient + 220Hz triangle body, highpass 400Hz (SNARE_PATTERN)", "role": "rhythm", "defaultGain": 0.35 },
+    { "id": "ticks", "file": "procedural:12ms noise clack highpass 4800Hz + D2 stamp-thock + carriage-return zip/ding", "role": "rhythm", "defaultGain": 0.2 },
+    { "id": "lead", "file": "procedural:pulse(0.35)+square(detune 7c) -> drive 0.12 -> FeedbackDelay('8n')", "role": "melody", "defaultGain": 0.55 },
+    { "id": "tension", "file": "procedural:detuned-saw minor-2nd grind D2+Eb2 -> LFO'd lowpass 700Hz", "role": "tension", "defaultGain": 0 },
+    { "id": "air", "file": "procedural:Tone.Noise(pink) -> bandpass 1200Hz Q0.6", "role": "ambience", "defaultGain": 0.06 },
+    { "id": "counter", "file": "procedural:Tone.Synth(triangle) -> Tremolo(0.18Hz, depth 0.45) — COUNTER_LINE long tones", "role": "melody", "defaultGain": 0.5 }
   ],
   "intensityLayers": [
-    { "level": 0, "activeStems": ["crackle", "pad", "rhodes", "sub", "warmth"] },
-    { "level": 1, "activeStems": ["crackle", "pad", "sub", "tension"] }
+    { "level": 0, "activeStems": ["air", "bass", "brass", "counter", "keys", "lead", "snare", "ticks"] },
+    { "level": 1, "activeStems": ["air", "bass", "brass", "keys", "snare", "ticks", "tension"] }
   ],
   "transitions": [
-    { "from": "recap", "to": "recap", "quantize": "bar", "type": "stinger", "stingerId": "scene-cut" },
-    { "from": "recap", "to": "verdict-stamp", "quantize": "bar", "type": "stinger", "stingerId": "verdict" },
+    { "from": "recap", "to": "recap", "quantize": "bar", "type": "stinger", "stingerId": "thud" },
+    { "from": "recap", "to": "verdict-stamp", "quantize": "beat", "type": "stinger", "stingerId": "stampGood" },
+    { "from": "recap", "to": "verdict-stamp", "quantize": "beat", "type": "stinger", "stingerId": "stampBad" },
     { "from": "verdict-stamp", "to": "menu", "quantize": "bar", "type": "crossfade", "fadeBars": 1 }
   ],
-  "licenseNotes": "Original. Warm major-6 extension (good) or minor tension (bad) over the shared A-minor cycle; no third-party material.",
-  "sourceNotes": "Procedural; phase `recapGood`/`recapBad` of src/audio/AudioEngine.ts. WIRED: components/cinematic/Outro.tsx quantizes the recap film onto this grid via hooks/useBeatClock — every scene cut lands on a BAR (3.157895s), snapped cumulatively so rounding cannot drift, with each scene's accent requested ACCENT_PREROLL_MS (120ms) early so it detonates on the cut. The authored scene lengths (2200/3000/3800/4200ms plus the years replay) were already within half a bar of one, so the film's total runtime is unchanged. The year replay's atoms are beat subdivisions (a 16th per year, a dotted 8th of extra dwell on a milestone), so an uncompressed replay is on the grid by construction; runs long enough to need compressing fall back to proportional scaling. The verdict split-flap locks each character on the 16th grid (the glyph churn stays at 55ms — that blur is texture, not rhythm), which also self-throttles the mechanical clacks to one per 16th.",
-  "generatedBy": "AudioEngine.ts (Tone.js)",
+  "licenseNotes": "Original composition for LifePatch — 'The Debtor's March'. The good verdict brightens the same D-minor cycle with a picardy F# (D major); the bad verdict opens the minor-2nd tension layer instead. No existing song, beat, melody, riff, drop or arrangement was referenced or transcribed; Papers, Please and Undertale were mood and instrumentation references only. No third-party samples — everything is synthesized live in Tone.js.",
+  "sourceNotes": "Procedural; phases `recapGood` and `recapBad` of src/audio/AudioEngine.ts, built from src/audio/score.ts. Same 16-bar cycle as score-intro and score-gameplay — the recap is not a different piece, it is the march re-mixed by the verdict. defaultGain above is the `recapGood` preset (hopeful: the tune returns at 0.55 and the countermelody at 0.5, so the cycle's closing C#5 — the brand note — is the last thing you hear before the loop turns over; tension is gone entirely). intensityLayer 1 is `recapBad` (dramatic: no tune at all, tension 0.55, brass and bass carrying it — the march is still there, the player is just not the one leading it). WIRED: components/cinematic/Outro.tsx quantizes the recap film onto this grid via hooks/useBeatClock — every scene cut lands on a BAR (2.222s at 108 BPM), snapped cumulatively so rounding cannot drift, with each scene's accent requested ACCENT_PREROLL_MS (120ms) early so it detonates on the cut. The authored scene lengths (2200/3000/3800/4200ms plus the years replay) sit close enough to whole bars of the new grid that the film's total runtime is effectively unchanged. The year replay's atoms are beat subdivisions (a 16th per year = 138.9ms, a dotted 8th of extra dwell = 416.7ms on a milestone — see lib/cinematic.YEARS_FLIP_MS/YEARS_HOLD_MS and components/cinematic/outro/YearsScene.tsx), so an uncompressed replay is on the grid by construction; runs long enough to need compressing fall back to proportional scaling. The verdict split-flap locks each character on the 16th grid (the glyph churn stays at 55ms — that blur is texture, not rhythm), which also self-throttles the mechanical clacks to one per 16th. STINGERS: the verdict stamps replace the old full-measure held chords. `stampGood` is 'APPROVED' — a staccato D-major pluck D4/F#4/A4/D5 over a D2 membrane, under 1s. `stampBad` is the red stamp — a saw-pluck cluster D4/Eb4/A3 (the tension layer's own minor 2nd, struck once) over a D1 membrane plus a short noise slap, under 1s. Neither can hang: STINGER_MAX_SOUNDING_SEC caps every accent at one bar (2.222s) including release, and every accent timbre is inside STINGER_ENVELOPE_CAP (attack <= 0.01, decay <= 0.35, sustain <= 0.05, release <= 0.5). See .claude/audio/qc/cue-plan.md.",
+  "generatedBy": "AudioEngine.ts (Tone.js) from src/audio/score.ts",
   "humanReviewRequired": true
 }
