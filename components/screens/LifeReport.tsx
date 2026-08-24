@@ -18,6 +18,7 @@ import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
 import { DEBT_RATE, TAKE_HOME } from "@/lib/economy";
+import { ghostFor, GHOST_BUFFER_MONTHS } from "@/lib/replay";
 import { annualExpenses, homeEquity, netWorth, operatingCashFlow, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { STAGGER } from "@/src/motion/tokens";
@@ -190,6 +191,11 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
   const klass = deriveVerdict(run);
 
   const hist = run.history;
+  // The counterfactual: the same life, the same cards, the same choices — only the
+  // money moved differently. Null for a run that cannot be replayed (a save from
+  // before the engine journalled, or one that came back from a room), and the
+  // section simply does not render rather than printing a gap it cannot compute.
+  const ghost = useMemo(() => ghostFor(run), [run]);
   const firstYear = hist[0]?.year ?? run.startYear;
   const lastYear = hist[hist.length - 1]?.year ?? run.startYear;
   const best = [...hist].sort((a, b) => b.portfolioDelta - a.portfolioDelta)[0];
@@ -281,7 +287,33 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
         {hist.length > 1 && (
           <motion.div variants={item}>
             <SectionLabel>Net worth, year by year</SectionLabel>
-            <AnnotatedLifeChart points={hist.map((h) => ({ year: h.year, netWorth: h.netWorth }))} />
+            <AnnotatedLifeChart
+              points={hist.map((h) => ({ year: h.year, netWorth: h.netWorth }))}
+              ghost={ghost?.points}
+            />
+          </motion.div>
+        )}
+
+        {/* The gap. Gain/loss is the RIGHT channel here and the only place in this
+            feature it appears: the difference is money, which is what those two
+            colours are for. `currency` prints U+2212 for a negative, so the sign
+            carries it without the hue. Signed from the player's side — green means
+            you beat it. */}
+        {ghost && (
+          <motion.div variants={item}>
+            <SectionLabel>The other version of this life</SectionLabel>
+            <LedgerRow label="You ended with" value={currency(nw)} strong />
+            <LedgerRow label="Every spare dollar in the index" value={currency(ghost.final)} />
+            <LedgerRow
+              label="The difference"
+              value={currency(nw - ghost.final)}
+              tone={nw - ghost.final >= 0 ? "text-gain" : "text-loss"}
+            />
+            <p className="voice mt-3 text-[0.95rem] leading-snug text-secondary">
+              {ghost.truncated
+                ? `The other version ran out of road before you did — there is nothing to compare after ${ghost.points[ghost.points.length - 1].year}.`
+                : `Same life, same cards, same choices — only the money moved differently. ${GHOST_BUFFER_MONTHS} months of costs stay in cash; everything above that goes into the index, every year.`}
+            </p>
           </motion.div>
         )}
 
