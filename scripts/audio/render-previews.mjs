@@ -30,7 +30,7 @@ import {
   CHORDS, ROOTS, LEAD_THEME, KEYS_FIGURES, COUNTER_LINE, COUNTER_NOTE_VALUE,
   BASS_LINE, SNARE_PATTERN, TICKS_PATTERN, TICK_STAMP_BARS, CARRIAGE_RETURN,
   GRIDS, PRESETS, INTENSITY_RULES, VOICES, STINGERS, STINGER_TIMBRES,
-  STING_TONES, rampGain,
+  STINGER_ENVELOPE_CAP, STINGER_MAX_SOUNDING_SEC, STING_TONES, rampGain,
   SCORE_BPM_REF, BEATS_PER_BAR, SECONDS_PER_BAR, SECONDS_PER_BEAT,
   CYCLE_SECONDS, SAMPLES_PER_BEAT_44K1, BARS_PER_CYCLE,
 } from "../../src/audio/score.ts";
@@ -90,7 +90,7 @@ const CUES = [
   { id: "11-stinger-consequence", stinger: "consequence", tailSec: 2,
     note: "Money lands: impact, descent, settle." },
   { id: "12-stings-reveal", stings: ["good", "bad", "warning", "neutral"], tailSec: 1.2,
-    note: "Outcome reveal chimes, retuned into D minor (good/bad changed, warning/neutral unchanged)." },
+    note: "Outcome reveal chimes. good: C-major triad → D major (the win colour). bad: A+D# → D+Eb (D# was the one pitch genuinely foreign to D minor). warning: D+G (a 4th) → A+Bb (a minor 2nd, the same grind the tension stem uses). neutral: unchanged." },
 ];
 
 /**
@@ -243,6 +243,64 @@ const SCORE = {
   CYCLE_SECONDS, BARS_PER_CYCLE,
 };
 
+/**
+ * Preflight assertions on the score data itself, before a single sample is
+ * rendered.
+ *
+ * These exist because three separate places in the score and its metadata
+ * claimed to be "checked" or "asserted" by this renderer and were not — the
+ * sample-exact tempo, the stinger envelope cap, and the one-bar sounding
+ * limit. A comment that claims an invariant nobody enforces is worse than no
+ * comment: it is the reason a reviewer stops looking. So the claims are made
+ * true here rather than deleted there.
+ */
+function preflight() {
+  const problems = [];
+
+  // The reason 108 BPM was chosen over anything else in the 104-112 window.
+  const perBeat = (SAMPLE_RATE * 60) / SCORE_BPM_REF;
+  if (!Number.isInteger(perBeat) || perBeat !== SAMPLES_PER_BEAT_44K1) {
+    problems.push(`tempo is no longer sample-exact: ${SAMPLE_RATE}x60/${SCORE_BPM_REF} = ${perBeat}, expected the integer ${SAMPLES_PER_BEAT_44K1}`);
+  }
+
+  // Every pluck timbre must stay inside the cap, or an accent could ring on.
+  for (const [name, t] of Object.entries(STINGER_TIMBRES)) {
+    for (const [field, max] of Object.entries(STINGER_ENVELOPE_CAP)) {
+      if (t.envelope[field] > max) {
+        problems.push(`stinger timbre "${name}" has ${field} ${t.envelope[field]} > cap ${max}`);
+      }
+    }
+  }
+
+  // The whole point of the rewrite: nothing may still be sounding a bar later.
+  // Measured from the layers, not from the declared `soundingSec`, since a
+  // declaration cannot be wrong in a way that matters if nothing reads it.
+  for (const [id, spec] of Object.entries(STINGERS)) {
+    let end = 0;
+    for (const layer of spec.layers) {
+      const t0 = layer.atSec ?? 0;
+      const span = layer.kind === "arp" ? (layer.notes.length - 1) * layer.stepSec
+        : layer.kind === "ruff" ? (layer.velocities.length - 1) * layer.stepSec
+        : 0;
+      const tail = layer.kind === "pluck" || layer.kind === "arp"
+        ? STINGER_TIMBRES[layer.timbre].envelope.decay + STINGER_TIMBRES[layer.timbre].envelope.release
+        : layer.kind === "noise" ? layer.durationSec : 0;
+      end = Math.max(end, t0 + span + tail);
+    }
+    if (end > STINGER_MAX_SOUNDING_SEC) {
+      problems.push(`stinger "${id}" sounds for ${end.toFixed(3)}s, over the one-bar cap of ${STINGER_MAX_SOUNDING_SEC.toFixed(3)}s`);
+    }
+  }
+
+  if (problems.length) {
+    console.error("Preflight FAILED:");
+    for (const p of problems) console.error("  ✗ " + p);
+    process.exit(1);
+  }
+  console.log(`Preflight: tempo sample-exact, ${Object.keys(STINGER_TIMBRES).length} timbres inside the envelope cap, ${Object.keys(STINGERS).length} stingers inside one bar.`);
+}
+
+preflight();
 mkdirSync(OUT_DIR, { recursive: true });
 
 const browser = await chromium.launch({ executablePath: chromiumPath() });
@@ -264,9 +322,17 @@ let failures = 0;
 for (const cue of CUES) {
   if (ONLY && !ONLY.includes(cue.id)) continue;
 
-  const musicSec = cue.cycles
-    ? cue.cycles * CYCLE_SECONDS
-    : (cue.stinger ? STINGERS[cue.stinger].soundingSec : 2.2);
+  // How long the cue's own material lasts, before `tailSec` of ring-out. The
+  // sting cue has to derive this from how many stings it lists: they are laid
+  // out 1.1s apart from 0.25s (see score-graph's renderCue), so a fixed 2.2s
+  // silently rendered only the first two and a bit — the `neutral` chime fell
+  // off the end of the buffer entirely, and no QC check can see a sound that
+  // was never scheduled.
+  const STING_AT = 0.25, STING_STEP = 1.1;
+  const musicSec = cue.cycles ? cue.cycles * CYCLE_SECONDS
+    : cue.stinger ? STINGERS[cue.stinger].soundingSec
+    : cue.stings ? STING_AT + cue.stings.length * STING_STEP
+    : 2.2;
   // Derive the duration from a whole number of samples so the buffer length is
   // never at the mercy of float truncation inside OfflineAudioContext.
   const totalSamples = Math.round((musicSec + cue.tailSec) * SAMPLE_RATE);

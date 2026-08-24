@@ -876,7 +876,10 @@ export class AudioEngine {
       case "amb_coins": bed("white", 3200, "bandpass", -34, 1.5); every("2n", (t) => { if (Math.random() < 0.3) this.ambBeepInto(out, t, 1760, 0.05); }); break;
       case "amb_feed": bed("pink", 700, "lowpass", -30); every("1n", (t) => { if (Math.random() < 0.35) this.ambBeepInto(out, t, 1174.66, 0.08); }); break;
       case "amb_unease": {
-        // the score's own m2 grind (D2 + Eb2), an octave down and far quieter
+        // the score's own m2 grind (D2 + Eb2) at the same pitch as the tension
+        // stem, but ~12dB quieter and under a much lower cutoff (300Hz vs 700):
+        // scenario unease is meant to READ as the same anxiety the economy's
+        // layer carries, sitting well beneath it rather than beside it.
         const fa = new Tone.Filter(300, "lowpass").connect(out);
         const fb = new Tone.Filter(300, "lowpass").connect(out);
         const a = new Tone.Oscillator("D2", "sawtooth").connect(fa);

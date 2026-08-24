@@ -22,7 +22,6 @@
   function buildScore(bus, score, gains, cycles) {
     const V = score.VOICES;
     const G = score.GRIDS;
-    const disposeLater = [];
 
     // Each stem is a gain node the phase mix sets, exactly as in the engine.
     const stems = {};
@@ -292,23 +291,42 @@
     return m ? `${m[1]}${Math.max(0, +m[2] - 1)}` : note;
   }
 
-  /** The reveal chimes, so the retune can be auditioned alongside the score. */
+  /**
+   * The reveal chimes, so the retune can be auditioned alongside the score.
+   *
+   * Mirrors `AudioEngine.playSting` layer for layer, including which PRIMITIVE
+   * each layer is built from — `blip()` allocates one Synth per note, so the
+   * ascending `good` triad is three INDEPENDENT voices that overlap and sum
+   * (each note rings 0.5s while the next arrives 60ms later). Rendering it on
+   * one monophonic Synth instead produced a single stepping voice — a preview
+   * that quietly disagreed with the game about the most-heard sting in it.
+   */
   function buildSting(bus, score, tone, at) {
     const s = score.STING_TONES[tone];
+    // `AudioEngine.blip()`: a fresh single-voice Synth per note, self-disposing.
+    const blip = (freq, dur, when) => {
+      const v = new Tone.Synth({ oscillator: { type: s.wave }, envelope: { attack: 0.004, decay: dur, sustain: 0, release: 0.05 }, volume: s.volume }).connect(bus);
+      v.triggerAttackRelease(freq, dur, when);
+    };
     if (tone === "good") {
-      const v = new Tone.Synth({ oscillator: { type: s.wave }, envelope: { attack: 0.004, decay: s.durationSec, sustain: 0, release: 0.05 }, volume: s.volume }).connect(bus);
-      s.notes.forEach((n, i) => v.triggerAttackRelease(n, s.durationSec, at + i * s.stepSec));
+      s.freqs.forEach((f, i) => blip(f, s.durationSec, at + i * s.stepSec));
     } else if (tone === "bad") {
       const p = new Tone.PolySynth(Tone.Synth, { oscillator: { type: s.wave }, envelope: { attack: 0.005, decay: s.durationSec, sustain: 0.1, release: 0.4 }, volume: s.volume }).connect(bus);
       p.triggerAttackRelease(s.notes, s.durationSec, at);
-      const m = new Tone.MembraneSynth({ volume: s.thock.volume }).connect(bus);
+      // `AudioEngine.thock()`'s membrane, not a default one: octaves 4 (not 10)
+      // and a 0.18s decay with no sustain tail are what make this a knock
+      // rather than the long, high-swept boom the defaults produce.
+      const m = new Tone.MembraneSynth({
+        pitchDecay: 0.04, octaves: 4,
+        envelope: { attack: 0.001, decay: 0.18, sustain: 0 },
+        volume: s.thock.volume,
+      }).connect(bus);
       m.triggerAttackRelease(s.thock.note, "16n", at);
     } else if (tone === "warning") {
       const p = new Tone.PolySynth(Tone.Synth, { oscillator: { type: s.wave }, envelope: { attack: 0.005, decay: s.durationSec, sustain: 0.1, release: 0.4 }, volume: s.volume }).connect(bus);
       p.triggerAttackRelease(s.notes, s.durationSec, at);
     } else {
-      const v = new Tone.Synth({ oscillator: { type: s.wave }, envelope: { attack: 0.004, decay: s.durationSec, sustain: 0, release: 0.05 }, volume: s.volume }).connect(bus);
-      v.triggerAttackRelease(s.freq, s.durationSec, at);
+      blip(s.freq, s.durationSec, at);
     }
   }
 
@@ -317,18 +335,23 @@
       transport.bpm.value = score.SCORE_BPM_REF;
       transport.timeSignature = score.BEATS_PER_BAR;
 
-      // Master trim: the phase mixes are tuned for the game's own master gain,
-      // and previewing them flat would read as louder than the game is.
-      const bus = new Tone.Gain(0.85).toDestination();
+      // The engine's bus tree, reproduced: master 0.85, and under it musicBus
+      // 1.0 for the stems, accentBus 0.9 for the accents, sfxBus 0.9 for the
+      // stings. The 0.9 trims are not cosmetic — without them a stinger preview
+      // is 0.9dB hotter than the same stinger in the game, which is exactly the
+      // margin somebody is judging "is this too loud" against.
+      const master = new Tone.Gain(0.85).toDestination();
+      const bus = new Tone.Gain(1).connect(master); // musicBus
 
       if (cue.phase) {
         buildScore(bus, score, gains, cue.cycles ?? 1);
       } else if (cue.stinger) {
         // Accents fire against silence here so the sound under scrutiny is the
         // accent itself, not the accent plus a bed.
-        buildStinger(bus, score, cue.stinger, 0.25);
+        buildStinger(new Tone.Gain(0.9).connect(master), score, cue.stinger, 0.25);
       } else if (cue.stings) {
-        cue.stings.forEach((t, i) => buildSting(bus, score, t, 0.25 + i * 1.1));
+        const sfxBus = new Tone.Gain(0.9).connect(master);
+        cue.stings.forEach((t, i) => buildSting(sfxBus, score, t, 0.25 + i * 1.1));
       }
       transport.start(0);
     }, duration, 2, sampleRate);

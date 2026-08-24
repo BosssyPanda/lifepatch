@@ -30,7 +30,7 @@
     { "id": "lead", "file": "procedural:pulse(0.35)+square(detune 7c) -> drive 0.12 -> FeedbackDelay('8n')", "role": "melody", "defaultGain": 0.55 },
     { "id": "tension", "file": "procedural:detuned-saw minor-2nd grind D2+Eb2 -> LFO'd lowpass 700Hz", "role": "tension", "defaultGain": 0 },
     { "id": "air", "file": "procedural:Tone.Noise(pink) -> bandpass 1200Hz Q0.6", "role": "ambience", "defaultGain": 0.06 },
-    { "id": "counter", "file": "procedural:Tone.Synth(triangle) -> Tremolo(0.18Hz, depth 0.45) — COUNTER_LINE long tones", "role": "melody", "defaultGain": 0.5 }
+    { "id": "counter", "file": "procedural:Tone.Synth(triangle) -> Tremolo(0.16875Hz = 6 breaths per 16-bar cycle, depth 0.45) — COUNTER_LINE long tones", "role": "melody", "defaultGain": 0.5 }
   ],
   "intensityLayers": [
     { "level": 0, "activeStems": ["air", "bass", "brass", "counter", "keys", "lead", "snare", "ticks"] },

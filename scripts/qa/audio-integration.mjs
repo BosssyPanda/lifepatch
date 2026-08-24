@@ -12,9 +12,14 @@
 // inferring it from what is on screen.
 //
 // Headless Chromium has no audio device. That is fine: Tone still builds its
-// graph and runs its Transport, which is what is under test. The launch flag
-// below removes the autoplay gate so `Tone.start()` resolves without a real
-// user gesture; the harness already filters the autoplay console warnings.
+// graph and runs its Transport, which is what is under test. No autoplay flag
+// is needed either — every boot here happens inside a Playwright click, which
+// is a trusted user gesture, so `Tone.start()` resolves on its own; the harness
+// filters the autoplay console warnings that headless emits regardless.
+//
+// RUN THIS AGAINST A DEV SERVER (`npm run dev`, or QA_BASE_URL). `__lpAudio` is
+// compiled out of production builds by design, so against `npm start` every
+// assertion below reports the engine as absent rather than as broken.
 //
 // Exits non-zero on any HIGH finding or console error.
 import { Run, DESKTOP } from "./harness.mjs";

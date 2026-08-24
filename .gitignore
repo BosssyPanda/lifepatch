@@ -29,3 +29,6 @@ next-env.d.ts
 
 # python audio tooling venv
 /.venv-audio/
+
+# offline audio previews (regenerate with scripts/audio/render-previews.mjs)
+/.preview-audio/
