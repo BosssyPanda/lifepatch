@@ -31,7 +31,8 @@ import {
   BASS_LINE, SNARE_PATTERN, TICKS_PATTERN, TICK_STAMP_BARS, CARRIAGE_RETURN,
   GRIDS, PRESETS, INTENSITY_RULES, VOICES, STINGERS, STINGER_TIMBRES,
   STINGER_ENVELOPE_CAP, STINGER_MAX_SOUNDING_SEC, STING_TONES, rampGain,
-  SCORE_BPM_REF, BEATS_PER_BAR, SECONDS_PER_BAR, SECONDS_PER_BEAT,
+  MIX, POLYPHONY, VELOCITY, STINGER_PRIMITIVES, SFX_PRIMITIVES, stingerSoundingSec,
+  SCORE_BPM_REF, BEATS_PER_BAR, BARS_PER_SEGMENT, SECONDS_PER_BAR, SECONDS_PER_BEAT,
   CYCLE_SECONDS, SAMPLES_PER_BEAT_44K1, BARS_PER_CYCLE,
 } from "../../src/audio/score.ts";
 
@@ -239,7 +240,8 @@ const SCORE = {
   CHORDS, ROOTS, LEAD_THEME, KEYS_FIGURES, COUNTER_LINE, COUNTER_NOTE_VALUE,
   BASS_LINE, SNARE_PATTERN, TICKS_PATTERN, TICK_STAMP_BARS, CARRIAGE_RETURN,
   GRIDS, VOICES, STINGERS, STINGER_TIMBRES, STING_TONES,
-  SCORE_BPM_REF, BEATS_PER_BAR, SECONDS_PER_BAR, SECONDS_PER_BEAT,
+  MIX, POLYPHONY, VELOCITY, STINGER_PRIMITIVES, SFX_PRIMITIVES,
+  SCORE_BPM_REF, BEATS_PER_BAR, BARS_PER_SEGMENT, SECONDS_PER_BAR, SECONDS_PER_BEAT,
   CYCLE_SECONDS, BARS_PER_CYCLE,
 };
 
@@ -273,20 +275,10 @@ function preflight() {
   }
 
   // The whole point of the rewrite: nothing may still be sounding a bar later.
-  // Measured from the layers, not from the declared `soundingSec`, since a
-  // declaration cannot be wrong in a way that matters if nothing reads it.
+  let worst = 0;
   for (const [id, spec] of Object.entries(STINGERS)) {
-    let end = 0;
-    for (const layer of spec.layers) {
-      const t0 = layer.atSec ?? 0;
-      const span = layer.kind === "arp" ? (layer.notes.length - 1) * layer.stepSec
-        : layer.kind === "ruff" ? (layer.velocities.length - 1) * layer.stepSec
-        : 0;
-      const tail = layer.kind === "pluck" || layer.kind === "arp"
-        ? STINGER_TIMBRES[layer.timbre].envelope.decay + STINGER_TIMBRES[layer.timbre].envelope.release
-        : layer.kind === "noise" ? layer.durationSec : 0;
-      end = Math.max(end, t0 + span + tail);
-    }
+    const end = stingerSoundingSec(spec);
+    worst = Math.max(worst, end);
     if (end > STINGER_MAX_SOUNDING_SEC) {
       problems.push(`stinger "${id}" sounds for ${end.toFixed(3)}s, over the one-bar cap of ${STINGER_MAX_SOUNDING_SEC.toFixed(3)}s`);
     }
@@ -297,7 +289,10 @@ function preflight() {
     for (const p of problems) console.error("  ✗ " + p);
     process.exit(1);
   }
-  console.log(`Preflight: tempo sample-exact, ${Object.keys(STINGER_TIMBRES).length} timbres inside the envelope cap, ${Object.keys(STINGERS).length} stingers inside one bar.`);
+  console.log(
+    `Preflight: tempo sample-exact, ${Object.keys(STINGER_TIMBRES).length} timbres inside the envelope cap, `
+    + `${Object.keys(STINGERS).length} stingers inside one bar `
+    + `(worst ${worst.toFixed(3)}s of ${STINGER_MAX_SOUNDING_SEC.toFixed(3)}s).`);
 }
 
 preflight();
@@ -330,7 +325,7 @@ for (const cue of CUES) {
   // was never scheduled.
   const STING_AT = 0.25, STING_STEP = 1.1;
   const musicSec = cue.cycles ? cue.cycles * CYCLE_SECONDS
-    : cue.stinger ? STINGERS[cue.stinger].soundingSec
+    : cue.stinger ? stingerSoundingSec(STINGERS[cue.stinger])
     : cue.stings ? STING_AT + cue.stings.length * STING_STEP
     : 2.2;
   // Derive the duration from a whole number of samples so the buffer length is

@@ -127,7 +127,15 @@ export const SAMPLES_PER_BEAT_44K1 = 24_500;
 export const SAMPLES_PER_BAR_44K1 = SAMPLES_PER_BEAT_44K1 * BEATS_PER_BAR; // 98,000
 export const SAMPLES_PER_CYCLE_44K1 = SAMPLES_PER_BAR_44K1 * BARS_PER_CYCLE; // 1,568,000
 
-/** Identity block for the cue. `public/audio/meta/*.music.json` is generated from this. */
+/**
+ * Identity block for the cue.
+ *
+ * `public/audio/meta/*.music.json` is checked against this and against the rest
+ * of this file by `scripts/audio/check-meta.mjs` — not generated from it. Those
+ * documents carry analysis no generator could write, so the prose is written by
+ * hand and every machine-checkable field in them (tempo, key, form, loop points,
+ * stem gains, cue-point timings, transition targets) is verified to agree.
+ */
 export const SCORE_CUE = {
   id: "score.debtors-march",
   title: "The Debtor's March",
@@ -456,8 +464,20 @@ export const CARRIAGE_RETURN = {
   beat: 3,
   /** E6 — the 5th of the bar-16 A7, so the bell is part of the half-cadence. */
   ding: "E6",
-  /** Band-passed noise sweep: the carriage travelling back. */
-  zip: { fromHz: 1600, toHz: 5200, durationSec: 0.18, volume: -26 },
+  /**
+   * Band-passed noise sweep: the carriage travelling back.
+   *
+   * `peakScale` and `rampFraction` describe the gain shape, because this is the
+   * one voice in the score that is a gain automation rather than an envelope:
+   * the noise runs continuously and a Gain is swept over it. The peak is
+   * `10^(volume/20) * peakScale`, reached `rampFraction` of the way through and
+   * falling to zero by the end — a fast rise and a slower fall, which is a
+   * carriage arriving rather than a click.
+   */
+  zip: {
+    fromHz: 1600, toHz: 5200, durationSec: 0.18, volume: -26,
+    bandpassQ: 3, peakScale: 4, rampFraction: 0.6,
+  },
 } as const;
 
 /**
@@ -616,7 +636,17 @@ export const VOICES = {
     oscillator: { type: "fatsawtooth", count: 3, spread: 24 },
     envelope: { attack: 0.06, decay: 0.35, sustain: 0.75, release: 0.5 },
     volume: -13,
-    filter: { type: "lowpass", base: 380, peak: 1600, envAttack: 0.05, envDecay: 0.35, Q: 1.2 },
+    filter: {
+      type: "lowpass", base: 380, peak: 1600, Q: 1.2, rolloff: -12,
+      envAttack: 0.05, envDecay: 0.35, envSustain: 0.45, envRelease: 0.6,
+      /**
+       * A quadratic filter-envelope curve, not the default linear one. The
+       * sweep spends longer near the base frequency and then opens quickly,
+       * which is the shape of a player leaning into a note; linear opens
+       * evenly and reads as a synth pad being filtered.
+       */
+      envExponent: 2,
+    },
   },
 
   /**
@@ -637,12 +667,22 @@ export const VOICES = {
   /** The tune. Two oscillators, drive, tempo-synced delay. */
   lead: {
     a: { type: "pulse", width: 0.35, detune: 0 },
-    b: { type: "square", detune: 7 },
+    /** `under` = dB below the A voice: the beating partner, never the equal. */
+    b: { type: "square", detune: 7, under: 4 },
     envelope: { attack: 0.008, decay: 0.3, sustain: 0.55, release: 0.35 },
     volume: -12,
     /** Light asymmetric drive — edge, not distortion. */
     drive: 0.12,
     delay: { time: "8n", feedback: 0.2, wet: 0.18 },
+    /**
+     * DC blocker, and not optional. The A voice is a pulse at 35% duty, and a
+     * pulse whose duty is not 50% has a non-zero mean by construction —
+     * measured at +0.0225 on the title render, tracking the lead's gain
+     * exactly. DC is inaudible on its own but it eats headroom on the side it
+     * leans toward, so the anthem clipped earlier than its level suggested.
+     * 25 Hz is far below the lowest lead note (D4 = 293 Hz).
+     */
+    dcBlock: { hz: 25, rolloff: -12 },
   },
 
   /** Sine sub on the segment roots. Long release so the low end never gaps. */
@@ -658,7 +698,8 @@ export const VOICES = {
    */
   marchBass: {
     a: { type: "triangle", gain: 0.75 },
-    b: { type: "sawtooth", gain: 0.25 },
+    /** `under` = dB below the A voice. The buzz is a seasoning, not a layer. */
+    b: { type: "sawtooth", gain: 0.25, under: 8 },
     envelope: { attack: 0.005, decay: 0.25, sustain: 0.4, release: 0.25 },
     volume: -14,
   },
@@ -670,8 +711,8 @@ export const VOICES = {
    * a tone-only snare is a tom.
    */
   snare: {
-    noise: { type: "white", decay: 0.09, volume: -18 },
-    body: { type: "triangle", frequency: 220, decay: 0.12, volume: -24 },
+    noise: { type: "white", attack: 0.001, decay: 0.09, volume: -18 },
+    body: { type: "triangle", frequency: 220, attack: 0.001, decay: 0.12, volume: -24 },
     highpass: 400,
   },
 
@@ -683,6 +724,7 @@ export const VOICES = {
   tick: {
     noise: { type: "white" },
     highpass: 4800,
+    attack: 0.001,
     decay: 0.012,
     volume: -20,
   },
@@ -692,6 +734,7 @@ export const VOICES = {
     note: "D2",
     pitchDecay: 0.04,
     octaves: 4,
+    attack: 0.001,
     decay: 0.12,
     volume: -14,
   },
@@ -699,6 +742,7 @@ export const VOICES = {
   /** The carriage-return bell. */
   carriageDing: {
     oscillator: { type: "triangle" },
+    attack: 0.002,
     decay: 0.35,
     volume: -24,
   },
@@ -739,6 +783,13 @@ export const VOICES = {
    */
   counter: {
     oscillator: { type: "triangle" },
+    /**
+     * A deliberately slow envelope. Each counter tone lasts two bars, so a
+     * 0.6 s attack and a 1.4 s release mean the line never has an onset —
+     * it fades in under the brass and fades out under the next chord, which
+     * is what keeps it a countermelody and not a second tune.
+     */
+    envelope: { attack: 0.6, decay: 0.4, sustain: 0.8, release: 1.4 },
     tremolo: { rate: 6 / CYCLE_SECONDS, depth: 0.45 },
     volume: -20,
   },
@@ -746,6 +797,128 @@ export const VOICES = {
 
 /** The voice book's shape, for anything that wants to pass a voice around. */
 export type VoiceBook = typeof VOICES;
+
+// ---------------------------------------------------------------------------
+// Performance and wiring
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything below this line exists for one reason: **anything both the engine
+ * and the offline renderer need must live here, or the preview will eventually
+ * lie.**
+ *
+ * `src/audio/AudioEngine.ts` and `scripts/audio/score-graph.js` build the same
+ * graph from the same material, in two languages, in two runtimes. The music
+ * always lived here, so the notes could never diverge — but the *performance*
+ * (how hard each part is struck, how loud each bus runs, how many voices each
+ * synth may stack) was written twice, as literals, with nothing checking that
+ * the two copies agreed. They did not: three separate bugs came out of that
+ * seam, and every one of them made the preview quietly disagree with the game
+ * about how the game sounds. A preview that disagrees with the game is worse
+ * than no preview, because it is trusted.
+ *
+ * So: if a number is needed on both sides, it is a constant in this file.
+ */
+
+/**
+ * Bus levels. The engine's tree is `master -> {music, accent, sfx, ambience}`,
+ * and the renderer reproduces it exactly.
+ *
+ * The 0.9 trims on `accent` and `sfx` are not cosmetic. Without them a stinger
+ * preview renders 0.9 dB hotter than the same stinger in the game — which is
+ * precisely the margin somebody is judging "is this too loud?" against.
+ */
+export const MIX = {
+  master: 0.85,
+  music: 1,
+  accent: 0.9,
+  sfx: 0.9,
+  ambience: 0.8,
+} as const;
+
+/**
+ * Voice ceilings. A PolySynth with no ceiling will happily allocate voices
+ * until the CPU gives out; these are set from the densest moment each part
+ * actually plays (brass: a 4-note chord ringing two bars while the next one
+ * attacks; lead: an 8th-note line through a feedback delay).
+ */
+export const POLYPHONY = {
+  brass: 16,
+  keys: 12,
+  lead: 8,
+} as const;
+
+/**
+ * How hard each part is struck. These are the dynamics of the arrangement — the
+ * reason the march reads as an ensemble and not as a MIDI file where everything
+ * is at 100.
+ *
+ * The shape worth noticing: every doubling voice is quieter than the voice it
+ * doubles (`leadB` 0.6 under `leadA` 0.85, `marchB` 0.5 under `marchA` 0.85,
+ * `pluckOctaveDouble` 0.8 under `pluck` 0.9). A double at equal velocity stops
+ * being a double and becomes a second instrument playing in unison, which is
+ * thicker but much less interesting.
+ */
+export const VELOCITY = {
+  /** Harmony loop: chord, sub root, countermelody tone. */
+  brass: 0.8,
+  sub: 0.9,
+  counter: 0.7,
+  /** The tune and its detuned partner. */
+  leadA: 0.85,
+  leadB: 0.6,
+  /** The piano's comping figures. */
+  keys: 0.7,
+  /** The march "oom" and its saw buzz. */
+  marchA: 0.85,
+  marchB: 0.5,
+  /** The snare's tuned body, as a fraction of the noise crack's velocity. */
+  snareBodyScale: 0.8,
+  /** Percussion one-shots on the ticks stem. */
+  stamp: 0.9,
+  ding: 0.7,
+  /** Stinger plucks, and their octave doubles. */
+  pluck: 0.9,
+  pluckOctaveDouble: 0.8,
+} as const;
+
+/**
+ * The non-pitched stinger layers. `pluck` and `arp` layers get their voice from
+ * `STINGER_TIMBRES`; these three kinds are built inline on both sides and so
+ * need their shapes stated once, here.
+ *
+ * `membrane` is the stamp landing, `noise` the paper slap, `ruff` the snare
+ * flam that runs into a downbeat.
+ */
+export const STINGER_PRIMITIVES = {
+  membrane: { pitchDecay: 0.05, octaves: 5 },
+  noise: { attack: 0.002 },
+  ruff: { highpassHz: 400, decaySec: 0.07 },
+} as const;
+
+/**
+ * `AudioEngine`'s one-shot SFX primitives, in the two places they are needed on
+ * both sides: the reveal stings.
+ *
+ * These values are the ORIGINALS, unchanged — they are stated here rather than
+ * changed. They live here because the reveal-sting preview was built on the
+ * wrong primitives once already: it rendered the ascending `good` triad on a
+ * single monophonic synth, when `blip()` allocates a fresh voice per note and
+ * the three therefore overlap and sum. The preview was wrong about the most
+ * frequently heard sound in the game, and nothing could have caught it while
+ * these numbers were literals in two files.
+ */
+export const SFX_PRIMITIVES = {
+  /** `blip()` — one self-disposing Synth per note. `decay` is the caller's. */
+  blip: { attack: 0.004, release: 0.05 },
+  /** `chordShot()` — a PolySynth stack with a short sustained tail. */
+  chordShot: { attack: 0.005, sustain: 0.1, release: 0.4 },
+  /**
+   * `thock()` — a knock, not a boom. `octaves: 4` (rather than Tone's default
+   * 10) and a 0.18 s decay with no sustain are the whole difference.
+   */
+  thock: { pitchDecay: 0.04, octaves: 4, attack: 0.001, decay: 0.18 },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Accents (stingers)
@@ -831,11 +1004,6 @@ export type StingerLayer =
     });
 
 export interface StingerSpec {
-  /**
-   * Total sounding length INCLUDING release, in seconds. Documented per accent
-   * and asserted against `STINGER_MAX_SOUNDING_SEC`.
-   */
-  readonly soundingSec: number;
   readonly layers: readonly StingerLayer[];
 }
 
@@ -925,7 +1093,6 @@ export const STINGERS = {
    * gesture, not a drone.
    */
   title: {
-    soundingSec: 1.1,
     layers: [
       { kind: "arp", notes: ["A4", "C#5", "D5"], timbre: "brassPluck", duration: "8n", stepSec: 0.18, volume: -8, octaveDoubleVolume: -16 },
       { kind: "membrane", note: "D2", duration: "8n", volume: -4 },
@@ -935,7 +1102,6 @@ export const STINGERS = {
 
   /** "APPROVED". A staccato D major — the F# picardy wink is the win colour. */
   stampGood: {
-    soundingSec: 0.9,
     layers: [
       // Levels are set from the offline render, not by ear: a four-note pluck
       // and a membrane landing on the same instant sum, and at -8/-3 this
@@ -948,7 +1114,6 @@ export const STINGERS = {
 
   /** The red stamp. The tension layer's m2 (D-Eb) struck once, plus a slap. */
   stampBad: {
-    soundingSec: 0.85,
     layers: [
       // Same clipping correction as `stampGood` (this one peaked at +0.4 dBFS).
       // A saw cluster is already the harshest timbre in the set; letting it
@@ -967,7 +1132,6 @@ export const STINGERS = {
    * held chord was half the reason the outro sounded like an alarm.
    */
   consequence: {
-    soundingSec: 1.85,
     layers: [
       { kind: "membrane", note: "D2", duration: "4n", volume: -3 },
       { kind: "noise", durationSec: 0.14, highpassHz: 160, volume: -14 },
@@ -978,7 +1142,6 @@ export const STINGERS = {
 
   /** Soft body blow. The cold open's punctuation. */
   thump: {
-    soundingSec: 0.7,
     layers: [
       { kind: "membrane", note: "D1", duration: "4n", volume: -2 },
       { kind: "noise", durationSec: 0.12, highpassHz: 200, volume: -14 },
@@ -987,7 +1150,6 @@ export const STINGERS = {
 
   /** Harder, and up on the subdominant so it reads as a different blow, not a louder one. */
   hit: {
-    soundingSec: 0.8,
     layers: [
       { kind: "membrane", note: "G1", duration: "4n", volume: 0 },
       { kind: "noise", durationSec: 0.2, highpassHz: 120, volume: -8 },
@@ -996,7 +1158,6 @@ export const STINGERS = {
 
   /** The lowest thing in the game. Weight without pitch information. */
   thud: {
-    soundingSec: 0.75,
     layers: [
       { kind: "membrane", note: "A0", duration: "4n", volume: -4 },
       { kind: "noise", durationSec: 0.18, highpassHz: 90, volume: -16 },
@@ -1005,7 +1166,6 @@ export const STINGERS = {
 
   /** A saw cluster on the b2 grind — the tension layer, stabbed. */
   stab: {
-    soundingSec: 0.6,
     layers: [
       { kind: "pluck", notes: ["D3", "Eb3", "A3"], timbre: "sawPluck", duration: "8n", volume: -10 },
       { kind: "membrane", note: "D1", duration: "8n", volume: -4 },
@@ -1014,7 +1174,6 @@ export const STINGERS = {
 
   /** Concept mastered: straight up the tonic triad, with a small crown on top. */
   mastered: {
-    soundingSec: 1,
     layers: [
       { kind: "arp", notes: ["D4", "F4", "A4", "D5"], timbre: "trianglePluck", duration: "8n", stepSec: 0.075, volume: -8 },
       { kind: "membrane", note: "D2", duration: "4n", volume: -7 },
@@ -1024,7 +1183,6 @@ export const STINGERS = {
 
   /** Mastery level rose: the same idea from the relative major, higher and faster. */
   levelup: {
-    soundingSec: 0.95,
     layers: [
       { kind: "arp", notes: ["F4", "A4", "D5", "F5"], timbre: "trianglePluck", duration: "8n", stepSec: 0.06, volume: -9 },
       { kind: "pluck", notes: ["A5", "D6"], timbre: "trianglePluck", duration: "4n", volume: -14, atSec: 0.24 },
@@ -1033,13 +1191,83 @@ export const STINGERS = {
 
   /** Streak alive: a warm three-step over a soft kick — confidence, not fanfare. */
   streak: {
-    soundingSec: 0.8,
     layers: [
       { kind: "membrane", note: "D1", duration: "4n", volume: -5 },
       { kind: "arp", notes: ["A3", "D4", "F4"], timbre: "trianglePluck", duration: "8n", stepSec: 0.05, volume: -9 },
     ],
   },
 } as const satisfies Record<StingerId, StingerSpec>;
+
+/** A note value in seconds at the score's tempo. */
+export function noteValueSeconds(v: NoteValue): number {
+  const inBeats: Record<NoteValue, number> = {
+    "32n": 0.125, "16n": 0.25, "8n": 0.5, "8n.": 0.75,
+    "4n": 1, "2n": 2, "1m": BEATS_PER_BAR, "2m": BEATS_PER_BAR * 2,
+  };
+  return inBeats[v] * SECONDS_PER_BEAT;
+}
+
+/**
+ * Tone's `MembraneSynth` release, which stinger membranes inherit.
+ *
+ * Stated here because it is the single longest tail in the accent set and it is
+ * INVISIBLE at the call site: `STINGER_PRIMITIVES.membrane` sets `pitchDecay`
+ * and `octaves` only, so the envelope is Tone's default — attack 0.001, decay
+ * 0.4, sustain 0.01, release 1.4. The sustain is -40 dB, so what the release
+ * governs is a tail nobody can actually hear; but `stingerSoundingSec` counts
+ * it in full anyway, because a limit that only counts the audible part of a
+ * sound is a limit that will one day be argued with.
+ *
+ * The envelope is deliberately NOT overridden. The numbers already pass the
+ * one-bar rule with 0.27 s to spare, so there is nothing to buy by changing how
+ * any of these accents sound.
+ */
+export const MEMBRANE_RELEASE_SEC = 1.4;
+
+/**
+ * How long an accent is still making sound after it fires, measured from its
+ * layers — the value `STINGER_MAX_SOUNDING_SEC` is enforced against.
+ *
+ * This is computed rather than declared, and that is the point. Each spec used
+ * to carry a hand-written `soundingSec`, and all eleven were wrong in the same
+ * direction: every one omitted the membrane release above, under-declaring by
+ * between 0.1 s and 1.2 s. That is not merely bad documentation — the offline
+ * renderer sizes each preview's buffer from this number, so an under-declaration
+ * renders a preview with the accent's own tail cut off, and the check that was
+ * supposed to enforce the one-bar rule was reading the wrong number to enforce
+ * it with. A figure derived from the layers cannot disagree with the layers.
+ */
+export function stingerSoundingSec(spec: StingerSpec): number {
+  let end = 0;
+  for (const layer of spec.layers) {
+    const t0 = layer.atSec ?? 0;
+    let span = 0;
+    let tail = 0;
+    switch (layer.kind) {
+      case "pluck":
+        tail = noteValueSeconds(layer.duration)
+          + STINGER_TIMBRES[layer.timbre].envelope.release;
+        break;
+      case "arp":
+        span = (layer.notes.length - 1) * layer.stepSec;
+        tail = noteValueSeconds(layer.duration)
+          + STINGER_TIMBRES[layer.timbre].envelope.release;
+        break;
+      case "membrane":
+        tail = noteValueSeconds(layer.duration) + MEMBRANE_RELEASE_SEC;
+        break;
+      case "noise":
+        tail = layer.durationSec;
+        break;
+      case "ruff":
+        span = (layer.velocities.length - 1) * layer.stepSec;
+        tail = STINGER_PRIMITIVES.ruff.decaySec;
+        break;
+    }
+    end = Math.max(end, t0 + span + tail);
+  }
+  return end;
+}
 
 // ---------------------------------------------------------------------------
 // Reveal stings

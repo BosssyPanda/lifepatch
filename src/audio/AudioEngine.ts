@@ -4,10 +4,11 @@ import * as Tone from "tone";
 import type { AmbienceId, SfxName, StingTone } from "./sfxBank";
 import { SCORE_BPM } from "./tempo";
 import {
-  BASS_LINE, BRAIN_GLOW, CARRIAGE_RETURN, CHORDS, COUNTER_LINE, COUNTER_NOTE_VALUE,
-  GRIDS, INTENSITY_RULES, KEYS_FIGURES, LEAD_THEME, PRESETS, ROOTS, SNARE_PATTERN,
-  STINGERS, STINGER_TIMBRES, STING_TONES, SWELL_STEM, TICKS_PATTERN, TICK_STAMP_BARS,
-  VOICES, rampGain,
+  BARS_PER_SEGMENT, BASS_LINE, BEATS_PER_BAR, BRAIN_GLOW, CARRIAGE_RETURN,
+  CHORDS, COUNTER_LINE, COUNTER_NOTE_VALUE,
+  GRIDS, INTENSITY_RULES, KEYS_FIGURES, LEAD_THEME, MIX, POLYPHONY, PRESETS, ROOTS,
+  SFX_PRIMITIVES, SNARE_PATTERN, STINGERS, STINGER_PRIMITIVES, STINGER_TIMBRES,
+  STING_TONES, SWELL_STEM, TICKS_PATTERN, TICK_STAMP_BARS, VELOCITY, VOICES, rampGain,
   type IntensityRamp, type StemId, type StingerSpec, type StingerTimbre,
 } from "./score";
 
@@ -108,7 +109,6 @@ export class AudioEngine {
   private phase: ScorePhase = "menu";
   private intensity = 0.3;
   private brainGlow = 0; // 0..1 Money-Brain progress → warms the menu/recap bed
-  private seg = 0;
 
   private master!: Tone.Gain;
   private musicBus!: Tone.Gain;
@@ -151,6 +151,8 @@ export class AudioEngine {
   /** Last time each throttled SFX actually fired, on the performance clock. */
   private lastSfxAt: Partial<Record<SfxName, number>> = {};
   private swellTimer: ReturnType<typeof setTimeout> | null = null;
+  /** In-flight `disposeLater` timers and the nodes they are waiting to free. */
+  private pendingDisposals = new Map<ReturnType<typeof setTimeout>, { dispose(): void }>();
 
   get isStarted() {
     return this.started;
@@ -186,11 +188,11 @@ export class AudioEngine {
     const t = Tone.getTransport();
     t.bpm.value = BPM;
 
-    this.master = new Tone.Gain(0.85).toDestination();
-    this.musicBus = new Tone.Gain(1).connect(this.master);
-    this.accentBus = new Tone.Gain(0.9).connect(this.master);
-    this.sfxBus = new Tone.Gain(0.9).connect(this.master);
-    this.ambBus = new Tone.Gain(0.8).connect(this.master);
+    this.master = new Tone.Gain(MIX.master).toDestination();
+    this.musicBus = new Tone.Gain(MIX.music).connect(this.master);
+    this.accentBus = new Tone.Gain(MIX.accent).connect(this.master);
+    this.sfxBus = new Tone.Gain(MIX.sfx).connect(this.master);
+    this.ambBus = new Tone.Gain(MIX.ambience).connect(this.master);
 
     // per-stem gains start silent and ramp in via setPhase()
     this.stems = {
@@ -217,35 +219,31 @@ export class AudioEngine {
       volume: V.brass.volume,
       oscillator: { ...V.brass.oscillator },
       envelope: { ...V.brass.envelope },
-      filter: { type: V.brass.filter.type, Q: V.brass.filter.Q, rolloff: -12 },
+      filter: { type: V.brass.filter.type, Q: V.brass.filter.Q, rolloff: V.brass.filter.rolloff },
       filterEnvelope: {
         attack: V.brass.filter.envAttack,
         decay: V.brass.filter.envDecay,
-        sustain: 0.45,
-        release: 0.6,
+        sustain: V.brass.filter.envSustain,
+        release: V.brass.filter.envRelease,
         baseFrequency: V.brass.filter.base,
         octaves: Math.log2(V.brass.filter.peak / V.brass.filter.base),
-        exponent: 2,
+        exponent: V.brass.filter.envExponent,
       },
     }).connect(this.stems.brass);
-    this.brass.maxPolyphony = 16;
+    this.brass.maxPolyphony = POLYPHONY.brass;
 
     // --- keys: the compressed upright, FM, hammer-then-decay ---
     this.keys = new Tone.PolySynth(Tone.FMSynth, { ...V.keys }).connect(this.stems.keys);
-    this.keys.maxPolyphony = 12;
+    this.keys.maxPolyphony = POLYPHONY.keys;
 
     // --- lead: two detuned oscillators → drive → tempo-synced delay. Drive sits
     //     BEFORE the delay so the echoes repeat an already-shaped note instead
     //     of re-distorting every tail.
-    //     The high-pass is a DC blocker, and it is not optional: the A voice is
-    //     a pulse at 35% duty, and a pulse whose duty is not 50% has a non-zero
-    //     mean by construction (measured +0.0225 on the title render, tracking
-    //     the lead's gain exactly). DC is inaudible on its own but it eats
-    //     headroom on the side it leans toward, so the anthem clipped earlier
-    //     than its level suggested. 25Hz is far below the lowest lead note
-    //     (D4 = 293Hz), so it removes the offset and nothing anyone can hear. ---
-    const leadDC = new Tone.Filter({ type: "highpass", frequency: 25, rolloff: -12 })
-      .connect(this.stems.lead);
+    //     The high-pass is a DC blocker and it is not optional; see
+    //     `VOICES.lead.dcBlock` in score.ts for why the pulse voice needs one. ---
+    const leadDC = new Tone.Filter({
+      type: "highpass", frequency: V.lead.dcBlock.hz, rolloff: V.lead.dcBlock.rolloff,
+    }).connect(this.stems.lead);
     const leadDelay = new Tone.FeedbackDelay({
       delayTime: V.lead.delay.time, feedback: V.lead.delay.feedback, wet: V.lead.delay.wet,
     }).connect(leadDC);
@@ -259,11 +257,11 @@ export class AudioEngine {
     this.leadB = new Tone.PolySynth(Tone.Synth, {
       oscillator: { type: V.lead.b.type },
       envelope: { ...V.lead.envelope },
-      volume: V.lead.volume - 4,
+      volume: V.lead.volume - V.lead.b.under,
       detune: V.lead.b.detune,
     }).connect(leadDrive);
-    this.leadA.maxPolyphony = 8;
-    this.leadB.maxPolyphony = 8;
+    this.leadA.maxPolyphony = POLYPHONY.lead;
+    this.leadB.maxPolyphony = POLYPHONY.lead;
     this.musicNodes.push(leadDC, leadDelay, leadDrive);
 
     // --- bass: sine sub for the weight, plus a march "oom" that survives a
@@ -277,7 +275,7 @@ export class AudioEngine {
     this.marchB = new Tone.Synth({
       oscillator: { type: V.marchBass.b.type },
       envelope: { ...V.marchBass.envelope },
-      volume: V.marchBass.volume - 8,
+      volume: V.marchBass.volume - V.marchBass.b.under,
     }).connect(this.stems.bass);
 
     // --- snare: noise crack + tuned body, high-passed to leave the low end
@@ -285,12 +283,12 @@ export class AudioEngine {
     const snareHP = new Tone.Filter(V.snare.highpass, "highpass").connect(this.stems.snare);
     this.snareNoise = new Tone.NoiseSynth({
       noise: { type: V.snare.noise.type },
-      envelope: { attack: 0.001, decay: V.snare.noise.decay, sustain: 0 },
+      envelope: { attack: V.snare.noise.attack, decay: V.snare.noise.decay, sustain: 0 },
       volume: V.snare.noise.volume,
     }).connect(snareHP);
     this.snareBody = new Tone.Synth({
       oscillator: { type: V.snare.body.type },
-      envelope: { attack: 0.001, decay: V.snare.body.decay, sustain: 0 },
+      envelope: { attack: V.snare.body.attack, decay: V.snare.body.decay, sustain: 0 },
       volume: V.snare.body.volume,
     }).connect(snareHP);
     this.musicNodes.push(snareHP);
@@ -299,17 +297,17 @@ export class AudioEngine {
     const tickHP = new Tone.Filter(V.tick.highpass, "highpass").connect(this.stems.ticks);
     this.tick = new Tone.NoiseSynth({
       noise: { type: V.tick.noise.type },
-      envelope: { attack: 0.001, decay: V.tick.decay, sustain: 0 },
+      envelope: { attack: V.tick.attack, decay: V.tick.decay, sustain: 0 },
       volume: V.tick.volume,
     }).connect(tickHP);
     this.stampThock = new Tone.MembraneSynth({
       pitchDecay: V.stampThock.pitchDecay, octaves: V.stampThock.octaves,
-      envelope: { attack: 0.001, decay: V.stampThock.decay, sustain: 0 },
+      envelope: { attack: V.stampThock.attack, decay: V.stampThock.decay, sustain: 0 },
       volume: V.stampThock.volume,
     }).connect(this.stems.ticks);
     this.ding = new Tone.Synth({
       oscillator: { ...V.carriageDing.oscillator },
-      envelope: { attack: 0.002, decay: V.carriageDing.decay, sustain: 0 },
+      envelope: { attack: V.carriageDing.attack, decay: V.carriageDing.decay, sustain: 0 },
       volume: V.carriageDing.volume,
     }).connect(this.stems.ticks);
     this.musicNodes.push(tickHP);
@@ -351,7 +349,7 @@ export class AudioEngine {
     counterTrem.start();
     this.counter = new Tone.Synth({
       oscillator: { ...V.counter.oscillator },
-      envelope: { attack: 0.6, decay: 0.4, sustain: 0.8, release: 1.4 },
+      envelope: { ...V.counter.envelope },
       volume: V.counter.volume,
     }).connect(counterTrem);
     this.musicNodes.push(counterTrem);
@@ -363,32 +361,43 @@ export class AudioEngine {
     // quantized to whenever the callback happened to run.
     // -----------------------------------------------------------------------
 
-    // harmony: chord voicing + sub root + counter tone, one segment per 2 bars
+    // harmony: chord voicing + sub root + counter tone, one segment per 2 bars.
+    //
+    // The segment index is DERIVED from the transport rather than counted up in
+    // this callback, and that is not a style preference. Every other part here
+    // is a Tone.Sequence, and a Sequence takes its index from the transport's
+    // own position — so a counter is only in agreement with the melody as long
+    // as both started together. They do not always: the Transport deliberately
+    // keeps running across a teardown (see `transportOwner`), so an engine built
+    // by a Fast Refresh or a StrictMode remount inherits a transport that is
+    // already mid-cycle. Its Sequences pick up at the right bar of the tune; a
+    // counter starting from 0 would put the chords somewhere else entirely, and
+    // the result is a march playing its own harmony against its own melody.
+    const ticksPerSegment = t.PPQ * BEATS_PER_BAR * BARS_PER_SEGMENT;
     const harmonyLoop = new Tone.Loop((time) => {
-      const seg = this.seg;
-      this.brass.triggerAttackRelease([...CHORDS[seg]], "2m", time, 0.8);
-      this.sub.triggerAttackRelease(ROOTS[seg], "2m", time, 0.9);
-      this.counter.triggerAttackRelease(COUNTER_LINE[seg], COUNTER_NOTE_VALUE, time, 0.7);
-      this.seg = (seg + 1) % CHORDS.length;
+      const seg = Math.floor(t.getTicksAtTime(time) / ticksPerSegment) % CHORDS.length;
+      this.brass.triggerAttackRelease([...CHORDS[seg]], "2m", time, VELOCITY.brass);
+      this.sub.triggerAttackRelease(ROOTS[seg], "2m", time, VELOCITY.sub);
+      this.counter.triggerAttackRelease(COUNTER_LINE[seg], COUNTER_NOTE_VALUE, time, VELOCITY.counter);
     }, G.harmony.subdivision).start(0);
 
     // the tune — always scheduled, audible only where the phase opens `lead`
     const leadSeq = new Tone.Sequence<string | null>((time, note) => {
       if (!note) return;
-      this.leadA.triggerAttackRelease(note, "8n", time, 0.85);
-      this.leadB.triggerAttackRelease(note, "8n", time, 0.6);
+      this.leadA.triggerAttackRelease(note, "8n", time, VELOCITY.leadA);
+      this.leadB.triggerAttackRelease(note, "8n", time, VELOCITY.leadB);
     }, [...LEAD_THEME], G.lead.subdivision).start(0);
 
     // the piano's comping figures (the tune's shadow, an octave down)
     const keysSeq = new Tone.Sequence<string | null>((time, note) => {
       if (!note) return;
-      this.keys.triggerAttackRelease(note, "8n", time, 0.7);
+      this.keys.triggerAttackRelease(note, "8n", time, VELOCITY.keys);
     }, [...KEYS_FIGURES], G.keys.subdivision).start(0);
 
     // the march "oom": root on 1, fifth on 3
     const bassSeq = new Tone.Sequence<string>((time, note) => {
-      this.marchA.triggerAttackRelease(note, "4n", time, 0.85);
-      this.marchB.triggerAttackRelease(note, "4n", time, 0.5);
+      this.marchA.triggerAttackRelease(note, "4n", time, VELOCITY.marchA);
+      this.marchB.triggerAttackRelease(note, "4n", time, VELOCITY.marchB);
     }, [...BASS_LINE], G.bass.subdivision).start(0);
 
     // Velocities, not pitches: 0 is a rest, and the ghost notes are what make
@@ -397,7 +406,7 @@ export class AudioEngine {
     const snareSeq = new Tone.Sequence<number>((time, v) => {
       if (!v) return;
       this.snareNoise.triggerAttackRelease(V.snare.noise.decay, time, v);
-      this.snareBody.triggerAttackRelease(V.snare.body.frequency, V.snare.body.decay, time, v * 0.8);
+      this.snareBody.triggerAttackRelease(V.snare.body.frequency, V.snare.body.decay, time, v * VELOCITY.snareBodyScale);
     }, [...SNARE_PATTERN], G.snare.subdivision).start(0);
 
     const ticksSeq = new Tone.Sequence<number>((time, v) => {
@@ -409,7 +418,7 @@ export class AudioEngine {
     // (The offline renderer schedules these as absolute-time triggers because
     // its transport ends; here it runs forever, so a Loop is the honest form.)
     const stampLoops = TICK_STAMP_BARS.map((bar) => new Tone.Loop((time) => {
-      this.stampThock.triggerAttackRelease(V.stampThock.note, "8n", time, 0.9);
+      this.stampThock.triggerAttackRelease(V.stampThock.note, "8n", time, VELOCITY.stamp);
     }, `${GRIDS.harmony.bars}m`).start(`${bar}m`));
 
     // The once-per-cycle carriage return, on the last beat of the last bar: the
@@ -418,18 +427,18 @@ export class AudioEngine {
     // allocating a fresh graph every 35 seconds forever is how a long session
     // ends up with thousands of dead nodes.
     const cr = CARRIAGE_RETURN;
-    this.zipFilter = new Tone.Filter({ type: "bandpass", frequency: cr.zip.fromHz, Q: 3 })
+    this.zipFilter = new Tone.Filter({ type: "bandpass", frequency: cr.zip.fromHz, Q: cr.zip.bandpassQ })
       .connect(this.stems.ticks);
     this.zipGain = new Tone.Gain(0).connect(this.zipFilter);
     this.zipNoise = new Tone.Noise("white").connect(this.zipGain);
     this.zipNoise.start();
-    const zipPeak = Math.pow(10, cr.zip.volume / 20) * 4;
+    const zipPeak = Math.pow(10, cr.zip.volume / 20) * cr.zip.peakScale;
     const carriageLoop = new Tone.Loop((time) => {
-      this.ding.triggerAttackRelease(cr.ding, "8n", time, 0.7);
+      this.ding.triggerAttackRelease(cr.ding, "8n", time, VELOCITY.ding);
       this.zipFilter.frequency.setValueAtTime(cr.zip.fromHz, time);
       this.zipFilter.frequency.exponentialRampToValueAtTime(cr.zip.toHz, time + cr.zip.durationSec);
       this.zipGain.gain.setValueAtTime(0, time);
-      this.zipGain.gain.linearRampToValueAtTime(zipPeak, time + cr.zip.durationSec * 0.6);
+      this.zipGain.gain.linearRampToValueAtTime(zipPeak, time + cr.zip.durationSec * cr.zip.rampFraction);
       this.zipGain.gain.linearRampToValueAtTime(0, time + cr.zip.durationSec);
     }, `${GRIDS.harmony.bars}m`).start(`${cr.bar}:${cr.beat}:0`);
 
@@ -515,7 +524,11 @@ export class AudioEngine {
    */
   swellWarmth(amount = 0.5, hold = 1.8): void {
     if (!this.started) return;
-    this.stems[SWELL_STEM].gain.linearRampTo(amount, 0.4, Tone.now());
+    // Clamped because this is a public method with ~25 call sites and a stem
+    // gain is a raw multiplier: a caller who reads "amount" as a percentage and
+    // passes 50 does not get a louder swell, it gets the mix 34 dB into clipping.
+    const level = Math.max(0, Math.min(1, amount));
+    this.stems[SWELL_STEM].gain.linearRampTo(level, 0.4, Tone.now());
     if (this.swellTimer !== null) clearTimeout(this.swellTimer);
     this.swellTimer = setTimeout(() => {
       this.swellTimer = null;
@@ -600,24 +613,27 @@ export class AudioEngine {
       const t0 = at + (layer.atSec ?? 0);
       switch (layer.kind) {
         case "pluck": {
-          this.pluck(layer.timbre, layer.volume).triggerAttackRelease([...layer.notes], layer.duration, t0, 0.9);
+          this.pluck(layer.timbre, layer.volume)
+            .triggerAttackRelease([...layer.notes], layer.duration, t0, VELOCITY.pluck);
           if (layer.octaveDoubleVolume !== undefined) {
             this.pluck(layer.timbre, layer.octaveDoubleVolume)
-              .triggerAttackRelease(layer.notes.map(octaveDown), layer.duration, t0, 0.8);
+              .triggerAttackRelease(layer.notes.map(octaveDown), layer.duration, t0, VELOCITY.pluckOctaveDouble);
           }
           break;
         }
         case "arp": {
           const v = this.pluck(layer.timbre, layer.volume);
-          layer.notes.forEach((n, i) => v.triggerAttackRelease(n, layer.duration, t0 + i * layer.stepSec, 0.9));
+          layer.notes.forEach((n, i) =>
+            v.triggerAttackRelease(n, layer.duration, t0 + i * layer.stepSec, VELOCITY.pluck));
           if (layer.octaveDoubleVolume !== undefined) {
             const d = this.pluck(layer.timbre, layer.octaveDoubleVolume);
-            layer.notes.forEach((n, i) => d.triggerAttackRelease(octaveDown(n), layer.duration, t0 + i * layer.stepSec, 0.8));
+            layer.notes.forEach((n, i) =>
+              d.triggerAttackRelease(octaveDown(n), layer.duration, t0 + i * layer.stepSec, VELOCITY.pluckOctaveDouble));
           }
           break;
         }
         case "membrane": {
-          const m = new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 5, volume: layer.volume }).connect(bus);
+          const m = new Tone.MembraneSynth({ ...STINGER_PRIMITIVES.membrane, volume: layer.volume }).connect(bus);
           m.triggerAttackRelease(layer.note, layer.duration, t0);
           this.disposeLater(m, 2.5);
           break;
@@ -626,7 +642,7 @@ export class AudioEngine {
           const f = new Tone.Filter(layer.highpassHz, "highpass").connect(bus);
           const n = new Tone.NoiseSynth({
             noise: { type: "white" },
-            envelope: { attack: 0.002, decay: layer.durationSec, sustain: 0 },
+            envelope: { attack: STINGER_PRIMITIVES.noise.attack, decay: layer.durationSec, sustain: 0 },
             volume: layer.volume,
           }).connect(f);
           n.triggerAttackRelease(layer.durationSec, t0);
@@ -634,13 +650,14 @@ export class AudioEngine {
           break;
         }
         case "ruff": {
-          const hp = new Tone.Filter(400, "highpass").connect(bus);
+          const R = STINGER_PRIMITIVES.ruff;
+          const hp = new Tone.Filter(R.highpassHz, "highpass").connect(bus);
           const s = new Tone.NoiseSynth({
             noise: { type: "white" },
-            envelope: { attack: 0.001, decay: 0.07, sustain: 0 },
+            envelope: { attack: 0.001, decay: R.decaySec, sustain: 0 },
             volume: layer.volume,
           }).connect(hp);
-          layer.velocities.forEach((v, i) => s.triggerAttackRelease(0.07, t0 + i * layer.stepSec, v));
+          layer.velocities.forEach((v, i) => s.triggerAttackRelease(R.decaySec, t0 + i * layer.stepSec, v));
           this.disposeLater(s, 2.5); this.disposeLater(hp, 2.6);
           break;
         }
@@ -685,8 +702,21 @@ export class AudioEngine {
     this.disposeLater(n, len + 0.5); this.disposeLater(bp, len + 0.6); this.disposeLater(g, len + 0.6);
   }
 
+  /**
+   * Free a one-shot voice once it has rung out.
+   *
+   * The handle is tracked so `dispose()` can cancel it. Without that, tearing
+   * the engine down leaves every in-flight SFX holding a timer that fires into a
+   * dead graph seconds later — harmless in itself (the call is guarded), but it
+   * keeps the disposed nodes reachable, so the teardown does not actually finish
+   * until the last SFX would have finished ringing.
+   */
   private disposeLater(node: { dispose(): void }, after: number): void {
-    setTimeout(() => { try { node.dispose(); } catch {} }, after * 1000);
+    const handle = setTimeout(() => {
+      this.pendingDisposals.delete(handle);
+      try { node.dispose(); } catch {}
+    }, after * 1000);
+    this.pendingDisposals.set(handle, node);
   }
 
   // ===========================================================================
@@ -784,7 +814,8 @@ export class AudioEngine {
     this.disposeLater(n, dur + 0.8); this.disposeLater(f, dur + 0.9);
   }
   private blip(at: number, freq: number, type: "sine" | "triangle" | "square" | "sawtooth", dur: number, vol: number, glideTo?: number): void {
-    const s = new Tone.Synth({ oscillator: { type }, envelope: { attack: 0.004, decay: dur, sustain: 0, release: 0.05 }, volume: vol }).connect(this.sfxBus);
+    const P = SFX_PRIMITIVES.blip;
+    const s = new Tone.Synth({ oscillator: { type }, envelope: { attack: P.attack, decay: dur, sustain: 0, release: P.release }, volume: vol }).connect(this.sfxBus);
     if (glideTo) { s.frequency.setValueAtTime(freq, at); s.frequency.exponentialRampToValueAtTime(glideTo, at + dur); }
     s.triggerAttackRelease(freq, dur, at);
     this.disposeLater(s, dur + 0.8);
@@ -805,7 +836,11 @@ export class AudioEngine {
     m.triggerAttackRelease(freq, "16n", at);
   }
   private thock(at: number, note: string, vol: number): void {
-    const m = new Tone.MembraneSynth({ pitchDecay: 0.04, octaves: 4, envelope: { attack: 0.001, decay: 0.18, sustain: 0 }, volume: vol }).connect(this.sfxBus);
+    const P = SFX_PRIMITIVES.thock;
+    const m = new Tone.MembraneSynth({
+      pitchDecay: P.pitchDecay, octaves: P.octaves,
+      envelope: { attack: P.attack, decay: P.decay, sustain: 0 }, volume: vol,
+    }).connect(this.sfxBus);
     m.triggerAttackRelease(note, "16n", at);
     this.disposeLater(m, 1);
   }
@@ -822,7 +857,8 @@ export class AudioEngine {
     this.disposeLater(n, len + 0.5); this.disposeLater(bp, len + 0.6); this.disposeLater(g, len + 0.6);
   }
   private chordShot(notes: string[], type: "sine" | "triangle" | "square" | "sawtooth", dur: number, vol: number, at: number): void {
-    const p = new Tone.PolySynth(Tone.Synth, { oscillator: { type }, envelope: { attack: 0.005, decay: dur, sustain: 0.1, release: 0.4 }, volume: vol }).connect(this.sfxBus);
+    const P = SFX_PRIMITIVES.chordShot;
+    const p = new Tone.PolySynth(Tone.Synth, { oscillator: { type }, envelope: { attack: P.attack, decay: dur, sustain: P.sustain, release: P.release }, volume: vol }).connect(this.sfxBus);
     p.triggerAttackRelease(notes, dur, at);
     this.disposeLater(p, dur + 1);
   }
@@ -868,10 +904,22 @@ export class AudioEngine {
       case "amb_office": bed("pink", 520, "lowpass", -26); hum(60, -30); every("8n", (t) => { if (Math.random() < 0.5) this.ambTickInto(out, t, 3500); }); break;
       case "amb_room": bed("brown", 420, "lowpass", -24); hum(55, -32); break;
       case "amb_keys": bed("pink", 600, "lowpass", -27); every("4n", (t) => { if (Math.random() < 0.35) this.ambTickInto(out, t, 2600); }); break;
-      // The beeps are retuned into D minor and de-fanged, and they fire less
-      // often than the probabilities used to say: these intervals are transport-
-      // relative, so raising the tempo from 76 to 108 BPM already fires them ~42%
-      // more often. Holding the perceived density steady means asking for less.
+      // The beeps are retuned into D minor and de-fanged, and their
+      // probabilities are lower than they used to be because these intervals are
+      // TRANSPORT-relative: at 108 BPM instead of 76 the same "2n" comes round
+      // 42% more often, so an unchanged probability would be an audibly busier
+      // room. The probabilities below are set from the old rate in beeps per
+      // second, not copied across:
+      //
+      //   coins    0.253/s -> 0.270/s  (+7%)
+      //   feed     0.158/s -> 0.158/s  (unchanged)
+      //   hospital 0.633/s -> 0.540/s  (-15%, deliberately)
+      //
+      // Hospital is the one that is not merely held steady. It used to beep on
+      // every half note with no probability at all, which is the most insistent
+      // bed in the game, and insistent beeping over a scenario is the exact
+      // complaint this rewrite exists to answer. It is a room tone, not a
+      // monitor alarm.
       case "amb_hospital": bed("pink", 2400, "highpass", -34); every("2n", (t) => { if (Math.random() < 0.6) this.ambBeepInto(out, t, 587.33); }); break;
       case "amb_coins": bed("white", 3200, "bandpass", -34, 1.5); every("2n", (t) => { if (Math.random() < 0.3) this.ambBeepInto(out, t, 1760, 0.05); }); break;
       case "amb_feed": bed("pink", 700, "lowpass", -30); every("1n", (t) => { if (Math.random() < 0.35) this.ambBeepInto(out, t, 1174.66, 0.08); }); break;
@@ -939,7 +987,21 @@ export class AudioEngine {
       if (transportOwner === this) {
         transportOwner = null;
         Tone.getTransport().stop();
+        // Same ownership question, same answer: a newer engine has already
+        // redefined the probe, and removing it here would leave the QA journey
+        // reporting "no engine" while one is playing.
+        if (process.env.NODE_ENV !== "production" && typeof window !== "undefined") {
+          delete (window as { __lpAudio?: unknown }).__lpAudio;
+        }
       }
+      // Cancel every pending one-shot disposal and run it now. The graph is
+      // going away regardless, and the master gain reached zero 450ms ago, so
+      // there is nothing left for these voices to ring into.
+      this.pendingDisposals.forEach((node, handle) => {
+        clearTimeout(handle);
+        try { node.dispose(); } catch {}
+      });
+      this.pendingDisposals.clear();
       this.loops.forEach((l) => { try { l.dispose(); } catch {} });
       try { this.currentAmb?.dispose(); } catch {}
       this.currentAmb = null;

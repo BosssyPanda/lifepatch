@@ -10,7 +10,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "audio:meta": "node scripts/audio/check-meta.mjs",
+    "audio:preview": "node scripts/audio/render-previews.mjs",
+    "qa:audio": "node scripts/qa/audio-integration.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",

@@ -23,10 +23,10 @@
     "note": "Not a loop. A single grid-quantized accent fired on `land`; each synth voice disposes itself. Quantized to the next 8th (277.778ms at 108 BPM) via the shared accent scheduler so it locks to the running Transport."
   },
   "layers": [
-    { "id": "impact", "kind": "membrane", "note": "D2", "duration": "4n", "volume": -3, "atSec": 0, "gain": 1.0 },
-    { "id": "paper", "kind": "noise", "durationSec": 0.14, "highpassHz": 160, "volume": -14, "atSec": 0, "gain": 0.6 },
-    { "id": "descent", "kind": "arp", "notes": ["A4", "G4", "F4", "D4"], "timbre": "trianglePluck", "duration": "8n", "stepSec": 0.07, "volume": -9, "atSec": 0, "gain": 0.7 },
-    { "id": "settle", "kind": "pluck", "notes": ["D3", "A3", "D4"], "timbre": "trianglePluck", "duration": "2n", "volume": -12, "atSec": 0.28, "gain": 0.55 }
+    { "id": "impact", "kind": "membrane", "note": "D2", "duration": "4n", "volume": -3, "atSec": 0 },
+    { "id": "paper", "kind": "noise", "durationSec": 0.14, "highpassHz": 160, "volume": -14, "atSec": 0 },
+    { "id": "descent", "kind": "arp", "notes": ["A4", "G4", "F4", "D4"], "timbre": "trianglePluck", "duration": "8n", "stepSec": 0.07, "volume": -9, "atSec": 0 },
+    { "id": "settle", "kind": "pluck", "notes": ["D3", "A3", "D4"], "timbre": "trianglePluck", "duration": "2n", "volume": -12, "atSec": 0.28 }
   ],
   "voices": {
     "impact": "Tone.MembraneSynth D2 quarter-note (-3dB) — the deep tonic stamp, retuned from the old A1.",
