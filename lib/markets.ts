@@ -23,6 +23,8 @@
  * page's reference toys (CompoundToy, TitleTicker) keep one stable series.
  */
 
+import { hash01 } from "./rng";
+
 export type AssetId =
   | "savings"
   | "bonds"
@@ -76,14 +78,6 @@ const EVENTS: Record<number, MacroEvent> = {
 
 // ── synthetic layer ────────────────────────────────────────────────────────
 // Everything below this line is a MODEL. None of it is historical record.
-
-/** Deterministic uniform in [0,1) from (year, salt, seed). Same inputs → same draw. */
-function hash01(year: number, salt: number, seed: number): number {
-  let h = Math.imul(year | 0, 0x27d4eb2d) ^ Math.imul(salt | 0, 0x165667b1) ^ Math.imul(seed | 0, 0x9e3779b9);
-  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-}
 
 /** Deterministic per-(asset, year, run) jitter in [-amp, amp]. Synthetic noise, not data. */
 function jitter(year: number, salt: number, amp: number, seed: number): number {

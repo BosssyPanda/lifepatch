@@ -113,7 +113,11 @@ export function saveMatch(roomCode: string, playerId: string, config: MatchConfi
   if (!store || !isRoomCode(roomCode) || !playerId) return;
   let body: string;
   try {
-    const rec: MatchRecord = { playerId, config, state, updatedAt: Date.now() };
+    // The journal is dropped on the way in: `loadMatch` reads this record back
+    // through `parseRunState`, which rebuilds `RunState` field by field and cannot
+    // return it. Writing it would spend bytes — several KB on a long run — in a
+    // store that already evicts rooms to make room, for something nothing can read.
+    const rec: MatchRecord = { playerId, config, state: { ...state, journal: undefined }, updatedAt: Date.now() };
     body = JSON.stringify(rec);
   } catch {
     return;

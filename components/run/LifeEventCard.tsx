@@ -91,6 +91,8 @@ export function LifeEventCard({
       // is a correct application that raises mastery, others are seen-only.
       learn(conceptsForText(outcome.lesson, outcome.consequence), {
         applied: outcome.tone === "good",
+        // How it went, so the report can name what keeps going wrong.
+        tone: outcome.tone,
       });
     }
   }, [answered, outcome, audio, learn, beat, runState]);

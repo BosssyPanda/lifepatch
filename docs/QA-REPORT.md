@@ -195,7 +195,14 @@ money.
 | `loss` | `#FE4030` | 5.37:1 |
 
 Every pairing was solved for rather than picked, and the audit script
-(`scratchpad/palette-audit.js`) re-runs it: **52 of 52 pass**.
+(`scripts/qa/palette-audit.mjs`) re-runs it: **57 of 57 pass**.
+
+That script is new. This report and `DESIGN.md` both cited `scratchpad/palette-audit.js`,
+which was never committed and is not in the tree — so the gate behind "a pairing that has
+not been measured does not ship" could not be run. Every figure below was re-derived from
+`app/globals.css` and `lib/palette.ts` and reproduces exactly, so the original audit was
+real; what was missing was any way to repeat it. The rebuilt gate also checks the two files
+against each other, which nothing ever had.
 
 Two results worth recording. The red originally proposed, `#E23B2E`, measured
 **4.39:1** — just under the 4.5 minimum — so it was replaced with the most
@@ -361,12 +368,31 @@ true only until someone edits a deck price.
 ## 8. Verification
 
 Every gate in this pass required: `npm run typecheck`, `npm run lint`,
-`npx next build` in an isolated copy, the palette audit, and a scripted smoke
-pass at 1440×900, 390×844 and reduced motion.
+`npx next build` in an isolated copy, `node scripts/qa/palette-audit.mjs`,
+`node scripts/qa/engine-props.mjs`, and a scripted smoke pass at 1440×900,
+390×844 and reduced motion.
 
 Final state: typecheck clean · lint clean but for one pre-existing
-`<img>` warning · production build succeeds · palette **52/52** · all three
-smoke variants **0 high, 0 console errors**.
+`<img>` warning · production build succeeds · palette **57/57** ·
+engine properties **23/23** · all five browser journeys **0 high, 0 console
+errors** at both viewports.
+
+Two gates in that list are new, and both existed only on paper before:
+
+- **The palette audit** was cited by `DESIGN.md` and by this report as
+  `scratchpad/palette-audit.js`, a file that was never committed. It is now
+  `scripts/qa/palette-audit.mjs`, it checks `app/globals.css` and `lib/palette.ts`
+  against each other as well as measuring every pairing, and it fails on a single
+  drifted hex digit — verified by drifting one.
+- **The engine property suite** had two ways of passing without meaning it, both
+  found by deliberately breaking the code under test and watching it pass anyway.
+  It reported after its first section rather than its last, so eighteen of its
+  checks could print `FAIL` and still exit 0. And it — along with all four browser
+  journeys — imported the compiled engine's output directory without building it,
+  so a script run on its own drove whatever tsc had last left in `/tmp`; the engine
+  under test was three hours older than the tree. Both fixed, both re-verified by
+  repeating the sabotage. A gate that cannot fail, or that tests a stale copy, is
+  worse than no gate — because it is trusted.
 
 Beyond that: ~1.5M engine state transitions asserted, 3,000-seed market
 distributions, a 58,388-run-year replay behind the insolvency threshold, and a

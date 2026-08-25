@@ -82,9 +82,21 @@ export type LifePoint = { year: number; netWorth: number };
 type Plotted = LifePoint & { x: number; y: number };
 type Box = { x: number; y: number; w: number; h: number };
 
-function plot(points: LifePoint[], g: Geom, topPad: number): { pts: Plotted[]; zeroY: number | null } {
+/**
+ * Both series are solved in ONE domain. A ghost that ends higher than the run — the
+ * common case for a counterfactual that indexed everything — would otherwise be
+ * plotted against the run's own min/max and drawn straight out of the top of the
+ * frame. The x-mapping still comes from `points`, so a ghost whose life ended first
+ * simply stops short rather than being stretched to fit.
+ */
+function plot(
+  points: LifePoint[],
+  g: Geom,
+  topPad: number,
+  ghost?: LifePoint[],
+): { pts: Plotted[]; ghostPts: Plotted[] | null; zeroY: number | null } {
   const { W, H, PAD } = g;
-  const values = points.map((p) => p.netWorth);
+  const values = [...points.map((p) => p.netWorth), ...(ghost ?? []).map((p) => p.netWorth)];
   const min = Math.min(...values, 0);
   const max = Math.max(...values, 1);
   const span = max - min || 1;
@@ -92,13 +104,13 @@ function plot(points: LifePoint[], g: Geom, topPad: number): { pts: Plotted[]; z
   const innerH = H - topPad - PAD.bottom;
   const x0 = points[0].year;
   const x1 = points[points.length - 1].year || x0 + 1;
-  const pts = points.map((p) => ({
+  const at = (p: LifePoint): Plotted => ({
     ...p,
     x: PAD.left + ((p.year - x0) / Math.max(1, x1 - x0)) * innerW,
     y: topPad + (1 - (p.netWorth - min) / span) * innerH,
-  }));
+  });
   const zeroY = min < 0 ? topPad + (1 - (0 - min) / span) * innerH : null;
-  return { pts, zeroY };
+  return { pts: points.map(at), ghostPts: ghost?.length ? ghost.map(at) : null, zeroY };
 }
 
 // ── the label solver ────────────────────────────────────────────────────────
@@ -146,13 +158,25 @@ type ChartModel = {
   pts: Plotted[];
   zeroY: number | null;
   d: string;
+  ghostD: string | null;
   rise: { p: Plotted; delta: number; label: string; box: Box } | null;
   fall: { p: Plotted; delta: number; label: string; box: Box } | null;
   final: { label: string; box: Box };
   macro: { p: Plotted; label: string; tone: string; labelY: number; x: number }[];
 } | null;
 
-export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoint[]; className?: string }) {
+export function AnnotatedLifeChart({
+  points,
+  ghost,
+  ghostLabel = "every spare dollar in the index",
+  className = "",
+}: {
+  points: LifePoint[];
+  /** A counterfactual line drawn under the run's own. Derived in `lib/replay`. */
+  ghost?: LifePoint[];
+  ghostLabel?: string;
+  className?: string;
+}) {
   const { reduced } = useMotionCtx();
 
   // Measure the container rather than the viewport: this chart appears in the run report, the
@@ -198,7 +222,7 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
     });
 
     // ── pass 1: x positions and the macro row packing (neither depends on top pad) ──
-    const first = plot(points, g, PAD.top);
+    const first = plot(points, g, PAD.top, ghost);
     const scan = first.pts;
 
     let bestI = -1;
@@ -247,9 +271,11 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
     // ── pass 2: re-plot with exactly the top band the callouts need ──
     const rows = Math.max(1, rowEnds.length);
     const topPad = Math.max(PAD.top, fs + 6 + rows * row + 14);
-    const { pts, zeroY } = plot(points, g, topPad);
+    const { pts, ghostPts, zeroY } = plot(points, g, topPad, ghost);
     const zeroY0 = zeroY;
-    const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+    const path = (ps: Plotted[]) => ps.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+    const d = path(pts);
+    const ghostD = ghostPts ? path(ghostPts) : null;
     const macroPlaced = macro.map((m) => ({
       p: pts[scan.indexOf(m.p)] ?? m.p,
       label: m.label,
@@ -296,7 +322,11 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
           // Inside the plotting frame only: above it is the macro band, below it is
           // the year axis, and a callout in either reads as belonging to that band.
           if (box.y < size + 2 || box.y + box.h > H - PAD.bottom - 2) continue;
+          // Both lines, at the same price. A callout printed through the ghost is
+          // the same bug this solver exists to prevent, and it is harder to spot
+          // because the ghost is the fainter of the two.
           let cost = lineHitsBox(pts, box) ? 10_000 : 0;
+          if (ghostPts && lineHitsBox(ghostPts, box)) cost += 10_000;
           for (const q of placed) cost += overlapArea(box, q) * 4;
           cost += off * 2;
           if (!best || cost < best.cost) best = { box, cost };
@@ -324,11 +354,12 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
       ? { p: worstP, delta: fallDelta, label: fallLabel, box: place(worstP, fallLabel, fs) }
       : null;
 
-    return { pts, zeroY, d, rise, fall, final: { label: finalLabel, box: finalBox }, macro: macroPlaced };
-  }, [points, g, compact, fs, fsAxis, fsFinal, row, W, H, PAD.top, PAD.right, PAD.bottom]);
+    return { pts, zeroY, d, ghostD, rise, fall, final: { label: finalLabel, box: finalBox }, macro: macroPlaced };
+  }, [points, ghost, g, compact, fs, fsAxis, fsFinal, row, W, H, PAD.top, PAD.right, PAD.bottom]);
 
   if (!model) return null;
-  const { pts, zeroY, d, rise, fall, final, macro } = model;
+  const { pts, zeroY, d, ghostD, rise, fall, final, macro } = model;
+  const ghostFinal = ghost?.length ? ghost[ghost.length - 1].netWorth : null;
   const first = pts[0];
   const last = pts[pts.length - 1];
   const up = last.netWorth >= 0;
@@ -350,7 +381,9 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
         role="img"
         aria-label={`Net worth by year, ${first.year} to ${last.year}, ending at ${final.label}.${
           rise ? ` Biggest one-year rise ${rise.p.year}, ${currency(rise.delta)}.` : ""
-        }${fall ? ` Biggest one-year fall ${fall.p.year}, ${currency(Math.abs(fall.delta))}.` : ""} Marked years are real market events the run lived through.`}
+        }${fall ? ` Biggest one-year fall ${fall.p.year}, ${currency(Math.abs(fall.delta))}.` : ""}${
+          ghostFinal !== null ? ` A dashed second line shows what the same life was worth with ${ghostLabel}, ending at ${currency(ghostFinal)}.` : ""
+        } Marked years are real market events the run lived through.`}
       >
         {/* frame + zero baseline */}
         <line x1={PAD.left} y1={H - PAD.bottom} x2={W - PAD.right} y2={H - PAD.bottom} stroke="var(--color-hairline)" />
@@ -359,6 +392,25 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
             <line x1={PAD.left} y1={zeroY} x2={W - PAD.right} y2={zeroY} stroke="var(--color-ink-dim)" strokeDasharray="2 5" opacity="0.6" />
             <text x={W - PAD.right} y={zeroY - 6} textAnchor="end" className="num" fontSize={fsAxis} fill="var(--color-tertiary)">$0</text>
           </>
+        )}
+
+        {/* The counterfactual, UNDER the life line — the run is the subject and has to
+            read as it. Dashed `--color-ink-dim`: no new hex, 6.05:1 on this chart's
+            bg2 ground, and structurally non-semantic. The other tokens are all spoken
+            for and would say the wrong thing — accent means "here, you, do this",
+            chartreuse is a reward, and gain/loss mean money, which would GRADE the
+            counterfactual. The dash carries it without colour, and it is distinct
+            from both the macro leaders (1 4) and the zero baseline (2 5). It is not
+            drawn in: one line arriving is a ceremony, two racing is a scoreboard. */}
+        {ghostD && (
+          <path
+            d={ghostD}
+            fill="none"
+            stroke="var(--color-ink-dim)"
+            strokeWidth="2"
+            strokeDasharray="6 5"
+            strokeLinejoin="round"
+          />
         )}
 
         {/* the life line */}
@@ -429,6 +481,25 @@ export function AnnotatedLifeChart({ points, className = "" }: { points: LifePoi
           </text>
         </motion.g>
       </svg>
+      {ghostD && (
+        <p className="num mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.7rem] text-secondary">
+          <span className="inline-flex items-center gap-1.5">
+            {/* The swatches are the same primitive as the lines they stand for, so they
+                cannot drift from them — and a dashed rule drawn as SVG rather than as a
+                repeating gradient keeps the ban on decorative gradients intact. */}
+            <svg aria-hidden width="22" height="4" viewBox="0 0 22 4" className="shrink-0">
+              <line x1="0" y1="2" x2="22" y2="2" stroke="var(--color-ink)" strokeWidth="2" />
+            </svg>
+            you
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <svg aria-hidden width="22" height="4" viewBox="0 0 22 4" className="shrink-0">
+              <line x1="0" y1="2" x2="22" y2="2" stroke="var(--color-ink-dim)" strokeWidth="2" strokeDasharray="6 5" />
+            </svg>
+            {ghostLabel}
+          </span>
+        </p>
+      )}
       <p className="mt-2 font-body text-[0.78rem] leading-snug text-secondary">
         Net worth: everything you own minus everything you owe. RISE and FALL mark the biggest
         single-year moves in that line.

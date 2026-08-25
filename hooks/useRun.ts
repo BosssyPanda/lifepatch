@@ -13,6 +13,9 @@ import {
   trade,
   type RunState,
 } from "@/lib/runEngine";
+import { resolveProgressId } from "@/lib/cloud/identity";
+import { writeDaily } from "@/lib/dailySave";
+import { weakSpotIds } from "@/lib/weakSpots";
 import { saveRun } from "@/lib/saves";
 import type { AssetId } from "@/lib/markets";
 import type { LifeChoice } from "@/lib/lifeEvents";
@@ -30,6 +33,8 @@ export type RunOpts = {
   /** Set for a match run: the room owns this run's persistence, and its ending
    *  goes to the podium rather than to the solo recap. */
   matchCode?: string;
+  /** `YYYY-MM-DD` (UTC): this is the Daily Ledger's run for that day. */
+  daily?: string;
 };
 
 export function useRun(userId: string | null) {
@@ -69,6 +74,15 @@ export function useRun(userId: string | null) {
         // put two writers on that one key with only one of them fenced, and which
         // life came back was a race between the tab the player was really in and
         // the tab that was auto-playing itself.
+        return;
+      }
+      // A daily run is `mode: "story"` too, and `lib/saves.ts` is keyed
+      // (userId, mode) — so letting one through here would overwrite the player's
+      // own Story life with the day's puzzle. The fence reads the RUN, not a ref:
+      // a ref can go stale against the state it is supposed to describe, and this
+      // one would do so silently, in the direction that destroys a save.
+      if (r.daily) {
+        writeDaily(r.daily, r);
         return;
       }
       if (!userId) return;
@@ -132,8 +146,20 @@ export function useRun(userId: string | null) {
     start: useCallback(
       (m: ModeId, backgroundId: string, name: string, opts?: RunOpts) => {
         matchCodeRef.current = opts?.matchCode ?? null;
-        // A room deals one card to the whole table; a solo life deals its own.
-        const r = initRun(m, backgroundId, name, opts?.seed, opts?.matchCode != null);
+        // The concepts this player keeps getting wrong, SNAPSHOT at the start of the
+        // run. Read here rather than at each call site so no future entry point can
+        // forget it, and snapshot rather than read live so `drawEvents` stays a pure
+        // function of the run — a live read would make the same seed deal different
+        // cards tomorrow, and every replay and verification would stop holding.
+        //
+        // Never on a match (a per-player bias desynchronises the table — the failure
+        // `drawEvents` measures at 21% of years and $71k of net worth) and never on
+        // the daily (everyone's world has to be identical).
+        const solo = opts?.matchCode == null && !opts?.daily;
+        const r = initRun(m, backgroundId, name, opts?.seed, opts?.matchCode != null, {
+          daily: opts?.daily,
+          weakSpots: solo ? weakSpotIds(resolveProgressId(userId)) : undefined,
+        });
         setMode(m);
         liveRef.current = r;
         setRun(r);
@@ -141,7 +167,7 @@ export function useRun(userId: string | null) {
         void persist(r);
         return r;
       },
-      [persist],
+      [persist, userId],
     ),
 
     resume: useCallback((r: RunState, opts?: RunOpts) => {

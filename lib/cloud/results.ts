@@ -11,12 +11,33 @@ const LIST_KEY = "lifepatch.results";
 const DEFAULT_LIMIT = 25;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-export type LeaderboardScope = "all" | "week" | "friends";
+/**
+ * `daily` is not a mode — the Daily Ledger is a Story run — so it is a RANGE, the
+ * same axis "this week" lives on: it narrows the story board to the rows that were
+ * played on one specific day's puzzle.
+ */
+export type LeaderboardScope = "all" | "week" | "friends" | "daily";
 
 export type TopOptions = {
   scope?: LeaderboardScope;
   friendIds?: string[];
   limit?: number;
+  /**
+   * Narrow the board to one starting background, so a run that began with a
+   * student loan is not ranked against one that began with cash.
+   *
+   * Rows written before the background was recorded carry no `backgroundId` and
+   * are therefore excluded by any value here — correctly: their starting position
+   * is unknown, and guessing one would invent game data. The board says so rather
+   * than quietly dropping them.
+   */
+  backgroundId?: string;
+  /**
+   * `YYYY-MM-DD` (UTC). Required when `scope` is `daily` — the scope alone cannot
+   * pick a day, and defaulting to "today" inside a data module would put a clock
+   * in the middle of a pure query.
+   */
+  daily?: string;
 };
 
 function fromRow(row: Record<string, unknown>): ResultRow {
@@ -94,8 +115,12 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
   const limit = opts.limit ?? DEFAULT_LIMIT;
   const scope = opts.scope ?? "all";
   const friendIds = opts.friendIds ?? [];
+  const background = opts.backgroundId;
+  const daily = opts.daily;
 
   if (scope === "friends" && friendIds.length === 0) return [];
+  // A daily board with no day is not an empty board, it is a broken query.
+  if (scope === "daily" && !daily) return [];
 
   if (isCloud && supabase) {
     let query = supabase
@@ -105,12 +130,20 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
       .order("score", { ascending: false });
     if (scope === "week") query = query.gte("created_at", weekAgoIso());
     if (scope === "friends") query = query.in("user_id", friendIds);
+    // `metrics->>backgroundId` is Postgres' text arrow, which PostgREST exposes as
+    // a filterable column — the filter runs in the database, not over a page of
+    // rows this client happened to fetch. Unindexed by design (no new SQL is
+    // required to run this build); README carries the optional expression index.
+    if (background) query = query.eq("metrics->>backgroundId", background);
+    if (scope === "daily" && daily) query = query.eq("metrics->>daily", daily);
     // Over-fetch so best-per-user dedupe still fills the board.
     const { data } = await query.limit(limit * 5);
     return bestPerUser((data ?? []).map(fromRow)).slice(0, limit);
   }
 
   let rows = readLocal().filter((r) => r.mode === mode);
+  if (background) rows = rows.filter((r) => r.metrics.backgroundId === background);
+  if (scope === "daily") rows = rows.filter((r) => r.metrics.daily === daily);
   if (scope === "week") {
     const cutoff = weekAgoIso();
     rows = rows.filter((r) => r.createdAt >= cutoff);

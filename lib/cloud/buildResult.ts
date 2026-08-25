@@ -1,4 +1,5 @@
-import { netWorth, type RunState } from "../runEngine";
+import { ticketFor, verifyResult } from "../replay";
+import { netWorth, RUN_VERSION, type RunState } from "../runEngine";
 import { deriveVerdict } from "../verdict";
 import {
   hasEscaped,
@@ -15,8 +16,10 @@ import type { GameMode, NewResult } from "./types";
 
 /**
  * Build a leaderboard result row from a finished run. One score per mode so the
- * boards are comparable: net worth for the life sim, passive income for the Rat
- * Race. Extra context rides in `metrics` for the result card + row subtitle.
+ * boards are comparable: net worth for the life sim, net worth plus a year of cash
+ * flow for the Rat Race (see `cashflowScore`, and `lib/scoreLabel.ts` for the words
+ * every surface says about it). Extra context rides in `metrics` for the result
+ * card + row subtitle.
  */
 
 /** Story/Infinite: ranked by final net worth. */
@@ -24,6 +27,7 @@ export function resultFromRun(run: RunState): NewResult {
   const nw = netWorth(run);
   const verdict = deriveVerdict(run);
   const hist = run.history.slice(-100); // cap the stored series for very long infinite runs
+  const ticket = ticketFor(run);
   return {
     mode: run.mode as GameMode,
     score: nw,
@@ -37,6 +41,21 @@ export function resultFromRun(run: RunState): NewResult {
       // /r/[id] share page can draw the annotated life chart.
       history: hist.map((h) => Math.round(h.netWorth)),
       startYear: hist[0]?.year ?? run.startYear,
+      // What this run was, so two rows can be told apart and compared honestly.
+      // `seed` also gives the share lookup a key that cannot collide (two runs of
+      // one mode landing on the same net worth used to fight over one URL).
+      seed: run.seed,
+      backgroundId: run.backgroundId,
+      engine: RUN_VERSION,
+      // The Daily Ledger stays `mode: "story"` — its board is a filter on this
+      // field, not a fourth mode, so the table's own check constraint, its policies
+      // and its index are all untouched.
+      ...(run.daily ? { daily: run.daily } : {}),
+      // Replayed: the run re-simulated, on this device, from its own action log,
+      // and landed on the score it is claiming. Written only when that succeeded —
+      // an absent flag makes no claim either way, which is the honest reading for
+      // a run resumed from a save that predates the log.
+      ...(ticket && verifyResult(ticket, nw) ? { verified: 1 } : {}),
     },
   };
 }

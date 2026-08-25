@@ -11,15 +11,21 @@ import { SoundCell } from "@/components/ui/SoundCell";
 import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
 import { useAudio } from "@/hooks/useAudio";
+import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
+import { resolveProgressId } from "@/lib/cloud/identity";
 import { conceptTitle } from "@/lib/concepts";
 import { ASSETS } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
 import { DEBT_RATE, TAKE_HOME } from "@/lib/economy";
+import { dailyShare, GRID_ROW, gridGlyph, gridSummary } from "@/lib/dailyShare";
+import { ghostFor, GHOST_BUFFER_MONTHS } from "@/lib/replay";
 import { annualExpenses, homeEquity, netWorth, operatingCashFlow, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
+import { eventTeachesAny } from "@/lib/eventConcepts";
+import { rankWeakSpots, readTallies, type WeakSpot } from "@/lib/weakSpots";
 import { STAGGER } from "@/src/motion/tokens";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: STAGGER.list, delayChildren: STAGGER.loose } } };
@@ -166,6 +172,39 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
   onBackToStandings?: () => void }) {
   const { mastery } = useProfile();
   const { runGains } = useConceptLearn();
+  const { user } = useAuth();
+  /**
+   * What keeps going wrong, read after mount.
+   *
+   * The tallies are localStorage, which the server cannot see, and every one of
+   * this run's own outcomes has already been written into them by the time the
+   * report exists — so this is the state INCLUDING the life just finished, which is
+   * what makes the sentence about the next run true.
+   */
+  const [weakSpots, setWeakSpots] = useState<WeakSpot[]>([]);
+  useEffect(() => {
+    setWeakSpots(rankWeakSpots(readTallies(resolveProgressId(user?.id ?? null))));
+  }, [user]);
+  /**
+   * How many of this run's cards were actually about a weak spot — counted, not
+   * claimed. The bias makes those cards LIKELIER; it does not guarantee one was
+   * ever dealt, so the sentence below states the deck's weighting (true by
+   * construction) and only quotes a figure when the journal can back it. A run
+   * resumed from a save that predates the journal quotes nothing.
+   */
+  const [dealtCards, biasedCards] = useMemo(() => {
+    const weak = run.weakSpots;
+    if (!weak?.length || !run.journal) return [0, 0];
+    let dealt = 0;
+    let biased = 0;
+    for (const y of run.journal) {
+      for (const id of y.deal) {
+        dealt++;
+        if (eventTeachesAny(id, weak)) biased++;
+      }
+    }
+    return [dealt, biased];
+  }, [run.weakSpots, run.journal]);
   const { setBrainGlow } = useAudio();
   const [shareOpen, setShareOpen] = useState(false);
   const shareUrl = useShareUrl(run);
@@ -190,6 +229,17 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
   const klass = deriveVerdict(run);
 
   const hist = run.history;
+  // The counterfactual: the same life, the same cards, the same choices — only the
+  // money moved differently. Null for a run that cannot be replayed (a save from
+  // before the engine journalled, or one that came back from a room), and the
+  // section simply does not render rather than printing a gap it cannot compute.
+  const ghost = useMemo(() => ghostFor(run), [run]);
+  // A daily run also gets the grid: one cell per year, you against that ghost.
+  // Null for every other run, and for a daily whose ghost could not be built.
+  //
+  // Rebuilt when `shareUrl` resolves. `useShareUrl` starts at the bare origin and
+  // upgrades to this run's own statement link a second or two later, so a block
+  // built once at mount would put the wrong URL on every clipboard.
   const firstYear = hist[0]?.year ?? run.startYear;
   const lastYear = hist[hist.length - 1]?.year ?? run.startYear;
   const best = [...hist].sort((a, b) => b.portfolioDelta - a.portfolioDelta)[0];
@@ -209,6 +259,8 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
 
   // Rebuilt every render, this redrew ShareCard's whole 1080×1920 canvas on every
   // parent tick — and this screen has running counters.
+  const share = useMemo(() => dailyShare(run, shareUrl), [run, shareUrl]);
+
   const shareData = useMemo(
     () => ({
       verdict: klass.title,
@@ -281,9 +333,38 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
         {hist.length > 1 && (
           <motion.div variants={item}>
             <SectionLabel>Net worth, year by year</SectionLabel>
-            <AnnotatedLifeChart points={hist.map((h) => ({ year: h.year, netWorth: h.netWorth }))} />
+            <AnnotatedLifeChart
+              points={hist.map((h) => ({ year: h.year, netWorth: h.netWorth }))}
+              ghost={ghost?.points}
+            />
           </motion.div>
         )}
+
+        {/* The gap. Gain/loss is the RIGHT channel here and the only place in this
+            feature it appears: the difference is money, which is what those two
+            colours are for. `currency` prints U+2212 for a negative, so the sign
+            carries it without the hue. Signed from the player's side — green means
+            you beat it. */}
+        {ghost && (
+          <motion.div variants={item}>
+            <SectionLabel>The other version of this life</SectionLabel>
+            <LedgerRow label="You ended with" value={currency(nw)} strong />
+            <LedgerRow label="Every spare dollar in the index" value={currency(ghost.final)} />
+            <LedgerRow
+              label="The difference"
+              value={currency(nw - ghost.final)}
+              tone={nw - ghost.final >= 0 ? "text-gain" : "text-loss"}
+            />
+            <p className="voice mt-3 text-[0.95rem] leading-snug text-secondary">
+              {ghost.truncated
+                ? `The other version ran out of road before you did — there is nothing to compare after ${ghost.points[ghost.points.length - 1].year}.`
+                : `Same life, same cards, same choices, and the same payments to your debt — only what was left over moved differently. ${GHOST_BUFFER_MONTHS} months of costs stay in cash; everything above that goes into the index, every year.`}
+            </p>
+          </motion.div>
+        )}
+
+        {/* the daily's grid — right after the ghost it is built from */}
+        {share && <DailyGrid share={share} />}
 
         {/* final portfolio */}
         <motion.div variants={item}>
@@ -354,6 +435,44 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
           </button>
         </motion.div>
 
+        {/* Weak spots.
+            In the INK scale, not chartreuse: that hue has exactly four sanctioned
+            homes (the streak chip, the Money Brain meter, the mastery ticks and the
+            concept toast) and a fifth is a contract change, not a styling choice.
+            Not loss-red either — this is a gap, not a loss, and the register the
+            house uses for a gap names it without scolding. */}
+        {(weakSpots.length > 0 || (run.weakSpots?.length ?? 0) > 0) && (
+          <motion.div variants={item}>
+            <SectionLabel>Weak spots</SectionLabel>
+            {run.weakSpots && run.weakSpots.length > 0 && (
+              <p className="font-body text-[0.9rem] leading-snug text-secondary">
+                This run&rsquo;s deck was already weighted toward{" "}
+                <span className="text-ink">{run.weakSpots.map(conceptTitle).join(" and ")}</span>
+                {biasedCards ? ` — ${biasedCards} of the ${dealtCards} cards it dealt you were about them` : ""}.
+              </p>
+            )}
+            {weakSpots.length > 0 && (
+              <>
+                <div className={run.weakSpots?.length ? "mt-3" : ""}>
+                  {weakSpots.map((w) => (
+                    <LedgerRow
+                      key={w.conceptId}
+                      label={conceptTitle(w.conceptId)}
+                      value={`${w.tally.miss} of ${w.tally.hit + w.tally.miss} went badly`}
+                      size="0.82rem"
+                    />
+                  ))}
+                </div>
+                <p className="voice mt-3 text-[0.95rem] leading-snug text-secondary">
+                  {weakSpots.length === 1
+                    ? "This is the concept your decisions keep going wrong on. Your next run will deal more cards about it — the deck knows, and now so do you."
+                    : "These are the two concepts your decisions keep going wrong on. Your next run will deal more cards about them — the deck knows, and now so do you."}
+                </p>
+              </>
+            )}
+          </motion.div>
+        )}
+
         {/* actions */}
         <motion.div variants={item} className="mt-8 flex flex-wrap gap-3 border-t border-hairline pt-6">
           {onBackToStandings && (
@@ -361,8 +480,11 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
               ← Back to the standings
             </NeonButton>
           )}
+          {/* "Run it back" is a lie on a daily statement: today's world is spent, and
+              this button starts a fresh Story run with its own random seed. It says
+              so rather than implying a second attempt at the same puzzle. */}
           <NeonButton variant="primary" size="lg" onClick={onReplay}>
-            <ReplayIcon size={18} /> Run it back
+            <ReplayIcon size={18} /> {run.daily ? "Start a fresh Story run" : "Run it back"}
           </NeonButton>
           <NeonButton variant="secondary" size="lg" onClick={() => setShareOpen(true)}>Share ↗</NeonButton>
           <NeonButton variant="secondary" size="md" onClick={onAlmanac}>Almanac</NeonButton>
@@ -372,5 +494,77 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
 
       {shareOpen && <ShareCard data={shareData} onClose={() => setShareOpen(false)} />}
     </div>
+  );
+}
+
+/**
+ * The daily's grid: one cell per year, you against your own index ghost.
+ *
+ * The glyphs differ in SHAPE — filled triangle up, bar, filled triangle down — not
+ * in colour, because this block exists to be pasted into places that strip every
+ * bit of styling, and because a coloured square would carry no meaning at all in
+ * monochrome. They are rendered in the ink scale for the same reason: gain and loss
+ * green/red would read as "the market went up", and the cell says nothing of the
+ * kind. It says how YOU did against it.
+ *
+ * The text on the clipboard and the text on screen come from one function
+ * (`lib/dailyShare.ts`), so the grid a player sees and the grid they paste cannot
+ * drift apart.
+ */
+function DailyGrid({ share }: { share: NonNullable<ReturnType<typeof dailyShare>> }) {
+  const { sfx } = useAudio();
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(share.text);
+      setCopied(true);
+      sfx("uitick");
+    } catch {
+      // No clipboard API, or no permission. The grid is selectable text right there.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <motion.div variants={item}>
+      <SectionLabel>Daily Ledger · No. {share.number}</SectionLabel>
+      {/* One figure, one label. The glyphs themselves are hidden from assistive tech
+          — read out, they are twenty-one geometry names and no meaning — and the
+          count they encode is what the label says instead.
+
+          A real CSS grid rather than a letter-spaced string: U+25AC (▬) is a wide
+          glyph, and six level years in a row fused into one continuous bar that
+          could not be counted. One cell per column, fixed width, so the block reads
+          as a grid at any zoom and matches the spaced text on the clipboard. */}
+      <figure role="img" aria-label={gridSummary(share.cells)} className="m-0 mt-3">
+        <div
+          className="grid w-max gap-x-2.5 gap-y-1.5"
+          style={{ gridTemplateColumns: `repeat(${GRID_ROW}, 1.1rem)` }}
+        >
+          {share.cells.map((c, i) => (
+            <span key={i} aria-hidden className="num text-center text-[1.05rem] leading-none text-ink">
+              {gridGlyph(c)}
+            </span>
+          ))}
+        </div>
+      </figure>
+      <p className="voice mt-3 text-[0.92rem] text-secondary">
+        ▲ ahead of the index that year · ▬ level · ▼ behind. No calendar years, so it
+        spoils nothing for anyone still playing today.
+      </p>
+      {share.ungraded > 0 && (
+        <p className="voice mt-1 text-[0.92rem] text-secondary">
+          {share.ungraded === 1 ? "Your last year has" : `Your last ${share.ungraded} years have`}{" "}
+          no cell: the index version of this life went under before you did, so after that
+          there was nothing left to measure you against.
+        </p>
+      )}
+      <div className="mt-4">
+        <NeonButton variant="secondary" size="md" onClick={copy}>
+          {copied ? "Copied ✓" : "Copy the grid"}
+        </NeonButton>
+      </div>
+    </motion.div>
   );
 }

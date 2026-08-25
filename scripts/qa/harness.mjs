@@ -84,6 +84,25 @@ export class Run {
     return this.page;
   }
 
+  /**
+   * Wait until the title screen actually owns the landing.
+   *
+   * `skipIntro` promotes a returning visitor past the Gate, but the promotion is an
+   * effect and `AnimatePresence` crossfades the Gate out rather than unmounting it —
+   * so for a few hundred milliseconds after boot the Gate's own BEGIN is still
+   * hittable. A journey that clicks on a fixed timer catches it perhaps one run in
+   * three, restarts the cold open, and then reports every screen after it as
+   * missing. Every journey that starts from the landing waits on this first.
+   */
+  async settle({ timeout = 15_000 } = {}) {
+    const ok = await this.page
+      .waitForFunction(() => !document.body.innerText.includes("Best with sound"), null, { timeout })
+      .then(() => true)
+      .catch(() => false);
+    if (!ok) this.finding("HIGH", "landing", "the title never replaced the gate");
+    return ok;
+  }
+
   /** Screenshot + scan the visible text for poison values. */
   async snap(label) {
     const file = path.join(SHOT_DIR, `${this.name}-${label}.png`);
@@ -116,6 +135,24 @@ export class Run {
     if (!(await el.isEnabled().catch(() => false))) return false;
     // a swallowed click looks identical to a successful one, which makes a stuck
     // overlay read as progress — report the failure instead
+    let ok = true;
+    await el.click({ timeout }).catch((e) => {
+      ok = false;
+      this.lastClickError = `${name}: ${String(e.message ?? e).split("\n")[0].slice(0, 160)}`;
+    });
+    await this.page.waitForTimeout(wait);
+    return ok;
+  }
+
+  /**
+   * Click a tab by accessible name. `LedgerTabs` renders `role="tab"`, not
+   * `button` — `click()` above looks only for buttons and silently found nothing,
+   * which reads in a journey exactly like a tab that does not exist.
+   */
+  async clickTab(name, { wait = 900, timeout = 6000 } = {}) {
+    const el = this.page.getByRole("tab", { name: typeof name === "string" ? new RegExp(name, "i") : name }).first();
+    if (!(await el.count())) return false;
+    if (!(await el.isVisible().catch(() => false))) return false;
     let ok = true;
     await el.click({ timeout }).catch((e) => {
       ok = false;

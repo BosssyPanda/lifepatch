@@ -15,6 +15,9 @@ The game is fully playable out of the box — with no configuration it uses a lo
 
 ## Modes
 
+- **Daily Ledger** — one seeded world a day, the same one for everybody: same markets,
+  same cards, same opening. One attempt, then a spoiler-free grid of how each of your
+  years went against the index.
 - **Story** — 1990 → 2010. A finite run through the dot-com boom/bust and the 2008 crash, ending in a report.
 - **Infinite** — 1957 → today. Live a whole lifetime until you retire, quit, or your number comes up. Autosaves every year.
 
@@ -37,6 +40,25 @@ rooms table. See [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
 
 On a hosted deploy, `NEXT_PUBLIC_*` values are inlined at **build** time — setting
 them in your host's dashboard takes effect only on the next deploy.
+
+### Optional index for the segmented boards
+
+The leaderboard can narrow to one starting background or to today's Daily Ledger,
+and a run's share link is found by its seed. All three filter inside `metrics`,
+which PostgREST exposes as a real column (`metrics->>backgroundId`), so
+**`schema.sql` covers everything and nothing here is required**. If the `results` table ever grows past the point where those
+filters are comfortable, two expression indexes are the fix:
+
+```sql
+create index if not exists results_background_idx
+  on public.results ((metrics->>'backgroundId'));
+create index if not exists results_seed_idx
+  on public.results (user_id, (metrics->>'seed'));
+create index if not exists results_daily_idx
+  on public.results ((metrics->>'daily'), score desc);
+```
+
+Safe to run at any time on a live table.
 
 ## Notes
 

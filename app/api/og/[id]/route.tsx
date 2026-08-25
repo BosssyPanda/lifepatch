@@ -146,7 +146,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const hex = verdictHex(row.verdict);
   const isCash = row.mode === "cashflow";
-  const scoreLabel = isCash ? "PASSIVE INCOME / MO" : "FINAL NET WORTH";
+  // Not "PASSIVE INCOME / MO": the Rat Race score is net worth plus a year of
+  // cash flow (lib/scoreLabel.ts), and the `/mo` printed it as a wage.
+  const scoreLabel = isCash ? "RAT RACE SCORE" : "FINAL NET WORTH";
   const scoreColor = isCash ? (Number(row.metrics?.escaped) === 1 ? GAIN : SECONDARY) : row.score >= 0 ? GAIN : LOSS;
   const score = currency(row.score);
 
