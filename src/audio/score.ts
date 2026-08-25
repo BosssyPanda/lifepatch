@@ -1010,6 +1010,28 @@ export const VELOCITY = {
  *
  * 9 kHz rather than the snare's 12: a room tone has no transient to protect.
  */
+/**
+ * Which 2-bar segment of the harmonic cycle a transport tick lands in.
+ *
+ * The modulo has to be the positive kind, and that is not pedantry — it is a
+ * crash that reached a QA journey. JavaScript's `%` keeps the sign of its left
+ * operand, so a negative tick reading yields a negative index, `CHORDS[-1]` is
+ * `undefined`, and spreading it throws
+ * `CHORDS[seg] is not iterable` out of the harmony loop, killing the callback.
+ *
+ * Ticks go negative for a real and deliberate reason. The Transport keeps
+ * running across an engine teardown (see `transportOwner`), so an engine
+ * rebuilt by a Fast Refresh or a StrictMode remount inherits one already
+ * mid-cycle, and a loop re-scheduled at `.start(0)` against that transport can
+ * be asked for the position of a time that precedes its origin. Wrapping is
+ * also the musically correct answer: the cycle is a loop, so a moment "before"
+ * segment 0 is the last segment, not an error.
+ */
+export function segmentAtTicks(ticks: number, ticksPerSegment: number, segments: number): number {
+  const raw = Math.floor(ticks / ticksPerSegment) % segments;
+  return raw < 0 ? raw + segments : raw;
+}
+
 export const AMBIENCE_CEILING_HZ = 9000;
 
 export const STINGER_PRIMITIVES = {

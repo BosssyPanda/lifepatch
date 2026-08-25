@@ -21,6 +21,23 @@
 // compiled out of production builds by design, so against `npm start` every
 // assertion below reports the engine as absent rather than as broken.
 //
+// WHY THIS JOURNEY DOES NOT CALL `run.settle()`, ALONE AMONG THE SIX.
+//
+// Every other journey opens with `settle()`, which waits for the Gate to stop
+// being on screen — the fix for `skipIntro` promoting a returning visitor past
+// a Gate that `AnimatePresence` is still crossfading out. This one opens with
+// `skipIntro: false` and WANTS the Gate, because clicking its BEGIN is the
+// trusted user gesture that boots the engine, and the first assertion below is
+// that no engine exists before it. Waiting for the Gate to disappear first
+// would wait for something only that click can cause: the journey would hang
+// its full timeout and then report a HIGH about a Gate that was working
+// correctly. The difference is deliberate; do not "fix" it by adding settle().
+//
+// The engine-build bootstrap the other journeys gained does not apply either:
+// nothing here imports the compiled engine. This drives the real browser and
+// reads `window.__lpAudio`, so the code under test is whatever the dev server
+// is serving, which cannot go stale.
+//
 // Exits non-zero on any HIGH finding or console error.
 import { Run, DESKTOP } from "./harness.mjs";
 

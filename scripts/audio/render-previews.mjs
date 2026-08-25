@@ -34,6 +34,7 @@ import {
   MIX, POLYPHONY, VELOCITY, STINGER_PRIMITIVES, SFX_PRIMITIVES, stingerSoundingSec,
   SCORE_BPM_REF, BEATS_PER_BAR, BARS_PER_SEGMENT, SECONDS_PER_BAR, SECONDS_PER_BEAT,
   CYCLE_SECONDS, SAMPLES_PER_BEAT_44K1, BARS_PER_CYCLE,
+  segmentAtTicks,
 } from "../../src/audio/score.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -340,6 +341,30 @@ page.on("console", (m) => { if (m.type() === "error") pageErrors.push(m.text());
 await page.goto("about:blank");
 await page.addScriptTag({ content: readFileSync(TONE_BUNDLE, "utf8") });
 await page.addScriptTag({ content: readFileSync(path.join(HERE, "score-graph.js"), "utf8") });
+
+// The graph builder keeps its own copy of `segmentAtTicks` because functions do
+// not survive `page.evaluate`'s structured clone. Prove the copy still agrees
+// with the real one before rendering a single sample — including the negative
+// ticks that made the engine throw `CHORDS[seg] is not iterable` when a
+// Fast Refresh handed it a transport already mid-cycle.
+{
+  const cases = [[0, 384, 8], [383, 384, 8], [384, 384, 8], [3071, 384, 8], [3072, 384, 8],
+                 [-1, 384, 8], [-384, 384, 8], [-385, 384, 8], [-3072, 384, 8], [-3073, 384, 8]];
+  const theirs = await page.evaluate((cs) => cs.map((c) => window.__segmentAtTicks(...c)), cases);
+  const mine = cases.map((c) => segmentAtTicks(...c));
+  const bad = cases
+    .map((c, i) => (theirs[i] === mine[i] ? null : `segmentAtTicks(${c.join(", ")}): graph ${theirs[i]}, score ${mine[i]}`))
+    .filter(Boolean);
+  if (bad.length) {
+    console.error("score-graph.js has drifted from src/audio/score.ts:");
+    for (const b of bad) console.error(`  ${b}`);
+    process.exit(1);
+  }
+  if (mine.some((v) => !Number.isInteger(v) || v < 0 || v >= 8)) {
+    console.error(`segmentAtTicks returned an out-of-range segment: ${JSON.stringify(mine)}`);
+    process.exit(1);
+  }
+}
 
 const toneVersion = await page.evaluate(() => window.Tone?.version);
 if (!toneVersion) throw new Error("Tone.js failed to load in the render page");

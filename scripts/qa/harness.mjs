@@ -70,6 +70,18 @@ export class Run {
       }, Object.entries(seedStorage));
     }
 
+    // Vercel's Analytics and Speed Insights scripts are third-party telemetry
+    // loaded from va.vercel-scripts.com. They cannot be reached from a sandboxed
+    // or offline runner, and when they fail Chromium logs a bare "Failed to load
+    // resource: net::ERR_TUNNEL_CONNECTION_FAILED" with NO URL in the text — so
+    // there is nothing for IGNORED_CONSOLE to match on that would not also hide a
+    // genuine asset failure. Every journey then reports phantom console errors
+    // for a CDN that is not under test: smoke logged four, audio-integration
+    // failed outright on two. Serving them as an empty 200 removes the failure
+    // instead of hiding it, and leaves real load errors as loud as they were.
+    await this.page.route(/va\.vercel-scripts\.com/, (route) =>
+      route.fulfill({ status: 200, contentType: "application/javascript", body: "" }));
+
     this.page.on("console", (m) => {
       if (m.type() !== "error" && m.type() !== "warning") return;
       const text = m.text();

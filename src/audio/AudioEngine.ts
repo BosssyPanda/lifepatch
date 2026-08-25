@@ -11,6 +11,7 @@ import {
   STING_TONES, SWELL_STEM, TICKS_PATTERN, TICK_STAMP_BARS, VELOCITY, VOICES, rampGain,
   type IntensityRamp, type StemId, type StingerSpec, type StingerTimbre,
   AMBIENCE_CEILING_HZ,
+  segmentAtTicks,
 } from "./score";
 
 /**
@@ -390,7 +391,7 @@ export class AudioEngine {
     // the result is a march playing its own harmony against its own melody.
     const ticksPerSegment = t.PPQ * BEATS_PER_BAR * BARS_PER_SEGMENT;
     const harmonyLoop = new Tone.Loop((time) => {
-      const seg = Math.floor(t.getTicksAtTime(time) / ticksPerSegment) % CHORDS.length;
+      const seg = segmentAtTicks(t.getTicksAtTime(time), ticksPerSegment, CHORDS.length);
       this.brass.triggerAttackRelease([...CHORDS[seg]], "2m", time, VELOCITY.brass);
       this.sub.triggerAttackRelease(ROOTS[seg], "2m", time, VELOCITY.sub);
       this.counter.triggerAttackRelease(COUNTER_LINE[seg], COUNTER_NOTE_VALUE, time, VELOCITY.counter);

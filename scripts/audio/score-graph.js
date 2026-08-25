@@ -16,6 +16,24 @@
 
 (function () {
   /**
+   * Mirror of `segmentAtTicks` in src/audio/score.ts.
+   *
+   * It has to be duplicated rather than imported: `score` reaches this file
+   * through `page.evaluate`, which structured-clones its argument, and
+   * structured clone drops functions. Reading `score.segmentAtTicks` here would
+   * be `undefined` at run time — data crosses that boundary, code does not.
+   *
+   * The duplication is guarded rather than trusted: `render-previews.mjs`
+   * exercises this copy against the real one over a table of inputs, negative
+   * ticks included, and refuses to render if they ever disagree.
+   */
+  function segmentAtTicks(ticks, ticksPerSegment, segments) {
+    const raw = Math.floor(ticks / ticksPerSegment) % segments;
+    return raw < 0 ? raw + segments : raw;
+  }
+  window.__segmentAtTicks = segmentAtTicks;
+
+  /**
    * Build the whole score into `bus`, with each stem's gain preset from
    * `gains`, and return nothing — the caller starts the transport.
    */
@@ -175,7 +193,7 @@
     const transport = Tone.getTransport();
     const ticksPerSegment = transport.PPQ * score.BEATS_PER_BAR * score.BARS_PER_SEGMENT;
     new Tone.Loop((time) => {
-      const seg = Math.floor(transport.getTicksAtTime(time) / ticksPerSegment) % score.CHORDS.length;
+      const seg = segmentAtTicks(transport.getTicksAtTime(time), ticksPerSegment, score.CHORDS.length);
       brass.triggerAttackRelease(score.CHORDS[seg], "2m", time, VEL.brass);
       sub.triggerAttackRelease(score.ROOTS[seg], "2m", time, VEL.sub);
       counter.triggerAttackRelease(score.COUNTER_LINE[seg], score.COUNTER_NOTE_VALUE, time, VEL.counter);
