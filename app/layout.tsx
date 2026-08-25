@@ -1,3 +1,5 @@
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { PALETTE } from "@/lib/palette";
 import type { Metadata, Viewport } from "next";
 import { Anton, IBM_Plex_Mono, Instrument_Serif, Archivo } from "next/font/google";
@@ -68,6 +70,8 @@ export default function RootLayout({
             shared statement link carrying chart history rendered a crash instead of a page.
             Passing `children` through keeps every route's server components server-rendered. */}
         <MotionProvider>{children}</MotionProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
