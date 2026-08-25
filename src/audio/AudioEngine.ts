@@ -289,20 +289,26 @@ export class AudioEngine {
     // --- snare: noise crack + tuned body, high-passed to leave the low end
     //     to the bass (noise alone is a "tss", tone alone is a tom) ---
     const snareHP = new Tone.Filter(V.snare.highpass, "highpass").connect(this.stems.snare);
+    // The ceiling goes on the crack alone: unbounded noise up there is hiss, not
+    // drum. The body bypasses it — see VOICES.snare.
+    const snareLP = new Tone.Filter(V.snare.noise.ceilingHz, "lowpass").connect(snareHP);
     this.snareNoise = new Tone.NoiseSynth({
       noise: { type: V.snare.noise.type },
       envelope: { attack: V.snare.noise.attack, decay: V.snare.noise.decay, sustain: 0 },
       volume: V.snare.noise.volume,
-    }).connect(snareHP);
+    }).connect(snareLP);
     this.snareBody = new Tone.Synth({
       oscillator: { type: V.snare.body.type },
       envelope: { attack: V.snare.body.attack, decay: V.snare.body.decay, sustain: 0 },
       volume: V.snare.body.volume,
     }).connect(snareHP);
-    this.musicNodes.push(snareHP);
+    this.musicNodes.push(snareHP, snareLP);
 
     // --- ticks: typewriter clacks, the 4-bar stamp, the carriage-return bell ---
-    const tickHP = new Tone.Filter(V.tick.highpass, "highpass").connect(this.stems.ticks);
+    // The clack runs high-pass -> low-pass. The ceiling is what makes it a
+    // typewriter instead of a hiss; see VOICES.tick for the measurement.
+    const tickLP = new Tone.Filter(V.tick.band.lowpassHz, "lowpass").connect(this.stems.ticks);
+    const tickHP = new Tone.Filter(V.tick.band.highpassHz, "highpass").connect(tickLP);
     this.tick = new Tone.NoiseSynth({
       noise: { type: V.tick.noise.type },
       envelope: { attack: V.tick.attack, decay: V.tick.decay, sustain: 0 },
@@ -318,7 +324,7 @@ export class AudioEngine {
       envelope: { attack: V.carriageDing.attack, decay: V.carriageDing.decay, sustain: 0 },
       volume: V.carriageDing.volume,
     }).connect(this.stems.ticks);
-    this.musicNodes.push(tickHP);
+    this.musicNodes.push(tickHP, tickLP);
 
     // --- tension: two saws a minor second apart (D2 + Eb2) under a slow filter
     //     LFO. min/max fully define the cutoff — connecting a signal to
@@ -647,7 +653,10 @@ export class AudioEngine {
           break;
         }
         case "noise": {
-          const f = new Tone.Filter(layer.highpassHz, "highpass").connect(bus);
+          // band, not a bare high-pass: the ceiling is what stops the impact
+          // reading as a hiss burst. See STINGER_PRIMITIVES.noise.
+          const lp = new Tone.Filter(STINGER_PRIMITIVES.noise.ceilingHz, "lowpass").connect(bus);
+          const f = new Tone.Filter(layer.highpassHz, "highpass").connect(lp);
           const n = new Tone.NoiseSynth({
             noise: { type: "white" },
             envelope: { attack: STINGER_PRIMITIVES.noise.attack, decay: layer.durationSec, sustain: 0 },
@@ -655,18 +664,20 @@ export class AudioEngine {
           }).connect(f);
           n.triggerAttackRelease(layer.durationSec, t0);
           this.disposeLater(n, layer.durationSec + 1); this.disposeLater(f, layer.durationSec + 1.1);
+          this.disposeLater(lp, layer.durationSec + 1.2);
           break;
         }
         case "ruff": {
           const R = STINGER_PRIMITIVES.ruff;
-          const hp = new Tone.Filter(R.highpassHz, "highpass").connect(bus);
+          const rlp = new Tone.Filter(R.ceilingHz, "lowpass").connect(bus);
+          const hp = new Tone.Filter(R.highpassHz, "highpass").connect(rlp);
           const s = new Tone.NoiseSynth({
             noise: { type: "white" },
             envelope: { attack: 0.001, decay: R.decaySec, sustain: 0 },
             volume: layer.volume,
           }).connect(hp);
           layer.velocities.forEach((v, i) => s.triggerAttackRelease(R.decaySec, t0 + i * layer.stepSec, v));
-          this.disposeLater(s, 2.5); this.disposeLater(hp, 2.6);
+          this.disposeLater(s, 2.5); this.disposeLater(hp, 2.6); this.disposeLater(rlp, 2.7);
           break;
         }
       }

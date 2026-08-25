@@ -512,12 +512,19 @@ export const GRIDS = {
  * Target gain per stem per phase — the whole dramaturgy of the score in one
  * table. A phase change ramps these; nothing is ever started or stopped.
  *
+ * `menu` and `gameplay` sit 3 dB higher than they first did. Measured, the
+ * in-game bed was 7.4 dB under the title theme (-26.1 against -18.7 LUFS) —
+ * the "anthem up front" shape working, but overshooting it: at that distance
+ * the music does not read as having stepped back, it reads as having left. The
+ * step is applied as one multiplier across the whole row so the balance inside
+ * each phase is untouched; only the distance from the anthem changes.
+ *
  * - `intro` — the cold open. No tune at all (`lead: 0`): the theme has not been
  *   earned yet, so the player only gets machinery and dread. `tension` is the
  *   loudest it ever is outside a bad ending.
  * - `title` — the anthem. Lead wide open at 0.7, brass up, counter joining, no
  *   tension anywhere. This is the one moment the march is unambiguously heroic.
- * - `menu` — the same anthem heard from the next room. Lead drops to 0.15 and
+ * - `menu` — the same anthem heard from the next room. Lead drops to 0.21 and
  *   the piano takes the foreground; snare and ticks pull almost all the way back
  *   so nobody is being marched at while reading UI copy.
  * - `gameplay` — chill and focused by default: no tune (it would compete with
@@ -525,17 +532,24 @@ export const GRIDS = {
  *   `INTENSITY_RULES` to bring it in as financial stress rises.
  * - `recapGood` — hopeful: lead and counter both up, piano at its richest,
  *   tension gone.
- * - `recapBad` — dramatic: no tune, tension at 0.55, brass and bass carrying it.
+ * - `recapBad` — dramatic: no tune, tension at 0.36, brass and bass carrying it.
  *   The march is still there; the player is just not the one leading it.
  *
  * `air` is 0.06 in every phase on purpose. It is the glue — the reason silence
  * in this game sounds like a room rather than like a dropped audio context.
+ *
+ * It is also the one stem that did NOT move when `menu` and `gameplay` were
+ * lifted 3 dB. Everything else in those two rows was multiplied by the same
+ * factor, which is what keeps a level change from quietly becoming a remix; the
+ * room tone stayed put because it is a noise floor, and a noise floor that
+ * follows the music up is just a worse signal-to-noise ratio wearing a costume.
+ * Holding it still means the louder in-game bed is also a cleaner one.
  */
 export const PRESETS = {
   intro:     { bass: 0.38, brass: 0.45, keys: 0.24, snare: 0.45, ticks: 0.3,  lead: 0,    tension: 0.32, air: 0.06, counter: 0    },
   title:     { bass: 0.5,  brass: 0.55, keys: 0.3,  snare: 0.5,  ticks: 0.3,  lead: 0.7,  tension: 0,    air: 0.06, counter: 0.25 },
-  menu:      { bass: 0.35, brass: 0.3,  keys: 0.45, snare: 0.12, ticks: 0.12, lead: 0.15, tension: 0,    air: 0.06, counter: 0.15 },
-  gameplay:  { bass: 0.26, brass: 0.28, keys: 0.5,  snare: 0.12, ticks: 0.1,  lead: 0,    tension: 0,    air: 0.06, counter: 0    },
+  menu:      { bass: 0.49, brass: 0.42, keys: 0.64, snare: 0.17, ticks: 0.17, lead: 0.21, tension: 0,    air: 0.06, counter: 0.21 },
+  gameplay:  { bass: 0.37, brass: 0.4,  keys: 0.71, snare: 0.17, ticks: 0.14, lead: 0,    tension: 0,    air: 0.06, counter: 0    },
   recapGood: { bass: 0.45, brass: 0.5,  keys: 0.5,  snare: 0.35, ticks: 0.2,  lead: 0.55, tension: 0,    air: 0.06, counter: 0.5  },
   recapBad:  { bass: 0.38, brass: 0.35, keys: 0.3,  snare: 0.3,  ticks: 0.1,  lead: 0,    tension: 0.36, air: 0.06, counter: 0    },
 } as const satisfies Record<ScorePhaseId, Record<StemId, number>>;
@@ -568,7 +582,7 @@ export interface IntensityRamp {
  * it is the same material leaning on the player harder, which is why it never
  * feels like the game changed soundtrack mid-thought.
  *
- * The bass barely moves (0.26 -> 0.33 across the whole range), and that is a
+ * The bass barely moves (0.37 -> 0.48 across the whole range), and that is a
  * correction. It used to climb to 0.52 while the piano fell to 0.29, on the
  * theory that "heavier" means "more low end". Measured, that made the stressed
  * bed the most low-tilted mix in the game by a wide margin — the player got
@@ -585,11 +599,11 @@ export interface IntensityRamp {
  */
 export const INTENSITY_RULES = {
   gameplay: {
-    bass:    { base: 0.26, perIntensity: 0.08 },
-    keys:    { base: 0.5,  perIntensity: -0.1 },
-    snare:   { base: 0.12, perIntensity: 0.3 },
-    ticks:   { base: 0.1,  perIntensity: 0.25 },
-    tension: { base: 0,    perIntensity: 0.7, threshold: 0.45 },
+    bass:    { base: 0.37, perIntensity: 0.11 },
+    keys:    { base: 0.71, perIntensity: -0.14 },
+    snare:   { base: 0.17, perIntensity: 0.42 },
+    ticks:   { base: 0.14, perIntensity: 0.35 },
+    tension: { base: 0,    perIntensity: 0.99, threshold: 0.45 },
   },
   intro: {
     snare:   { base: 0.45, perIntensity: 0.3 },
@@ -738,24 +752,64 @@ export const VOICES = {
    * the drum under it, both high-passed at 400 Hz so the low end stays the
    * bass's. Two layers rather than one because a noise-only snare is a "tss" and
    * a tone-only snare is a tom.
+   *
+   * `ceilingHz` is on the CRACK only, and it is the same correction the
+   * typewriter clack needed — found second, because the clack was the louder
+   * suspect and turned out not to be the culprit. Measured as energy density on
+   * the soloed stem, this snare was DEAD FLAT from 500 Hz to 20 kHz: −2.3 dB at
+   * 2–4 kHz and −2.8 dB at 12–16 kHz, a slope of −0.6 dB across the entire top
+   * end. That is not a drum, that is white noise with an envelope on it. It also
+   * sits at a higher fader than the ticks in every phase and was lifted 9 dB in
+   * the mix fix, which makes it — not the clack — the loudest broadband hiss in
+   * the score, and the best remaining candidate for the "scrapey" complaint.
+   *
+   * 12 kHz is deliberately generous. A snare's crack lives at 2–8 kHz and its
+   * brightness at 8–12 kHz; a real one has rolled well off by 16 kHz. Cutting
+   * here removes the octave nobody hears as a drum and everybody hears as hiss,
+   * and leaves the transient untouched. The body is not filtered — it is a
+   * 220 Hz triangle with nothing up there to lose.
    */
   snare: {
-    noise: { type: "white", attack: 0.001, decay: 0.09, volume: -9 },
+    noise: { type: "white", attack: 0.001, decay: 0.09, volume: -9, ceilingHz: 12000 },
     body: { type: "triangle", frequency: 220, attack: 0.001, decay: 0.12, volume: -15 },
     highpass: 400,
   },
 
   /**
-   * The typewriter clack: a 12 ms noise click through a high-pass at 4800 Hz.
-   * (The 4800 is the FILTER cutoff, not an oscillator pitch — the clack has no
-   * pitch class, which is what keeps it out of the harmony.)
+   * The typewriter clack: a 12 ms noise click through a 3–9 kHz BAND rather
+   * than a bare high-pass. (Both numbers are FILTER cutoffs, not oscillator
+   * pitches — the clack has no pitch class, which is what keeps it out of the
+   * harmony.)
+   *
+   * The ceiling is the whole point, and it is a correction. This was a lone
+   * high-pass at 4800 Hz, and white noise above a high-pass keeps going to
+   * Nyquist: what came out was not a clack but a hiss with an attack on it.
+   * Measured on the soloed stem, energy was flat from 4 kHz to 20 kHz
+   * (−62.4 / −61.4 / −62.4 dB) and the 8–14 kHz band sat 7.7 dB ABOVE 2–4 kHz.
+   * Nothing musical slopes upward like that; unbounded noise does, and it is
+   * the specific texture a listener calls scrapey. Since this layer had just
+   * been lifted 14 dB out of inaudibility during the mix fix, it had become the
+   * loudest thing in the top octave of the entire score.
+   *
+   * 3 kHz and 9 kHz come from computing the response of Tone's own biquads
+   * rather than from guessing: the pair is flat to within 1.2 dB across
+   * 4–8 kHz, down 2.3 dB at each edge, 18 dB down by 16 kHz, and still passes
+   * enough 1–2 kHz for the clack to keep a wooden body. A real typewriter has a
+   * thock as well as a tick, and a band-pass narrow enough to kill the hiss
+   * without that body just sounds like a hi-hat.
    */
   tick: {
     noise: { type: "white" },
-    highpass: 4800,
+    band: { highpassHz: 3000, lowpassHz: 9000 },
     attack: 0.001,
     decay: 0.012,
-    volume: -6,
+    /**
+     * -7 rather than -6 because the band itself only accounts for part of the
+     * intended step back. Measured per-clack on the soloed stem, the filter
+     * change alone cost 1.87 dB; this last dB brings the total to 2.9, which is
+     * the "about 3 dB quieter" the clacks were meant to end up.
+     */
+    volume: -7,
   },
 
   /** The low stamp on every fourth downbeat. */
@@ -941,8 +995,29 @@ export const VELOCITY = {
  */
 export const STINGER_PRIMITIVES = {
   membrane: { pitchDecay: 0.05, octaves: 5 },
-  noise: { attack: 0.002 },
-  ruff: { highpassHz: 400, decaySec: 0.07 },
+  /**
+   * The impact/slap noise inside a stamp. `ceilingHz` is the third instance of
+   * the same correction as VOICES.tick and VOICES.snare, and the one that
+   * matters most, because these are the intro and outro sounds a player
+   * actually singled out.
+   *
+   * Measured as energy density, `stampBad` fell 0.5 dB from 2–4 kHz to
+   * 12–16 kHz and `consequence` 2.4 dB — flat white noise to 20 kHz, ten to
+   * seventeen dB under the fundamental and audible as a hiss burst on the
+   * verdict. By contrast `stampGood`, which has no noise layer at all, falls
+   * 26.2 dB and sounds like an instrument.
+   *
+   * These layers are high-passed at 90–200 Hz: they are the WEIGHT of an
+   * impact, not its air. Everything that makes a stamp read as a stamp is under
+   * 8 kHz, so the octave above it was contributing hiss and nothing else.
+   */
+  noise: { attack: 0.002, ceilingHz: 8000 },
+  /**
+   * The snare ruff leading into the title detonation. Its ceiling matches
+   * VOICES.snare rather than the impact noises, because it is the same
+   * instrument playing a flam — a drum, which keeps its brightness.
+   */
+  ruff: { highpassHz: 400, decaySec: 0.07, ceilingHz: 12000 },
 } as const;
 
 /**

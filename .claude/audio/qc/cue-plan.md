@@ -49,25 +49,25 @@ Every stem is always **playing**; the phase decides which are audible. A phase c
 | `brass` | harmony | the chord voicings — the march ensemble | `fatsawtooth ×3, spread 24` through a **filter envelope** sweeping 380 → 1600 Hz in 50 ms and falling back over 350 ms. That "bwah" swell is the entire difference between *ledger orchestra* and *ambient wash* |
 | `keys` | harmony | compressed upright piano stamping per-segment comping figures — the stamp cell an octave down, so the piano is the tune's shadow rather than a competing idea | FM, harmonicity 3.01, modIndex 10, near-zero sustain (hammer then decay) |
 | `snare` | rhythm | tight march rimshot; 4-bar velocity pattern, accents on beats 1 & 3, ghosts on the "a" of 1 / "&" of 2 / "&" of 4, and a **16th ruff into every 4th bar** | white-noise transient + 220 Hz triangle body, both high-passed at 400 Hz |
-| `ticks` | rhythm | typewriter clacks on **offbeat 8ths** (in a march the "pah" answers the "oom"; here the "pah" is office machinery — the joke the whole score is built on) + a low stamp-thock on each 4-bar downbeat + one **carriage-return zip + ding** on bar 16 beat 4 | 12 ms noise click, highpass 4800 Hz; thock = D2 membrane; ding = triangle (`CARRIAGE_RETURN`) |
+| `ticks` | rhythm | typewriter clacks on **offbeat 8ths** (in a march the "pah" answers the "oom"; here the "pah" is office machinery — the joke the whole score is built on) + a low stamp-thock on each 4-bar downbeat + one **carriage-return zip + ding** on bar 16 beat 4 | 12 ms noise click, bandpass 3–9 kHz (the ceiling is what stops it hissing); thock = D2 membrane; ding = triangle (`CARRIAGE_RETURN`) |
 | `lead` | melody | the anthem voice carrying the hook. Only fully open in `title` and `recapGood` | dual detuned oscillators (pulse 0.35 + square at +7 cents) → light drive 0.12 → tempo-synced `8n` delay. The beating between two slightly-apart waves is what makes it read as something *blown* rather than a bell-pluck |
 | `tension` | tension | **the economy's music, not the player's.** Two saws a minor 2nd apart, **D2 + E♭2** — the ♭2 of D minor, the most institutionally unpleasant interval available | LFO'd lowpass (700 Hz, 0.07 Hz rate) so it breathes instead of sitting still. Retuned from the old A2/A♯2 pair so it now grinds *against* the tonic |
-| `air` | ambience | band-passed pink noise — **always on at 0.06** (the glue; successor to the vinyl crackle). It is why silence in this game sounds like a room rather than a dropped audio context | pink noise → bandpass 1200 Hz, Q 0.6, −20 dB |
-| `counter` | melody | the countermelody long tones under a slow tremolo — warmth for the wins (successor to `warmth`; `swellWarmth()` keeps its public name and now targets this stem) | triangle → Tremolo 0.18 Hz, depth 0.45 |
+| `air` | ambience | band-passed pink noise — **always on at 0.06** (the glue; successor to the vinyl crackle). It is why silence in this game sounds like a room rather than a dropped audio context | pink noise → bandpass 1200 Hz, Q 0.6, -13 dB |
+| `counter` | melody | the countermelody long tones under a slow tremolo — warmth for the wins (successor to `warmth`; `swellWarmth()` keeps its public name and now targets this stem) | triangle → Tremolo 0.169 Hz (six breaths per cycle), depth 0.45 |
 
 ## Phase presets (target stem mix; engine ramps over the crossfade time)
 
 | stem | `intro` | `title` | `menu` | `gameplay` | `recapGood` | `recapBad` |
 |---|---|---|---|---|---|---|
-| `bass` | 0.50 | 0.50 | 0.35 | 0.36 | 0.45 | 0.50 |
-| `brass` | 0.45 | 0.55 | 0.30 | 0.25 | 0.50 | 0.35 |
-| `keys` | 0.15 | 0.30 | 0.45 | 0.42 | 0.50 | 0.20 |
-| `snare` | 0.45 | 0.50 | 0.12 | 0.12 | 0.35 | 0.30 |
-| `ticks` | 0.30 | 0.30 | 0.12 | 0.10 | 0.20 | 0.10 |
-| `lead` | **0** | **0.70** | 0.15 | **0** | 0.55 | **0** |
-| `tension` | 0.50 | 0 | 0 | 0 | 0 | 0.55 |
+| `bass` | 0.38 | 0.50 | 0.49 | 0.37 | 0.45 | 0.38 |
+| `brass` | 0.45 | 0.55 | 0.42 | 0.40 | 0.50 | 0.35 |
+| `keys` | 0.24 | 0.30 | 0.64 | 0.71 | 0.50 | 0.30 |
+| `snare` | 0.45 | 0.50 | 0.17 | 0.17 | 0.35 | 0.30 |
+| `ticks` | 0.30 | 0.30 | 0.17 | 0.14 | 0.20 | 0.10 |
+| `lead` | **0.00** | **0.70** | 0.21 | **0.00** | 0.55 | **0.00** |
+| `tension` | 0.32 | 0.00 | 0.00 | 0.00 | 0.00 | 0.36 |
 | `air` | 0.06 | 0.06 | 0.06 | 0.06 | 0.06 | 0.06 |
-| `counter` | 0 | 0.25 | 0.15 | 0 | 0.50 | 0 |
+| `counter` | 0.00 | 0.25 | 0.21 | 0.00 | 0.50 | 0.00 |
 | **feel** | machinery + dread; the theme has not been *earned* yet | the anthem, unambiguously heroic | the anthem heard from the filing room next door | focused; the room closes in as finances worsen | hopeful — the tune returns and the counter's C♯ closes it | dramatic — the march is still there, the player is just not leading it |
 
 Crossfade between presets: **0.9–1.5 s** linear gain ramps. Transport keeps running across every phase → seamless.
@@ -87,11 +87,11 @@ Evaluated by `rampGain()` in `score.ts` as `clamp01(base + max(0, i − threshol
 
 | stem | base | per intensity | threshold |
 |---|---|---|---|
-| `bass` | 0.36 | +0.18 | — |
-| `keys` | 0.42 | **−0.15** (the comp gets out of the way) | — |
-| `snare` | 0.12 | +0.30 | — |
-| `ticks` | 0.10 | +0.25 | — |
-| `tension` | 0 | +1.1 | **0.45** |
+| `bass` | 0.37 | +0.11 | — |
+| `keys` | 0.71 | **-0.14** (the comp gets out of the way) | — |
+| `snare` | 0.17 | +0.42 | — |
+| `ticks` | 0.14 | +0.35 | — |
+| `tension` | 0.00 | +0.99 | **0.45** |
 
 Nothing new is introduced at high intensity — it is the same material leaning on the player harder, which is why it never feels like the game changed soundtrack mid-thought. The tension threshold is what stops the grind being a permanent low-level whine.
 
@@ -101,7 +101,7 @@ Nothing new is introduced at high intensity — it is the same material leaning 
 |---|---|---|
 | `snare` | 0.45 | +0.30 |
 | `ticks` | 0.30 | +0.22 |
-| `tension` | 0.50 | +0.30 |
+| `tension` | 0.32 | +0.18 |
 
 Phases absent from `INTENSITY_RULES` ignore intensity entirely and use their preset row.
 
@@ -115,7 +115,7 @@ Phases absent from `INTENSITY_RULES` ignore intensity entirely and use their pre
 |---|---|---|
 | `title` | **the anthem stamp**: `A4 → C♯5 → D5` as three crisp 8ths at 180 ms (brass-pluck, doubled one octave down) + D2 membrane boom + 4-hit snare ruff. Literally the tune's own cadence — the grin resolving | 1.1 s |
 | `stampGood` | **"APPROVED"**: staccato D-major pluck `D4 / F♯4 / A4 / D5` + D2 membrane. The F♯ picardy wink is the win colour | 0.9 s |
-| `stampBad` | **the red stamp**: saw-pluck cluster `D4 / E♭4 / A3` (the tension layer's own m2, struck once) + D1 membrane + short noise slap | 0.85 s |
+| `stampBad` | **the red stamp**: saw-pluck cluster `D4 / E♭4 / A3` (the tension layer's own m2, struck once) + D1 membrane + short noise slap (8 kHz ceiling) | 0.85 s |
 | `consequence` | impact → descent → settle, retained in shape but retuned and shortened: D2 membrane + paper transient, descent arp `A4 G4 F4 D4` (the tune's own bar-10 figure), settle pluck `D3/A3/D4` at **`2n`** — *not* the `1m` hold it used to be | 1.85 s |
 | `thump` / `hit` / `thud` / `stab` | retuned to D minor: D1 / G1 / A0 membranes; `stab` is a saw cluster on the ♭2 grind `D3/E♭3/A3` | 0.6–0.8 s |
 | `mastered` / `levelup` / `streak` | arps `D4-F4-A4-D5` / `F4-A4-D5-F5` / `A3-D4-F4` | 0.8–1.0 s |

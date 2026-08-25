@@ -94,11 +94,13 @@
 
     // --- snare: noise crack + tuned body, high-passed to leave the low end alone
     const snareHP = new Tone.Filter(V.snare.highpass, "highpass").connect(stems.snare);
+    // ceiling on the crack alone; the body bypasses it. See VOICES.snare.
+    const snareLP = new Tone.Filter(V.snare.noise.ceilingHz, "lowpass").connect(snareHP);
     const snareNoise = new Tone.NoiseSynth({
       noise: { type: V.snare.noise.type },
       envelope: { attack: V.snare.noise.attack, decay: V.snare.noise.decay, sustain: 0 },
       volume: V.snare.noise.volume,
-    }).connect(snareHP);
+    }).connect(snareLP);
     const snareBody = new Tone.Synth({
       oscillator: { type: V.snare.body.type },
       envelope: { attack: V.snare.body.attack, decay: V.snare.body.decay, sustain: 0 },
@@ -106,7 +108,10 @@
     }).connect(snareHP);
 
     // --- ticks: typewriter clacks, the 4-bar stamp, the carriage-return bell
-    const tickHP = new Tone.Filter(V.tick.highpass, "highpass").connect(stems.ticks);
+    // high-pass -> low-pass; the ceiling is what makes it a typewriter and not
+    // a hiss. Mirrors AudioEngine exactly — see VOICES.tick.
+    const tickLP = new Tone.Filter(V.tick.band.lowpassHz, "lowpass").connect(stems.ticks);
+    const tickHP = new Tone.Filter(V.tick.band.highpassHz, "highpass").connect(tickLP);
     const tick = new Tone.NoiseSynth({
       noise: { type: V.tick.noise.type },
       envelope: { attack: V.tick.attack, decay: V.tick.decay, sustain: 0 },
@@ -278,14 +283,18 @@
         const m = new Tone.MembraneSynth({ ...P.membrane, volume: layer.volume }).connect(bus);
         m.triggerAttackRelease(layer.note, layer.duration, t0);
       } else if (layer.kind === "ruff") {
-        const hp = new Tone.Filter(P.ruff.highpassHz, "highpass").connect(bus);
+        const rlp = new Tone.Filter(P.ruff.ceilingHz, "lowpass").connect(bus);
+        const hp = new Tone.Filter(P.ruff.highpassHz, "highpass").connect(rlp);
         const s = new Tone.NoiseSynth({
           noise: { type: "white" },
           envelope: { attack: 0.001, decay: P.ruff.decaySec, sustain: 0 }, volume: layer.volume,
         }).connect(hp);
         layer.velocities.forEach((v, i) => s.triggerAttackRelease(P.ruff.decaySec, t0 + i * layer.stepSec, v));
       } else if (layer.kind === "noise") {
-        const f = new Tone.Filter(layer.highpassHz, "highpass").connect(bus);
+        // band, not a bare high-pass — the ceiling stops the impact reading
+        // as a hiss burst. Mirrors AudioEngine; see STINGER_PRIMITIVES.noise.
+        const lp = new Tone.Filter(P.noise.ceilingHz, "lowpass").connect(bus);
+        const f = new Tone.Filter(layer.highpassHz, "highpass").connect(lp);
         const n = new Tone.NoiseSynth({
           noise: { type: "white" },
           envelope: { attack: P.noise.attack, decay: layer.durationSec, sustain: 0 }, volume: layer.volume,
