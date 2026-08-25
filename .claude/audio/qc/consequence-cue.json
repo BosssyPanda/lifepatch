@@ -30,7 +30,7 @@
   ],
   "voices": {
     "impact": "Tone.MembraneSynth D2 quarter-note (-3dB) — the deep tonic stamp, retuned from the old A1.",
-    "paper": "White NoiseSynth transient (0.14s, 160Hz highpass, -14dB) — the air a stamp displaces.",
+    "paper": "White NoiseSynth transient (0.14s, banded 160Hz-8kHz, -14dB) — the air a stamp displaces. The ceiling matters: unbounded, this layer measured flat to 20kHz and read as a hiss burst rather than an impact.",
     "descent": "trianglePluck (triangle osc; envelope a .004 / d .32 / s .05 / r .45, -9dB) arpeggiating A4-G4-F4-D4 at 70ms per step.",
     "settle": "trianglePluck D3/A3/D4 at '2n' (1.111s), -12dB, entering 280ms after the impact — the low, quiet close."
   },

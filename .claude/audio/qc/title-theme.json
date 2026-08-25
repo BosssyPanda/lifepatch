@@ -74,8 +74,8 @@
     "carriageReturn": "Bar 16 beat 4 (35.0s): a band-passed noise zip (1600 -> 5200Hz, 180ms) and a bell ding — the page finishing, right as the next one starts."
   },
   "transitions": {
-    "in": "ColdOpen -> setPhase('title') crossfade (finishCold). The intro's tension layer (0.5) ramps to 0 and the lead ramps 0 -> 0.7: the theme has not been earned during the cold open, and arrives when it has.",
-    "out": "Leaving the title (Choose your run) -> AppShell sets phase 'menu' on the mode screen — clean stem-gain ramp; the lead drops 0.7 -> 0.15 and the piano takes the foreground. Same piece, heard from the filing room next door.",
+    "in": "ColdOpen -> setPhase('title') crossfade (finishCold). In `intro` `tension` sits at 0.32 and `lead` at 0. Both resolve into `title`, where `tension` is 0 and `lead` is 0.7: the theme has not been earned during the cold open, and arrives when it has.",
+    "out": "Leaving the title (Choose your run) -> AppShell sets phase 'menu' on the mode screen — clean stem-gain ramp. In `title` the `lead` is 0.7. In `menu` the `lead` is 0.21 and `keys` takes the foreground at 0.64. Same piece, heard from the filing room next door.",
     "quantize": "Phase changes are gain ramps over 0.9-1.5s and are bar-agnostic; only accents are quantized (to the next 8th, requested ACCENT_PREROLL_MS = 120ms early)."
   },
   "accessibility": "Respects global mute (master gain ramp) and is silent until a user gesture starts the engine. Mute only ramps the master gain, so the Transport — and therefore the visual beat grid every cinematic derives from — keeps running for muted players and pacing is identical. Reduced-motion does not silence audio; the user's stored mute preference defaults on under prefers-reduced-motion/data.",
@@ -85,7 +85,7 @@
     "loopClean": true,
     "beatLocked": true,
     "sampleExact": "44100 x 60 / 108 = 24,500 samples per beat exactly; bar = 98,000; 16-bar cycle = 1,568,000. Asserted by the offline renderer before it trusts a loop point.",
-    "noClipping": "buses pre-master at <=0.9; lead -12dB, brass -13dB; verify no >0dBFS sum at title with the `title` accent stacked on the full anthem mix",
+    "noClipping": "music bus 1.25 into master 0.85; lead -17dB, brass -13dB; verify no >0dBFS sum at title with the `title` accent stacked on the full anthem mix",
     "accentCannotHang": "accent('title') soundingSec 1.1 <= STINGER_MAX_SOUNDING_SEC (2.222s); brassPluck envelope (a .008 / d .3 / s .04 / r .4) inside STINGER_ENVELOPE_CAP. This is the regression test for the held-chord 'beeping' this replaced.",
     "rampedGains": true,
     "muteRespected": true,

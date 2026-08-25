@@ -185,42 +185,89 @@ function claim(doc, label, claimed, actual) {
   if (!eq(claimed, actual)) fail(doc, `prose says ${label} = ${claimed}, score says ${actual}`);
 }
 
-for (const { file } of DOCS) {
-  const notes = JSON.parse(readFileSync(path.join(META_DIR, file), "utf8")).sourceNotes ?? "";
+/**
+ * Which phase a sentence is talking about. Returned only when the sentence
+ * names exactly one, because a figure attached to the wrong phase is a worse
+ * failure than a figure left unchecked: it fails a build over correct prose.
+ */
+function phaseOf(sentence) {
+  const named = Object.keys(PRESETS).filter((ph) =>
+    new RegExp(`\\b${ph}\\b`, "i").test(sentence));
+  return named.length === 1 ? named[0] : null;
+}
 
-  // `bass = 0.37 + i*0.11`
-  for (const m of notes.matchAll(/\b(\w+) = (-?[\d.]+) ([+-]) i\*(-?[\d.]+)/g)) {
-    const [, stem, base, sign, slope] = m;
-    const rule = INTENSITY_RULES.gameplay?.[stem];
-    if (!rule) { fail(file, `prose describes an intensity ramp for "${stem}", which has none`); continue; }
-    claim(file, `${stem} base`, num(base), rule.base);
-    claim(file, `${stem} per-intensity`, (sign === "-" ? -1 : 1) * num(slope), rule.perIntensity);
-  }
+/** `rampGain`'s arithmetic, so the expectation cannot drift from the engine's. */
+const rampAt = (r, i) =>
+  Math.min(1, Math.max(0, r.base + Math.max(0, i - (r.threshold ?? 0)) * r.perIntensity));
 
-  // `tension = max(0, (i - 0.45) * 0.99)`
-  for (const m of notes.matchAll(/\b(\w+) = max\(0, \(i - ([\d.]+)\) \* ([\d.]+)\)/g)) {
-    const [, stem, threshold, slope] = m;
-    const rule = INTENSITY_RULES.gameplay?.[stem];
-    if (!rule) { fail(file, `prose describes an intensity ramp for "${stem}", which has none`); continue; }
-    claim(file, `${stem} threshold`, num(threshold), rule.threshold ?? 0);
-    claim(file, `${stem} per-intensity`, num(slope), rule.perIntensity);
-  }
+/** Every string value in a JSON document, however deeply nested. */
+function strings(node, into = []) {
+  if (typeof node === "string") into.push(node);
+  else if (Array.isArray(node)) for (const v of node) strings(v, into);
+  else if (node && typeof node === "object") for (const v of Object.values(node)) strings(v, into);
+  return into;
+}
 
-  // `snare 0.45 -> 0.75, ticks 0.3 -> 0.52 ... per INTENSITY_RULES.intro`
+function checkProse(file, notes) {
   for (const sentence of notes.split(/(?<=[.)])\s+/)) {
-    const phase = sentence.match(/per INTENSITY_RULES\.(\w+)/)?.[1];
-    if (!phase) continue;
-    const rules = INTENSITY_RULES[phase];
-    if (!rules) { fail(file, `prose cites INTENSITY_RULES.${phase}, which does not exist`); continue; }
+    const cited = sentence.match(/INTENSITY_RULES\.(\w+)/)?.[1];
+    const phase = cited ?? phaseOf(sentence);
+    const rules = cited ? INTENSITY_RULES[cited] : INTENSITY_RULES[phase];
+    if (cited && !rules) { fail(file, `prose cites INTENSITY_RULES.${cited}, which does not exist`); continue; }
+
+    // `bass = 0.37 + i*0.11`
+    for (const m of sentence.matchAll(/\b(\w+) = (-?[\d.]+) ([+-]) i\*(-?[\d.]+)/g)) {
+      const [, stem, base, sign, slope] = m;
+      const rule = rules?.[stem];
+      if (!rule) { fail(file, `prose ramps "${stem}"${phase ? ` in ${phase}` : ""}, which has no rule there`); continue; }
+      claim(file, `${phase}.${stem} base`, num(base), rule.base);
+      claim(file, `${phase}.${stem} per-intensity`, (sign === "-" ? -1 : 1) * num(slope), rule.perIntensity);
+    }
+
+    // `tension = max(0, (i - 0.45) * 0.99)`
+    for (const m of sentence.matchAll(/\b(\w+) = max\(0, \(i - ([\d.]+)\) \* ([\d.]+)\)/g)) {
+      const [, stem, threshold, slope] = m;
+      const rule = rules?.[stem];
+      if (!rule) { fail(file, `prose ramps "${stem}"${phase ? ` in ${phase}` : ""}, which has no rule there`); continue; }
+      claim(file, `${phase}.${stem} threshold`, num(threshold), rule.threshold ?? 0);
+      claim(file, `${phase}.${stem} per-intensity`, num(slope), rule.perIntensity);
+    }
+
+    // `snare 0.45 -> 0.75, ticks 0.30 -> 0.52`
     for (const m of sentence.matchAll(/\b(\w+) ([\d.]+) -> ([\d.]+)/g)) {
       const [, stem, from, to] = m;
-      const rule = rules[stem];
-      if (!rule) { fail(file, `prose ramps "${stem}" in ${phase}, which has no rule there`); continue; }
+      const rule = rules?.[stem];
+      if (!rule) continue;
       claim(file, `${phase}.${stem} at i=0`, num(from), rule.base);
-      claim(file, `${phase}.${stem} at i=1`, num(to),
-        Math.min(1, rule.base + Math.max(0, 1 - (rule.threshold ?? 0)) * rule.perIntensity));
+      claim(file, `${phase}.${stem} at i=1`, num(to), rampAt(rule, 1));
+    }
+
+    // The form this checker exists for: `MENU ...: lead 0.21, keys forward at
+    // 0.64, snare/ticks pulled back to 0.17`. Two stems may share one value.
+    if (!phase) continue;
+    for (const m of sentence.matchAll(
+      /`?\b([a-z]+(?:\/[a-z]+)?)\b`?(?: layer)?(?: is| sits at| forward at| pulled back to| back to| up to| at|)? ([01](?:\.\d+)?)\b/g)) {
+      const [, names, value] = m;
+      const stems = names.split("/").filter((n) => STEM_IDS.includes(n));
+      if (!stems.length) continue;
+      for (const stem of stems) claim(file, `PRESETS.${phase}.${stem}`, num(value), PRESETS[phase][stem]);
     }
   }
+}
+
+for (const { file } of DOCS) {
+  checkProse(file, JSON.parse(readFileSync(path.join(META_DIR, file), "utf8")).sourceNotes ?? "");
+}
+
+/**
+ * The cue-plan design documents. These were outside the checker until a review
+ * found three stale figures in `title-theme.json` alone — a menu lead, an intro
+ * tension level, and a bus gain — sitting behind a green build. They are prose
+ * throughout, so every string value in them is scanned.
+ */
+for (const doc of ["title-theme.json", "consequence-cue.json"]) {
+  const full = path.join(REPO, ".claude/audio/qc", doc);
+  for (const text of strings(JSON.parse(readFileSync(full, "utf8")))) checkProse(doc, text);
 }
 
 // The cue plan's tables are the same numbers again, in a third place.
@@ -252,6 +299,19 @@ for (let i = 0; i < planLines.length; i++) {
     claim(planName, `${phase}.${stem} base`, num(cells[2]), rule.base);
     claim(planName, `${phase}.${stem} per-intensity`, num(cells[3].split(" ")[0]), rule.perIntensity);
     if (cells[4] && cells[4] !== "\u2014") claim(planName, `${phase}.${stem} threshold`, num(cells[4]), rule.threshold ?? 0);
+  }
+}
+
+// The invariant score.ts states as a MUST: an intensity ramp's `base` is the
+// value at intensity 0, so it has to equal the phase's preset or the mix jumps
+// the instant anything calls setIntensity. Documented in two places, enforced in
+// none until now — and this script already holds both tables.
+for (const [phase, rules] of Object.entries(INTENSITY_RULES)) {
+  for (const [stem, rule] of Object.entries(rules)) {
+    if (!eq(rule.base, PRESETS[phase][stem])) {
+      fail("score.ts", `INTENSITY_RULES.${phase}.${stem}.base ${rule.base} != PRESETS.${phase}.${stem} ${PRESETS[phase][stem]}`
+        + " — the mix would jump on the first setIntensity call");
+    }
   }
 }
 

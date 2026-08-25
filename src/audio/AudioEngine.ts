@@ -10,6 +10,7 @@ import {
   SFX_PRIMITIVES, SNARE_PATTERN, STINGERS, STINGER_PRIMITIVES, STINGER_TIMBRES,
   STING_TONES, SWELL_STEM, TICKS_PATTERN, TICK_STAMP_BARS, VELOCITY, VOICES, rampGain,
   type IntensityRamp, type StemId, type StingerSpec, type StingerTimbre,
+  AMBIENCE_CEILING_HZ,
 } from "./score";
 
 /**
@@ -904,10 +905,16 @@ export class AudioEngine {
     const out = new Tone.Gain(0).connect(this.ambBus);
     const parts: { dispose(): void }[] = [out];
     const loops: { dispose(): void }[] = [];
-    const bed = (type: "white" | "pink" | "brown", freq: number, filt: BiquadFilterType, vol: number, q = 1) => {
-      const f = new Tone.Filter({ type: filt, frequency: freq, Q: q }).connect(out);
+    // `ceiling` is only meaningful for the high-passed beds; a low-passed one
+    // already has one. See AMBIENCE_CEILING_HZ.
+    const bed = (type: "white" | "pink" | "brown", freq: number, filt: BiquadFilterType, vol: number, q = 1, ceiling = false) => {
+      const top = ceiling
+        ? new Tone.Filter({ type: "lowpass", frequency: AMBIENCE_CEILING_HZ }).connect(out)
+        : null;
+      const f = new Tone.Filter({ type: filt, frequency: freq, Q: q }).connect(top ?? out);
       const n = new Tone.Noise({ type, volume: vol }).connect(f).start();
       parts.push(n, f);
+      if (top) parts.push(top);
     };
     const hum = (freq: number, vol: number) => {
       const o = new Tone.Oscillator(freq, "sine").connect(out);
@@ -939,7 +946,7 @@ export class AudioEngine {
       // bed in the game, and insistent beeping over a scenario is the exact
       // complaint this rewrite exists to answer. It is a room tone, not a
       // monitor alarm.
-      case "amb_hospital": bed("pink", 2400, "highpass", -34); every("2n", (t) => { if (Math.random() < 0.6) this.ambBeepInto(out, t, 587.33); }); break;
+      case "amb_hospital": bed("pink", 2400, "highpass", -34, 1, true); every("2n", (t) => { if (Math.random() < 0.6) this.ambBeepInto(out, t, 587.33); }); break;
       case "amb_coins": bed("white", 3200, "bandpass", -34, 1.5); every("2n", (t) => { if (Math.random() < 0.3) this.ambBeepInto(out, t, 1760, 0.05); }); break;
       case "amb_feed": bed("pink", 700, "lowpass", -30); every("1n", (t) => { if (Math.random() < 0.35) this.ambBeepInto(out, t, 1174.66, 0.08); }); break;
       case "amb_unease": {
@@ -969,9 +976,10 @@ export class AudioEngine {
   }
   private ambTickInto(out: Tone.Gain, at: number, freq: number): void {
     const n = new Tone.NoiseSynth({ noise: { type: "white" }, envelope: { attack: 0.001, decay: 0.02, sustain: 0 }, volume: -30 });
-    const f = new Tone.Filter({ type: "highpass", frequency: freq, Q: 1 }).connect(out);
+    const lp = new Tone.Filter({ type: "lowpass", frequency: AMBIENCE_CEILING_HZ }).connect(out);
+    const f = new Tone.Filter({ type: "highpass", frequency: freq, Q: 1 }).connect(lp);
     n.connect(f); n.triggerAttackRelease(0.02, at);
-    this.disposeLater(n, 0.6); this.disposeLater(f, 0.7);
+    this.disposeLater(n, 0.6); this.disposeLater(f, 0.7); this.disposeLater(lp, 0.8);
   }
   private ambBeepInto(out: Tone.Gain, at: number, freq: number, dur = 0.12): void {
     const s = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.01, decay: dur, sustain: 0, release: 0.05 }, volume: -32 }).connect(out);

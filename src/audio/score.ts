@@ -993,6 +993,25 @@ export const VELOCITY = {
  * `membrane` is the stamp landing, `noise` the paper slap, `ruff` the snare
  * flam that runs into a downbeat.
  */
+/**
+ * Ceiling for the ambience layer's broadband noise.
+ *
+ * The same correction as VOICES.tick, VOICES.snare and STINGER_PRIMITIVES.noise,
+ * applied to the last place it was still missing. Most ambience beds are already
+ * LOW-passed and were never at risk; `amb_hospital` is high-passed pink noise
+ * and `ambTickInto` is a 20 ms white click high-passed at 2.6-3.5 kHz, so both
+ * ran open to Nyquist.
+ *
+ * These are quiet — the beds sit at -26 to -34 dB — but quiet is not the point.
+ * Ambience is by definition the thing playing underneath everything else for
+ * minutes at a time, which makes it the layer where an unbounded noise floor is
+ * least likely to be noticed as a decision and most likely to be experienced as
+ * "the background is not clean".
+ *
+ * 9 kHz rather than the snare's 12: a room tone has no transient to protect.
+ */
+export const AMBIENCE_CEILING_HZ = 9000;
+
 export const STINGER_PRIMITIVES = {
   membrane: { pitchDecay: 0.05, octaves: 5 },
   /**
