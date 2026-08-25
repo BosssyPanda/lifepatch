@@ -1,0 +1,1045 @@
+<title>LifePatch Audit Register</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+
+<style>
+/* ───────────────────────────────────────────────────────────────────────────
+   LEDGER — the palette and type system this project already ships.
+   Mirrors lib/palette.ts and app/layout.tsx. Single visual world by design:
+   LifePatch has no light mode, so every colour is painted explicitly and
+   nothing is inherited from the host ground.
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg:        #131110;
+  --bg2:       #1a1714;
+  --bg3:       #211d19;
+  --ink:       #f4f0e6;
+  --ink-mid:   #cbc6ba;
+  --secondary: #9a968c;
+  --tertiary:  #8f8b81;
+  --hairline:  #4c4b47;
+  --hairline-strong: #6b6964;
+  --dotted:    #55544f;
+  --accent:    #ff5a1f;
+  --highlight: #d8e04b;
+  --gain:      #2fcc71;
+  --loss:      #fe4030;
+
+  --display: "Anton", "Arial Narrow", Impact, sans-serif;
+  --body:    "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --voice:   "Instrument Serif", ui-serif, Georgia, serif;
+
+  --gutter: clamp(1.15rem, 4vw, 3rem);
+  --measure: 68ch;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.doc { max-width: 1080px; margin: 0 auto; }
+
+/* ── masthead rail ───────────────────────────────────────────────────────── */
+.rail {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--hairline);
+}
+.rail-cell {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .85rem var(--gutter);
+  border-right: 1px solid var(--hairline);
+}
+.rail-cell:last-child { border-right: 0; margin-left: auto; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: .62rem;
+  font-weight: 500;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--secondary);
+}
+.eyebrow--ink { color: var(--ink); }
+.eyebrow--faint { color: var(--tertiary); }
+
+/* ── header ──────────────────────────────────────────────────────────────── */
+header.masthead {
+  padding: clamp(2.5rem, 7vw, 4.5rem) var(--gutter) 0;
+}
+h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(2.7rem, 9vw, 5.6rem);
+  line-height: .92;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  margin: .55rem 0 0;
+  color: var(--ink);
+}
+h1 .accent { color: var(--accent); }
+
+.standfirst {
+  font-family: var(--voice);
+  font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+  line-height: 1.5;
+  color: var(--ink-mid);
+  max-width: 46ch;
+  margin: 1.4rem 0 0;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0;
+  margin-top: clamp(2rem, 5vw, 3rem);
+  border-top: 1px solid var(--hairline);
+  border-left: 1px solid var(--hairline);
+}
+.meta-cell {
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+  padding: .85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.meta-cell .val {
+  font-family: var(--mono);
+  font-size: .84rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* ── tally band ──────────────────────────────────────────────────────────── */
+.tally {
+  margin: clamp(2.5rem, 6vw, 4rem) 0 0;
+  padding: 0 var(--gutter);
+}
+.tally-rows {
+  border-top: 2px solid var(--hairline-strong);
+  border-bottom: 2px solid var(--hairline-strong);
+  display: flex;
+  flex-direction: column;
+}
+.tally-row {
+  display: flex;
+  align-items: baseline;
+  gap: .9rem;
+  padding: .8rem 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.tally-row:last-child { border-bottom: 0; }
+.tally-row .stripe {
+  width: 3px;
+  align-self: stretch;
+  flex: none;
+}
+.tally-row .label {
+  font-family: var(--mono);
+  font-size: .72rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.leader {
+  flex: 1 1 auto;
+  height: 1px;
+  min-width: 1.5rem;
+  align-self: center;
+  background-image: radial-gradient(circle, var(--dotted) 1px, transparent 1.2px);
+  background-size: 6px 1px;
+  background-repeat: repeat-x;
+}
+.tally-row .count {
+  font-family: var(--display);
+  font-size: 1.7rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.tally-note {
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .1em;
+  color: var(--tertiary);
+  text-transform: uppercase;
+  min-width: 8.5rem;
+  text-align: right;
+}
+
+/* ── baseline plate ──────────────────────────────────────────────────────── */
+.plate {
+  margin: clamp(2rem, 5vw, 3rem) var(--gutter) 0;
+  border: 1px solid var(--hairline);
+  border-left: 3px solid var(--gain);
+  background: var(--bg2);
+  padding: 1.1rem 1.3rem;
+}
+.plate p { margin: .5rem 0 0; max-width: var(--measure); color: var(--ink-mid); font-size: .95rem; }
+.plate p:first-of-type { margin-top: .45rem; }
+
+/* ── sections ────────────────────────────────────────────────────────────── */
+section.bucket { padding: clamp(3rem, 8vw, 5rem) var(--gutter) 0; }
+
+.bucket-head {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  border-bottom: 2px solid var(--hairline-strong);
+  padding-bottom: .7rem;
+}
+.bucket-num {
+  font-family: var(--display);
+  font-size: clamp(1.9rem, 5vw, 2.8rem);
+  line-height: 1;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  line-height: 1.02;
+  letter-spacing: .015em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.bucket-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: .68rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  white-space: nowrap;
+}
+
+/* ── finding line item ───────────────────────────────────────────────────── */
+article.finding {
+  border-bottom: 1px solid var(--hairline);
+  padding: 1.9rem 0 2.1rem 1.1rem;
+  border-left: 3px solid var(--hairline);
+}
+article.finding.sev-critical { border-left-color: var(--loss); }
+article.finding.sev-bug      { border-left-color: var(--highlight); }
+article.finding.sev-quality  { border-left-color: var(--secondary); }
+
+.finding-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .55rem .9rem;
+}
+.docno {
+  font-family: var(--mono);
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .16em;
+  padding: .18rem .5rem;
+  background: var(--bg3);
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.sev-critical .docno { border-color: var(--loss); color: var(--loss); }
+.sev-bug .docno      { border-color: var(--highlight); color: var(--highlight); }
+
+h3 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(1.15rem, 2.8vw, 1.55rem);
+  line-height: 1.12;
+  letter-spacing: .012em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--ink);
+  flex: 1 1 22ch;
+  text-wrap: balance;
+}
+
+.refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .3rem .55rem;
+  margin: .75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.refs li {
+  font-family: var(--mono);
+  font-size: .72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--secondary);
+  border-bottom: 1px dotted var(--dotted);
+  padding-bottom: 1px;
+  overflow-wrap: anywhere;
+}
+
+article.finding p {
+  margin: .95rem 0 0;
+  max-width: var(--measure);
+  color: var(--ink-mid);
+  font-size: .95rem;
+}
+article.finding p strong { color: var(--ink); font-weight: 500; }
+article.finding ul {
+  margin: .8rem 0 0;
+  padding-left: 1.1rem;
+  max-width: var(--measure);
+  color: var(--ink-mid);
+  font-size: .95rem;
+}
+article.finding li { margin-bottom: .4rem; }
+article.finding li::marker { color: var(--accent); }
+
+.fixlabel {
+  display: block;
+  font-family: var(--mono);
+  font-size: .62rem;
+  font-weight: 600;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 1.3rem 0 .5rem;
+}
+
+pre {
+  margin: 0;
+  padding: .95rem 1.1rem;
+  background: var(--bg2);
+  border: 1px solid var(--hairline);
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: .78rem;
+  line-height: 1.62;
+  color: var(--ink-mid);
+  tab-size: 2;
+}
+pre + pre { margin-top: .6rem; }
+pre .c { color: var(--tertiary); font-style: italic; }
+pre .k { color: var(--accent); }
+pre .g { color: var(--gain); }
+pre .r { color: var(--loss); }
+code {
+  font-family: var(--mono);
+  font-size: .86em;
+  color: var(--ink);
+  background: var(--bg3);
+  padding: .08em .32em;
+  border: 1px solid var(--hairline);
+  overflow-wrap: anywhere;
+}
+p code, li code, td code { white-space: nowrap; }
+
+/* ── dependency table ────────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; margin-top: 1rem; border: 1px solid var(--hairline); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; }
+th, td {
+  text-align: left;
+  padding: .6rem .85rem;
+  border-bottom: 1px solid var(--hairline);
+  font-size: .82rem;
+  vertical-align: top;
+}
+th {
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  background: var(--bg2);
+  white-space: nowrap;
+}
+td { color: var(--ink-mid); }
+td:first-child { font-family: var(--mono); color: var(--ink); white-space: nowrap; }
+td.ver { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.sev-hi { font-family: var(--mono); color: var(--loss); text-transform: uppercase; font-size: .68rem; letter-spacing: .1em; white-space: nowrap; }
+td.sev-mo { font-family: var(--mono); color: var(--highlight); text-transform: uppercase; font-size: .68rem; letter-spacing: .1em; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+
+/* ── work order ──────────────────────────────────────────────────────────── */
+.order { counter-reset: step; list-style: none; margin: 1.4rem 0 0; padding: 0; }
+.order li {
+  counter-increment: step;
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  padding: .85rem 0;
+  border-bottom: 1px solid var(--hairline);
+  max-width: var(--measure);
+  color: var(--ink-mid);
+  font-size: .95rem;
+}
+.order li::before {
+  content: counter(step, decimal-leading-zero);
+  font-family: var(--display);
+  font-size: 1.25rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+  min-width: 1.7rem;
+}
+.order li b { color: var(--ink); font-weight: 500; }
+
+/* ── colophon ────────────────────────────────────────────────────────────── */
+footer {
+  margin-top: clamp(3.5rem, 8vw, 5.5rem);
+  border-top: 1px solid var(--hairline);
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem 1.5rem;
+  justify-content: space-between;
+  padding: 1.1rem var(--gutter) 3rem;
+}
+.verdict {
+  font-family: var(--voice);
+  font-style: italic;
+  font-size: 1.1rem;
+  color: var(--ink-mid);
+  max-width: 44ch;
+}
+
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+a:hover { border-bottom-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="doc">
+
+  <div class="rail">
+    <div class="rail-cell">
+      <span class="eyebrow eyebrow--ink">LIFEPATCH</span>
+      <span class="eyebrow eyebrow--faint">/ Audit</span>
+    </div>
+    <div class="rail-cell">
+      <span class="eyebrow">Form 03 — Findings register</span>
+    </div>
+  </div>
+
+  <header class="masthead">
+    <p class="eyebrow">Full-codebase review · 2026-08-25</p>
+    <h1>Twenty findings<br>against the <span class="accent">ledger</span></h1>
+    <p class="standfirst">
+      A game about money keeps a leaderboard anyone can write to, and a friend code
+      the whole world can read. Both are one migration away from being true.
+    </p>
+
+    <div class="meta-grid">
+      <div class="meta-cell">
+        <span class="eyebrow">Branch</span>
+        <span class="val">claude/eager-cori-qdyj61 @ 50a22ff</span>
+      </div>
+      <div class="meta-cell">
+        <span class="eyebrow">Surface reviewed</span>
+        <span class="val">31,167 lines · TS/TSX + SQL</span>
+      </div>
+      <div class="meta-cell">
+        <span class="eyebrow">Typecheck</span>
+        <span class="val" style="color:var(--gain)">tsc --noEmit · clean</span>
+      </div>
+      <div class="meta-cell">
+        <span class="eyebrow">Lint</span>
+        <span class="val">next lint · 1 warning</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="tally">
+    <div class="tally-rows">
+      <div class="tally-row">
+        <span class="stripe" style="background:var(--loss)"></span>
+        <span class="label">Critical security</span>
+        <span class="leader"></span>
+        <span class="tally-note">schema &amp; deps</span>
+        <span class="count" style="color:var(--loss)">6</span>
+      </div>
+      <div class="tally-row">
+        <span class="stripe" style="background:var(--highlight)"></span>
+        <span class="label">Functional bug</span>
+        <span class="leader"></span>
+        <span class="tally-note">7 confirmed</span>
+        <span class="count" style="color:var(--highlight)">7</span>
+      </div>
+      <div class="tally-row">
+        <span class="stripe" style="background:var(--secondary)"></span>
+        <span class="label">Quality &amp; performance</span>
+        <span class="leader"></span>
+        <span class="tally-note">incl. 4 minor</span>
+        <span class="count" style="color:var(--ink)">7</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="plate">
+    <span class="eyebrow" style="color:var(--gain)">Baseline · healthy</span>
+    <p>
+      No secrets are committed; <code>.env*.local</code> is gitignored and the example file
+      carries only placeholders. The multiplayer wire format in <code>lib/mp/protocol.ts</code>
+      is unusually well hardened — every inbound field is rebuilt and clamped rather than
+      passed through. The findings below are design- and logic-level, not compile-level.
+    </p>
+  </div>
+
+  <!-- ══ 1 · CRITICAL SECURITY ═══════════════════════════════════════════ -->
+  <section class="bucket">
+    <div class="bucket-head">
+      <span class="bucket-num">01</span>
+      <h2>Critical security</h2>
+      <span class="bucket-count">6 findings</span>
+    </div>
+
+    <article class="finding sev-critical">
+      <div class="finding-head">
+        <span class="docno">SEC-01</span>
+        <h3>Leaderboard scores are client-authored, unvalidated and unbounded</h3>
+      </div>
+      <ul class="refs">
+        <li>supabase/schema.sql:52–73</li>
+        <li>lib/cloud/results.ts:63–88</li>
+        <li>lib/cloud/buildResult.ts:96–110</li>
+      </ul>
+      <p>
+        <code>results</code> accepts a direct client insert under <code>with check (auth.uid() = user_id)</code>.
+        That is the only check — <code>score</code>, <code>verdict</code> and <code>metrics</code> are whatever
+        the browser sends.
+      </p>
+      <ul>
+        <li><strong>Forgeable rankings.</strong> Any signed-in player can post <code>score: 999999999</code> with any verdict string. The global board, the <code>/r/{id}</code> statement and the OG card all render it as fact.</li>
+        <li><strong>No size caps.</strong> <code>verdict</code> is bare <code>text</code>, <code>metrics</code> bare <code>jsonb</code>. One insert can carry megabytes into a public-read table, with no per-user rate limit.</li>
+        <li><strong>No enum on <code>verdict</code></strong>, though the app only ever produces the six values in <code>lib/verdict.ts</code>.</li>
+      </ul>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="c">-- Move scoring behind a SECURITY DEFINER RPC that recomputes from a run</span>
+<span class="c">-- transcript. At minimum, revoke direct insert and constrain the shape:</span>
+<span class="k">revoke insert on</span> public.results <span class="k">from</span> authenticated;
+
+<span class="k">alter table</span> public.results
+  <span class="k">add constraint</span> results_score_range   <span class="k">check</span> (score <span class="k">between</span> -1e12 <span class="k">and</span> 1e12),
+  <span class="k">add constraint</span> results_verdict_len   <span class="k">check</span> (char_length(verdict) &lt;= 64),
+  <span class="k">add constraint</span> results_metrics_size  <span class="k">check</span> (pg_column_size(metrics) &lt;= 8192);
+
+<span class="c">-- and cap submissions per player per hour</span>
+<span class="k">create unique index</span> results_hourly_cap
+  <span class="k">on</span> public.results (user_id, mode, date_trunc(<span class="g">'hour'</span>, created_at));</pre>
+    </article>
+
+    <article class="finding sev-critical">
+      <div class="finding-head">
+        <span class="docno">SEC-02</span>
+        <h3>Every player's friend code is world-readable</h3>
+      </div>
+      <ul class="refs"><li>supabase/schema.sql:44–45</li><li>lib/cloud/generate.ts:36–39</li></ul>
+      <p>
+        The policy comment says leaderboards show “username + avatar only”. The policy itself
+        grants every column:
+      </p>
+      <pre><span class="k">create policy</span> <span class="g">"profiles - public read"</span> <span class="k">on</span> public.profiles
+  <span class="k">for select using</span> (<span class="r">true</span>);</pre>
+      <p>
+        That includes <code>friend_code</code> — the single secret gating a friend request. Any client
+        can <code>select friend_code from profiles</code> and enumerate the userbase. The code is also
+        generated with <code>Math.random()</code> over 31⁶ ≈ 887M, so it was never built to withstand
+        guessing; it was built to stay private.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">drop policy</span> <span class="g">"profiles - public read"</span> <span class="k">on</span> public.profiles;
+
+<span class="k">create policy</span> <span class="g">"profiles - own row"</span> <span class="k">on</span> public.profiles
+  <span class="k">for select using</span> (auth.uid() = id);
+
+<span class="k">create view</span> public.profiles_public <span class="k">as</span>
+  <span class="k">select</span> id, username, avatar_seed <span class="k">from</span> public.profiles;
+<span class="k">grant select on</span> public.profiles_public <span class="k">to</span> anon, authenticated;
+
+<span class="k">create function</span> public.profile_by_friend_code(code <span class="k">text</span>)
+<span class="k">returns table</span> (id uuid, username <span class="k">text</span>, avatar_seed <span class="k">text</span>)
+<span class="k">language</span> sql <span class="k">security definer set</span> search_path = public <span class="k">as</span> $$
+  <span class="k">select</span> id, username, avatar_seed <span class="k">from</span> profiles <span class="k">where</span> friend_code = upper(code);
+$$;</pre>
+      <p>Then point <code>getProfiles</code> and <code>getByFriendCode</code> at the view and the RPC.</p>
+    </article>
+
+    <article class="finding sev-critical">
+      <div class="finding-head">
+        <span class="docno">SEC-03</span>
+        <h3>Friendship isn't mutual — anyone can befriend you unilaterally</h3>
+      </div>
+      <ul class="refs"><li>lib/cloud/friends.ts:70–84, 100–110</li><li>supabase/schema.sql:105–112</li></ul>
+      <p>
+        The file header claims “RLS lets each user write only their own side, so friendship is
+        mutual-accepted.” It isn't. <code>accept()</code> writes an accepted edge on the <strong>caller's own</strong>
+        side, and <code>listFriendIds()</code> counts an accepted edge in <strong>either</strong> direction:
+      </p>
+      <pre><span class="c">// accept() — no check that anything was ever offered</span>
+<span class="k">await</span> supabase.from(<span class="g">"friends"</span>).upsert(
+  { user_id: userId, friend_id: friendId, status: <span class="g">"accepted"</span> },
+  { onConflict: <span class="g">"user_id,friend_id"</span> },
+);
+
+<span class="c">// listFriendIds() — one edge, counted from both ends</span>
+<span class="k">if</span> (e.status !== <span class="g">"accepted"</span>) <span class="k">continue</span>;
+ids.add(e.userId === userId ? e.friendId : e.userId);</pre>
+      <p>
+        So <code>A</code> inserts <code>(A → B, accepted)</code> with no involvement from <code>B</code>, and
+        <code>B</code>'s client then lists <code>A</code> as a friend. Combined with SEC-02, any user can
+        insert themselves into any other user's friends leaderboard.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">create policy</span> <span class="g">"friends - accept only what was offered"</span> <span class="k">on</span> public.friends
+  <span class="k">for insert with check</span> (
+    auth.uid() = user_id <span class="k">and</span> (
+      status = <span class="g">'pending'</span>
+      <span class="k">or exists</span> (<span class="k">select</span> 1 <span class="k">from</span> friends f
+                 <span class="k">where</span> f.user_id = friends.friend_id
+                   <span class="k">and</span> f.friend_id = auth.uid())
+    )
+  );</pre>
+      <pre><span class="c">// lib/cloud/friends.ts — both sides must have said yes</span>
+<span class="k">const</span> mine   = <span class="k">new</span> Set(edges.filter(e =&gt; e.userId === userId   &amp;&amp; e.status === <span class="g">"accepted"</span>).map(e =&gt; e.friendId));
+<span class="k">const</span> theirs = <span class="k">new</span> Set(edges.filter(e =&gt; e.friendId === userId &amp;&amp; e.status === <span class="g">"accepted"</span>).map(e =&gt; e.userId));
+<span class="k">return</span> [...mine].filter(id =&gt; theirs.has(id));</pre>
+    </article>
+
+    <article class="finding sev-critical">
+      <div class="finding-head">
+        <span class="docno">SEC-04</span>
+        <h3>PostgREST filter built by string interpolation</h3>
+      </div>
+      <ul class="refs"><li>lib/cloud/friends.ts:89–96</li></ul>
+      <pre>.or(<span class="g">`user_id.eq.${userId},friend_id.eq.${userId}`</span>)</pre>
+      <p>
+        <code>userId</code> lands straight inside PostgREST filter syntax. Today it is a UUID from
+        <code>auth</code> and RLS bounds the blast radius to the caller's own rows, so this is
+        <strong>not currently exploitable</strong> — but it is an injection primitive one refactor away
+        from mattering, the day a friend id arrives from a URL or a room payload. Every other
+        query in the codebase uses parameterised builders; this is the exception.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">const</span> [asOwner, asTarget] = <span class="k">await</span> Promise.all([
+  supabase.from(<span class="g">"friends"</span>).select(<span class="g">"*"</span>).eq(<span class="g">"user_id"</span>, userId),
+  supabase.from(<span class="g">"friends"</span>).select(<span class="g">"*"</span>).eq(<span class="g">"friend_id"</span>, userId),
+]);
+<span class="k">return</span> [...(asOwner.data ?? []), ...(asTarget.data ?? [])].map(fromRow);</pre>
+    </article>
+
+    <article class="finding sev-critical">
+      <div class="finding-head">
+        <span class="docno">SEC-05</span>
+        <h3>Twelve open dependency advisories — 9 high, 3 moderate</h3>
+      </div>
+      <ul class="refs"><li>package-lock.json</li><li><code>npm audit</code> on the locked tree</li></ul>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Package</th><th>Locked</th><th>Sev</th><th>Notable</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>next</td><td class="ver">15.5.19</td><td class="sev-hi">high</td><td>SSRF via attacker-controlled rewrite destination; response-body cache confusion (×2); Image-Optimization DoS via SVG; unauthenticated disclosure of internal Server Function endpoints; Server-Action DoS</td></tr>
+            <tr><td>undici</td><td class="ver">7.28.0</td><td class="sev-hi">high</td><td>Response desync via retry interceptor; cross-user disclosure via cache directives; CRLF injection</td></tr>
+            <tr><td>sharp</td><td class="ver">0.34.5</td><td class="sev-hi">high</td><td>Inherited libvips CVE-2026-33327 / 33328 / 35590 / 35591</td></tr>
+            <tr><td>ip-address</td><td class="ver">transitive</td><td class="sev-hi">high</td><td>SSRF and trust-boundary bypass (3 advisories)</td></tr>
+            <tr><td>brace-expansion</td><td class="ver">1.1.15</td><td class="sev-hi">high</td><td>Expansion DoS (3 advisories)</td></tr>
+            <tr><td>js-yaml · nanoid · fast-uri</td><td class="ver">transitive</td><td class="sev-hi">high</td><td>ReDoS · infinite loop on zero/negative size · host confusion</td></tr>
+            <tr><td>postcss</td><td class="ver">8.5.15</td><td class="sev-mo">mod</td><td>Arbitrary <code>.map</code> file read via <code>sourceMappingURL</code></td></tr>
+            <tr><td>hono · @hono/node-server</td><td class="ver">transitive</td><td class="sev-mo">mod</td><td>SSR cross-user data disclosure; CORS ReDoS; path traversal</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        The Next.js image-optimizer advisory is partly mitigated here — <code>images: { unoptimized: true }</code>
+        in <code>next.config.ts:16</code> — but the cache-confusion and Server-Function ones are not.
+        <code>npm audit</code> reports a fix available for all twelve.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre>npm audit fix &amp;&amp; npm run build &amp;&amp; npx tsc --noEmit</pre>
+    </article>
+
+    <article class="finding sev-critical">
+      <div class="finding-head">
+        <span class="docno">SEC-06</span>
+        <h3>The CSP protects against framing only; no HSTS</h3>
+      </div>
+      <ul class="refs"><li>next.config.ts:7–13</li></ul>
+      <pre>{ key: <span class="g">"Content-Security-Policy"</span>,
+  value: <span class="g">"frame-ancestors 'none'; object-src 'none'; base-uri 'self'"</span> }</pre>
+      <p>
+        The header comment is honest that this is “the pragmatic set” with no <code>script-src</code>.
+        The result contributes nothing against injected script. Given that the app renders
+        user-authored strings — usernames from <code>profiles</code>, verdicts from <code>results</code>,
+        peer names off the multiplayer wire — a real <code>script-src</code> and <code>connect-src</code> would be
+        meaningful defence in depth. <code>Strict-Transport-Security</code> is absent too (Vercel supplies
+        it; a self-hosted deploy would not).
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">const</span> SUPA = process.env.NEXT_PUBLIC_SUPABASE_URL ?? <span class="g">""</span>;
+{ key: <span class="g">"Content-Security-Policy"</span>, value: [
+    <span class="g">"default-src 'self'"</span>,
+    <span class="c">// Next's inline bootstrap needs 'unsafe-inline'; move to a nonce with middleware</span>
+    <span class="g">"script-src 'self' 'unsafe-inline'"</span>,
+    <span class="g">"style-src 'self' 'unsafe-inline'"</span>,
+    <span class="g">"img-src 'self' data: blob:"</span>,
+    <span class="g">"media-src 'self'"</span>,
+    <span class="g">"font-src 'self' data:"</span>,
+    <span class="g">`connect-src 'self' ${SUPA} wss://${SUPA.replace(/^https?:\/\//, <span class="g">""</span>)}`</span>,
+    <span class="g">"frame-ancestors 'none'"</span>, <span class="g">"object-src 'none'"</span>, <span class="g">"base-uri 'self'"</span>,
+  ].join(<span class="g">"; "</span>) },
+{ key: <span class="g">"Strict-Transport-Security"</span>,
+  value: <span class="g">"max-age=63072000; includeSubDomains; preload"</span> },</pre>
+    </article>
+  </section>
+
+  <!-- ══ 2 · FUNCTIONAL BUGS ═════════════════════════════════════════════ -->
+  <section class="bucket">
+    <div class="bucket-head">
+      <span class="bucket-num">02</span>
+      <h2>Functional bugs</h2>
+      <span class="bucket-count">7 findings</span>
+    </div>
+
+    <article class="finding sev-bug">
+      <div class="finding-head">
+        <span class="docno">BUG-01</span>
+        <h3>Cloud guests break useProfile — 11 dead requests and an empty Money Brain</h3>
+      </div>
+      <ul class="refs">
+        <li>hooks/useProfile.ts:26–63</li>
+        <li>lib/cloud/profiles.ts:43–77</li>
+        <li>lib/cloud/identity.ts:60–64</li>
+      </ul>
+      <p>
+        <code>useProfile</code> resolves identity with <code>resolveProgressId</code>, which deliberately returns a
+        <code>device-…</code> id for guests <em>even in cloud mode</em>. It then hands that id to
+        <code>ensureProfile</code>, which — unlike its siblings <code>cloudSavesFor</code> and
+        <code>cloudMasteryFor</code> — has <strong>no guest guard</strong>:
+      </p>
+      <pre><span class="k">export async function</span> ensureProfile(userId: string): Promise&lt;Profile&gt; {
+  <span class="k">const</span> existing = <span class="k">await</span> getProfile(userId);  <span class="c">// uuid column vs "device-…" → error → null</span>
+  <span class="k">if</span> (existing) <span class="k">return</span> existing;
+  <span class="k">if</span> (isCloud &amp;&amp; supabase) {                  <span class="c">// ← no !isGuestId(userId)</span>
+    <span class="k">for</span> (<span class="k">let</span> attempt = 0; attempt &lt; MAX_CREATE_ATTEMPTS; attempt++) { … }
+    <span class="k">throw new</span> Error(<span class="g">"Could not create profile after multiple attempts"</span>);</pre>
+      <p>
+        Every mount fires ~11 doomed requests, then throws. Because <code>load()</code> uses
+        <code>Promise.all</code>, the throw discards the <strong>streak and mastery results too</strong>, and the
+        effect has a <code>finally</code> but no <code>catch</code> — an unhandled rejection each time. The
+        user-visible symptom is the exact one the codebase fights elsewhere: a report announcing
+        “this run sharpened Compounding, Windfalls…” above a Money Brain reading 0%.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="c">// lib/cloud/profiles.ts — the guard its siblings already have</span>
+<span class="k">function</span> cloudProfileFor(userId: string): boolean {
+  <span class="k">return</span> Boolean(isCloud &amp;&amp; supabase &amp;&amp; !isGuestId(userId));
+}
+<span class="c">// then swap every `isCloud &amp;&amp; supabase` in getProfile / ensureProfile /</span>
+<span class="c">// updateUsername for cloudProfileFor(userId) — and add a catch in useProfile</span>
+<span class="c">// so one failed store never blanks the other two.</span></pre>
+    </article>
+
+    <article class="finding sev-bug">
+      <div class="finding-head">
+        <span class="docno">BUG-02</span>
+        <h3>The Rat Race stock book creates money through rounding</h3>
+      </div>
+      <ul class="refs"><li>lib/cashflow/engine.ts:226 vs :255</li></ul>
+      <p>Buys settle in <strong>cents</strong>; sells settle in <strong>whole dollars</strong>.</p>
+      <pre><span class="c">// buyStock — cents</span>
+<span class="k">const</span> cost = Math.round(n * price * 100) / 100;
+
+<span class="c">// sellStock — dollars</span>
+<span class="k">return</span> { ...s, cash: s.cash + <span class="r">Math.round(n * price)</span>, stocks };</pre>
+      <p>
+        A buy-then-sell at an unchanged quote is therefore not value-neutral: one share of a
+        $2.95 ticker costs $2.95 and returns $3.00. The swing is bounded at ±$0.50 per
+        transaction but it is repeatable, and it leaves fractional residue in <code>cash</code> that flows
+        into <code>clampCash</code> and <code>netWorth</code>. <code>maxAffordable</code> already went to the trouble of
+        working in integer cents precisely to avoid this class of drift.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="c">// sellStock — settle both sides identically</span>
+<span class="k">const</span> proceeds = <span class="g">Math.round(n * price * 100) / 100</span>;
+<span class="k">return</span> { ...s, cash: s.cash + proceeds, stocks };</pre>
+    </article>
+
+    <article class="finding sev-bug">
+      <div class="finding-head">
+        <span class="docno">BUG-03</span>
+        <h3>loadCashflow feeds unvalidated localStorage into the engine</h3>
+      </div>
+      <ul class="refs"><li>lib/cashflow/persist.ts:44–56</li></ul>
+      <pre><span class="k">const</span> s = JSON.parse(raw) <span class="k">as</span> CashflowState;
+<span class="k">if</span> (!s || <span class="k">typeof</span> s.version !== <span class="g">"number"</span>) <span class="k">return null</span>;
+<span class="k">if</span> (s.version === STATE_VERSION) <span class="k">return</span> s;   <span class="c">// ← every other field unchecked</span></pre>
+      <p>
+        Only <code>version</code> is inspected. A truncated write or a hand-edited key resumes as a
+        corrupt state: <code>totalExpenses</code> and <code>payday</code> sum their fields with <code>+</code>, so a single
+        <code>undefined</code> becomes <code>NaN</code> and propagates through the whole statement, the Freedom
+        meter and the submitted leaderboard score. Compare the multiplayer path, which rebuilds
+        every field in <code>parseRunState</code>.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">function</span> isCashflowState(s: unknown): s <span class="k">is</span> CashflowState {
+  <span class="k">if</span> (<span class="k">typeof</span> s !== <span class="g">"object"</span> || s === <span class="k">null</span>) <span class="k">return false</span>;
+  <span class="k">const</span> c = s <span class="k">as</span> Partial&lt;CashflowState&gt;;
+  <span class="k">return</span> c.version === STATE_VERSION
+    &amp;&amp; !!c.liabilities &amp;&amp; !!c.expenses
+    &amp;&amp; Array.isArray(c.stocks) &amp;&amp; Array.isArray(c.realEstate) &amp;&amp; Array.isArray(c.businesses)
+    &amp;&amp; Number.isFinite(c.cash) &amp;&amp; Number.isFinite(c.salary) &amp;&amp; Number.isFinite(c.seed);
+}
+<span class="c">// loadCashflow: if (s.version === STATE_VERSION) return isCashflowState(s) ? s : null;</span></pre>
+    </article>
+
+    <article class="finding sev-bug">
+      <div class="finding-head">
+        <span class="docno">BUG-04</span>
+        <h3>advanceYear records a debt payment the player never made</h3>
+      </div>
+      <ul class="refs"><li>lib/runEngine.ts:598–640</li></ul>
+      <p>The lender's minimum comes from cash first, then a forced sale — and both may fall short:</p>
+      <pre><span class="k">const</span> due = debtMinimum(debt);
+…
+debt -= fromCash + forcedSale;   <span class="c">// only what was actually paid</span>
+
+<span class="c">// …but the year's statement line claims the whole amount left:</span>
+cashFlow: Math.round(takeHome - expenses - ms.payment - <span class="r">due</span>),</pre>
+      <p>
+        For a player with no cash and no holdings — precisely the insolvency spiral the engine
+        goes to great length to model — the printed cash flow overstates the outflow by
+        <code>due − (fromCash + forcedSale)</code>, so the receipt stops reconciling against the balance
+        change. The comment on that line (“the figure the player sees is the one they lived”) is
+        the intent; the code doesn't meet it.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">const</span> paid = fromCash + forcedSale;   <span class="c">// hoist out of the `if (due > 0)` block</span>
+…
+cashFlow: Math.round(takeHome - expenses - ms.payment - <span class="g">paid</span>),</pre>
+    </article>
+
+    <article class="finding sev-bug">
+      <div class="finding-head">
+        <span class="docno">BUG-05</span>
+        <h3>startMatch can build a nine-seat roster every peer then truncates</h3>
+      </div>
+      <ul class="refs"><li>hooks/useMatch.tsx:1349–1356</li><li>lib/mp/protocol.ts:221</li></ul>
+      <pre><span class="k">const</span> roster = Object.values(peersRef.current).filter(p =&gt; p.connected)
+  .sort(…).slice(0, MAX_PLAYERS)            <span class="c">// up to 8</span>
+  .map(…);
+<span class="k">if</span> (!roster.some(r =&gt; r.playerId === cur.hostId) &amp;&amp; selfInfoRef.current) {
+  roster.unshift(selfInfoRef.current);      <span class="c">// → 9</span>
+}</pre>
+      <p>
+        <code>parseMatchConfig</code> truncates every inbound roster to <code>MAX_PLAYERS</code>, dropping the
+        <strong>last</strong> entry. The host would then believe a player is seated whom the rest of the room
+        refuses — and since the roster is also the rejoin gate, that player is permanently locked
+        out with “the host started the match without you”. Presence caps <code>others</code> at 7, so this
+        is hard to reach today, but the invariant is one line.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">if</span> (roster.length &gt; MAX_PLAYERS) roster.length = MAX_PLAYERS;</pre>
+    </article>
+
+    <article class="finding sev-bug">
+      <div class="finding-head">
+        <span class="docno">BUG-06</span>
+        <h3>pickIndex returns index 0 for an empty deck</h3>
+      </div>
+      <ul class="refs"><li>lib/cashflow/rng.ts:29–31</li><li>lib/cashflow/engine.ts:204–207</li></ul>
+      <pre><span class="k">return</span> Math.floor(rngAt(seed, cursor) * len) % Math.max(1, len);</pre>
+      <p>
+        With <code>len === 0</code> this returns <code>0</code>, and <code>draw()</code> then hands back
+        <code>deck[0] === undefined</code> as a card. Every caller destructures <code>.card</code> and reads fields off
+        it. The <code>Math.max(1, len)</code> guard protects the modulo but not the caller.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">export function</span> pickIndex(seed: number, cursor: number, len: number): number {
+  <span class="k">if</span> (len &lt;= 0) <span class="k">return</span> -1;
+  <span class="k">return</span> Math.floor(rngAt(seed, cursor) * len) % len;
+}</pre>
+    </article>
+
+    <article class="finding sev-bug">
+      <div class="finding-head">
+        <span class="docno">BUG-07</span>
+        <h3>saveMatch deletes other rooms on any storage failure</h3>
+      </div>
+      <ul class="refs"><li>lib/mp/matchStore.ts:125–133</li></ul>
+      <pre><span class="k">for</span> (;;) {
+  <span class="k">try</span> { store.setItem(keyFor(roomCode), body); evict(store, roomCode); <span class="k">return</span>; }
+  <span class="k">catch</span> { <span class="k">if</span> (!dropOldest(store, roomCode)) <span class="k">return</span>; }
+}</pre>
+      <p>
+        The loop assumes every <code>setItem</code> throw is a quota error. It isn't — Safari private mode
+        and “block all cookies” throw unconditionally. In that case the loop deletes
+        <strong>every other stored match record</strong> before giving up, destroying rejoin data for rooms
+        that had nothing to do with this write. The comment explains why swallowing the error is
+        wrong; the retry over-corrects.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">catch</span> (e) {
+  <span class="k">const</span> quota = e <span class="k">instanceof</span> DOMException &amp;&amp;
+    (e.name === <span class="g">"QuotaExceededError"</span> || e.name === <span class="g">"NS_ERROR_DOM_QUOTA_REACHED"</span>);
+  <span class="k">if</span> (!quota || !dropOldest(store, roomCode)) <span class="k">return</span>;
+}</pre>
+    </article>
+  </section>
+
+  <!-- ══ 3 · QUALITY & PERFORMANCE ═══════════════════════════════════════ -->
+  <section class="bucket">
+    <div class="bucket-head">
+      <span class="bucket-num">03</span>
+      <h2>Quality &amp; performance</h2>
+      <span class="bucket-count">7 findings</span>
+    </div>
+
+    <article class="finding sev-quality">
+      <div class="finding-head">
+        <span class="docno">QUA-01</span>
+        <h3>The leaderboard over-fetches and dedupes on the client</h3>
+      </div>
+      <ul class="refs"><li>lib/cloud/results.ts:90–116</li></ul>
+      <pre><span class="k">const</span> { data } = <span class="k">await</span> query.limit(limit * 5);   <span class="c">// 125 rows over the wire</span>
+<span class="k">return</span> bestPerUser((data ?? []).map(fromRow)).slice(0, limit);</pre>
+      <p>
+        Two problems. The transfer grows linearly with board size, and correctness is only
+        probabilistic: if one prolific player owns the top 125 rows, the board renders
+        <strong>one</strong> entry. Push the dedupe into Postgres.
+      </p>
+      <span class="fixlabel">Recommended fix</span>
+      <pre><span class="k">create view</span> public.results_best <span class="k">as</span>
+  <span class="k">select distinct on</span> (user_id, mode) * <span class="k">from</span> public.results
+  <span class="k">order by</span> user_id, mode, score <span class="k">desc</span>, created_at <span class="k">desc</span>;</pre>
+    </article>
+
+    <article class="finding sev-quality">
+      <div class="finding-head">
+        <span class="docno">QUA-02</span>
+        <h3>ShareCard holds a multi-megabyte data URL in React state</h3>
+      </div>
+      <ul class="refs"><li>components/share/ShareCard.tsx:47</li></ul>
+      <p>
+        <code>setPreview(cv.toDataURL("image/png"))</code> base64-encodes a 1080×1920 PNG (≈1.33× the raw
+        bytes) into a string that lives in state, is diffed by React, and is re-parsed as an
+        <code>&lt;img src&gt;</code>. <code>URL.createObjectURL(blob)</code> avoids the encode, the copy and the diff —
+        and the component already has a <code>toBlob()</code> helper. Revoke on unmount and on format change.
+      </p>
+    </article>
+
+    <article class="finding sev-quality">
+      <div class="finding-head">
+        <span class="docno">QUA-03</span>
+        <h3>Identity generators are undersized and non-cryptographic</h3>
+      </div>
+      <ul class="refs"><li>lib/cloud/generate.ts:29–39</li><li>lib/mp/roomCodes.ts:9–22</li></ul>
+      <p>
+        <code>generateUsername()</code> draws from 24 × 24 × 900 ≈ 518k combinations against a
+        <code>UNIQUE</code> constraint with only five retries — collision pressure rises quadratically with
+        the userbase, and exhausting the retries throws (swallowed by <code>submitRunOnce</code>, so the
+        run silently never posts). <code>generateFriendCode()</code> uses <code>Math.random()</code>, which is not a
+        CSPRNG. <code>lib/mp/roomCodes.ts</code> already does this correctly with
+        <code>crypto.getRandomValues</code> and rejection sampling — reuse that helper, and append a random
+        suffix to usernames.
+      </p>
+    </article>
+
+    <article class="finding sev-quality">
+      <div class="finding-head">
+        <span class="docno">QUA-04</span>
+        <h3>Match messages carry no sender authentication — accepted risk</h3>
+      </div>
+      <ul class="refs"><li>hooks/useMatch.tsx:746–863</li></ul>
+      <p>
+        <code>snapshot</code>, <code>snapshotReply</code> and <code>config</code> are trusted on the strength of the
+        <code>playerId</code> <em>inside</em> the payload; the transport binds no sender identity. The code is
+        candid about this — “airtight needs a server authority, which is out of scope by
+        contract” — and mitigates it well with roster gating, session fencing, and a <code>tick</code>
+        bounded by demonstrable peer years. Worth recording as an accepted risk rather than a
+        defect: a room member who knows the code can still rewrite an absent player's cached
+        life. Binding sends to the Realtime presence key would close it.
+      </p>
+    </article>
+
+    <article class="finding sev-quality">
+      <div class="finding-head">
+        <span class="docno">QUA-05</span>
+        <h3>drawEvents spins its full guard when the eligible pool is thin</h3>
+      </div>
+      <ul class="refs"><li>lib/runEngine.ts:211</li></ul>
+      <p>
+        The solo branch loops to its 60-iteration guard whenever the eligible pool holds fewer
+        distinct events than <code>want</code>. Break when
+        <code>picks.length === new Set(weighted).size</code>.
+      </p>
+    </article>
+
+    <article class="finding sev-quality">
+      <div class="finding-head">
+        <span class="docno">QUA-06</span>
+        <h3>The OG route's upstream fetch has no timeout</h3>
+      </div>
+      <ul class="refs"><li>app/api/og/[id]/route.tsx:41</li></ul>
+      <p>
+        The Supabase read has no <code>AbortSignal.timeout()</code>. On an edge function a slow upstream
+        holds the request until the platform kills it — and the generic fallback card exists
+        precisely so this never blocks. Add <code>{ signal: AbortSignal.timeout(1500) }</code>; the
+        existing <code>catch</code> already returns the fallback.
+      </p>
+    </article>
+
+    <article class="finding sev-quality">
+      <div class="finding-head">
+        <span class="docno">QUA-07</span>
+        <h3>The one standing lint warning</h3>
+      </div>
+      <ul class="refs"><li>components/share/ShareCard.tsx:132</li></ul>
+      <p>
+        <code>@next/next/no-img-element</code> on a raw <code>&lt;img&gt;</code>. It's legitimate here — the source is a
+        data or blob URL that <code>next/image</code> can't optimise — so silence it with an inline
+        <code>eslint-disable-next-line</code> and a one-line note, rather than leaving a warning standing
+        in an otherwise clean run.
+      </p>
+    </article>
+  </section>
+
+  <!-- ══ WORK ORDER ══════════════════════════════════════════════════════ -->
+  <section class="bucket">
+    <div class="bucket-head">
+      <span class="bucket-num">04</span>
+      <h2>Suggested order of work</h2>
+      <span class="bucket-count">by effort against impact</span>
+    </div>
+    <ol class="order">
+      <li><b>npm audit fix</b> — SEC-05. Mechanical, clears twelve advisories in one command.</li>
+      <li><b>ensureProfile guest guard</b> — BUG-01. One function; fixes a live user-visible bug and eleven wasted requests per mount.</li>
+      <li><b>Schema hardening</b> — SEC-01, SEC-02, SEC-03 together. They are one migration, and they are the difference between a leaderboard that means something and one that doesn't.</li>
+      <li><b>Rounding and validation</b> — BUG-02, BUG-03, BUG-04, BUG-06.</li>
+      <li><b>CSP and HSTS</b> — SEC-06.</li>
+      <li><b>Robustness and perf</b> — BUG-05, BUG-07, QUA-01, QUA-02.</li>
+    </ol>
+  </section>
+
+  <footer>
+    <p class="verdict">The engine is careful with the player's money. The database isn't yet careful with the player's name.</p>
+    <span class="eyebrow eyebrow--faint">Lifepatch · Form 03 · 2026-08-25</span>
+  </footer>
+
+</div>
