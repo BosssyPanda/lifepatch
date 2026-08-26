@@ -1,4 +1,5 @@
 import { HOME_DOWN_PAYMENT } from "./economy";
+import { currency } from "./format";
 import type { Tone } from "./markets";
 
 export type LifeEffect = Partial<{
@@ -140,15 +141,39 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     tag: "Housing",
     prompt: "Rent keeps climbing. A starter home is just in reach — if you can stomach the down payment and the mortgage.",
     minAge: 27,
-    once: true,
     weight: 2,
     // You cannot buy a house you can't put money down on. The engine turns the
-    // "owned" flag into a $220k home + a $176k mortgage, so the down payment has
-    // to be real cash the player actually accumulated.
-    requires: (c) => c.life.housing === "renting" && c.salary > 0 && c.cash >= HOME_DOWN_PAYMENT,
+    // "owned" flag into a home priced at TODAY's level and the mortgage that paid
+    // for it, so the down payment has to be real cash the player actually
+    // accumulated.
+    //
+    // That is also why the buy blurb prints the dollar figure instead of the "20%
+    // down" it used to. The down payment is a fixed amount; the price is not. The
+    // two agreed in year one and nowhere after it — by Infinite year 40 the same
+    // $44,000 is about 7.5% of the house — so the percentage was a number the card
+    // stated and the engine contradicted. The dollars are true in every year.
+    //
+    // `once: true` used to sit here, and it punished the wrong answer permanently.
+    // Saying "keep renting" once — at 27, on a first salary, which is often the
+    // correct call — closed home ownership for the rest of the life AND took
+    // `houseHack` (owners only) with it, leaving the player with the repeatable
+    // −$3,600-EV `rentHike` and no way to ever stop drawing it. A choice that
+    // forecloses a third of the housing content forever is not a choice, it is a
+    // trapdoor.
+    //
+    // The housing test replaces it and does the same job better: buy, and the event
+    // is ineligible because you own; decline, and it comes back after the cooldown;
+    // sell (see `sellHome`), and it is offered again, which is what stops selling
+    // from being its own one-way door. Five years, because a starter-home decision
+    // re-presented every other year is nagging rather than a decision.
+    requires: (c) =>
+      c.life.housing === "renting" &&
+      c.salary > 0 &&
+      c.cash >= HOME_DOWN_PAYMENT &&
+      !recent(c.flags, "declinedHome", c.year, 5),
     choices: [
-      { id: "buy", label: "Buy the house", blurb: "20% down + a 30-year mortgage.", outcomes: [{ weight: 100, effect: { cash: -HOME_DOWN_PAYMENT, happiness: 8 }, tone: "warning", setFlags: ["owned"], consequence: "Keys in hand — and a 30-year obligation. Property tax, insurance and a roof that will, eventually, leak.", lesson: "A house is shelter first, investment second. The down payment is gone from the market, and the mortgage doesn't shrink when prices do." }] },
-      { id: "rent", label: "Keep renting, invest the rest", blurb: "Stay flexible and liquid.", outcomes: [{ weight: 100, effect: { happiness: -2 }, tone: "neutral", consequence: "No yard, no upkeep, full flexibility. The down payment stays working in the market.", lesson: "Renting isn't 'throwing money away' — it buys flexibility and dodges maintenance." }] },
+      { id: "buy", label: "Buy the house", blurb: `${currency(HOME_DOWN_PAYMENT)} down + a 30-year mortgage.`, outcomes: [{ weight: 100, effect: { cash: -HOME_DOWN_PAYMENT, happiness: 8 }, tone: "warning", setFlags: ["owned"], consequence: "Keys in hand — and a 30-year obligation. Property tax, insurance and a roof that will, eventually, leak.", lesson: "A house is shelter first, investment second. The down payment is gone from the market, and the mortgage doesn't shrink when prices do." }] },
+      { id: "rent", label: "Keep renting, invest the rest", blurb: "Stay flexible and liquid.", outcomes: [{ weight: 100, effect: { happiness: -2 }, tone: "neutral", setFlags: ["declinedHome"], consequence: "No yard, no upkeep, full flexibility. The down payment stays working in the market.", lesson: "Renting isn't 'throwing money away' — it buys flexibility and dodges maintenance." }] },
     ],
   },
   {
@@ -482,7 +507,15 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     prompt: "Your student loans sit there compounding. You could throw everything at them or just pay the minimum.",
     minAge: 22,
     weight: 1,
-    requires: (c) => c.salary > 0 && c.life.health > 0,
+    // The balance gate is the point. Without it this was dealt to players carrying
+    // no debt at all — a prompt describing loans that do not exist, above an option
+    // whose own lesson calls it "a guaranteed return equal to its interest rate".
+    // `applyLifeChoice` moves cash and debt independently and floors the balance at
+    // zero, so a debt-free Tradesperson who took the advice paid $8,000 to retire
+    // nothing. The threshold is the full $8,000 rather than a token balance so the
+    // card's stated cost is always a cost the player can actually incur; the engine
+    // now refuses to overpay as well, but a card should not need rescuing.
+    requires: (c) => c.salary > 0 && c.life.health > 0 && c.debt >= 8000,
     choices: [
       { id: "attack", label: "Attack the debt", blurb: "Kill it fast.", outcomes: [{ weight: 100, effect: { cash: -8000, debt: -8000, happiness: -3 }, tone: "good", consequence: "Lean months, but the balance drops hard. Future-you gets a raise called 'no payment.'", lesson: "Paying off debt is a guaranteed return equal to its interest rate. Often unbeatable." }] },
       { id: "minimum", label: "Pay the minimum, invest more", blurb: "Bet on the market.", outcomes: [{ weight: 100, effect: { happiness: 1 }, tone: "neutral", consequence: "You keep the cash liquid and invest instead. Works if your returns beat the loan rate.", lesson: "Low-rate debt can coexist with investing. High-rate debt should always die first." }] },
@@ -494,15 +527,21 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     prompt: "A much better-paying job is open — in another city. New start, new rent, no friends nearby.",
     minAge: 24,
     weight: 1,
-    requires: (c) => c.salary > 0,
+    // A guaranteed +28% with no cooldown is a money pump, not a career decision:
+    // both `move` outcomes carry the identical salary and cash, so re-drawing it
+    // compounds the raise with no counterweight but happiness. `promotion` — the
+    // other raise event, and the only comparable one — already draws this line with
+    // `recent(flags, "promoted", 2)`; the same idiom, the same window, so a life
+    // cannot be two moves and a promotion inside three years.
+    requires: (c) => c.salary > 0 && !recent(c.flags, "relocated", c.year, 2),
     choices: [
       {
         id: "move",
         label: "Pack up and move",
         blurb: "Chase the opportunity.",
         outcomes: [
-          { weight: 60, note: "It clicked.", effect: { salaryPct: 28, cash: -6000, happiness: 4, health: -2 }, tone: "good", consequence: "Bigger paycheck, fresh scene, and you actually settle in. The leap paid off.", lesson: "Geographic flexibility early in a career is one of the biggest income levers you have." },
-          { weight: 40, note: "Homesick.", effect: { salaryPct: 28, cash: -6000, happiness: -10, health: -3 }, tone: "warning", consequence: "The money's great; the loneliness isn't. You're richer and a little adrift.", lesson: "More income doesn't automatically mean more happiness. Price in the human cost." },
+          { weight: 60, note: "It clicked.", effect: { salaryPct: 28, cash: -6000, happiness: 4, health: -2 }, tone: "good", setFlags: ["relocated"], consequence: "Bigger paycheck, fresh scene, and you actually settle in. The leap paid off.", lesson: "Geographic flexibility early in a career is one of the biggest income levers you have." },
+          { weight: 40, note: "Homesick.", effect: { salaryPct: 28, cash: -6000, happiness: -10, health: -3 }, tone: "warning", setFlags: ["relocated"], consequence: "The money's great; the loneliness isn't. You're richer and a little adrift.", lesson: "More income doesn't automatically mean more happiness. Price in the human cost." },
         ],
       },
       { id: "stay", label: "Stay put", blurb: "Keep your people.", outcomes: [{ weight: 100, effect: { happiness: 4 }, tone: "neutral", consequence: "You keep your community and pass on the raise. Roots have value money can't buy.", lesson: "Your network and support system are real assets — just ones that don't show on a balance sheet." }] },

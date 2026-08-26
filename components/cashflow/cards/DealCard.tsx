@@ -77,6 +77,7 @@ export function DealCard({
   deal,
   cash,
   price,
+  canAfford = true,
   onBuy,
   onPass,
 }: {
@@ -85,6 +86,17 @@ export function DealCard({
   /** Live quote for a stock deal. Stocks are no longer priced at their deck value
    *  forever, so the card has to ask for the same number the engine will charge. */
   price?: number;
+  /**
+   * Whether the engine will actually accept this purchase — `canAffordDeal(s, down)`,
+   * answered by the engine rather than re-derived here.
+   *
+   * It has to be the engine's answer and not a `cash < down` test in the UI, because
+   * "can I afford it" means "cash plus what the bank will lend, quantised to the
+   * thousand it lends in". A card that reasons about that separately drifts from the
+   * rule that decides the outcome, which is how this card came to promise the bank
+   * would cover a gap the bank had already refused.
+   */
+  canAfford?: boolean;
   onBuy: (shares?: number) => void;
   onPass: () => void;
 }) {
@@ -125,9 +137,19 @@ export function DealCard({
 
       <LessonBox>{deal.lesson}</LessonBox>
 
-      {needLoan && (
+      {/* Two different messages, because they are two different situations and the
+          card used to print the reassuring one for both. "The bank will cover the
+          gap" was shown whenever cash was short — including when the credit line was
+          already exhausted and the click would end the run on the spot. */}
+      {needLoan && canAfford && (
         <p className="mt-3 bg-loss/12 px-3 py-2 font-body text-[0.8rem] text-loss">
           You have {currency(cash)}. Buying means a bank loan to cover the gap — at 10%/month. Borrow wisely.
+        </p>
+      )}
+      {!canAfford && (
+        <p className="mt-3 bg-loss/12 px-3 py-2 font-body text-[0.8rem] text-loss">
+          You have {currency(cash)}, and the bank will not lend the rest. This one is out of reach
+          — pass, and come back when your cash flow has bought you the room.
         </p>
       )}
 
@@ -135,7 +157,7 @@ export function DealCard({
         <NeonButton variant="outline" size="sm" onClick={onPass}>
           Pass
         </NeonButton>
-        <NeonButton variant="paper" size="md" onClick={() => onBuy()}>
+        <NeonButton variant="paper" size="md" disabled={!canAfford} onClick={() => onBuy()}>
           Buy · {currency(down)} down
         </NeonButton>
       </div>

@@ -278,6 +278,28 @@ export const MARKET_CARDS: MarketCard[] = [
     lesson: "Assets do not always go up. Sell here and you crystallize a real loss — this is why cash flow beats hoping for a price.",
   },
   {
+    kind: "propertySale",
+    id: "mk-commercial-buyer",
+    title: "Fund Assembling a Retail Portfolio",
+    propertyType: "commercial",
+    // The Strip Mall (`bd-commercial`) was the only holding in the game that could be
+    // bought and never sold: it is the sole `propertyType: "commercial"` deal, no sale
+    // card carried that type, and `EventCards.tsx` matches on exact string equality —
+    // so $380,000 of the largest purchase available was locked up for the rest of the
+    // run with no way out and no message saying so.
+    //
+    // The terms are not a new dial. Every existing sale card sits on one gradient:
+    // the bigger and more institutional the asset, the tighter the offer — house
+    // 1.16/0.22, duplex 1.12/0.20, plex 1.10/0.18 (land is the deliberate outlier at
+    // 1.20/0.55, because speculation is the lesson there). A five-tenant commercial
+    // block at $380,000 is the largest and most institutional thing on the board, so
+    // it continues that line rather than starting a new one.
+    multiple: 1.08,
+    spread: 0.16,
+    flavor: "A REIT is rolling up neighbourhood retail and your five tenants look tidy on a spreadsheet.",
+    lesson: "Commercial property is priced off its income, not its postcode — a buyer is really buying your rent roll. The bigger the ticket, the fewer the buyers, and the less they need to stretch.",
+  },
+  {
     kind: "businessSale",
     id: "mk-biz-buyer",
     title: "Chain Acquiring Local Businesses",

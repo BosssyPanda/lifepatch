@@ -273,6 +273,7 @@ export function parseRunState(raw: unknown): RunState | null {
   const debt = money(raw.debt);
   const homeValue = money(raw.homeValue);
   const mortgage = money(raw.mortgage);
+  const mortgagePayment = money(raw.mortgagePayment);
   const salary = money(raw.salary);
   const seed = int(raw.seed, 0, 1e9);
   const lastDelta = money(raw.lastDelta);
@@ -283,7 +284,8 @@ export function parseRunState(raw: unknown): RunState | null {
   const job = str(raw.job, 64);
   if (
     startYear === null || year === null || age === null || cash === null || debt === null ||
-    homeValue === null || mortgage === null || salary === null || seed === null ||
+    homeValue === null || mortgage === null || mortgagePayment === null ||
+    salary === null || seed === null ||
     lastDelta === null || interestPaid === null || insolventStreak === null ||
     !life || bg === null || job === null
   ) {
@@ -362,6 +364,7 @@ export function parseRunState(raw: unknown): RunState | null {
     debt: Math.max(0, debt),
     homeValue: Math.max(0, homeValue),
     mortgage: Math.max(0, mortgage),
+    mortgagePayment: Math.max(0, mortgagePayment),
     salary: Math.max(0, salary),
     job,
     holdings,

@@ -268,6 +268,34 @@ export function sellStock(s: CashflowState, symbol: string, shares: number): Cas
  * range so PLSE stays a lottery ticket and GRID stays a utility. Deterministic
  * from (seed, cursor) like every other draw, so a run replays exactly.
  */
+/**
+ * How far outside its published range a quote may actually travel.
+ *
+ * The range is a HARD band no longer, and that is the fix. `Math.max(lo, …)` made
+ * the bottom of every range a free bet: PLSE trades in `[1, 60]`, and at a quote of
+ * $1.00 its worst possible tick is `1 × (1 − 0.16 − 0.28) = 0.56`, which clamped
+ * straight back to $1.00 — while its best, $1.46, kept every cent. A holding bought
+ * at the floor could not lose. The deal card then advertised exactly that condition
+ * as "Below its usual price" in `tone="good"`, so the game was pointing at the
+ * exploit and calling it a bargain.
+ *
+ * Reflecting the price back inside was the wrong repair — it turns a down move into
+ * a gain, which is a stranger lie than the one it replaces. Widening the band is the
+ * right one, because the band was never a promise: `DealCard` prints it under the
+ * label "Typical range", and its "usual price" comparison is against the deck's
+ * reference price, not against `lo`. So a stock at the low end of typical can now
+ * fall further, and a stock at the high end can run — while PLSE still stays a
+ * lottery ticket and GRID still stays a utility, which is all the clamp was for.
+ *
+ * What this does not do: a price still cannot fall forever, so the widened floor is
+ * itself a floor, and a quote sitting exactly on it is still safe. The difference is
+ * that the floor now sits 15% BELOW the range the game points at, so the state the
+ * card labels "Below its usual price" is a real risk rather than a free option, and
+ * the safe corner is somewhere the game never advertises. A price has to be positive;
+ * that much is arithmetic, not design.
+ */
+const QUOTE_BAND_SLACK = 0.15;
+
 export function tickStockPrices(s: CashflowState, drift: number): CashflowState {
   const prices: Record<string, number> = { ...s.stockPrices };
   STOCK_CATALOG.forEach((d, i) => {
@@ -276,12 +304,51 @@ export function tickStockPrices(s: CashflowState, drift: number): CashflowState 
     const volatility = (hi - lo) / d.price; // GRID ≈ 0.87, PLSE ≈ 11.8
     const shock = (rngAt(s.seed, s.rngCursor + 101 + i) - 0.5) * 0.14 * Math.min(volatility, 4);
     const moved = now * (1 + drift * Math.min(1, volatility) + shock);
-    prices[d.symbol] = Math.max(lo, Math.min(hi, Math.round(moved * 100) / 100));
+    // A cent is the smallest thing a price can be: the slack must never take a
+    // quote to zero or below, where `maxAffordable` would offer infinite shares.
+    const floor = Math.max(0.01, lo * (1 - QUOTE_BAND_SLACK));
+    const ceiling = hi * (1 + QUOTE_BAND_SLACK);
+    prices[d.symbol] = Math.round(Math.max(floor, Math.min(ceiling, moved)) * 100) / 100;
   });
   return { ...s, stockPrices: prices, rngCursor: s.rngCursor + 1 };
 }
 
+/**
+ * Can this purchase be paid for — from cash, or from cash plus what the bank will
+ * actually lend right now?
+ *
+ * `buyRealEstate` and `buyBusiness` had no affordability test at all. They handed
+ * the shortfall to `clampCash`, which borrows what it can and then, if the player is
+ * still short, ends the run — and the caller went on to append the holding to the
+ * spread of that already-lost state. The recap showed a bankrupt player owning an
+ * apartment building, and the click that did it was a Buy button that had never been
+ * disabled and a line of copy promising the bank would cover the gap.
+ *
+ * The headroom is measured on the state BEFORE the holding is appended, which is
+ * also what `clampCash` was doing — so a deal's own cash flow never counted toward
+ * the credit line deciding whether that deal could kill you. That stays true here,
+ * deliberately: a lender does not underwrite a loan on income the loan has not
+ * bought yet, and pretending otherwise would let a big enough deal always finance
+ * itself.
+ */
+export function canAffordDeal(s: CashflowState, downPayment: number): boolean {
+  if (downPayment <= 0) return true;
+  const short = downPayment - s.cash;
+  if (short <= 0) return true;
+  // The bank lends in whole thousands, so the reachable amount is the quantised one
+  // — the same figure `clampCash` will actually draw, and the same figure the Bank
+  // panel prints. Comparing against an unquantised ceiling would call a purchase
+  // affordable that the draw then falls $1–$999 short of.
+  const room = Math.max(0, bankHeadroom(s));
+  return Math.ceil(short / BANK_UNIT) * BANK_UNIT <= room;
+}
+
 export function buyRealEstate(s: CashflowState, deal: RealEstateDeal): CashflowState {
+  // Refused, not survived. Returning the state untouched is the engine's existing
+  // "I will not do that" signal, and it keeps the two outcomes the player can
+  // actually reason about — you bought it, or you did not — instead of a third one
+  // where you own it and the run is over.
+  if (!canAffordDeal(s, deal.downPayment)) return s;
   const base = clampCash({ ...s, cash: s.cash - deal.downPayment });
   return {
     ...base,
@@ -304,6 +371,7 @@ export function buyRealEstate(s: CashflowState, deal: RealEstateDeal): CashflowS
 }
 
 export function buyBusiness(s: CashflowState, deal: BusinessDeal): CashflowState {
+  if (!canAffordDeal(s, deal.downPayment)) return s; // see `buyRealEstate`
   const base = clampCash({ ...s, cash: s.cash - deal.downPayment });
   return {
     ...base,

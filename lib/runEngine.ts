@@ -6,10 +6,12 @@ import {
   DEBT_RATE,
   HOME_DOWN_PAYMENT,
   HOME_PRICE,
+  HOME_SALE_COST,
   HOME_UPKEEP,
   INFLATION,
   KID_COST,
   MORTGAGE_PAYMENT,
+  MORTGAGE_PAYMENT_RATE,
   MORTGAGE_RATE,
   RENT_START,
   RETIRE_MULTIPLE,
@@ -45,8 +47,15 @@ import { mulberry32, strHash } from "./rng";
  *          draw falls back to the weights it always used, and replay/ghost/verify
  *          return null. Same reasoning `sharedEvents` already makes below. Bumping
  *          would have invalidated every live save to buy nothing.
+ *   6 → 7: the home stops being a fixed nominal price. `HOME_PRICE` is restated to
+ *          the price level at purchase, the mortgage payment is derived from the
+ *          loan actually signed and carried in `mortgagePayment`, and `sellHome`
+ *          exists. This one HAS to bump: a v6 save carries no `mortgagePayment`,
+ *          and every engine fix in this change alters what a replayed run resolves
+ *          to, so old rows must be marked non-comparable rather than quietly mixed
+ *          into a leaderboard beside new ones.
  */
-export const RUN_VERSION = 6;
+export const RUN_VERSION = 7;
 
 export type Life = {
   health: number;
@@ -84,7 +93,12 @@ export type MarketYear = { year: number; returns: Record<AssetId, number> };
 export type JournalAct =
   | readonly ["c", eventId: string, choiceId: string, outcomeIdx: number]
   | readonly ["t", asset: AssetId, dollars: number]
-  | readonly ["d", dollars: number];
+  | readonly ["d", dollars: number]
+  /** Sold the house. Carries nothing: the proceeds are a pure function of the
+   *  state at the moment it happened, so recording them would be recording a
+   *  derivation the replay must compute anyway — and a second source of truth
+   *  that can disagree with the first. */
+  | readonly ["h"];
 
 /**
  * What one year of a life actually consisted of.
@@ -125,6 +139,16 @@ export type EndReason = "story-complete" | "retired" | "quit" | "died" | "insolv
 export type RunState = {
   /** Engine/save format — see RUN_VERSION. Checked before a save is resumed. */
   version: number;
+  /**
+   * Set only on a run carried forward by `migrateSave`, and set to the version it
+   * was carried FROM. A migrated run is playable — that is the whole point — but it
+   * is not comparable: most of its years were resolved under the older economy, so
+   * ranking it against runs played entirely under the current one is the exact
+   * mixing `comparabilityMarker` exists to prevent. `resultFromRun` stamps this
+   * instead of `RUN_VERSION` when it is present, so the run keeps its own share
+   * page and simply does not appear on today's board.
+   */
+  migratedFrom?: number;
   mode: ModeId;
   startYear: number;
   endYear: number | null;
@@ -138,6 +162,17 @@ export type RunState = {
   homeValue: number;
   /** Outstanding mortgage principal. Secured, cheaper than `debt`, and amortising. */
   mortgage: number;
+  /**
+   * The level annual payment on the loan this player actually signed. 0 while
+   * renting.
+   *
+   * In the state rather than a constant because the price is restated to the price
+   * level at purchase: a loan taken out in year 40 is several times the size of one
+   * taken out in year 1, and a fixed payment against it would never cover the
+   * interest — the balance would grow every year and the house would never be paid
+   * off. Set once, at purchase, and never re-derived: a mortgage is a contract.
+   */
+  mortgagePayment: number;
   salary: number;
   job: string;
   holdings: Record<AssetId, number>;
@@ -438,6 +473,7 @@ export function initRun(
     debt: bg.debt,
     homeValue: 0,
     mortgage: 0,
+    mortgagePayment: 0,
     salary: bg.salary,
     job: bg.job,
     holdings: emptyHoldings(),
@@ -498,6 +534,52 @@ export function payDebt(s: RunState, dollars: number): RunState {
   // repayment into a loan.
   const amt = Math.min(dollars, Math.max(0, s.cash), Math.max(0, s.debt));
   return record({ ...s, cash: s.cash - amt, debt: s.debt - amt }, ["d", dollars]);
+}
+
+/**
+ * What selling the house right now would put in the player's hand.
+ *
+ * Negative means underwater: the sale does not clear the mortgage and the
+ * shortfall follows you as unsecured debt. That is what "the mortgage doesn't
+ * shrink when prices do" — the lesson `rentOrBuy` already prints — actually costs,
+ * and 2007–2011 is in the returns table precisely so it can happen.
+ */
+export function homeSaleProceeds(s: RunState): number {
+  if (s.life.housing !== "owned") return 0;
+  return Math.round(s.homeValue * (1 - HOME_SALE_COST)) - s.mortgage;
+}
+
+/**
+ * Sell the house.
+ *
+ * The engine had three places that could write `housing`/`homeValue`/`mortgage`
+ * — `initRun`, the buy branch, the annual revaluation — and none of them could
+ * ever reverse it. That made two things untrue at once. `isUnrecoverable`'s own
+ * comment says "equity in the house is a way out", and refuses the insolvency
+ * ending to any homeowner; with no way to reach that equity it was not a way out,
+ * it was a reason the ending could never fire. And upkeep is `homeValue *
+ * HOME_UPKEEP` on a value compounding faster than wages, so a long Infinite run
+ * eventually spends more on the house than it earns, with no lever left but
+ * ADVANCE. This is the lever.
+ *
+ * It is not free: `HOME_SALE_COST` comes off the top, so a house flipped the year
+ * after it was bought loses money, and the run goes back to paying inflating rent.
+ */
+export function sellHome(s: RunState): RunState {
+  if (s.status !== "playing") return s;
+  if (s.life.housing !== "owned") return s;
+  const net = homeSaleProceeds(s);
+  return record({
+    ...s,
+    // Underwater, the bank is still owed the difference, and it joins the balance
+    // that compounds at DEBT_RATE. Nothing here can be lost quietly.
+    cash: s.cash + Math.max(0, net),
+    debt: net < 0 ? s.debt - net : s.debt,
+    homeValue: 0,
+    mortgage: 0,
+    mortgagePayment: 0,
+    life: { ...s.life, housing: "renting" },
+  }, ["h"]);
 }
 
 export function allEventsResolved(s: RunState): boolean {
@@ -575,20 +657,55 @@ export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice
   // Buying a home: the down payment leaves as `effect.cash`, and in exchange the
   // player gets an asset AND the mortgage that paid for it. Never one without
   // the other — that was the "free house" bug.
+  //
+  // The PRICE is restated to today's level, for the same reason `salaryTo` is. Left
+  // nominal it was the largest exploit in the sim: `annualExpenses` inflates rent
+  // every year while the house stayed $220,000 with a fixed $13,376/yr mortgage, so
+  // by Infinite year 60 a $44,000 down payment bought a permanent $42,700/yr saving
+  // — a guaranteed ~97% annual return, available to anyone who waited.
+  //
+  // The DOWN PAYMENT stays nominal, which is deliberate and is the honest half of
+  // the same story: it is the figure the card quotes and the figure `requires`
+  // gates on, so the ledger the player reads is the money that actually moves.
+  // What changes is the leverage — buy in year one and you own 20% of the house;
+  // buy in year forty and you own 5% of a much larger one, with a payment to match.
   let homeValue = s.homeValue;
   let mortgage = s.mortgage;
+  let mortgagePayment = s.mortgagePayment;
   if (o.setFlags?.includes("owned") && housing !== "owned") {
     housing = "owned";
-    homeValue = HOME_PRICE;
-    mortgage = HOME_PRICE - HOME_DOWN_PAYMENT;
+    homeValue = Math.round(HOME_PRICE * inflator(s));
+    mortgage = Math.max(0, homeValue - HOME_DOWN_PAYMENT);
+    // The contract, signed once. `mortgageService` amortises against this and never
+    // recomputes it — a level payment is what makes a mortgage a mortgage.
+    mortgagePayment = Math.round(mortgage * MORTGAGE_PAYMENT_RATE);
+  }
+
+  // A repayment can only spend what it actually retires.
+  //
+  // Cash and debt move independently and the balance floors at zero, so an effect
+  // that pairs `cash: -8000` with `debt: -8000` charged the full $8,000 against a
+  // balance of $2,000 — or of nothing — and the difference simply ceased to exist.
+  // `studentLoans` now carries a balance gate so this cannot be reached on today's
+  // content and no draw or number changes; the guard is here so the next card that
+  // pairs the two fields cannot reintroduce it. The refund is proportional, which
+  // is the only reading that keeps the ledger's ratio honest: retire a quarter of
+  // what the card offered to retire, pay a quarter of what it asked.
+  const debtDelta = e.debt ?? 0;
+  const cashDelta = e.cash ?? 0;
+  let cashOut = cashDelta;
+  if (debtDelta < 0 && cashDelta < 0) {
+    const retired = Math.min(-debtDelta, Math.max(0, s.debt));
+    cashOut = -Math.round(-cashDelta * (retired / -debtDelta));
   }
 
   return record({
     ...s,
-    cash: s.cash + (e.cash ?? 0),
-    debt: Math.max(0, s.debt + (e.debt ?? 0)),
+    cash: s.cash + cashOut,
+    debt: Math.max(0, s.debt + debtDelta),
     homeValue,
     mortgage,
+    mortgagePayment,
     salary,
     life: {
       ...s.life,
@@ -629,7 +746,12 @@ export function annualExpenses(s: RunState): number {
 export function mortgageService(s: RunState): { payment: number; balance: number } {
   if (s.mortgage <= 0) return { payment: 0, balance: 0 };
   const interest = s.mortgage * MORTGAGE_RATE;
-  const payment = Math.min(MORTGAGE_PAYMENT, s.mortgage + interest);
+  // This loan's own level payment. A floor at one year of interest keeps the
+  // invariant that a mortgage amortises: a state that somehow carried a payment
+  // smaller than its interest would grow the balance every year forever, which is
+  // not a mortgage, it is the debt spiral wearing a house.
+  const level = Math.max(s.mortgagePayment, interest + 1);
+  const payment = Math.min(level, s.mortgage + interest);
   return { payment: Math.round(payment), balance: Math.round(Math.max(0, s.mortgage + interest - payment)) };
 }
 
@@ -776,6 +898,7 @@ export function advanceYear(s: RunState): RunState {
   // debt does to a real portfolio. Only a player with neither cash nor holdings
   // rolls the shortfall forward, and that balance keeps compounding at 7%.
   let forcedSale = 0;
+  let debtPaid = 0;
   const due = debtMinimum(debt);
   if (due > 0) {
     const fromCash = Math.min(cash, due);
@@ -787,7 +910,8 @@ export function advanceYear(s: RunState): RunState {
       for (const id of ALL_ASSETS) holdings[id] = holdings[id] * keep;
       after -= forcedSale;
     }
-    debt -= fromCash + forcedSale;
+    debtPaid = fromCash + forcedSale;
+    debt -= debtPaid;
   }
   debt = Math.round(Math.max(0, debt));
   cash = Math.round(cash);
@@ -817,7 +941,15 @@ export function advanceYear(s: RunState): RunState {
     portfolioDelta,
     // What actually left the account this year — housing and debt service included,
     // so the figure the player sees is the one they lived.
-    cashFlow: Math.round(takeHome - expenses - ms.payment - due),
+    //
+    // `due` is what the lender ASKED for; `debtPaid` is what it actually got. The
+    // two part company for exactly the player this row matters most to. Broke, no
+    // holdings, nothing to take: the shortfall rolls forward onto the balance and
+    // not a dollar moves, yet the row used to print the full minimum as though it
+    // had been paid — and it printed it on top of a deficit that had ALREADY been
+    // charged, once as the negative operating line and again as the debt it became.
+    // The same year was billed twice and the receipt disagreed with the ledger.
+    cashFlow: Math.round(takeHome - expenses - ms.payment - debtPaid),
   };
 
   const nextYear = s.year + 1;
@@ -865,10 +997,19 @@ export function advanceYear(s: RunState): RunState {
 // Both of these end a life INSIDE a year rather than by turning it, so the open
 // journal entry has no matching `history` row — and its acts still moved money into
 // the final number. It is marked, not dropped; a replay has to apply it and then stop.
+//
+// Both also carry `advanceYear`'s guard, and for a reason that is reachable rather
+// than theoretical: `AnimatePresence mode="wait"` keeps `AdvanceBar` mounted
+// through its exit animation, so a run that has just ended still has a live Retire
+// and a live Quit under the player's thumb for the length of that transition. A tap
+// there used to rewrite `endReason` — "died" became "quit", and `deriveVerdict`
+// silently reclassified the run. An ended life cannot end again.
 export function retire(s: RunState): RunState {
+  if (s.status !== "playing") return s;
   return { ...s, status: "ended", endReason: "retired", journal: sealEnd(s, "retire") };
 }
 export function quitRun(s: RunState): RunState {
+  if (s.status !== "playing") return s;
   return { ...s, status: "ended", endReason: "quit", journal: sealEnd(s, "quit") };
 }
 /**
@@ -898,6 +1039,54 @@ export function canRetire(s: RunState): boolean {
  */
 export function isCompatibleSave(s: unknown): s is RunState {
   return Boolean(s && typeof s === "object" && (s as Partial<RunState>).version === RUN_VERSION);
+}
+
+/**
+ * Carry a v6 save into v7, or say it cannot be carried.
+ *
+ * The 6 → 7 bump exists because the home stopped being a fixed nominal price, and
+ * the only genuinely NEW field is `mortgagePayment`. For a v6 save that field is
+ * not unknown — it is exactly `MORTGAGE_PAYMENT`, the fixed constant those loans
+ * were already being charged every year. So the upgrade is lossless and derives
+ * nothing: it writes down a number the old engine was already using.
+ *
+ * Refusing these instead would have been the cheaper change and the wrong one.
+ * `isCompatibleSave` is checked before a save is resumed, so every player with a
+ * run in progress would have met OUTDATED_SAVE_MESSAGE on deploy and lost it, to
+ * buy a strictness that a one-line backfill provides for free.
+ *
+ * The honest caveat, written here rather than discovered later: a migrated run
+ * FINISHES under the new economy — a home bought before the fix keeps its old
+ * price, and every year after it is priced the new way. Its journal therefore no
+ * longer replays clean end to end, so `verifyResult` returns false and the run
+ * posts without the Replayed flag. That is the correct reading of a run played
+ * across two economies, not a failure: an absent flag makes no claim either way,
+ * which is precisely what `buildResult` documents it to mean.
+ *
+ * The same fact is why `migratedFrom` is stamped below. A run played across two
+ * economies is not comparable to one played entirely under the current one, and
+ * the leaderboard filter that was added alongside this migration would have been
+ * defeated by the very saves it was written to keep out — `resultFromRun` reads
+ * `migratedFrom` so the row carries `engine: 6` and is ranked with its own kind.
+ *
+ * Returns null for anything that is neither v6 nor v7 — those genuinely cannot be
+ * carried, and `"outdated"` is reserved for them.
+ */
+export function migrateSave(s: unknown): RunState | null {
+  if (!s || typeof s !== "object") return null;
+  const raw = s as Partial<RunState>;
+  if (raw.version === RUN_VERSION) return raw as RunState;
+  if (raw.version !== 6) return null;
+  return {
+    ...(raw as RunState),
+    version: RUN_VERSION,
+    // A renter had no loan and no payment; an owner was paying the flat constant.
+    mortgagePayment: (raw.mortgage ?? 0) > 0 ? MORTGAGE_PAYMENT : 0,
+    // Remember where it came from. Without this the run would post `engine: 7` and
+    // rank beside runs that never saw the old nominal $220k house — see the field's
+    // own note on `RunState`.
+    migratedFrom: 6,
+  };
 }
 
 export function playHeadline(year: number, indexReturn: number): { text: string; tone: "good" | "bad" | "warning" | "neutral" } | null {

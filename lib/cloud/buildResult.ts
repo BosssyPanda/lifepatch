@@ -9,6 +9,7 @@ import {
   totalExpenses,
 } from "../cashflow/selectors";
 import type { CashflowState } from "../cashflow/types";
+import { CASHFLOW_SCORE_VERSION } from "./comparability";
 import { ensureProfile } from "./profiles";
 import {
   alreadySubmitted,
@@ -58,7 +59,13 @@ export function resultFromRun(run: RunState): NewResult {
       // one mode landing on the same net worth used to fight over one URL).
       seed: run.seed,
       backgroundId: run.backgroundId,
-      engine: RUN_VERSION,
+      // NOT unconditionally RUN_VERSION. A save carried forward by `migrateSave`
+      // played most of its years under the older economy and only its last few
+      // under this one, so stamping it with today's version would slip it past the
+      // comparability filter in `topResults` — the filter added in the same change
+      // as the migration, to keep exactly those runs off this board. It keeps its
+      // share page either way; it just ranks with the engine it was mostly played on.
+      engine: run.migratedFrom ?? RUN_VERSION,
       // The Daily Ledger stays `mode: "story"` — its board is a filter on this
       // field, not a fourth mode, so the table's own check constraint, its policies
       // and its index are all untouched.
@@ -73,23 +80,43 @@ export function resultFromRun(run: RunState): NewResult {
 }
 
 /**
- * Rat Race scoring, v2. Ranking by passive income alone was blind to debt and
- * expenses, so maximum leverage was the optimal ranked strategy — the exact
- * opposite of what the mode teaches. The score is now a balance-sheet measure
- * plus a year of realized cash flow:
+ * Rat Race scoring, v3.
+ *
+ * v1 ranked by passive income alone, which was blind to debt and expenses, so
+ * maximum leverage was the optimal ranked strategy — the exact opposite of what
+ * the mode teaches. v2 replaced it with a balance-sheet measure plus a year of
+ * realized cash flow:
  *
  *     score = netWorth + 12 × payday
  *
- * Net worth counts every dollar borrowed against you; `payday` (income − ALL
- * expenses, bank interest included) counts the cost of carrying that debt. You
- * still climb by buying cash-flowing assets — you just can't climb by drowning.
+ * That fixed the leverage exploit and introduced a bigger one in the same place it
+ * had just closed, because the starting balance sheets are not level and nothing
+ * subtracted them. Every profession begins in the hole — a personal home mortgage
+ * is a liability with no matching asset on this board — and the holes are not
+ * remotely the same size: the Janitor opens at −$43,350 and the Doctor at
+ * −$512,600. That is a $469,250 head start handed out at the character-select
+ * screen, against a mode whose whole run is worth a fraction of it. The board was
+ * ranking profession choice, not play, and the winning move was to pick the
+ * Janitor and stop thinking.
  *
- * v1 rows are not comparable to v2 rows, so the version rides in `metrics`.
+ * v3 measures the distance travelled instead:
+ *
+ *     score = (netWorth + 12 × payday) − startingNetWorth
+ *
+ * The Doctor's debt still costs the Doctor every turn — it is in `payday` as
+ * interest and in `netWorth` as principal — but it is no longer scored as a
+ * mistake they made. `startingNetWorth` is already on the state (`initCashflow`
+ * records it, and `persist` backfills it for older saves), so nothing new has to
+ * be tracked to say it.
+ *
+ * v1 and v2 rows are not comparable to v3 rows, so the version rides in `metrics`
+ * — and, as of this change, `topResults` actually filters on it. It lives in
+ * `./comparability` because both the writer here and the reader there need it, and
+ * that module importing this one would close a cycle.
  */
-export const CASHFLOW_SCORE_VERSION = 2;
 
 export function cashflowScore(s: CashflowState): number {
-  return Math.round(cashflowNetWorth(s) + 12 * cashflowPayday(s));
+  return Math.round(cashflowNetWorth(s) + 12 * cashflowPayday(s) - s.startingNetWorth);
 }
 
 export function resultFromCashflow(s: CashflowState): NewResult {

@@ -10,6 +10,7 @@ import {
   payDebt,
   quitRun,
   retire,
+  sellHome,
   trade,
   type RunState,
 } from "@/lib/runEngine";
@@ -96,33 +97,53 @@ export function useRun(userId: string | null) {
     [userId],
   );
 
-  // local mutation (no save) — used for trades within a year
+/*
+ * Both of these read the previous state from `liveRef` and call `setRun` with a
+ * VALUE, rather than passing an updater to `setRun` and working inside it. That is
+ * deliberate, and it is the shape `start` above already uses.
+ *
+ * React may invoke an updater function twice — StrictMode does it in development,
+ * and a discarded-and-replayed render can do it under concurrent rendering — so an
+ * updater must be pure. `commit`'s used not to be: it called `setPhase`, and it
+ * called `persist`. `setPhase` was harmless (React bails on an identical value),
+ * but `persist` is I/O. A double invocation fired two concurrent `saveRun` upserts
+ * of the same row and two overlapping `setSaving(true)/(false)` pairs — and since
+ * `saving` is a boolean rather than a counter, the first call's `finally` cleared
+ * the flag while the second write was still in flight, so the autosave indicator
+ * read "saved" over an outstanding write. The `next === prev` guard did not help:
+ * `fn(prev)` re-runs and returns a fresh object each time.
+ *
+ * Reading `liveRef` instead of `prev` is not a downgrade. The ref is written
+ * synchronously by every path that can change the run — `start`, `resume`, `reset`,
+ * `toTitle`, and these two — which is exactly the property `stillPlaying` already
+ * relies on, so two calls in one tick each see the first one's result.
+ */
+
+// local mutation (no save) — used for trades within a year
   const mutate = useCallback((fn: (s: RunState) => RunState) => {
-    setRun((prev) => {
-      if (!prev) return prev;
-      const next = fn(prev);
-      liveRef.current = next;
-      return next;
-    });
+    const prev = liveRef.current;
+    if (!prev) return;
+    const next = fn(prev);
+    liveRef.current = next;
+    setRun(next);
   }, []);
 
   // mutation that also persists + may end the run
   const commit = useCallback(
     (fn: (s: RunState) => RunState) => {
-      setRun((prev) => {
-        if (!prev) return prev;
-        const next = fn(prev);
-        // The engine refuses some mutations outright — aging a life that has already
-        // ended is the one that matters here — and hands the state back untouched.
-        // Nothing was decided, so nothing is announced and nothing is written.
-        if (next === prev) return prev;
-        liveRef.current = next;
-        // A match run goes to the room's podium first — the standings are the point,
-        // and the player's own cinematic recap is one tap away from there.
-        if (next.status === "ended") setPhase(matchCodeRef.current ? "podium" : "recap");
-        void persist(next);
-        return next;
-      });
+      const prev = liveRef.current;
+      if (!prev) return;
+      const next = fn(prev);
+      // The engine refuses some mutations outright — aging a life that has already
+      // ended is the one that matters here — and hands the state back untouched.
+      // Nothing was decided, so nothing is announced and nothing is written.
+      if (next === prev) return;
+      liveRef.current = next;
+      setRun(next);
+      // A match run goes to the room's podium first — the standings are the point,
+      // and the player's own cinematic recap is one tap away from there.
+      if (next.status === "ended") setPhase(matchCodeRef.current ? "podium" : "recap");
+      void persist(next);
     },
     [persist],
   );
@@ -190,6 +211,20 @@ export function useRun(userId: string | null) {
     // year actions
     trade: useCallback((asset: AssetId, dollars: number) => mutate((s) => trade(s, asset, dollars)), [mutate]),
     payDebt: useCallback((dollars: number) => mutate((s) => payDebt(s, dollars)), [mutate]),
+    /**
+     * `commit`, not `mutate`, unlike its neighbours.
+     *
+     * A trade or a debt payment moves money between things the player already owns
+     * and is saved when the year turns. Selling the house ends a thirty-year
+     * obligation, changes every future year's expenses from upkeep to rent, and is
+     * the one action on this screen that cannot be undone — so it is written down
+     * when it happens, not when the year does.
+     *
+     * `commit`'s `next === prev` short-circuit already matches `sellHome`'s two
+     * refusal guards (an ended run, a run that owns nothing), so a sale the engine
+     * declines writes nothing and re-renders nothing.
+     */
+    sellHome: useCallback(() => commit((s) => sellHome(s)), [commit]),
     choose: useCallback(
       (eventId: string, choice: LifeChoice) => mutate((s) => applyLifeChoice(s, eventId, choice)),
       [mutate],

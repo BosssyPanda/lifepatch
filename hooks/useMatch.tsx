@@ -1353,6 +1353,20 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       .map((p) => ({ playerId: p.playerId, name: p.name, avatarSeed: p.avatarSeed, joinedAt: p.joinedAt }));
     if (!roster.some((r) => r.playerId === cur.hostId) && selfInfoRef.current) {
       roster.unshift(selfInfoRef.current);
+      // Re-cap. The slice above ran BEFORE this unshift, so seating the host on an
+      // already-full list shipped MAX_PLAYERS + 1 and nothing capped it again before
+      // `send`. Every peer re-caps on ingest by truncation (`parseMatchConfig`), and
+      // neither transport echoes to the sender — so the host alone kept all of them,
+      // and the entry the whole table silently dropped was the last one: sorted by
+      // `joinedAt` behind the freshly-unshifted host, that is always the newest
+      // player. They were told the host started without them and then refused on
+      // rejoin, while the host's standings showed them seated the entire match.
+      //
+      // Truncating from the end here rather than dropping the host keeps the rule
+      // the same one the peers apply, so both sides arrive at the same roster.
+      // `protocol.ts` says why that matters: a roster is also a rejoin gate, so a
+      // padded one is an authorisation bug, not a display bug.
+      roster.length = Math.min(roster.length, MAX_PLAYERS);
     }
     if (roster.length < MIN_PLAYERS) {
       setError(`A match needs at least ${MIN_PLAYERS} players.`);

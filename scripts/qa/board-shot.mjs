@@ -16,6 +16,10 @@ import { engineDir } from "./build-engine.mjs";
 // Builds the engine if the tree has moved past what is compiled — see build-engine.mjs.
 const OUT = engineDir();
 const daily = createRequire(`${OUT}/`)(`${OUT}/lib/daily.js`);
+// Read from the engine rather than written down here. `topResults` now filters the
+// board on this marker, so a fixture that drifts one version behind the engine
+// photographs an empty board and looks like a layout bug.
+const ENGINE = createRequire(`${OUT}/`)(`${OUT}/lib/runEngine.js`).RUN_VERSION;
 
 const viewport = process.env.QA_VIEWPORT === "mobile" ? MOBILE : DESKTOP;
 const tag = process.env.QA_VIEWPORT === "mobile" ? "mobile" : "desktop";
@@ -41,7 +45,7 @@ function rows() {
         age: 43,
         seed: 99_000 + i,
         backgroundId: BACKGROUNDS[0],
-        engine: 6,
+        engine: ENGINE,
         verified: 1,
         daily: TODAY,
       },
@@ -49,7 +53,10 @@ function rows() {
     });
   }
   for (let i = 0; i < 14; i++) {
-    // Every third row is a legacy row: no background, no replay, nothing claimed.
+    // Every third row is a sparse row: no background, no replay, nothing claimed
+    // beyond the score. It still carries the engine marker, because `topResults`
+    // now filters on it — a row without one is not a legacy row on the board, it is
+    // an absent one, which is a different screenshot than this fixture is for.
     const legacy = i % 3 === 2;
     out.push({
       id: `local-${i}`,
@@ -58,13 +65,13 @@ function rows() {
       score: 900_000 - i * 61_337,
       verdict: VERDICTS[i % VERDICTS.length],
       metrics: legacy
-        ? { netWorth: 900_000 - i * 61_337, age: 43 }
+        ? { netWorth: 900_000 - i * 61_337, age: 43, engine: ENGINE }
         : {
             netWorth: 900_000 - i * 61_337,
             age: 43,
             seed: 1000 + i,
             backgroundId: BACKGROUNDS[i % BACKGROUNDS.length],
-            engine: 6,
+            engine: ENGINE,
             verified: 1,
           },
       createdAt: new Date(Date.UTC(2026, 6, 1 + i)).toISOString(),

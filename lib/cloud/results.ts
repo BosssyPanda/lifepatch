@@ -1,4 +1,5 @@
 import { isCloud, supabase } from "../supabase";
+import { comparabilityMarker } from "./comparability";
 import type { GameMode, NewResult, ResultRow } from "./types";
 
 /**
@@ -160,12 +161,25 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
     // required to run this build); README carries the optional expression index.
     if (background) query = query.eq("metrics->>backgroundId", background);
     if (scope === "daily" && daily) query = query.eq("metrics->>daily", daily);
+    // Only rows produced under the CURRENT rules are ranked. Same text-arrow
+    // mechanism as the two filters above; see `comparabilityMarker` for why the key
+    // differs by mode. Rows from an older economy are not deleted and their share
+    // pages still work — they simply stop being ranked against scores that were
+    // never playing the same game. A row written before the marker existed carries
+    // no such key and is excluded by any value here, which is the correct reading:
+    // an unmarked row makes no claim about which rules produced it.
+    const marker = comparabilityMarker(mode);
+    query = query.eq(`metrics->>${marker.key}`, marker.value);
     // Over-fetch so best-per-user dedupe still fills the board.
     const { data } = await query.limit(limit * 5);
     return bestPerUser((data ?? []).map(fromRow)).slice(0, limit);
   }
 
   let rows = readLocal().filter((r) => r.mode === mode);
+  // The same rule as the cloud branch — a dev board that mixed economies would hide
+  // exactly the bug the filter exists to prevent.
+  const marker = comparabilityMarker(mode);
+  rows = rows.filter((r) => String(r.metrics[marker.key]) === marker.value);
   if (background) rows = rows.filter((r) => r.metrics.backgroundId === background);
   if (scope === "daily") rows = rows.filter((r) => r.metrics.daily === daily);
   if (scope === "week") {

@@ -1,6 +1,6 @@
 import { isGuestId } from "./cloud/identity";
 import type { ModeId } from "./modes";
-import { isCompatibleSave, type RunState } from "./runEngine";
+import { isCompatibleSave, migrateSave, type RunState } from "./runEngine";
 import { isCloud, supabase } from "./supabase";
 
 export type SaveRow = {
@@ -150,6 +150,12 @@ export async function loadRun(userId: string, mode: ModeId): Promise<RunState | 
 export async function loadRunChecked(userId: string, mode: ModeId): Promise<SaveLookup> {
   const state = await loadRun(userId, mode);
   if (state === null) return { kind: "none" };
+  // A save one version behind is upgraded rather than refused — see `migrateSave`,
+  // which explains why the 6 → 7 backfill is lossless and what it costs. Only a
+  // save that genuinely cannot be carried reaches `"outdated"`, which is what makes
+  // that verdict mean something.
+  const carried = migrateSave(state);
+  if (carried) return { kind: "ok", state: carried };
   return isCompatibleSave(state) ? { kind: "ok", state } : { kind: "outdated" };
 }
 
@@ -219,8 +225,10 @@ export async function adoptGuestSaves(guestId: string, userId: string): Promise<
     try {
       const raw = localStorage.getItem(localKey(guestId, mode));
       if (!raw) continue;
-      const state = (JSON.parse(raw) as SaveRow).state;
-      if (!isCompatibleSave(state)) continue;
+      // Carried the same way `loadRunChecked` carries one — a guest's run is an
+      // ordinary save, and signing in must never be the thing that loses it.
+      const state = migrateSave((JSON.parse(raw) as SaveRow).state);
+      if (!state) continue;
       if (await loadRun(userId, mode)) continue; // never overwrite the account's own run
       await saveRun(userId, mode, state);
     } catch {

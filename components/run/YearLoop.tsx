@@ -167,7 +167,7 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
       )}
 
       <Reveal>
-        <PortfolioPanel run={s} onTrade={run.trade} onPayDebt={run.payDebt} />
+        <PortfolioPanel run={s} onTrade={run.trade} onPayDebt={run.payDebt} onSellHome={run.sellHome} />
       </Reveal>
 
       {/* Sits directly above the one control that advances the clock, because that is

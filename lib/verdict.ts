@@ -1,5 +1,5 @@
 import { PALETTE, INK_TIER as PALETTE_INK_TIER } from "@/lib/palette";
-import { netWorth, type RunState } from "./runEngine";
+import { liquidNetWorth, netWorth, retirementNumber, type RunState } from "./runEngine";
 
 export type Verdict = {
   title: string;
@@ -32,14 +32,32 @@ export const VERDICTS = {
   estate: { title: "The Estate", blurb: "You can't take it with you — but you can leave it behind. Here's the ledger you left.", hex: INK_TIER.mid, good: false },
 } satisfies Record<string, Verdict>;
 
-/** The final class for a run — shared by the outro recap and the report. */
+/**
+ * The final class for a run — shared by the outro recap and the report.
+ *
+ * "Financially Free" asks the game's own retirement question rather than a flat
+ * dollar bar, because the two disagreed and the flat bar was the one that lied.
+ * `canRetire` — the predicate that decides whether the Retire button is even
+ * offered — measures `liquidNetWorth` against 25× a year of expenses, and
+ * deliberately excludes home equity: you live in the house, so it cannot fund the
+ * years you stop working. `netWorth >= 1_000_000` includes it, and includes it at
+ * a threshold that never moves. So a player who owned $1.05M of house and held no
+ * liquid assets was handed a verdict reading "work became optional well before the
+ * end" for a life in which the game had never once let them stop.
+ *
+ * The number the run was actually chasing is on screen all along — the report
+ * prints `retirementNumber` — and it inflates with the cost of living, which a
+ * fixed $1M cannot. Only the money half of `canRetire` is used: its `age >= 60`
+ * arm is the ordinary path for a long Infinite run that never got rich, and would
+ * hand this verdict to someone broke at sixty.
+ */
 export function deriveVerdict(run: RunState): Verdict {
   const nw = netWorth(run);
   const happiness = run.life.happiness;
   const died = run.endReason === "died";
 
   if (died) return VERDICTS.estate;
-  if (nw >= 1_000_000) return VERDICTS.free;
+  if (liquidNetWorth(run) >= retirementNumber(run)) return VERDICTS.free;
   if (nw >= 250_000) return VERDICTS.comfortable;
   if (nw > 0 && happiness >= 60) return VERDICTS.richEnough;
   if (nw > 0) return VERDICTS.gettingBy;

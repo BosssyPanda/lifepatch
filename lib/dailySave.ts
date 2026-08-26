@@ -51,6 +51,14 @@ function storage(): Storage | null {
  * "Continue", and a daily has nowhere to show an "outdated save" message. Losing
  * one day to an engine change is the honest outcome; resuming a corrupt half-state
  * into a scored, one-attempt run is not.
+ *
+ * Deliberately NOT migrated, unlike `lib/saves.ts`. `migrateSave` carries an
+ * ordinary run forward losslessly, but a migrated run finishes across two
+ * economies — and the whole point of a daily is that everyone plays the SAME seed
+ * under the same rules on the same day. A carried save would be ranked on that
+ * day's board against runs it is not comparable to, which is the exact fault the
+ * version filter on `topResults` exists to prevent. One lost day is the cheaper
+ * error.
  */
 export function readDaily(date: string): DailyRecord | null {
   const store = storage();

@@ -325,19 +325,28 @@ function TypeIn({ text, startDelay, enabled }: { text: string; startDelay: numbe
   const { reduced } = useMotionCtx();
   const animate = enabled && !reduced;
   const [shown, setShown] = useState(animate ? 0 : text.length);
+  // Mirrors `shown` so the effect below can START from where the typing got to.
+  // Reading it out of the updater was what made the old code correct across a
+  // re-run; reading it from a ref keeps that property without a side effect inside
+  // the updater. Without it, toggling the OS reduced-motion setting off with the
+  // Almanac open re-ran the effect and retyped finished text from one character.
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
 
   useEffect(() => {
     if (!animate) return;
     let interval = 0;
+    // The count is kept here rather than derived inside the updater, because the
+    // stop condition used to call `window.clearInterval` from inside it — a side
+    // effect in a function React is allowed to invoke twice. The effect's own
+    // cleanup below already clears the same handle, so this only has to stop the
+    // typing at the end of the string.
+    let n = shownRef.current;
     const timeout = window.setTimeout(() => {
       interval = window.setInterval(() => {
-        setShown((n) => {
-          if (n >= text.length) {
-            window.clearInterval(interval);
-            return n;
-          }
-          return n + 1;
-        });
+        n += 1;
+        setShown(n);
+        if (n >= text.length) window.clearInterval(interval);
       }, TYPE_CHAR_MS);
     }, startDelay);
     return () => {

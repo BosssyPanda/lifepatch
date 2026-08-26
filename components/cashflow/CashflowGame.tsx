@@ -37,6 +37,7 @@ import {
   borrow,
   buyDream,
   buyFastTrackDeal,
+  canAffordDeal,
   cashflowDayPayout,
   collectCashflowDay,
   donateCharity,
@@ -63,13 +64,11 @@ import type { CashflowState, PayoffKey } from "@/lib/cashflow/types";
 
 export function CashflowGame({
   s,
-  apply,
   commit,
   onExit,
   onOpenAlmanac,
 }: {
   s: CashflowState;
-  apply: (fn: (s: CashflowState) => CashflowState) => void;
   commit: (fn: (s: CashflowState) => CashflowState) => void;
   onExit: () => void;
   onOpenAlmanac?: () => void;
@@ -86,11 +85,11 @@ export function CashflowGame({
   // ── the turn: roll, move, land, resolve (components/cashflow/useCashflowTurn) ──
   const {
     turnPhase, dice, rollFx, twoDice, setTwoDice,
-    pending, setPending, quizState,
+    pending, setPending, quizState, borrowToast,
     paydayToast, paydayFlash, boardPulse, busy,
     handleLand, handleRoll, finishRollFx,
     endTurn, finishResolve, pickDeal, buyDeal,
-  } = useCashflowTurn({ s, apply, commit, blocked: tutorialOpen });
+  } = useCashflowTurn({ s, commit, blocked: tutorialOpen });
 
   const dream = getDream(s.dreamId);
   const prof = getProfession(s.professionId);
@@ -269,18 +268,36 @@ export function CashflowGame({
         </div>
       </div>
 
-      {/* payday toast */}
-      <Toast show={paydayToast !== null}>
+      {/* Payday and the bank loan share ONE positioned surface and stack inside it.
+          They were two `<Toast>`s at the same fixed corner, and the case where both
+          fire is not rare — it is the specific case that matters most: a negative
+          payday the player could not cover is exactly what makes `clampCash` borrow,
+          so the two most important numbers on the screen landed on top of each
+          other. */}
+      <Toast show={paydayToast !== null || borrowToast !== null}>
+        <div className="flex flex-col items-end gap-1.5">
         {/* A toast is a floating surface, which is exactly what amendment B sanctions — but it
             was asking with `shadow-xl`/`rounded-full`, which the reset eats, so it rendered as
             a flat hard-edged block over the board. */}
-        <div
-          data-radius=""
-          data-elevated=""
-          className={`px-5 py-2 display-caps text-lg ${(paydayToast ?? 0) >= 0 ? "bg-gain text-bg" : "bg-loss text-bg"}`}
-        >
-          {(paydayToast ?? 0) >= 0 ? "Payday +" : "Payday "}
-          {currency(paydayToast ?? 0)}
+          {paydayToast !== null && (
+            <div
+              data-radius=""
+              data-elevated=""
+              className={`px-5 py-2 display-caps text-lg ${paydayToast >= 0 ? "bg-gain text-bg" : "bg-loss text-bg"}`}
+            >
+              {paydayToast >= 0 ? "Payday +" : "Payday "}
+              {currency(paydayToast)}
+            </div>
+          )}
+          {/* The bank lent, whether or not you asked. See `borrowToast`. Loss red and
+              the same stamp treatment, because it is the same kind of fact — money
+              moved, here is the number. It carries the rate, since the rate is the
+              part that turns $2,000 into the reason a run ends. */}
+          {borrowToast !== null && (
+            <div data-radius="" data-elevated="" className="bg-loss px-5 py-2 display-caps text-lg text-bg">
+              Bank loan +{currency(borrowToast)} · 10%/mo
+            </div>
+          )}
         </div>
       </Toast>
 
@@ -329,6 +346,11 @@ export function CashflowGame({
                 deal={pending.deal}
                 cash={s.cash}
                 price={pending.deal.kind === "stock" ? quote(s, pending.deal.symbol, pending.deal.price) : undefined}
+                canAfford={
+                  pending.deal.kind === "stock"
+                    ? true // the stock view already clamps its own share count
+                    : canAffordDeal(s, pending.deal.downPayment)
+                }
                 onBuy={(shares) => { learn(conceptsForText(pending.deal.lesson), { applied: true }); buyDeal(pending.deal, shares); }}
                 onPass={() => { audio.sfx("page"); endTurn(s); }}
               />
@@ -346,11 +368,24 @@ export function CashflowGame({
               <MarketCardView
                 card={pending.card}
                 s={s}
-                onSellProperty={(uid, price) => { audio.sfx("cash"); finishResolve(sellProperty(s, uid, price), "sale"); }}
-                onSellBusiness={(uid, price) => { audio.sfx("cash"); finishResolve(sellBusiness(s, uid, price), "sale"); }}
-                onSellStock={(symbol, shares) => { audio.sfx("cash"); finishResolve(sellStock(s, symbol, shares), "sale"); }}
-                onWindfall={(c) => { if (c.cash >= 0) audio.sfx("cash"); else audio.sting("bad"); finishResolve(applyWindfall(s, c)); }}
-                onDone={() => endTurn(s)}
+                onSellProperty={(uid, price) => { audio.sfx("cash"); learn(conceptsForText(pending.card.lesson), { applied: true }); finishResolve(sellProperty(s, uid, price), "sale"); }}
+                onSellBusiness={(uid, price) => { audio.sfx("cash"); learn(conceptsForText(pending.card.lesson), { applied: true }); finishResolve(sellBusiness(s, uid, price), "sale"); }}
+                onSellStock={(symbol, shares) => { audio.sfx("cash"); learn(conceptsForText(pending.card.lesson), { applied: true }); finishResolve(sellStock(s, symbol, shares), "sale"); }}
+                onWindfall={(c) => { if (c.cash >= 0) audio.sfx("cash"); else audio.sting("bad"); learn(conceptsForText(pending.card.lesson), { applied: false }); finishResolve(applyWindfall(s, c)); }}
+                /* Declining is a real answer, and it now costs a turn's teaching
+                   rather than nothing at all.
+                   `mk-soft-market` (max multiple 0.82 × 1.14 = 0.93) and
+                   `mk-biz-distress` (0.75 × 1.2 = 0.90) can NEVER offer above cost,
+                   and passing is free — so a player who reads the numbers correctly
+                   always declines, and the square did literally nothing but advance
+                   the RNG cursor. Its lesson rendered on screen and was recorded
+                   nowhere, because `onDone` went straight to `endTurn` and skipped
+                   `finishResolve`.
+                   That is the fix: a card whose right answer is "no" is a teaching
+                   square, so it teaches. `applied: false` because the player
+                   understood the offer rather than acting on it — the same reading
+                   `doodad` already uses for a cost you had no choice about. */
+                onDone={() => { learn(conceptsForText(pending.card.lesson), { applied: false }); finishResolve(s); }}
               />
             )}
             {pending.kind === "baby" && <BabyCard s={s} onOk={() => { audio.sfx("confirm"); finishResolve(addBaby(s)); }} />}

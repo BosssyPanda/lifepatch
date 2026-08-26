@@ -1,10 +1,18 @@
 "use client";
 
 import { useAudio } from "@/hooks/useAudio";
+import { ArmedLabel, useArmedAction } from "@/components/ui/useArmedAction";
 import { assetsForYear, type AssetDef } from "@/lib/assets";
 import { currency } from "@/lib/format";
 import type { AssetId } from "@/lib/markets";
-import { lastAssetReturn, portfolioValue, priceSeries, type RunState } from "@/lib/runEngine";
+import {
+  homeEquity,
+  homeSaleProceeds,
+  lastAssetReturn,
+  portfolioValue,
+  priceSeries,
+  type RunState,
+} from "@/lib/runEngine";
 import { AssetRow } from "./AssetRow";
 import { PortfolioPresets } from "./PortfolioPresets";
 
@@ -15,10 +23,12 @@ export function PortfolioPanel({
   run,
   onTrade,
   onPayDebt,
+  onSellHome,
 }: {
   run: RunState;
   onTrade: (id: AssetId, dollars: number) => void;
   onPayDebt: (dollars: number) => void;
+  onSellHome: () => void;
 }) {
   const audio = useAudio();
   const assets = assetsForYear(run.year);
@@ -39,6 +49,35 @@ export function PortfolioPanel({
     audio.sfx("confirm");
     for (const [id, dollars] of orders) onTrade(id, dollars);
   };
+
+  /**
+   * The house, and the way out of it.
+   *
+   * Until now a run could see its home ONLY as the word "Homeowner" in the HUD
+   * drawer — its value, its mortgage and its equity appeared nowhere, while the net
+   * worth on screen silently included the equity. And there was no way to sell:
+   * `housing` was written in three places and reversed in none, which is why
+   * `isUnrecoverable` refuses the insolvency ending to any homeowner and why a long
+   * Infinite run eventually spends more on upkeep than it earns with no lever left
+   * but ADVANCE.
+   *
+   * `net` is what the sale actually hands over — the price less selling costs, less
+   * the mortgage — and it can be NEGATIVE. Underwater, selling clears the house and
+   * moves the shortfall onto the unsecured balance at 7%. The confirm has to say so,
+   * because "sell" reads as "receive money" and here it sometimes is not.
+   */
+  const owned = run.life.housing === "owned";
+  const net = owned ? homeSaleProceeds(run) : 0;
+  const sell = useArmedAction({
+    label: "Sell",
+    armedLabel:
+      net >= 0 ? `Tap again — ${currency(net)} to you` : `Tap again — adds ${currency(-net)} of debt`,
+    onArm: () => audio.sfx("uitick"),
+    onConfirm: () => {
+      audio.sfx("stamp");
+      onSellHome();
+    },
+  });
 
   // Every dollar the player has. The ONE denominator this screen quotes shares against —
   // rows print "% of total" off the same figure, so two readouts can never disagree.
@@ -103,6 +142,64 @@ export function PortfolioPanel({
           <p className="num text-xl text-ink">{currency(run.debt)}</p>
         </div>
       </div>
+
+      {/* The house. Structurally the twin of the Debt tile above — a figure, and a
+          small bordered control in the header — but full width, because it carries
+          three numbers rather than one and because a sale is the largest single
+          thing a player can do on this screen.
+
+          DESIGN.md § Palette: "orange never grades an outcome — a 'sell' button does
+          not turn orange because the sale is profitable". So the control is loss-red
+          armed and ink at rest, and it is the SAME red whether the sale pays out or
+          costs; only the equity figure below carries gain/loss, because that is the
+          number being graded. `reserve` is passed because the armed label is far
+          longer than "Sell" and this control shares its row with the heading. */}
+      {owned && (
+        <div className="mt-2.5 border border-hairline bg-bg px-3 py-2.5">
+          <div className="flex items-center justify-between">
+            <p className="eyebrow text-secondary">Home</p>
+            <button
+              type="button"
+              data-radius=""
+              onClick={sell.onClick}
+              onBlur={sell.onBlur}
+              className={`num border px-1.5 py-0.5 text-[0.6rem] transition-colors ${DEBT_HIT} ${
+                sell.armed
+                  ? "border-loss bg-loss text-bg"
+                  : "border-hairline-strong text-ink hover:border-loss hover:text-loss"
+              }`}
+            >
+              {/* `align="end"` — the control is anchored to the right edge of the
+                  row, so at rest "Sell" stays exactly where it sits and the long
+                  armed label grows inwards instead of shoving the heading. */}
+              <ArmedLabel reserve={sell.reserve} align="end">
+                {sell.label}
+              </ArmedLabel>
+            </button>
+          </div>
+          <p className="num text-xl text-ink">{currency(run.homeValue)}</p>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+            <span className="eyebrow tabular-nums text-tertiary" style={{ fontSize: "0.55rem" }}>
+              mortgage {currency(run.mortgage)}
+            </span>
+            <span
+              className={`eyebrow tabular-nums ${homeEquity(run) >= 0 ? "text-tertiary" : "text-loss"}`}
+              style={{ fontSize: "0.55rem" }}
+            >
+              equity {currency(homeEquity(run))}
+            </span>
+            {/* Selling costs ~6% off the top, so the equity figure and the payout are
+                never the same number. Printing only one of them would make whichever
+                was missing feel like a deduction nobody mentioned. */}
+            <span
+              className={`eyebrow tabular-nums ${net >= 0 ? "text-tertiary" : "text-loss"}`}
+              style={{ fontSize: "0.55rem" }}
+            >
+              {net >= 0 ? `sells for ${currency(net)} after costs` : `sale leaves ${currency(-net)} owing`}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* one-tap starter mixes — the risk ladder is the lesson */}
       <div className="mt-4">

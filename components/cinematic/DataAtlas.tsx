@@ -87,8 +87,15 @@ export function DataAtlas({ className = "", px, py }: { className?: string; px?:
     if (reduce) return;
     let onScreen = true;
     let id = 0;
-    const tick = () =>
-      setStats((p) => p.map((s) => ({ ...s, v: Math.max(0.1, s.v + (Math.random() - 0.5) * 0.07) })));
+    const tick = () => {
+      // The jitter is rolled HERE, not inside the updater. React may invoke an
+      // updater twice, and a `Math.random()` in one makes the second invocation
+      // produce a different answer than the first — the state ends up depending on
+      // how many times React chose to call it. Rolling first and applying a fixed
+      // array keeps the updater a pure function of `p`.
+      const jitter = STATS0.map(() => (Math.random() - 0.5) * 0.07);
+      setStats((p) => p.map((s, i) => ({ ...s, v: Math.max(0.1, s.v + (jitter[i] ?? 0)) })));
+    };
     const sync = () => {
       const live = onScreen && document.visibilityState === "visible";
       if (live && !id) id = window.setInterval(tick, 1400);

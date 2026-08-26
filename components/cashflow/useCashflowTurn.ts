@@ -62,12 +62,13 @@ export type Pending =
 
 export function useCashflowTurn({
   s,
-  apply,
   commit,
   blocked,
 }: {
   s: CashflowState;
-  apply: (fn: (s: CashflowState) => CashflowState) => void;
+  /** Every state change here saves. The transient no-save path used to be threaded
+   *  through as `apply`, and the one caller it had was the roll — which is exactly
+   *  the thing that had to start saving. It is gone rather than left available. */
   commit: (fn: (s: CashflowState) => CashflowState) => void;
   /** Screen-owned modals (the tutorial) that must also freeze the turn controls. */
   blocked: boolean;
@@ -114,6 +115,33 @@ export function useCashflowTurn({
   const [twoDice, setTwoDice] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [paydayToast, setPaydayToast] = useState<number | null>(null);
+
+  /**
+   * Say it out loud when the bank lends.
+   *
+   * `clampCash` borrows on the player's behalf from ten different places — passing
+   * Payday, a doodad, charity, a downsizing, a lawsuit, both sale paths, a Fast Track
+   * setback and two purchases — and only two of them warned first. Everywhere else
+   * the loan simply appeared, at 10% a month, compounding against the freedom ratio
+   * the whole mode is about, and the only surface that mentioned it was the Bank
+   * panel — which warns at 60% of the limit, long after the borrowing that got there.
+   *
+   * Watching the balance rather than instrumenting ten call sites is deliberate: the
+   * borrow is `clampCash`'s decision, not the caller's, so the caller is the wrong
+   * place to describe it, and a new one added later would be silent again. A
+   * deliberate draw from the Bank panel also lands here, which is correct — the
+   * figure is the same fact either way, and the copy states it rather than scolding.
+   */
+  const [borrowToast, setBorrowToast] = useState<number | null>(null);
+  const lastBankLoan = useRef(s.liabilities.bankLoan);
+  useEffect(() => {
+    const now = s.liabilities.bankLoan;
+    const lent = now - lastBankLoan.current;
+    lastBankLoan.current = now;
+    if (lent <= 0) return;
+    setBorrowToast(lent);
+    timers.current.push(window.setTimeout(() => setBorrowToast(null), 2600));
+  }, [s.liabilities.bankLoan]);
 
   const lastRoll = useRef(0);
   const lastLanded = useRef("");
@@ -377,7 +405,29 @@ export function useCashflowTurn({
       if (s.track === "rat" && s.charityRolls > 0 && count === 2) moved = consumeCharityRoll(moved);
       const mv = applyMove(moved, rolled.total);
       setTurnPhase("moving");
-      apply(() => mv.state);
+      // `commit`, not `apply` — the roll has to survive a refresh.
+      //
+      // Everything the dice just decided lives in `mv.state`: the advanced
+      // `rngCursor`, the new `position`, the incremented `turn`, any cash collected
+      // passing Payday, and the charity roll spent above. `apply` writes React state
+      // and nothing else, so on the branches that then wait for a decision — a deal,
+      // charity, a baby, a downsizing, and every Fast Track card — none of it was
+      // written down. A player who refreshed mid-decision came back to the board as
+      // it stood at the END OF THE PREVIOUS TURN, with the pre-roll cursor and the
+      // charity roll un-spent, and could re-roll: `handleRoll` derives the die count
+      // from live state and `rollDiceRaw` is seeded on `(seed, rngCursor)`, so
+      // choosing a different count from the same cursor deals a different result.
+      // Rolling until you like where you land is not a refresh, it is a re-roll.
+      //
+      // What this does NOT do, stated plainly: `pending` is component state and is
+      // lost on a refresh either way, and nothing on the resume path re-opens it. So
+      // a player who refreshes mid-decision still forfeits that one card. That is a
+      // smaller wrong than the one being fixed — a forfeited card cannot be farmed,
+      // a re-roll can — but it is a wrong, and it is the same reason a card whose
+      // cost is applied on confirm (a doodad, a downsizing) can still be dodged by
+      // refreshing. Closing that needs the pending card itself to be part of
+      // `CashflowState`, which is a save-format change, not a fix.
+      commit(() => mv.state);
 
       if (mv.paydaysPassed > 0 && mv.paydayAmount !== 0) {
         setPaydayToast(mv.paydayAmount * mv.paydaysPassed);
@@ -452,6 +502,7 @@ export function useCashflowTurn({
     setPending,
     quizState,
     paydayToast,
+    borrowToast,
     paydayFlash,
     boardPulse,
     busy,

@@ -41,6 +41,7 @@ import {
   payDebt,
   quitRun,
   retire,
+  sellHome,
   trade,
   type RunState,
   type YearJournal,
@@ -176,6 +177,14 @@ export function replayRun(t: ReplayTicket, opts: ReplayOpts = {}): RunState | nu
       } else if (act[0] === "t") {
         if (opts.allocate) continue; // the counterfactual buys its own way
         s = trade(s, act[1], act[2]);
+      } else if (act[0] === "h") {
+        // Selling the house replays VERBATIM, for the same reason debt payments do
+        // (see below). It is a housing decision, not an allocation one: it changes
+        // rent, upkeep, the mortgage and every year of expenses after it, so a ghost
+        // that skipped it would be answering a different question entirely. The
+        // proceeds are recomputed from the state the replay is already in, which is
+        // why the act carries no figures — see `JournalAct`.
+        s = sellHome(s);
       } else {
         // Debt payments replay VERBATIM, even for a counterfactual, and that is the
         // difference between a comparison and a muddle. The ghost exists to answer

@@ -505,6 +505,30 @@ check("P8d a daily run's result row is filed under its day", () => {
 // A bias on the cards you are dealt is the most dangerous thing in this pass: it
 // touches `drawEvents`, which every replay, every verification and every match
 // stands on. These four checks are the fence around it.
+// `golden-draws.json` is a PIN, not a fixture: it exists so that a change nobody
+// intended to make to the draw cannot pass unnoticed. Regenerating it is therefore
+// an act that has to be justified, and the justification belongs here.
+//
+// Last regenerated at RUN_VERSION 7. 80 of the 120 seeds moved, and every one of them
+// was attributed before the file was rewritten:
+//   • 74 seeds — the three eligibility changes. `studentLoans` now requires a balance
+//     of at least $8,000 (it was being dealt to debt-free players, whose "attack the
+//     debt" burned $8,000 to retire nothing); `relocate` now carries `promotion`'s
+//     2-year cooldown (it was an unbounded, guaranteed +28% pump); `rentOrBuy` is no
+//     longer `once`, so declining it at 27 stops permanently foreclosing home
+//     ownership and `houseHack` with it. Removing or restoring one entry re-indexes
+//     the whole weighted pool, so a single eligibility change cascades through every
+//     later draw off the same stream — which is why three gates moved 74 seeds and
+//     not three. Reverting just these three restores 114/120.
+//   • 6 seeds — the remaining two economy changes, each confirmed on the seeds that
+//     exhibit it: all 6 took "attack the debt" against a balance smaller than the
+//     $8,000 the card charges, which the engine now refunds proportionally instead of
+//     vanishing; 2 of those also bought a home after year one, which is now priced at
+//     the price level rather than a fixed nominal $220,000.
+//   • 0 seeds unexplained.
+// A year-one home purchase is byte-identical before and after (price 220,000, loan
+// 176,000, payment 13,376/yr), which is the property that says the inflation fix is a
+// restatement and not a rebalance.
 check("P9 a run with no weak spots deals exactly what it dealt before", () => {
   const golden = JSON.parse(readFileSync(new URL("./golden-draws.json", import.meta.url), "utf8"));
   for (let seed = 1; seed <= 120; seed++) {

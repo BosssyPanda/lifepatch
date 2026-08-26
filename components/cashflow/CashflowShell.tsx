@@ -130,7 +130,7 @@ export function CashflowShell({
       {view === "play" && s
         ? scene(
             "cf-play",
-            <CashflowGame s={s} apply={cf.apply} commit={cf.commit} onExit={onExit} onOpenAlmanac={onOpenAlmanac} />,
+            <CashflowGame s={s} commit={cf.commit} onExit={onExit} onOpenAlmanac={onOpenAlmanac} />,
           )
         : view === "escape" && s
           ? scene(
