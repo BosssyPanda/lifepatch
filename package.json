@@ -15,6 +15,7 @@
     "audio:preview": "node scripts/audio/render-previews.mjs",
     "qa:audio": "node scripts/qa/audio-integration.mjs",
     "qa:engine": "node scripts/qa/engine-props.mjs",
+    "qa:friends": "node scripts/qa/friends-flow.mjs",
     "qa:palette": "node scripts/qa/palette-audit.mjs",
     "qa:verify": "node scripts/qa/verify-route.mjs",
     "qa:schema": "node scripts/qa/schema-policies.mjs",

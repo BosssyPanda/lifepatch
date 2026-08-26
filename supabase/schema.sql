@@ -426,6 +426,33 @@ create table if not exists public.friends (
 -- table for the second half.
 create index if not exists friends_friend_idx on public.friends (friend_id);
 
+-- ── An edge to yourself is not a thing ────────────────────────────────────
+-- The insert policy below already refuses one for a client (`friend_id <>
+-- auth.uid()`), and `addByCode` refuses it before that with a better sentence.
+-- This is the third layer, and the only one that binds a writer holding the
+-- service role — which bypasses row-level security entirely and would otherwise
+-- meet no rule at all. The table itself is where an invariant about the table's
+-- own rows belongs.
+--
+-- What such a row would do if it existed: the both-edges rule reads it as a
+-- request from yourself, so it renders in your own "Sent · waiting" list and
+-- waits forever for a reply from you.
+--
+-- NOT VALID for the same reason as the username charset: it binds every write
+-- from now on and leaves whatever is already in the table alone.
+--
+--   alter table public.friends validate constraint friends_not_self;
+--
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'friends_not_self'
+  ) then
+    alter table public.friends
+      add constraint friends_not_self check (user_id <> friend_id) not valid;
+  end if;
+end $$;
+
 alter table public.friends enable row level security;
 
 -- ── What a friendship IS ──────────────────────────────────────────────────
@@ -480,9 +507,24 @@ create policy "friends - update own" on public.friends
     )
   );
 
+-- Deleting covers BOTH sides of an edge you are part of, and both halves of that
+-- are needed for the feature to be usable rather than just safe.
+--
+-- An edge pointed AT you is a request. If only its author could remove it, a
+-- request you do not want would sit on your Friends tab forever and the only way
+-- to clear it would be to accept it — which is a spam vector with a single
+-- available response. Dismissing it is deleting their row.
+--
+-- And an unfriend has to take both rows. A friendship is two edges, so deleting
+-- only your own would end it — and instantly re-present their surviving edge as a
+-- brand-new incoming request from someone you just removed.
+--
+-- This is a dismiss, not a block: nothing here stops them asking again. A real
+-- block list is a table this schema does not have, and pretending otherwise in
+-- the UI would be the worse answer.
 drop policy if exists "friends - delete own" on public.friends;
 create policy "friends - delete own" on public.friends
-  for delete using (auth.uid() = user_id);
+  for delete using (auth.uid() = user_id or auth.uid() = friend_id);
 
 -- Reconcile anything the old policies allowed. A one-sided `accepted` edge is
 -- demoted to the request it always actually was; nothing is deleted, so a

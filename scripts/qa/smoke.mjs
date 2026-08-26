@@ -5,7 +5,7 @@
 //   QA_REDUCED=1 node scripts/qa/smoke.mjs
 //
 // Exits non-zero when a HIGH finding or a console error appears.
-import { Run, DESKTOP, MOBILE } from "./harness.mjs";
+import { Run, BASE, DESKTOP, MOBILE } from "./harness.mjs";
 
 const viewport = process.env.QA_VIEWPORT === "mobile" ? MOBILE : DESKTOP;
 const tag = process.env.QA_VIEWPORT === "mobile" ? "mobile" : "desktop";
@@ -239,11 +239,117 @@ async function storyRun(run) {
   }
 }
 
+/**
+ * The Friends tab, end to end in a real browser.
+ *
+ * This tab has existed since the social layer shipped and could only ever be
+ * empty: `addByCode` had no caller anywhere in the repo. So the journey drives
+ * the whole loop — the waiting-request count on the tab itself, accepting one,
+ * and sending a new one by code — against profiles seeded into localStorage,
+ * which is exactly what a dev build's `getByFriendCode` scans.
+ */
+async function friendsTab(run) {
+  const page = run.page;
+  await page.goto(`${BASE}/leaderboard`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1200);
+
+  // Two other players on the same device — the only shape a no-cloud build has.
+  // One has asked to be my friend; the other I am about to ask by code.
+  await page.evaluate(() => {
+    const mk = (id, username, friendCode, avatarSeed) =>
+      localStorage.setItem(
+        `lifepatch.profile.${id}`,
+        JSON.stringify({ id, username, avatarSeed, friendCode, createdAt: "" }),
+      );
+    mk("device-qa-friend", "calm-heron-202", "K7X2FM", "bb22");
+    mk("device-qa-asker", "bold-lynx-303", "PQ4RTV", "cc33");
+    // The id the app will actually use, resolved the way `resolveProgressId` does.
+    // The story journey signs in with an email first, and a dev build files that
+    // under `lifepatch.devUser` — seeding against the device id instead put the
+    // request on a player who was not the one looking at the screen.
+    const dev = localStorage.getItem("lifepatch.devUser");
+    const me = (dev ? JSON.parse(dev).id : null) ?? localStorage.getItem("lifepatch.deviceId");
+    localStorage.setItem(
+      "lifepatch.friends",
+      JSON.stringify([{ userId: "device-qa-asker", friendId: me, status: "pending", createdAt: "" }]),
+    );
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(1400);
+
+  // A request nobody is told about is a request nobody answers, so the count is
+  // on the tab — which is also why this matches on a prefix, not `^friends$`.
+  const tab = page.getByRole("tab", { name: /^friends/i }).first();
+  if (!(await tab.count())) {
+    run.finding("HIGH", "friends", "the Friends tab is not reachable from the leaderboard");
+    return;
+  }
+  // Every tab wears aria-hidden bracket marks, so the text reads "[ FRIENDS · 1 ]".
+  if (!/friends\s*·\s*1/i.test(((await tab.innerText()) ?? "").replace(/\s+/g, " "))) {
+    run.finding("HIGH", "friends", `a waiting request is not counted on the tab: ${JSON.stringify(await tab.innerText())}`);
+  }
+  await tab.click({ timeout: 6000 }).catch(() => {});
+  await page.waitForTimeout(1400);
+  await run.snap("13-friends-panel");
+
+  const text = await run.text();
+  if (!/Your friend code/i.test(text)) {
+    run.finding("HIGH", "friends", "the panel does not show your own code");
+    return;
+  }
+  const mine = (await run.readNear("your friend code", 40)) ?? "";
+  if (!/[A-HJ-NP-Z2-9]{6}/.test(mine)) {
+    run.finding("HIGH", "friends", `own friend code did not render as a code: ${JSON.stringify(mine)}`);
+  }
+  if (!/bold-lynx-303/.test(text)) run.finding("HIGH", "friends", "the waiting request is not listed");
+
+  // Accepting writes the second edge — the half that makes it a friendship.
+  // Prefix, not `^accept$`: the control's accessible name names the person
+  // ("Accept calm-heron-202"), because a column of identical "Accept" buttons is
+  // unanswerable to a screen reader without the row's context.
+  if (!(await run.click("^accept ", { wait: 1600 }))) {
+    run.finding("HIGH", "friends", "no Accept control on a waiting request");
+  } else {
+    const accepted = await run.text();
+    if (!/Friends · 1/i.test(accepted)) run.finding("HIGH", "friends", "accepting did not produce a friendship");
+    if (/friends\s*·\s*1/i.test(((await tab.innerText()) ?? "").replace(/\s+/g, " "))) {
+      run.finding("MED", "friends", "the tab still counts a request that was accepted");
+    }
+  }
+
+  const field = page.locator('input[placeholder="K7X2FM"]');
+  if (!(await field.count())) {
+    run.finding("HIGH", "friends", "no add-by-code field on the panel");
+    return;
+  }
+
+  // A code nobody holds must say so, not fail silently and not throw.
+  await field.fill("QQQQQQ");
+  await run.click("^send$", { wait: 1200 });
+  if (!/No player has that code/i.test(await run.text())) {
+    run.finding("HIGH", "friends", "an unknown code produced no message");
+  }
+
+  // And the real one must go through, naming who it went to.
+  await field.fill("K7X2FM");
+  await run.click("^send$", { wait: 1400 });
+  const after = await run.text();
+  if (!/Request sent to calm-heron-202/i.test(after)) {
+    run.finding("HIGH", "friends", "a valid friend code did not send a request");
+  }
+  // `innerText` reflects CSS, and the group heading is an `eyebrow` (uppercased).
+  if (!/Sent · 1/i.test(after)) {
+    run.finding("MED", "friends", "the sent request did not appear in the panel's own list");
+  }
+  await run.snap("14-friends-sent");
+}
+
 const run = new Run(`smoke-${tag}`);
 try {
   await landing(run);
   if (await intoModeSelect(run)) await ratRace(run);
   await storyRun(run);
+  await friendsTab(run);
 } catch (e) {
   run.finding("HIGH", "harness", `journey threw: ${e.message}`);
 } finally {

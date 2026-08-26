@@ -4,16 +4,18 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useId, useRef, useState } from "react";
 import { CloseIcon } from "@/components/icons";
 import { Avatar } from "@/components/social/Avatar";
+import { FriendsPanel } from "@/components/social/FriendsPanel";
 import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { LedgerButton } from "@/components/ui/LedgerButton";
 import { LedgerDialog } from "@/components/ui/LedgerDialog";
 import { LedgerTabs, tabId } from "@/components/ui/LedgerTabs";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
+import { useFriends } from "@/hooks/useFriends";
 import { useProfile } from "@/hooks/useProfile";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { todaysDaily } from "@/lib/daily";
-import { listFriendIds } from "@/lib/cloud/friends";
+import { friendsNeedAccount } from "@/lib/cloud/friends";
 import { getProfiles } from "@/lib/cloud/profiles";
 import { topResults, type LeaderboardScope } from "@/lib/cloud/results";
 import type { GameMode, Profile, ResultRow } from "@/lib/cloud/types";
@@ -136,6 +138,23 @@ export function Leaderboard({
   const [today, setToday] = useState<string | null>(null);
   useEffect(() => setToday(todaysDaily()?.date ?? null), []);
 
+  const profileId = profile?.id ?? null;
+
+  /**
+   * The friend lists, read once per open rather than per tab.
+   *
+   * Held here and not inside `FriendsPanel` because two things above the panel
+   * need them: the scope strip has to show a count when somebody is waiting on
+   * you — a request nobody is told about is a request nobody answers — and the
+   * board's own fetch needs the friend ids, which it used to read from the table
+   * a second time on every filter change.
+   */
+  const friends = useFriends(open && profileId && !friendsNeedAccount(profileId) ? profileId : null);
+  /** Stable across renders, so the board's effect re-runs when the SET changes and
+   *  not merely because a refresh handed back a new array of the same ids. */
+  const friendKey = friends.friends.join(",");
+  const pending = friends.incoming.length;
+
   // Two filters that do not exist on every board. Both are neutralised by
   // DERIVATION rather than by resetting state in an effect: an effect would let one
   // fetch go out with the stale filter still armed, and the player would watch the
@@ -145,21 +164,36 @@ export function Leaderboard({
   // fixes the background for everyone, so there is nothing left to segment on it.
   const showDaily = mode === "story" && today !== null;
   const scope: LeaderboardScope = showDaily || scopePick !== "daily" ? scopePick : "all";
-  const scopeTabs = showDaily ? [...SCOPE_TABS, DAILY_TAB] : SCOPE_TABS;
+  // Text, not a dot: DESIGN.md § "colour is never the only channel", and the same
+  // `label · n` grammar the panel's own group headings use.
+  const scopeTabs = (showDaily ? [...SCOPE_TABS, DAILY_TAB] : SCOPE_TABS).map((t) =>
+    t.id === "friends" && pending > 0 ? { ...t, label: `Friends · ${pending}` } : t,
+  );
   const showBackgrounds = mode !== "cashflow" && scope !== "daily";
   const background = showBackgrounds ? backgroundPick : ALL_BACKGROUNDS;
 
-  const profileId = profile?.id ?? null;
-
   useEffect(() => {
     if (!open) return;
+    // The friend board is a filter ON the friend list, so fetching before that
+    // list has arrived asks for "the best runs among nobody" and paints the empty
+    // plate for a beat before correcting itself.
+    if (scope === "friends" && friends.loading) {
+      setLoading(true);
+      return;
+    }
     let active = true;
     setLoading(true);
     setFailed(false);
     void (async () => {
       try {
+        // Your own row belongs on the board you are comparing yourself against —
+        // it used to be the one row missing from it, which left "how am I doing
+        // against my friends" unanswerable on the tab built to answer it. Added
+        // only when there IS a friend: `topResults` treats an empty list as "no
+        // friends yet", and seeding it with just me would turn that state into a
+        // board on which I am my own only rival.
         const friendIds =
-          scope === "friends" && profileId ? await listFriendIds(profileId) : [];
+          scope === "friends" && friendKey && profileId ? [profileId, ...friendKey.split(",")] : [];
         const top = await topResults(mode, {
           scope,
           friendIds,
@@ -186,7 +220,7 @@ export function Leaderboard({
     return () => {
       active = false;
     };
-  }, [open, mode, scope, background, today, profileId, sfx, retry]);
+  }, [open, mode, scope, background, today, profileId, sfx, retry, friendKey, friends.loading]);
 
   const metric = scoreMetric(mode);
   const isPage = chrome === "page";
@@ -242,6 +276,21 @@ export function Leaderboard({
       )}
     </>
   );
+
+  /**
+   * The Friends tab's own controls, above its board.
+   *
+   * Not a separate screen, because the two halves answer each other: adding a
+   * friend has no visible effect on a leaderboard until that friend finishes a
+   * run, and a tab that stayed empty after a successful request is exactly how
+   * this feature read for its whole life before now. Accepting somebody changes
+   * `friendKey`, which re-runs the board fetch on its own — there is no separate
+   * "something changed" signal to keep in step.
+   */
+  const friendsPanel =
+    scope === "friends" && profile ? (
+      <FriendsPanel userId={profile.id} friendCode={profile.friendCode} friends={friends} />
+    ) : null;
 
   const body = loading ? (
     <p className="py-10 text-center"><TerminalOp label="Fetching ledger" center /></p>
@@ -327,6 +376,7 @@ export function Leaderboard({
         {board}
 
         <div className={`${gutter} flex-1 pb-10 pt-2`} id={panelId} role="tabpanel" aria-labelledby={tabId(panelId, mode)}>
+          {friendsPanel}
           {body}
         </div>
 
@@ -389,6 +439,7 @@ export function Leaderboard({
               tabIndex={0}
               data-lenis-prevent
             >
+              {friendsPanel}
               {body}
             </div>
 
@@ -427,7 +478,7 @@ function RankBadge({ rank }: { rank: number }) {
 function EmptyState({ scope, reduced }: { scope: LeaderboardScope; reduced: boolean }) {
   const msg =
     scope === "friends"
-      ? "No friends added yet. Share your friend code to race together."
+      ? "No friend has filed a run yet. Their best one lands here the moment they finish."
       : scope === "week"
         ? "No runs this week. Finish a run to claim the top spot."
         : scope === "daily"

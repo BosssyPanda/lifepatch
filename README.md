@@ -100,6 +100,23 @@ rolls, not decisions, so there is no action log to replay; those rows keep posti
 from the browser and never carry the flag. Their board is protected instead by the
 score-version filter in `lib/cloud/comparability.ts`.
 
+### Friends
+
+Adding a friend is by **code only** — there is no search, no directory, and
+`profiles` is not readable row by row (see `profiles_for` and
+`find_by_friend_code` in `supabase/schema.sql`). Your code is on the
+Leaderboard's Friends tab.
+
+A friendship is **two edges**, one in each direction. One edge — whatever
+`status` it carries — is a request, and that rule is enforced in two places at
+once: the insert policy refuses a self-authored `accepted` row, and
+`partitionEdges` in `lib/cloud/friends.ts` refuses to read one edge as a
+friendship. Accepting writes your own edge back; dismissing deletes theirs;
+removing a friend deletes both. A dismiss is not a block, and the panel says so.
+
+Without Supabase keys the whole feature runs on one localStorage key, which is
+useful for development and is what `npm run qa:friends` drives end to end.
+
 ### Indexes
 
 `schema.sql` creates the expression indexes the segmented boards need

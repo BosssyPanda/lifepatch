@@ -161,6 +161,37 @@ try {
 
     const forge = as("authenticated", C, `insert into public.friends values ('${A}','${C}','pending');`);
     ck(forge.denied, "C cannot write an edge on A's behalf", forge.out);
+
+    // ── the delete side, which the friends UI is the first caller of ────────
+    // `delete using (auth.uid() = user_id)` was the whole rule, and it made a
+    // request undismissable: the target never wrote the row, so the only answer
+    // they could give was yes. It also made unfriending one-sided — my edge went,
+    // theirs stayed, and `listIncoming` re-presented the person I had just removed
+    // as a brand-new request. Both halves are policy, so both are tested here.
+    // Two layers, two claims. A client meets the policy; a writer holding the
+    // service role bypasses policies entirely and meets the CHECK. `psql` here
+    // runs as the table owner, which is the closest this harness gets to that.
+    const selfEdge = as("authenticated", C, `insert into public.friends values ('${C}','${C}','pending');`);
+    ck(selfEdge.denied, "a client cannot write an edge to themselves", selfEdge.out);
+
+    const selfEdgeOwner = psql(`insert into public.friends values ('${C}','${C}','pending');`, { stopOnError: false, quiet: false });
+    ck(/violates check constraint "friends_not_self"/.test(selfEdgeOwner.out), "and neither can a writer that bypasses RLS", selfEdgeOwner.out);
+
+    const meddle = as("authenticated", B, `delete from public.friends where user_id='${C}' and friend_id='${A}';`);
+    ck(/^DELETE 0$/m.test(meddle.out), "B cannot delete an edge they are no part of", meddle.out);
+
+    const dismiss = as("authenticated", A, `delete from public.friends where user_id='${C}' and friend_id='${A}';`);
+    ck(/^DELETE 1$/m.test(dismiss.out), "A can DISMISS C's request — the edge they are the target of", dismiss.out);
+
+    const gone = as("authenticated", A, `select count(*) from public.friends where user_id='${C}';`);
+    ck(value(gone) === "0", "and the dismissed request is actually gone", gone.out);
+
+    const unfriend = as(
+      "authenticated",
+      A,
+      `delete from public.friends where (user_id='${A}' and friend_id='${B}') or (user_id='${B}' and friend_id='${A}');`,
+    );
+    ck(/^DELETE 2$/m.test(unfriend.out), "unfriending takes BOTH edges, not just mine", unfriend.out);
   }
 
   console.log("── profiles stop being a directory of account ids ──");
