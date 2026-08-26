@@ -1,3 +1,4 @@
+import type { ReplayTicket } from "../replay";
 import { isCloud, supabase } from "../supabase";
 import { comparabilityMarker } from "./comparability";
 import type { GameMode, NewResult, ResultRow } from "./types";
@@ -106,9 +107,118 @@ function bestPerUser(rows: ResultRow[]): ResultRow[] {
   return Array.from(best.values()).sort((a, b) => b.score - a.score);
 }
 
-export async function submitResult(userId: string, result: NewResult): Promise<ResultRow> {
-  const metrics = result.metrics ?? {};
+/**
+ * What the server did with a ticket.
+ *
+ * `null` is not an error and is the common case in a deployment that has not
+ * finished the cutover: the route is not there, or it is there and could not
+ * re-derive this particular run. Either way the run is real and still belongs on
+ * the board — it simply posts without the flag, which is what an absent flag has
+ * always meant.
+ */
+type ServerSubmit =
+  | { kind: "posted"; row: ResultRow }
+  /** Post it yourself. `dropDaily` when the server rejected the DAY it claimed —
+   *  the run happened, it is just not provably that day's puzzle, so the tag has
+   *  to come off rather than ride onto a board it cannot defend. */
+  | { kind: "fallback"; dropDaily: boolean };
+
+/**
+ * Post the run through the server, which replays it and derives the score itself.
+ *
+ * Every refusal that is ABOUT THIS RUN falls back rather than throwing, and that
+ * distinction is the one this function exists to draw. A 422 means "I could not
+ * reproduce this run on this build" — which is exactly what a save carried across
+ * an engine bump looks like (`migrateSave` documents it), and what any run
+ * finished across a content deploy looks like. Treating that as fatal would
+ * DELETE the run: it is not a claim the player made, it is a claim the server
+ * could not check. It posts unverified, as it did before this route existed.
+ *
+ * Only "I could not reach you" and "your session is stale" throw, because those
+ * are the two a retry can genuinely fix.
+ */
+async function submitViaServer(
+  ticket: ReplayTicket,
+  claimedScore: number,
+  daily?: string,
+): Promise<ServerSubmit> {
+  const { data: session } = await supabase!.auth.getSession();
+  const token = session.session?.access_token;
+  // No session means no `auth.uid()`, so the direct insert is about to be refused
+  // by RLS too. Let it be refused there, where the error already says so.
+  if (!token) return { kind: "fallback", dropDaily: false };
+
+  let res: Response;
+  try {
+    res = await fetch("/api/submit-result", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ ticket, claimedScore, ...(daily ? { daily } : {}) }),
+    });
+  } catch (err) {
+    // The network, not a verdict. Retryable.
+    throw new Error(`submit-result: could not reach the server: ${String(err)}`);
+  }
+
+  if (res.ok) {
+    const json = (await res.json()) as { row?: Record<string, unknown> };
+    if (!json.row) throw new Error("submit-result: the server returned no row");
+    return { kind: "posted", row: fromRow(json.row) };
+  }
+
+  // 401 is a token that can be refreshed; 5xx is the server having a bad minute.
+  // Both are worth another go, and neither is a statement about the run.
+  if (res.status === 401 || res.status >= 500) {
+    throw new Error(`submit-result failed: HTTP ${res.status}`);
+  }
+
+  let reason = `HTTP ${res.status}`;
+  try {
+    const json = (await res.json()) as { error?: string; reject?: string };
+    if (json.error) reason = json.error;
+    if (json.reject === "daily") {
+      console.warn(`submit-result: this run is not provably that day's puzzle — posting it as an ordinary run (${reason})`);
+      return { kind: "fallback", dropDaily: true };
+    }
+  } catch {}
+  // 503 (no service key) and 404 (a build without the route) are silent by
+  // design — that is a deployment state, not an event. Everything else is worth
+  // one line, because it means a real run went onto the board unverified.
+  if (res.status !== 503 && res.status !== 404) {
+    console.warn(`submit-result: could not verify this run, posting it unverified — ${reason}`);
+  }
+  return { kind: "fallback", dropDaily: false };
+}
+
+/**
+ * Write a finished run to the board.
+ *
+ * With a `ticket` — which every journaled life-sim run has — this goes through
+ * `/api/submit-result`, and the score that lands is the one the SERVER derived by
+ * replaying the run. The direct insert below is the fallback for the Rat Race
+ * (nothing to replay), for a run with no journal, and for a deployment where the
+ * route is not configured yet.
+ */
+export async function submitResult(
+  userId: string,
+  result: NewResult,
+  ticket?: ReplayTicket | null,
+): Promise<ResultRow> {
+  let metrics = result.metrics ?? {};
   if (isCloud && supabase) {
+    if (ticket && result.mode !== "cashflow") {
+      const daily = typeof metrics.daily === "string" ? metrics.daily : undefined;
+      const outcome = await submitViaServer(ticket, result.score, daily);
+      if (outcome.kind === "posted") return outcome.row;
+      // The server could not defend the day this run claims, so the claim comes
+      // off before the row is written. Posting it with the tag intact would put
+      // the run on a daily board on nothing but the browser's say-so, which is
+      // the filing the binding exists to prevent.
+      if (outcome.dropDaily && "daily" in metrics) {
+        const { daily: _dropped, ...rest } = metrics;
+        metrics = rest;
+      }
+    }
     const { data, error } = await supabase
       .from("results")
       .insert({
@@ -120,7 +230,14 @@ export async function submitResult(userId: string, result: NewResult): Promise<R
       })
       .select("*")
       .single();
-    if (error || !data) throw new Error(error?.message ?? "Result submit failed");
+    // The raw Postgres message names tables, columns and constraints. This one is
+    // only ever logged today, but the queue re-throws it and it is one render away
+    // from a player's screen at any time — so it is logged where an operator can
+    // read it and summarised where a caller can.
+    if (error || !data) {
+      console.error("submitResult: insert failed", error);
+      throw new Error("Result submit failed");
+    }
     return fromRow(data);
   }
   const row: ResultRow = {
@@ -219,7 +336,10 @@ export async function resultAlreadyPosted(userId: string, result: NewResult): Pr
       .limit(1);
     // Unknown is not "no". Claiming the row is absent when the check itself failed
     // would re-insert it, which is the duplicate this exists to avoid.
-    if (error) throw new Error(`resultAlreadyPosted: lookup failed: ${error.message}`);
+    if (error) {
+      console.error("resultAlreadyPosted: lookup failed", error);
+      throw new Error("resultAlreadyPosted: lookup failed");
+    }
     return (data?.length ?? 0) > 0;
   }
   return readLocal().some(
@@ -346,6 +466,16 @@ export type PendingResult = {
   runKey: string;
   playerId: string;
   result: NewResult;
+  /**
+   * The run's actions, so a retry can still go through the server.
+   *
+   * Without it a queued life-sim run would come back on the next load with no
+   * ticket, fall through to the direct insert, and — once Part B of the schema has
+   * closed that path — be refused by the database for a reason the queue cannot
+   * fix. It costs bytes (a long run's journal is a few KB) against a queue already
+   * bounded at `MAX_PENDING`, which is the cheaper side of that trade by far.
+   */
+  ticket?: ReplayTicket | null;
   attempts: number;
   queuedAt: string;
 };
@@ -379,13 +509,28 @@ function writePending(rows: PendingResult[]): void {
  * exists to prevent. `attempts` counts load-time retries, and only
  * `countPendingAttempt` increments it.
  */
-export function queuePending(runKey: string, playerId: string, result: NewResult): void {
+export function queuePending(
+  runKey: string,
+  playerId: string,
+  result: NewResult,
+  ticket?: ReplayTicket | null,
+): void {
   const all = readPending();
   const prev = all.find((p) => p.runKey === runKey);
   const others = all.filter((p) => p.runKey !== runKey);
   writePending([
     ...others,
-    { runKey, playerId, result, attempts: prev?.attempts ?? 0, queuedAt: prev?.queuedAt ?? new Date().toISOString() },
+    {
+      runKey,
+      playerId,
+      result,
+      // Never DOWNGRADE a queued row: an entry parked with a ticket must not lose
+      // it to a later call that happens not to have one, or the retry silently
+      // stops being verifiable.
+      ticket: ticket ?? prev?.ticket ?? null,
+      attempts: prev?.attempts ?? 0,
+      queuedAt: prev?.queuedAt ?? new Date().toISOString(),
+    },
   ]);
 }
 

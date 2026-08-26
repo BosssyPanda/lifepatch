@@ -4,8 +4,25 @@ import type { FriendEdge, FriendStatus } from "./types";
 
 /**
  * Opt-in friend edges (added by code, never by search). Cloud → `friends` table;
- * dev → namespaced localStorage. Lean for Phase 0: request / accept / list. RLS
- * lets each user write only their own side, so friendship is mutual-accepted.
+ * dev → namespaced localStorage.
+ *
+ * ── What a friendship is ───────────────────────────────────────────────────
+ * An edge means "I want to be connected to you". A FRIENDSHIP is two of them,
+ * one in each direction. Nothing else counts, and that structural rule is the
+ * consent model — not the `status` column, which is a label on top of it.
+ *
+ * The old rule was that ONE accepted edge in EITHER direction made you friends,
+ * and the old insert policy let a client choose its own `status`. Those two
+ * together meant a single request — `{user_id: me, friend_id: anyone, status:
+ * "accepted"}` — silently made you someone's friend, with their board and their
+ * streak on your Friends tab and nothing at all on theirs. The database now
+ * refuses a self-authored edge that is not `pending`; this module refuses to
+ * read one edge as a friendship. Either fix alone would close it. Both are here
+ * because the client is not the place that decides who your friends are.
+ *
+ * `status` still earns its place: `pending` on your own edge means you asked and
+ * they have not written one back, and `accepted` means you have seen theirs and
+ * said yes. It is what the UI reads to tell a request from a friend.
  */
 
 const PREFIX = "lifepatch.friends.";
@@ -62,7 +79,17 @@ export async function addByCode(userId: string, code: string): Promise<AddFriend
   return { ok: true };
 }
 
-/** Accept an incoming request: mark my own edge to that friend accepted. */
+/**
+ * Accept an incoming request.
+ *
+ * Writes MY edge back to them, which is the half that was missing — their
+ * request was one edge, and one edge is not a friendship. The `accepted` status
+ * is the label; the row existing is the consent.
+ *
+ * The database only permits `accepted` here because their edge already exists
+ * (see the update policy in supabase/schema.sql). If it somehow does not, the
+ * upsert is refused and this returns false rather than inventing a friendship.
+ */
 export async function accept(userId: string, friendId: string): Promise<boolean> {
   if (isCloud && supabase) {
     const { error } = await supabase
@@ -99,21 +126,51 @@ export async function listEdges(userId: string): Promise<FriendEdge[]> {
   return readLocal(userId);
 }
 
-/** Accepted friend ids (either direction counts as friends). */
-export async function listFriendIds(userId: string): Promise<string[]> {
-  const edges = await listEdges(userId);
-  const ids = new Set<string>();
+/**
+ * The two halves of "who is connected to me": people I wrote an edge to, and
+ * people who wrote one to me. Every question this module answers is a set
+ * operation on these, which is why they are computed in one place.
+ */
+function sides(userId: string, edges: FriendEdge[]): { mine: Set<string>; theirs: Set<string> } {
+  const mine = new Set<string>();
+  const theirs = new Set<string>();
   for (const e of edges) {
-    if (e.status !== "accepted") continue;
-    ids.add(e.userId === userId ? e.friendId : e.userId);
+    if (e.userId === userId) mine.add(e.friendId);
+    else if (e.friendId === userId) theirs.add(e.userId);
   }
-  return Array.from(ids);
+  return { mine, theirs };
 }
 
-/** Incoming pending requests (someone added me, I haven't accepted yet). */
+/**
+ * Friends: the people an edge runs to AND from.
+ *
+ * Both directions, always. A single edge — whatever status it carries — is a
+ * request, not a friendship, because only one person wrote it. This is the read
+ * side of the rule the insert policy enforces on the write side; see this file's
+ * header for what the old one-edge reading allowed.
+ */
+export async function listFriendIds(userId: string): Promise<string[]> {
+  const { mine, theirs } = sides(userId, await listEdges(userId));
+  return [...mine].filter((id) => theirs.has(id));
+}
+
+/**
+ * Incoming requests: they wrote an edge to me and I have written none back.
+ *
+ * Keyed on the absence of my edge rather than on their `status`, and that is the
+ * fix for a real gap. A request whose sender had already marked their own side
+ * `accepted` — which the old insert policy allowed, and which a legacy row can
+ * still carry — matched neither the friend list (I never wrote an edge) nor the
+ * incoming list (their status was not `pending`). It was invisible from both
+ * sides: they were waiting on someone who was never shown the request.
+ */
 export async function listIncoming(userId: string): Promise<string[]> {
-  const edges = await listEdges(userId);
-  return edges
-    .filter((e) => e.friendId === userId && e.status === "pending")
-    .map((e) => e.userId);
+  const { mine, theirs } = sides(userId, await listEdges(userId));
+  return [...theirs].filter((id) => !mine.has(id));
+}
+
+/** People I have asked who have not written an edge back yet. */
+export async function listOutgoing(userId: string): Promise<string[]> {
+  const { mine, theirs } = sides(userId, await listEdges(userId));
+  return [...mine].filter((id) => !theirs.has(id));
 }

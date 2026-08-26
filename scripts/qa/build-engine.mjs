@@ -34,6 +34,8 @@ const ENTRIES = [
   "lib/daily.ts",
   "lib/dailyShare.ts",
   "lib/cloud/buildResult.ts",
+  "lib/cloud/resultRow.ts",
+  "lib/cloud/ticketGuard.ts",
   "lib/mp/autoResolve.ts",
   "lib/mp/protocol.ts",
 ];

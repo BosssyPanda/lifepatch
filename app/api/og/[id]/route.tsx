@@ -38,9 +38,13 @@ async function fetchRow(id: string): Promise<Row | null> {
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!base || !anon || !UUID_RE.test(id)) return null;
   try {
+    // Timed out rather than open-ended. This runs inside an image render that a
+    // scraper is already waiting on, and an un-timed fetch to a database having a
+    // bad minute holds the whole request until the platform kills it — which
+    // returns nothing at all, where a timeout returns the fallback card.
     const res = await fetch(
       `${base}/rest/v1/results?id=eq.${id}&select=id,mode,score,verdict,metrics`,
-      { headers: { apikey: anon, authorization: `Bearer ${anon}` } },
+      { headers: { apikey: anon, authorization: `Bearer ${anon}` }, signal: AbortSignal.timeout(4000) },
     );
     if (!res.ok) return null;
     const rows = (await res.json()) as Row[];
@@ -111,8 +115,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     { name: "Anton", data: anton, style: "normal" as const, weight: 400 as const },
     { name: "PlexMono", data: plex, style: "normal" as const, weight: 400 as const },
   ];
-  // A real row never changes, so it can be cached forever.
-  const headers = { "cache-control": "public, immutable, no-transform, max-age=31536000" };
+  // A real row never CHANGES — `results` has no update policy — but it can be
+  // DELETED, and "immutable, max-age=31536000" outlives that by up to a year. The
+  // card would stay pinned at every CDN and scraper that saw it while the page it
+  // links to 404s. A day is long enough that this is still effectively free, and
+  // short enough that a deleted run stops being advertised.
+  const headers = { "cache-control": "public, no-transform, max-age=86400, s-maxage=86400" };
   // The fallback must not be: a link shared in the window between the share URL being
   // minted and its row landing would otherwise pin the WRONG card at every CDN and
   // scraper for a year. A short TTL lets the real statement replace it.

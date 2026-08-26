@@ -235,8 +235,9 @@ export function Leaderboard({
           board, or over rows that all predate the check, is chrome for nothing. */}
       {rows.some((r) => r.metrics.verified === 1) && (
         <p className={`voice ${gutter} pt-1 text-xs text-tertiary`}>
-          <span aria-hidden>{VERIFIED_MARK}</span> replayed — the run re-simulated to the
-          score it claims, on the device that played it. It is a self-check, not a proof.
+          <span aria-hidden>{VERIFIED_MARK}</span> replayed — the server re-simulated this
+          run from its own recorded actions, and this is the score they produce. Not a
+          claim the browser made; a number derived here.
         </p>
       )}
     </>

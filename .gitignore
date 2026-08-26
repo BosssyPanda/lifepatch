@@ -32,3 +32,6 @@ next-env.d.ts
 
 # offline audio previews (regenerate with scripts/audio/render-previews.mjs)
 /.preview-audio/
+
+# supabase cli scratch
+/supabase/.temp

@@ -15,6 +15,7 @@ import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
 import type { DailyPuzzle } from "@/lib/daily";
+import { ticketFor } from "@/lib/replay";
 import { lastPlayerName } from "@/lib/mp/matchStore";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { flushPendingResults, resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
@@ -155,7 +156,12 @@ function AppShellInner() {
     if ((phase !== "report" && phase !== "podium") || !run.run || run.run.status !== "ended") return;
     const r = run.run;
     const id = resolvePlayerId(auth.user?.id ?? null);
-    void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r));
+    // The ticket is the run's ACTIONS, and it is what makes the score checkable:
+    // the server replays it and derives the number itself rather than believing
+    // the one computed here. Null for a run resumed from a save that predates
+    // journaling, or one that came back through the multiplayer wire parser — in
+    // both cases the row still posts, it just cannot carry the verified flag.
+    void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r), ticketFor(r));
   }, [phase, run.run, auth.user]);
 
   // Runs that finished while the network was not listening. `submitRunOnce` used

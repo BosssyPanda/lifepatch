@@ -1,15 +1,4 @@
-import { ticketFor, verifyResult } from "../replay";
-import { netWorth, RUN_VERSION, type RunState } from "../runEngine";
-import { deriveVerdict } from "../verdict";
-import {
-  hasEscaped,
-  netWorth as cashflowNetWorth,
-  passiveIncome,
-  payday as cashflowPayday,
-  totalExpenses,
-} from "../cashflow/selectors";
-import type { CashflowState } from "../cashflow/types";
-import { CASHFLOW_SCORE_VERSION } from "./comparability";
+import type { ReplayTicket } from "../replay";
 import { ensureProfile } from "./profiles";
 import {
   alreadySubmitted,
@@ -25,125 +14,17 @@ import {
   wasInterrupted,
 } from "./results";
 import { bumpStreak } from "./streaks";
-import type { GameMode, NewResult } from "./types";
+import type { NewResult } from "./types";
 
 /**
- * Build a leaderboard result row from a finished run. One score per mode so the
- * boards are comparable: net worth for the life sim, net worth plus a year of cash
- * flow for the Rat Race (see `cashflowScore`, and `lib/scoreLabel.ts` for the words
- * every surface says about it). Extra context rides in `metrics` for the result
- * card + row subtitle.
+ * Posting a finished run: exactly once, durably, and — for the life sim — through
+ * the server, which derives the score by replaying the run rather than believing it.
+ *
+ * The row-BUILDING half of this module moved to `./resultRow`, which is pure and
+ * therefore importable from `app/api/submit-result`. It is re-exported here so no
+ * call site had to move with it.
  */
-
-/** Story/Infinite: ranked by final net worth. */
-export function resultFromRun(run: RunState): NewResult {
-  const nw = netWorth(run);
-  const verdict = deriveVerdict(run);
-  const hist = run.history.slice(-100); // cap the stored series for very long infinite runs
-  const ticket = ticketFor(run);
-  return {
-    mode: run.mode as GameMode,
-    score: nw,
-    verdict: verdict.title,
-    metrics: {
-      netWorth: nw,
-      happiness: run.life.happiness,
-      age: run.age,
-      good: verdict.good ? 1 : 0,
-      // Phase M3: per-year net-worth series + its first calendar year, so the
-      // /r/[id] share page can draw the annotated life chart.
-      history: hist.map((h) => Math.round(h.netWorth)),
-      startYear: hist[0]?.year ?? run.startYear,
-      // What this run was, so two rows can be told apart and compared honestly.
-      // `seed` also gives the share lookup a key that cannot collide (two runs of
-      // one mode landing on the same net worth used to fight over one URL).
-      seed: run.seed,
-      backgroundId: run.backgroundId,
-      // NOT unconditionally RUN_VERSION. A save carried forward by `migrateSave`
-      // played most of its years under the older economy and only its last few
-      // under this one, so stamping it with today's version would slip it past the
-      // comparability filter in `topResults` — the filter added in the same change
-      // as the migration, to keep exactly those runs off this board. It keeps its
-      // share page either way; it just ranks with the engine it was mostly played on.
-      engine: run.migratedFrom ?? RUN_VERSION,
-      // The Daily Ledger stays `mode: "story"` — its board is a filter on this
-      // field, not a fourth mode, so the table's own check constraint, its policies
-      // and its index are all untouched.
-      ...(run.daily ? { daily: run.daily } : {}),
-      // Replayed: the run re-simulated, on this device, from its own action log,
-      // and landed on the score it is claiming. Written only when that succeeded —
-      // an absent flag makes no claim either way, which is the honest reading for
-      // a run resumed from a save that predates the log.
-      ...(ticket && verifyResult(ticket, nw) ? { verified: 1 } : {}),
-    },
-  };
-}
-
-/**
- * Rat Race scoring, v3.
- *
- * v1 ranked by passive income alone, which was blind to debt and expenses, so
- * maximum leverage was the optimal ranked strategy — the exact opposite of what
- * the mode teaches. v2 replaced it with a balance-sheet measure plus a year of
- * realized cash flow:
- *
- *     score = netWorth + 12 × payday
- *
- * That fixed the leverage exploit and introduced a bigger one in the same place it
- * had just closed, because the starting balance sheets are not level and nothing
- * subtracted them. Every profession begins in the hole — a personal home mortgage
- * is a liability with no matching asset on this board — and the holes are not
- * remotely the same size: the Janitor opens at −$43,350 and the Doctor at
- * −$512,600. That is a $469,250 head start handed out at the character-select
- * screen, against a mode whose whole run is worth a fraction of it. The board was
- * ranking profession choice, not play, and the winning move was to pick the
- * Janitor and stop thinking.
- *
- * v3 measures the distance travelled instead:
- *
- *     score = (netWorth + 12 × payday) − startingNetWorth
- *
- * The Doctor's debt still costs the Doctor every turn — it is in `payday` as
- * interest and in `netWorth` as principal — but it is no longer scored as a
- * mistake they made. `startingNetWorth` is already on the state (`initCashflow`
- * records it, and `persist` backfills it for older saves), so nothing new has to
- * be tracked to say it.
- *
- * v1 and v2 rows are not comparable to v3 rows, so the version rides in `metrics`
- * — and, as of this change, `topResults` actually filters on it. It lives in
- * `./comparability` because both the writer here and the reader there need it, and
- * that module importing this one would close a cycle.
- */
-
-export function cashflowScore(s: CashflowState): number {
-  return Math.round(cashflowNetWorth(s) + 12 * cashflowPayday(s) - s.startingNetWorth);
-}
-
-export function resultFromCashflow(s: CashflowState): NewResult {
-  const passive = passiveIncome(s);
-  const escaped = hasEscaped(s);
-  return {
-    mode: "cashflow",
-    score: cashflowScore(s),
-    verdict: s.status === "lost" ? "Buried in Debt" : escaped ? "Escaped the Rat Race" : "Still Racing",
-    metrics: {
-      scoreVersion: CASHFLOW_SCORE_VERSION,
-      // The run's seed, for the same reason the life sim records one: it is the only
-      // field unique to a run, and `resultAlreadyPosted` keys the retry dedupe on it.
-      // Without it every Rat Race retry was a blind re-insert.
-      seed: s.seed,
-      passiveIncome: passive,
-      netWorth: cashflowNetWorth(s),
-      payday: cashflowPayday(s),
-      expenses: totalExpenses(s),
-      bankLoan: s.liabilities.bankLoan,
-      interestPaid: Math.round(s.interestPaid),
-      turns: s.turn,
-      escaped: escaped ? 1 : 0,
-      lost: s.status === "lost" ? 1 : 0,
-    },
-  };
-}
+export { cashflowScore, resultFromCashflow, resultFromRun } from "./resultRow";
 
 /** What became of a submit. `"failed"` is the only one that leaves work to do,
  *  and `flushPendingResults` is what does it. */
@@ -176,6 +57,7 @@ export async function submitRunOnce(
   runKey: string,
   playerId: string | null,
   result: NewResult,
+  ticket?: ReplayTicket | null,
 ): Promise<SubmitOutcome> {
   if (!playerId || alreadySubmitted(runKey) || inFlight.has(runKey)) return "skipped";
   inFlight.add(runKey);
@@ -191,7 +73,7 @@ export async function submitRunOnce(
       dropPending(runKey);
       return "posted";
     }
-    await submitResult(playerId, result);
+    await submitResult(playerId, result, ticket);
     markSubmitted(runKey);
     dropPending(runKey);
     // The score is on the board. A streak that fails to bump is a smaller loss
@@ -205,7 +87,7 @@ export async function submitRunOnce(
     return "posted";
   } catch (err) {
     console.error("submitRunOnce: could not post the finished run — queued for retry", err);
-    queuePending(runKey, playerId, result);
+    queuePending(runKey, playerId, result, ticket);
     return "failed";
   } finally {
     clearSubmitting(runKey);
@@ -251,7 +133,7 @@ export async function flushPendingResults(playerId: string | null): Promise<numb
       console.error("flushPendingResults: could not check for an existing row", err);
       break;
     }
-    const outcome = await submitRunOnce(p.runKey, playerId, p.result);
+    const outcome = await submitRunOnce(p.runKey, playerId, p.result, p.ticket);
     if (outcome === "posted") posted++;
     else if (outcome === "failed") break; // still down — stop, keep the rest queued
   }

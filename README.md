@@ -27,7 +27,8 @@ Cloud login, cross-device saves, and the **Play with friends** rooms in Story ar
 off by default and require zero code changes to enable:
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. SQL editor → run [`supabase/schema.sql`](supabase/schema.sql).
+2. SQL editor → run [`supabase/schema.sql`](supabase/schema.sql). Run **Part A**;
+   the file is one document and tells you when Part B applies (step 7 below).
 3. Authentication → Providers → enable **Email** (magic link).
 4. Authentication → URL Configuration → add your site URL (and `http://localhost:3000`).
 5. Settings → **API Keys** → copy the Project URL and the **publishable key**
@@ -41,22 +42,70 @@ rooms table. See [`docs/MULTIPLAYER.md`](docs/MULTIPLAYER.md).
 On a hosted deploy, `NEXT_PUBLIC_*` values are inlined at **build** time — setting
 them in your host's dashboard takes effect only on the next deploy.
 
-### Optional index for the segmented boards
+### Making a posted score mean something
 
-The leaderboard can narrow to one starting background or to today's Daily Ledger,
-and a run's share link is found by its seed. All three filter inside `metrics`,
-which PostgREST exposes as a real column (`metrics->>backgroundId`), so
-**`schema.sql` covers everything and nothing here is required**. If the `results` table ever grows past the point where those
-filters are comfortable, two expression indexes are the fix:
+Everything above works without this. What it adds is the difference between the
+"Replayed" mark being real and it being decoration.
 
-```sql
-create index if not exists results_background_idx
-  on public.results ((metrics->>'backgroundId'));
-create index if not exists results_seed_idx
-  on public.results (user_id, (metrics->>'seed'));
-create index if not exists results_daily_idx
-  on public.results ((metrics->>'daily'), score desc);
-```
+A run records what the player actually did — every card answered, every trade,
+every debt payment, the year the house was sold. That log plus the seed is enough
+to re-simulate the run exactly, which is what `lib/replay.ts` has always done.
+Until now it did it *in the browser*: the same program that computed the score
+also replayed it, agreed with itself, and wrote its own `verified` flag. A
+modified client writes both halves, so the mark attested to nothing.
+
+`app/api/submit-result` moves the replay to the server. The browser sends the
+run's **actions** and no score at all; the server replays them and derives the
+score, the verdict and every metric from the state that replay lands on. There is
+no number in the request to disagree with.
+
+To turn it on:
+
+7. Supabase → Settings → **API Keys** → copy the `sb_secret_…` (service_role)
+   key. Set it as **`SUPABASE_SERVICE_ROLE_KEY`** in your host (Vercel → Project →
+   Settings → Environment Variables), then redeploy.
+   **No `NEXT_PUBLIC_` prefix.** That prefix inlines a value into the JavaScript
+   every visitor downloads, and this key bypasses every row-level-security policy
+   in your database.
+8. Finish a run and confirm the row lands with **Replayed** beside it. That is the
+   route answering; without the key it answers `503` and the browser quietly posts
+   the row itself, exactly as before.
+9. Only then, run **Part B** at the end of `supabase/schema.sql`. It closes the
+   browser's ability to insert a Story or Infinite result at all, leaving the
+   route as the only way one can be written. Run it earlier and finished runs stop
+   reaching the board until the route is live — nothing is lost (the client parks
+   them and retries), but nothing appears either.
+
+Be precise about where the line falls. `scripts/qa/verify-route.mjs` measures both
+sides of it:
+
+- **Refused** — any journal the engine could not have produced: a choice whose
+  outcome is not the one the seed rolls, a deal it did not deal (or the same cards
+  reordered), the same actions under a different seed or background, a year
+  appended, spliced out, or renumbered. 288 attempts, 288 refusals.
+- **Not refused** — a journal that is *legal* but is not what happened: an extra
+  trade the state could genuinely have funded. This cannot be caught, and no
+  amount of server-side replay would change that. The journal is the only record
+  of what the player did, so a legal journal is a legal run by definition. It is
+  also not much of a lever: across 36 runs, one invented trade moved the score up
+  on 7 of them and *down* on 14.
+
+So it ends score **fabrication** — claiming a number, or a life the engine could
+not produce. It does not end run **optimisation** by a determined player, which is
+the same limit as someone scripting the real game. The share page and the board
+legend say exactly this, in as many words.
+
+The Rat Race is not covered and does not pretend to be. Its state records dice
+rolls, not decisions, so there is no action log to replay; those rows keep posting
+from the browser and never carry the flag. Their board is protected instead by the
+score-version filter in `lib/cloud/comparability.ts`.
+
+### Indexes
+
+`schema.sql` creates the expression indexes the segmented boards need
+(`metrics->>'backgroundId'`, `metrics->>'daily'`) and the unique index on
+`(user_id, mode, metrics->>'seed')` that stops two tabs posting the same run
+twice. Nothing further is required.
 
 Safe to run at any time on a live table.
 

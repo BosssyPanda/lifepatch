@@ -1,4 +1,5 @@
 import { playerName } from "@/components/ui/NameField";
+import { BACKGROUNDS } from "@/lib/backgrounds";
 import { ASSET_IDS, type AssetId } from "@/lib/markets";
 import type { ModeId } from "@/lib/modes";
 import { RUN_VERSION, type EndReason, type Life, type MarketYear, type RunState, type YearRecord } from "@/lib/runEngine";
@@ -204,6 +205,8 @@ export function parsePeerStatus(raw: unknown): PeerStatus | null {
   return out;
 }
 
+const KNOWN_BACKGROUNDS = new Set(BACKGROUNDS.map((b) => b.id));
+
 export function parseMatchConfig(raw: unknown): MatchConfig | null {
   if (!isObj(raw)) return null;
   if (raw.v !== MP_PROTOCOL) return null;
@@ -211,7 +214,14 @@ export function parseMatchConfig(raw: unknown): MatchConfig | null {
   const seed = int(raw.seed, 0, 1e9);
   const host = playerId(raw.hostId);
   const bg = str(raw.backgroundId, 32);
-  if (seed === null || !host || !bg || !isYearSeconds(raw.yearSeconds)) return null;
+  // Checked against the real list rather than merely length-capped. `initRun`
+  // routes an unknown id through `getBackground`, which returns BACKGROUNDS[0]
+  // instead of throwing — so a config naming a background that does not exist
+  // does not fail, it silently seats everybody as the student while the lobby
+  // shows whatever string arrived. Every peer lands in the same place, so it is
+  // not a desync; it is a room that is not the room it says it is.
+  if (seed === null || !host || !bg || !KNOWN_BACKGROUNDS.has(bg)) return null;
+  if (!isYearSeconds(raw.yearSeconds)) return null;
   if (!Array.isArray(raw.roster)) return null;
 
   // Cap the roster BEFORE parsing, and drop duplicate ids — a roster is also a

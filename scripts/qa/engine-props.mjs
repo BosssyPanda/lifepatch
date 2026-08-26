@@ -359,9 +359,25 @@ check("P6b spare cash never exceeds the cash on hand", () => {
 // ── the result row a board actually stores ──────────────────────────────────
 // P1b proves `verifyResult` can tell a true score from a nudged one. This proves
 // the wiring above it: that a finished run's row carries what a reader needs to
-// judge it, and that the replayed flag is claimed only when the replay ran.
+// judge it, and — the part that changed — that the row the CLIENT builds never
+// vouches for itself.
+//
+// This check used to assert the opposite: `metrics.verified === 1` on every
+// complete run. That was the old design, and the old design was the bug. The
+// browser computed the score, replayed its own journal against its own claim,
+// agreed with itself, and wrote its own flag — every input to that chain under
+// the control of whoever was making the claim. A modified client wrote both
+// halves and the row was indistinguishable from an honest one.
+//
+// The flag is now written in exactly one place, `app/api/submit-result`, after
+// the SERVER has replayed the run and derived this score from the actions. The
+// row-level policy in supabase/schema.sql refuses a client insert that carries
+// the key at all, so a browser cannot put it there even if it tries. What is
+// asserted here is the client half of that: the row it builds is complete, and
+// it makes no claim about verification. The server half is proven end to end by
+// scripts/qa/verify-route.mjs.
 check("P7 a finished run's result row carries its own provenance", () => {
-  let verified = 0;
+  let rows = 0;
   for (let seed = 500; seed < 560; seed++) {
     const mode = seed % 2 ? "infinite" : "story";
     const bg = BG_IDS[seed % BG_IDS.length];
@@ -371,17 +387,20 @@ check("P7 a finished run's result row carries its own provenance", () => {
     eq(m.seed, s.seed, `seed ${seed}: metrics.seed`);
     eq(m.backgroundId, bg, `seed ${seed}: metrics.backgroundId`);
     eq(m.engine, engine.RUN_VERSION, `seed ${seed}: metrics.engine`);
-    // A run played through in one sitting always has its whole log, so this is the
-    // path every new row takes.
-    eq(m.verified, 1, `seed ${seed}: a complete run did not replay`);
-    verified++;
-    // The one thing the flag must never do is survive the log going missing —
-    // that is what an older save, or a state that crossed the wire, looks like.
+    eq(m.verified, undefined, `seed ${seed}: the client vouched for its own score`);
+    rows++;
+    // With or without the log — an older save, or a state that crossed the wire —
+    // the answer is the same, because the client never had anything to say here.
     const blind = buildResult.resultFromRun({ ...s, journal: undefined }).metrics;
     eq(blind.verified, undefined, `seed ${seed}: claimed a replay with no log`);
     eq(blind.seed, s.seed, `seed ${seed}: the seed is recorded either way`);
+    // And the run must still be replayable — that is what the server will do with
+    // it, and a row that cannot be re-derived can never carry the flag.
+    const t = replay.ticketFor(s);
+    if (!t) throw new Error(`seed ${seed}: a complete run produced no ticket`);
+    eq(replay.verifyResult(t, engine.netWorth(s)), true, `seed ${seed}: does not replay`);
   }
-  if (verified < 20) throw new Error(`only ${verified} finished runs checked`);
+  if (rows < 20) throw new Error(`only ${rows} finished runs checked`);
 });
 
 // ── the Daily Ledger ────────────────────────────────────────────────────────
@@ -495,7 +514,11 @@ check("P8d a daily run's result row is filed under its day", () => {
   eq(buildResult.resultFromRun(s).mode, "story", "a daily is still a story run");
   eq(m.backgroundId, p.backgroundId, "the day's background is on the row");
   eq(m.seed, p.seed, "the day's seed is on the row");
-  eq(m.verified, 1, "a daily played straight through did not replay");
+  // No self-vouching here either — see P7. What the row carries is the CLAIM that
+  // this was played on that day; `checkDaily` in lib/cloud/ticketGuard.ts is what
+  // re-derives the day from the seed and decides whether the claim is true.
+  eq(m.verified, undefined, "the client vouched for its own daily score");
+  eq(daily.dailySeed(date), p.seed, "the day's seed is a pure function of the date");
   // And an ordinary story run files under no day at all.
   const plain = engine.initRun("story", "student", "A", 4242);
   eq(plain.daily, undefined, "an ordinary run claimed a day");

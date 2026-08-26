@@ -47,7 +47,7 @@ function provenanceRows(row: ResultRow): { label: string; value: string }[] {
   if (bg) out.push({ label: "Started as", value: bg.name });
   if (m.seed !== undefined) out.push({ label: "World seed", value: String(m.seed) });
   if (m.engine !== undefined) out.push({ label: "Engine", value: `build ${m.engine}` });
-  if (m.verified === 1) out.push({ label: "Replayed", value: "re-simulated to this score" });
+  if (m.verified === 1) out.push({ label: "Replayed", value: "re-simulated on the server" });
   return out;
 }
 
@@ -213,8 +213,10 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
               ))}
             </div>
             <p className="voice mt-3 text-xs text-tertiary">
-              The replay runs on the device that played the run, before the row is posted. It
-              catches a run that does not add up. It is not a proof against a determined forger.
+              The replay runs on the server, from the actions this run recorded, and the score
+              above is what it produced — not a number the browser sent. A run played by a
+              script still replays honestly, because it really was played; what this rules out
+              is a score that was simply typed.
             </p>
           </div>
         )}
