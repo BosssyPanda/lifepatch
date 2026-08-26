@@ -1,0 +1,975 @@
+<title>LifePatch Security Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;500&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap">
+
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   LEDGER — the palette and four-font contract from DESIGN.md / lib/palette.ts.
+   Deliberately single-theme: LEDGER is a warm near-black paper identity, so
+   every colour is painted explicitly and nothing is left to the host ground.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg: #131110;
+  --bg2: #1a1714;
+  --bg3: #211d19;
+  --ink: #f4f0e6;
+  --ink-mid: #cbc6ba;
+  --secondary: #9a968c;
+  --tertiary: #8f8b81;
+  --hairline: #4c4b47;
+  --hairline-strong: #6b6964;
+  --dotted: #55544f;
+  --accent: #ff5a1f;
+  --highlight: #d8e04b;
+  --gain: #2fcc71;
+  --loss: #fe4030;
+
+  /* severity is an OUTCOME, so it never borrows the accent (DESIGN.md) */
+  --sev-critical: var(--loss);
+  --sev-functional: var(--highlight);
+  --sev-quality: var(--secondary);
+  --sev-sound: var(--gain);
+
+  --display: "Anton", "Arial Narrow", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --voice: "Instrument Serif", Georgia, serif;
+  --body: "Archivo", system-ui, -apple-system, sans-serif;
+
+  --gutter: clamp(1.25rem, 4vw, 4rem);
+  --measure: 68ch;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sheet {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: clamp(2rem, 5vw, 4rem) var(--gutter) 6rem;
+}
+
+/* ── shared chrome ───────────────────────────────────────────────────── */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  margin: 0;
+}
+
+.voice {
+  font-family: var(--voice);
+  font-style: italic;
+  font-size: 1.16rem;
+  line-height: 1.5;
+  color: var(--ink-mid);
+}
+
+code, .addr {
+  font-family: var(--mono);
+  font-variant-ligatures: none;
+}
+
+p code, li code, td code {
+  font-size: 0.86em;
+  color: var(--ink);
+  background: var(--bg3);
+  border: 1px solid var(--hairline);
+  padding: 0.06em 0.34em;
+  white-space: nowrap;
+}
+
+a { color: var(--ink); text-decoration-color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, .toc a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ── top rail ────────────────────────────────────────────────────────── */
+.rail {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-bottom: 2px solid var(--hairline);
+  padding-bottom: 0.85rem;
+}
+.wordmark {
+  font-family: var(--display);
+  font-size: clamp(1.3rem, 3vw, 1.7rem);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.wordmark span { color: var(--accent); }
+
+/* ── masthead ────────────────────────────────────────────────────────── */
+.masthead { padding: clamp(2.5rem, 6vw, 4.5rem) 0 0; }
+.masthead h1 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(2.9rem, 10vw, 6.4rem);
+  line-height: 0.88;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  margin: 0.5rem 0 0;
+  color: var(--ink);
+}
+.masthead .standfirst {
+  max-width: var(--measure);
+  margin: 1.6rem 0 0;
+  color: var(--ink-mid);
+  font-size: 1.03rem;
+}
+.masthead .standfirst strong { color: var(--ink); font-weight: 500; }
+
+/* ── stat plates ─────────────────────────────────────────────────────── */
+.plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  margin: 2.75rem 0 0;
+}
+.plate { background: var(--bg2); padding: 1.15rem 1.15rem 1.25rem; }
+.plate .n {
+  font-family: var(--display);
+  font-size: 2.5rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  display: block;
+  margin-top: 0.5rem;
+}
+.plate .n.crit { color: var(--sev-critical); }
+.plate .n.func { color: var(--sev-functional); }
+.plate .n.qual { color: var(--ink-mid); }
+.plate .n.sound { color: var(--sev-sound); }
+.plate .sub {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: var(--tertiary);
+  display: block;
+  margin-top: 0.4rem;
+}
+
+/* ── section heads ───────────────────────────────────────────────────── */
+.section { margin-top: clamp(3.5rem, 8vw, 5.5rem); }
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.9rem;
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 0.6rem;
+}
+.section-head .num {
+  font-family: var(--display);
+  font-size: 1.5rem;
+  color: var(--accent);
+  line-height: 1;
+}
+.section-head h2 {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: clamp(1.5rem, 3.6vw, 2.1rem);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0;
+  flex: 1;
+}
+.section-head .count {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  color: var(--tertiary);
+  text-transform: uppercase;
+}
+
+/* ── verification table ──────────────────────────────────────────────── */
+.scroll-x { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: 1.5rem;
+}
+th {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+  text-align: left;
+  padding: 0 1rem 0.6rem 0;
+  border-bottom: 1px solid var(--hairline);
+  white-space: nowrap;
+}
+td {
+  padding: 0.7rem 1rem 0.7rem 0;
+  border-bottom: 1px dotted var(--dotted);
+  vertical-align: top;
+  color: var(--ink-mid);
+}
+td:first-child { color: var(--ink); font-family: var(--mono); font-size: 0.84rem; }
+td.num-cell { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ok { color: var(--gain); }
+.bad { color: var(--loss); }
+.warn { color: var(--highlight); }
+
+/* ── finding entries ─────────────────────────────────────────────────── */
+.finding {
+  border-left: 3px solid var(--hairline);
+  padding: 0 0 0 clamp(1rem, 2.5vw, 1.75rem);
+  margin-top: 3rem;
+}
+.finding.crit { border-left-color: var(--sev-critical); }
+.finding.func { border-left-color: var(--sev-functional); }
+.finding.qual { border-left-color: var(--sev-quality); }
+
+.finding-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.ref {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.chip {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid currentColor;
+  line-height: 1;
+}
+.chip.crit { color: var(--sev-critical); }
+.chip.func { color: var(--sev-functional); }
+.chip.qual { color: var(--sev-quality); }
+.chip.known { color: var(--tertiary); }
+
+.finding h3 {
+  font-family: var(--body);
+  font-weight: 500;
+  font-size: clamp(1.14rem, 2.4vw, 1.4rem);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  margin: 0.7rem 0 0;
+  color: var(--ink);
+  max-width: var(--measure);
+}
+
+.addr {
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+  color: var(--secondary);
+  margin: 0.6rem 0 0;
+  word-break: break-word;
+}
+.addr b { color: var(--ink-mid); font-weight: 500; }
+
+.finding p { max-width: var(--measure); margin: 1.05rem 0 0; }
+.finding ul { max-width: var(--measure); margin: 1.05rem 0 0; padding-left: 1.15rem; }
+.finding li { margin-top: 0.55rem; }
+.finding li::marker { color: var(--accent); }
+
+.fix-label {
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 1.6rem 0 0.55rem;
+}
+
+pre {
+  margin: 0;
+  background: var(--bg2);
+  border: 1px solid var(--hairline);
+  border-left: 2px solid var(--hairline-strong);
+  padding: 1rem 1.15rem;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.79rem;
+  line-height: 1.6;
+  color: var(--ink-mid);
+  tab-size: 2;
+}
+pre .c { color: var(--tertiary); font-style: italic; }
+pre .k { color: var(--accent); }
+pre .s { color: var(--gain); }
+pre .del { color: var(--loss); }
+
+.note {
+  max-width: var(--measure);
+  margin-top: 1.5rem;
+  padding: 0.95rem 1.1rem;
+  background: var(--bg2);
+  border: 1px solid var(--hairline);
+  font-size: 0.93rem;
+  color: var(--ink-mid);
+}
+.note b { color: var(--ink); font-weight: 500; }
+
+/* ── sound / passed list ─────────────────────────────────────────────── */
+.sound-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.75rem 0 0;
+  display: grid;
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+}
+.sound-list li {
+  background: var(--bg2);
+  padding: 0.95rem 1.15rem;
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: 0.75rem;
+  align-items: start;
+  font-size: 0.93rem;
+  color: var(--ink-mid);
+  max-width: none;
+  margin: 0;
+}
+.sound-list li::before {
+  content: "✓";
+  color: var(--gain);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.sound-list b { color: var(--ink); font-weight: 500; }
+
+/* ── order of work ───────────────────────────────────────────────────── */
+.queue { list-style: none; padding: 0; margin: 1.75rem 0 0; counter-reset: q; }
+.queue li {
+  counter-increment: q;
+  display: grid;
+  grid-template-columns: 2.6rem 1fr;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px dotted var(--dotted);
+  align-items: baseline;
+  max-width: var(--measure);
+}
+.queue li::before {
+  content: counter(q, decimal-leading-zero);
+  font-family: var(--display);
+  font-size: 1.35rem;
+  color: var(--accent);
+  line-height: 1;
+}
+.queue b { color: var(--ink); font-weight: 500; }
+.queue span { color: var(--ink-mid); font-size: 0.95rem; }
+
+/* ── colophon ────────────────────────────────────────────────────────── */
+.colophon {
+  margin-top: 5rem;
+  border-top: 2px solid var(--hairline);
+  padding-top: 1.1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="sheet">
+
+  <div class="rail">
+    <span class="wordmark">LIFEPATCH<span>.</span></span>
+    <span class="eyebrow">Security &amp; quality review · 26 Aug 2026</span>
+  </div>
+
+  <header class="masthead">
+    <p class="eyebrow">Full-tree audit · branch <code>claude/eager-cori-6sncz6</code> · head <code>f672692</code></p>
+    <h1>The trust<br>boundary is<br>the client</h1>
+    <p class="standfirst">
+      200 TypeScript files, the Supabase schema, the build config and the whole dependency tree.
+      The engine, the multiplayer wire format and the animation layer are in <strong>good shape</strong> —
+      genuinely better than most codebases this size. Nearly every finding below lands in one place:
+      <strong>Row-Level Security treats the browser as authoritative</strong>, and the browser is
+      holding a public key.
+    </p>
+  </header>
+
+  <div class="plates">
+    <div class="plate">
+      <p class="eyebrow">Critical</p>
+      <span class="n crit">5</span>
+      <span class="sub">SECURITY</span>
+    </div>
+    <div class="plate">
+      <p class="eyebrow">Functional</p>
+      <span class="n func">6</span>
+      <span class="sub">BUGS</span>
+    </div>
+    <div class="plate">
+      <p class="eyebrow">Quality</p>
+      <span class="n qual">3</span>
+      <span class="sub">PERF / MAINT</span>
+    </div>
+    <div class="plate">
+      <p class="eyebrow">Advisories</p>
+      <span class="n crit">9</span>
+      <span class="sub">HIGH · NPM AUDIT</span>
+    </div>
+    <div class="plate">
+      <p class="eyebrow">Verified sound</p>
+      <span class="n sound">7</span>
+      <span class="sub">AREAS CLEARED</span>
+    </div>
+  </div>
+
+  <!-- ── VERIFICATION ─────────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <span class="num">0</span>
+      <h2>What was actually run</h2>
+      <span class="count">Evidence</span>
+    </div>
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr><th>Check</th><th>Result</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>tsc --noEmit</td>
+            <td class="num-cell ok">Clean</td>
+            <td>Exit 0, no type errors across all 200 files.</td>
+          </tr>
+          <tr>
+            <td>next lint</td>
+            <td class="num-cell warn">1 warning</td>
+            <td><code>&lt;img&gt;</code> in <code>ShareCard.tsx:132</code> — see 3.3.</td>
+          </tr>
+          <tr>
+            <td>Hardcoded secrets</td>
+            <td class="num-cell ok">None</td>
+            <td>No keys, tokens or credentials in tracked source.</td>
+          </tr>
+          <tr>
+            <td>eval / innerHTML</td>
+            <td class="num-cell ok">None</td>
+            <td>No <code>dangerouslySetInnerHTML</code>, <code>eval</code> or <code>document.write</code>.</td>
+          </tr>
+          <tr>
+            <td>npm audit</td>
+            <td class="num-cell bad">9 high · 3 mod</td>
+            <td>Fixes verified against a clean install — see 1.4.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── CRITICAL ─────────────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <span class="num">1</span>
+      <h2>Critical security</h2>
+      <span class="count">5 findings</span>
+    </div>
+
+    <!-- 1.1 -->
+    <article class="finding crit">
+      <div class="finding-head">
+        <span class="ref">1.1</span>
+        <span class="chip crit">Critical</span>
+      </div>
+      <h3>Leaderboard scores are client-authoritative and trivially forgeable</h3>
+      <p class="addr"><b>supabase/schema.sql:70</b> · <b>lib/cloud/results.ts:84–100</b> · <b>lib/cloud/buildResult.ts:26</b></p>
+
+      <p>The only constraint on a leaderboard row is that you own it:</p>
+<pre><span class="k">create policy</span> "results - insert own" <span class="k">on</span> public.results
+  <span class="k">for insert with check</span> (auth.uid() = user_id);</pre>
+
+      <p>
+        <code>score</code>, <code>verdict</code> and <code>metrics</code> are entirely unvalidated. The anon key ships
+        to every browser by design, so any signed-in player can <code>POST</code> straight to
+        <code>/rest/v1/results</code> with <code>score: 999999999</code>. Because <code>topResults</code> ranks by score
+        and <code>bestPerUser</code> keeps each player's maximum, <strong>one forged row permanently tops every board</strong>.
+      </p>
+
+      <ul>
+        <li><code>score</code> is unbounded <code>numeric</code> — no CHECK constraint, no plausibility ceiling.</li>
+        <li><code>metrics</code> is unbounded <code>jsonb</code> — a storage-abuse vector (Postgres allows 255 MB per value) with no insert rate limit.</li>
+        <li><strong>The <code>verified</code> provenance badge is self-asserted.</strong> <code>buildResult.ts:58</code> writes
+          <code>verified: 1</code> after a client-side replay and <code>app/r/[id]/page.tsx:50</code> renders it as
+          <em>"Replayed · re-simulated to this score"</em>. <code>lib/replay.ts</code> is honest about this in its comments,
+          but the shipped UI presents a trust signal a forger sets by hand.</li>
+      </ul>
+
+      <p class="fix-label">Recommendation</p>
+      <p>Move scoring server-side. The minimum viable fix is a <code>SECURITY DEFINER</code> RPC as the only insert path:</p>
+<pre><span class="k">revoke insert on</span> public.results <span class="k">from</span> anon, authenticated;
+<span class="k">drop policy</span> "results - insert own" <span class="k">on</span> public.results;
+
+<span class="k">alter table</span> public.results
+  <span class="k">add constraint</span> results_score_sane <span class="k">check</span> (score <span class="k">between</span> -1e10 <span class="k">and</span> 1e10),
+  <span class="k">add constraint</span> results_metrics_small <span class="k">check</span> (pg_column_size(metrics) &lt; 8192);
+
+<span class="k">create or replace function</span> public.submit_result(
+  p_mode <span class="k">text</span>, p_score <span class="k">numeric</span>, p_verdict <span class="k">text</span>, p_metrics <span class="k">jsonb</span>
+) <span class="k">returns</span> public.results
+<span class="k">language</span> plpgsql <span class="k">security definer set</span> search_path = public <span class="k">as</span> $$
+<span class="k">declare</span> v_row public.results;
+<span class="k">begin</span>
+  <span class="k">if</span> auth.uid() <span class="k">is null then raise exception</span> <span class="s">'auth required'</span>; <span class="k">end if</span>;
+  <span class="c">-- one row per player per hour: blunt, but it ends bulk forgery</span>
+  <span class="k">if</span> (<span class="k">select count</span>(*) <span class="k">from</span> public.results
+      <span class="k">where</span> user_id = auth.uid() <span class="k">and</span> created_at &gt; now() - <span class="k">interval</span> <span class="s">'1 hour'</span>) &gt;= 20 <span class="k">then</span>
+    <span class="k">raise exception</span> <span class="s">'rate limit'</span>;
+  <span class="k">end if</span>;
+  <span class="k">insert into</span> public.results (user_id, mode, score, verdict, metrics)
+  <span class="k">values</span> (auth.uid(), p_mode, p_score, p_verdict, p_metrics - <span class="s">'verified'</span>)
+  <span class="k">returning</span> * <span class="k">into</span> v_row;
+  <span class="k">return</span> v_row;
+<span class="k">end</span> $$;</pre>
+
+      <div class="note">
+        Note <code>p_metrics - 'verified'</code>: the flag must be stripped, since the client cannot be the thing that
+        attests to it. If the badge is to survive, re-run <code>replayRun</code> server-side from the submitted seed and
+        journal. <b>Until then, remove the "Replayed" row from <code>provenanceRows()</code></b> — an unbacked
+        verification claim is worse than none at all.
+      </div>
+    </article>
+
+    <!-- 1.2 -->
+    <article class="finding crit">
+      <div class="finding-head">
+        <span class="ref">1.2</span>
+        <span class="chip crit">Critical</span>
+      </div>
+      <h3>Friend requests can be accepted unilaterally — a silent consent bypass</h3>
+      <p class="addr"><b>supabase/schema.sql:107</b> · <b>lib/cloud/friends.ts:44–113</b></p>
+
+      <p class="voice">
+        "RLS lets each user write only their own side, so friendship is mutual-accepted."
+      </p>
+      <p>That is <code>friends.ts:8</code> stating the invariant. The code does not implement it. The insert policy
+        checks ownership but never constrains <code>status</code>, so Mallory inserts
+        <code>(user_id: mallory, friend_id: victim, status: 'accepted')</code> in a single call. On the victim's client,
+        <code>listFriendIds</code> counts an accepted edge in <em>either</em> direction:</p>
+
+<pre><span class="k">for</span> (<span class="k">const</span> e <span class="k">of</span> edges) {
+  <span class="k">if</span> (e.status !== <span class="s">"accepted"</span>) <span class="k">continue</span>;
+  ids.add(e.userId === userId ? e.friendId : e.userId);  <span class="c">// ← adds mallory</span>
+}</pre>
+
+      <p>
+        Mallory is now the victim's friend. Worse, it is <strong>silent</strong>: <code>listIncoming</code> filters on
+        <code>status === "pending"</code>, so an edge that skips straight to <code>accepted</code> never appears as a
+        request the victim could decline.
+      </p>
+
+      <div class="note">
+        <b>Data-exposure impact is limited</b> — <code>results</code> and <code>streaks</code> are public-read anyway.
+        But for a product that describes itself as opt-in and teen-safe, a friend graph that anyone can write
+        themselves into is a product-integrity defect, not a cosmetic one.
+      </div>
+
+      <p class="fix-label">Recommendation — fix in both places</p>
+<pre><span class="k">create policy</span> "friends - request own" <span class="k">on</span> public.friends
+  <span class="k">for insert with check</span> (auth.uid() = user_id <span class="k">and</span> status = <span class="s">'pending'</span>);
+
+<span class="k">create policy</span> "friends - accept own" <span class="k">on</span> public.friends
+  <span class="k">for update using</span> (auth.uid() = user_id)
+  <span class="k">with check</span> (
+    auth.uid() = user_id <span class="k">and</span> (
+      status = <span class="s">'pending'</span>
+      <span class="k">or exists</span> (                       <span class="c">-- only accept a real incoming request</span>
+        <span class="k">select</span> 1 <span class="k">from</span> public.friends f
+        <span class="k">where</span> f.user_id = friends.friend_id <span class="k">and</span> f.friend_id = auth.uid()
+      )
+    )
+  );</pre>
+      <p>And make the client agree with the invariant it documents — require <strong>both</strong> directions:</p>
+<pre><span class="k">const</span> mine = <span class="k">new</span> Set(edges.filter(e =&gt; e.userId === userId &amp;&amp; e.status === <span class="s">"accepted"</span>)
+                          .map(e =&gt; e.friendId));
+<span class="k">const</span> theirs = <span class="k">new</span> Set(edges.filter(e =&gt; e.friendId === userId &amp;&amp; e.status === <span class="s">"accepted"</span>)
+                            .map(e =&gt; e.userId));
+<span class="k">return</span> [...mine].filter(id =&gt; theirs.has(id));</pre>
+    </article>
+
+    <!-- 1.3 -->
+    <article class="finding crit">
+      <div class="finding-head">
+        <span class="ref">1.3</span>
+        <span class="chip crit">Critical</span>
+      </div>
+      <h3>Every player's friend code is published to every visitor</h3>
+      <p class="addr"><b>supabase/schema.sql:44</b> · <b>lib/cloud/profiles.ts:134–145</b> · <b>components/social/Leaderboard.tsx:169</b></p>
+
+      <p>
+        <code>profiles</code> is <code>for select using (true)</code> and every read is <code>select("*")</code>, so
+        <code>friend_code</code> — the one token gating the friend graph — ships to the browser on every leaderboard
+        render, for all 25 ranked players. Anyone holding the public anon key can also dump the whole table directly.
+        <strong>Chained with 1.2</strong>, an attacker can enumerate active players and write themselves into every one
+        of their friend lists.
+      </p>
+
+      <p class="fix-label">Recommendation</p>
+      <p>A secret must not live in a public-read table. Split it:</p>
+<pre><span class="k">revoke select on</span> public.profiles <span class="k">from</span> anon, authenticated;
+<span class="k">create view</span> public.profiles_public <span class="k">as</span>
+  <span class="k">select</span> id, username, avatar_seed, created_at <span class="k">from</span> public.profiles;
+<span class="k">grant select on</span> public.profiles_public <span class="k">to</span> anon, authenticated;
+
+<span class="k">create policy</span> "profiles - read own full row" <span class="k">on</span> public.profiles
+  <span class="k">for select using</span> (auth.uid() = id);</pre>
+      <p>
+        Point <code>getProfiles</code> / <code>getProfile</code> at <code>profiles_public</code>, and resolve
+        <code>getByFriendCode</code> through a <code>SECURITY DEFINER</code> RPC that returns only the matching
+        <code>id</code> — so a lookup can confirm a code but never enumerate one. As a one-line interim mitigation:
+      </p>
+<pre>.select(<span class="s">"id, username, avatar_seed, created_at"</span>)   <span class="c">// never "*"</span></pre>
+    </article>
+
+    <!-- 1.4 -->
+    <article class="finding crit">
+      <div class="finding-head">
+        <span class="ref">1.4</span>
+        <span class="chip crit">Critical</span>
+      </div>
+      <h3>Dependencies carry 9 high-severity advisories — all fixable in-range</h3>
+      <p class="addr"><b>package.json</b> · <b>package-lock.json</b></p>
+
+      <div class="scroll-x">
+        <table>
+          <thead>
+            <tr><th>Package</th><th>Installed</th><th>Advisories</th><th>Fix</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>next</td>
+              <td class="num-cell">15.5.19</td>
+              <td><span class="bad">8 high/moderate</span> — unauthenticated disclosure of internal Server Function endpoints, SSRF in rewrites, cache confusion of response bodies, Server Action DoS</td>
+              <td class="num-cell ok">→ 15.5.24</td>
+            </tr>
+            <tr>
+              <td>postcss</td>
+              <td class="num-cell">8.5.15</td>
+              <td><span class="bad">4 high</span> — arbitrary <code>.map</code> file read via attacker-controlled <code>sourceMappingURL</code>; XSS via unescaped <code>&lt;/style&gt;</code></td>
+              <td class="num-cell ok">→ 8.5.26</td>
+            </tr>
+            <tr>
+              <td>@tailwindcss/postcss</td>
+              <td class="num-cell">4.3.1</td>
+              <td><span class="warn">moderate</span> (transitive postcss)</td>
+              <td class="num-cell ok">→ 4.3.3</td>
+            </tr>
+            <tr>
+              <td>sharp</td>
+              <td class="num-cell">0.34.5</td>
+              <td><span class="bad">high</span> — inherited libvips CVEs</td>
+              <td class="num-cell">Not reachable</td>
+            </tr>
+            <tr>
+              <td>undici · hono · js-yaml · nanoid · ip-address · brace-expansion · fast-uri</td>
+              <td class="num-cell">—</td>
+              <td><span class="warn">high / moderate</span></td>
+              <td class="num-cell">Via <code>shadcn</code> devDep</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="fix-label">Verified fix</p>
+      <p>
+        A clean install of <code>next@15.5.24</code> — the maintained 15.x backport line — clears all 8 <code>next</code>
+        advisories, leaving one moderate from a bundled postcss copy. All three bumps sit
+        <strong>inside the existing semver ranges</strong>: a lockfile refresh, not a breaking upgrade.
+      </p>
+<pre>npm i next@15.5.24 postcss@8.5.26 @tailwindcss/postcss@4.3.3
+npm audit   <span class="c"># expect: next (moderate, bundled postcss) only</span></pre>
+
+      <div class="note">
+        Two mitigating notes, so the risk is not overstated: <b>sharp is unreachable</b> because
+        <code>next.config.ts:17</code> sets <code>images: { unoptimized: true }</code>, and the undici/hono/js-yaml
+        cluster comes only from <code>shadcn@4.12.0</code>, a scaffolding CLI in <code>devDependencies</code> that never
+        ships. Neither is a production-runtime path — but <code>shadcn</code> drags
+        <code>@modelcontextprotocol/sdk</code> and <code>@dotenvx/dotenvx</code> onto every developer and CI machine,
+        which is a wide supply-chain surface for a tool run a handful of times. Consider
+        <code>npx shadcn@latest</code> on demand and dropping the pinned dependency.
+      </div>
+    </article>
+
+    <!-- 1.5 -->
+    <article class="finding crit">
+      <div class="finding-head">
+        <span class="ref">1.5</span>
+        <span class="chip crit">Critical</span>
+      </div>
+      <h3>No Realtime channel authorization is configured</h3>
+      <p class="addr"><b>supabase/schema.sql</b> (absent) · <b>lib/mp/transport.ts:99</b></p>
+
+      <p>
+        Match rooms are Supabase Realtime channels named <code>lp-match-v1-${roomCode}</code>. The schema configures RLS
+        for every table but <strong>nothing for <code>realtime.messages</code></strong>, so with the public anon key any
+        client may subscribe to any channel. Room codes are 31⁶ ≈ 887M and <code>roomCodes.ts</code> correctly uses
+        <code>crypto.getRandomValues</code> with rejection sampling — so brute-forcing a <em>specific</em> room is
+        impractical, but nothing rate-limits sweeping for <em>any</em> live room.
+      </p>
+      <p>
+        Credit where due: <code>useMatch.tsx:522</code> (<code>isRosterMember</code>) refuses statuses and snapshots from
+        non-roster ids and holds nothing before the match starts, which closes the cache-growth attack an open channel
+        would otherwise enable. The residual exposure is passive observation of a room's traffic.
+      </p>
+
+      <p class="fix-label">Recommendation</p>
+<pre><span class="k">create policy</span> "authenticated may join match topics" <span class="k">on</span> realtime.messages
+  <span class="k">for select to</span> authenticated
+  <span class="k">using</span> (realtime.topic() <span class="k">like</span> <span class="s">'lp-match-v1-%'</span>);</pre>
+    </article>
+  </section>
+
+  <!-- ── FUNCTIONAL ───────────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <span class="num">2</span>
+      <h2>Functional bugs</h2>
+      <span class="count">6 findings</span>
+    </div>
+
+    <article class="finding func">
+      <div class="finding-head"><span class="ref">2.1</span><span class="chip func">Bug</span></div>
+      <h3><code>pickIndex</code> returns a valid-looking index for an empty deck</h3>
+      <p class="addr"><b>lib/cashflow/rng.ts:32–34</b></p>
+<pre><span class="k">export function</span> pickIndex(seed: number, cursor: number, len: number): number {
+  <span class="k">return</span> Math.floor(rngAt(seed, cursor) * len) % Math.max(1, len);
+}</pre>
+      <p>
+        The <code>Math.max(1, len)</code> guard prevents <code>NaN</code> from <code>% 0</code>, but for
+        <code>len === 0</code> it returns <code>0</code> — an out-of-bounds index. <code>draw()</code> then hands back
+        <code>{ card: undefined }</code>, which crashes at the first property access rather than at the empty-deck call
+        site. Not currently reachable (all four decks are non-empty module constants), so this is a latent trap — but the
+        guard reads as if it handles the case it doesn't.
+      </p>
+      <p class="fix-label">Fix</p>
+<pre><span class="k">if</span> (len &lt;= 0) <span class="k">return</span> -1;   <span class="c">// caller must handle; never a phantom index 0</span>
+<span class="k">return</span> Math.floor(rngAt(seed, cursor) * len);</pre>
+    </article>
+
+    <article class="finding func">
+      <div class="finding-head"><span class="ref">2.2</span><span class="chip func">Bug</span></div>
+      <h3><code>ensureProfile</code> throws once the username space fills</h3>
+      <p class="addr"><b>lib/cloud/profiles.ts:12, 42–62</b> · <b>lib/cloud/generate.ts:29–32</b></p>
+      <p>
+        <code>generateUsername()</code> yields 24 × 24 × 900 = <strong>518,400</strong> combinations against a
+        <code>unique</code> constraint, and <code>ensureProfile</code> retries only 5 times before throwing. Because
+        <code>friend_code</code> is <em>also</em> unique with 31⁶ values drawn by <code>Math.random()</code>, collisions
+        compound. By the birthday bound they become routine in the low tens of thousands of profiles — and the failure
+        surfaces as a hard throw inside the sign-in path, since <code>buildResult.ts:119</code> calls
+        <code>ensureProfile</code> before every submit.
+      </p>
+      <p class="fix-label">Fix</p>
+<pre><span class="k">const</span> n = Math.floor(Math.random() * 9000) + 1000;   <span class="c">// 1000–9999 → 5.2M combos</span></pre>
+      <p>
+        …and widen the retry budget, appending a disambiguating suffix on the last attempts rather than re-rolling blind.
+        <code>ensureProfile</code> should also degrade to a read-only anonymous profile rather than throwing, so a full
+        username table can never block a submit.
+      </p>
+    </article>
+
+    <article class="finding func">
+      <div class="finding-head"><span class="ref">2.3</span><span class="chip func">Bug</span></div>
+      <h3>Friend codes use <code>Math.random()</code></h3>
+      <p class="addr"><b>lib/cloud/generate.ts:25–27, 34–38</b></p>
+      <p>
+        <code>lib/mp/roomCodes.ts:9–22</code> gets this exactly right — <code>crypto.getRandomValues</code> with modulo
+        rejection sampling. <code>generate.ts</code> does not, and it is the module producing the token that gates the
+        friend graph. V8's <code>Math.random</code> state is recoverable from a modest run of outputs. Lift
+        <code>randomIndex()</code> into a shared util and use it in both places. Lower priority once 1.3 is fixed and
+        codes stop being public — but the two fixes are independent and both belong.
+      </p>
+    </article>
+
+    <article class="finding func">
+      <div class="finding-head"><span class="ref">2.4</span><span class="chip func">Bug</span></div>
+      <h3>Asymmetric rounding between stock buys and sells</h3>
+      <p class="addr"><b>lib/cashflow/engine.ts:226</b> vs <b>:255</b></p>
+<pre><span class="k">const</span> cost = Math.round(n * price * 100) / 100;                  <span class="c">// buy — cent-accurate</span>
+<span class="k">return</span> { ...s, cash: s.cash + Math.round(n * price), stocks };  <span class="c">// sell — whole dollars</span></pre>
+      <p>
+        A buy-then-immediate-sell at an unchanged quote nets ±$0.50. Small, but it breaks the balance-sheet identity
+        <code>netWorth = totalAssets − totalLiabilities</code> that <code>selectors.ts:161</code> exists to hold — and
+        <code>maxAffordable</code> documents at length how a sub-cent drift once triggered a phantom $1,000 bank loan.
+        Match the buy path: <code>s.cash + Math.round(n * price * 100) / 100</code>.
+      </p>
+    </article>
+
+    <article class="finding func">
+      <div class="finding-head"><span class="ref">2.5</span><span class="chip func">Bug</span></div>
+      <h3><code>/r/[id]</code> hits the database on any malformed id</h3>
+      <p class="addr"><b>app/r/[id]/page.tsx:124, 141</b> vs <b>app/api/og/[id]/route.tsx:26, 40</b></p>
+      <p>
+        The OG route validates before querying (<code>UUID_RE.test(id)</code>); the page route does not.
+        <code>getResult(id)</code> is called on arbitrary path input, and each junk request costs a Supabase round trip
+        that fails on a uuid cast error — twice per request, since <code>generateMetadata</code> and the page body both
+        call it. Not an injection risk (<code>.eq()</code> parameterises correctly), but free quota burn against a
+        project with no rate limiting. Export the regex and guard both entry points:
+        <code>if (!isCloud || !UUID_RE.test(id)) notFound();</code>
+      </p>
+    </article>
+
+    <article class="finding func">
+      <div class="finding-head">
+        <span class="ref">2.6</span>
+        <span class="chip known">Known limit</span>
+      </div>
+      <h3>The multiplayer session fence fails open on an omitted field</h3>
+      <p class="addr"><b>hooks/useMatch.tsx:800–802, 820–821</b> · <b>lib/mp/protocol.ts:147–150</b></p>
+<pre><span class="k">const</span> owner = sessionOwnersRef.current.get(msg.playerId);
+<span class="k">if</span> (msg.sessionId &amp;&amp; owner &amp;&amp; msg.sessionId !== owner) <span class="k">return</span>;</pre>
+      <p>
+        The fence is skipped entirely when <code>sessionId</code> is absent — deliberately, and the comments give two
+        good reasons (older builds, and the acting host's sessionless ghost rows). But an attacker simply omits the
+        field, so the fence stops nothing except an honest second tab. Combined with <code>parsePeerStatus</code>
+        accepting <code>netWorth</code> up to 1e12, any roster member can post arbitrary standings for any other.
+      </p>
+      <div class="note">
+        This is inherent to a serverless peer-to-peer design and the file says so — <code>protocol.ts:9–19</code>:
+        <em>"There is no server and no authority."</em> Flagged as <b>known and accepted</b> rather than a fixable
+        defect. But it should be written down as such, because multiplayer podium results carry the same trust weight as
+        1.1: if matches ever feed the public leaderboard, they need the same server-side arbitration.
+      </div>
+    </article>
+  </section>
+
+  <!-- ── QUALITY ──────────────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <span class="num">3</span>
+      <h2>Quality &amp; performance</h2>
+      <span class="count">3 findings</span>
+    </div>
+
+    <article class="finding qual">
+      <div class="finding-head"><span class="ref">3.1</span><span class="chip qual">Perf</span></div>
+      <h3>Leaderboard queries are the main scaling bottleneck</h3>
+      <p class="addr"><b>lib/cloud/results.ts:125–141</b></p>
+<pre><span class="k">if</span> (background) query = query.eq(<span class="s">"metrics-&gt;&gt;backgroundId"</span>, background);
+<span class="k">const</span> { data } = <span class="k">await</span> query.limit(limit * 5);       <span class="c">// 125 rows, select("*")</span>
+<span class="k">return</span> bestPerUser((data ?? []).map(fromRow)).slice(0, limit);</pre>
+      <p>Three compounding costs:</p>
+      <ul>
+        <li>The jsonb-path filters are <strong>unindexed</strong> — acknowledged in the source comment, with the index left optional in the README.</li>
+        <li><code>select("*")</code> pulls the full <code>metrics</code> blob — including the capped-100 <code>history</code> array — for 125 rows to render 25.</li>
+        <li>Best-per-user dedupe happens client-side, so a board where one player holds the top 125 rows renders nearly empty.</li>
+      </ul>
+      <p class="fix-label">Fix</p>
+<pre><span class="k">create index if not exists</span> results_bg_idx
+  <span class="k">on</span> public.results (mode, (metrics-&gt;&gt;<span class="s">'backgroundId'</span>), score <span class="k">desc</span>);
+<span class="k">create index if not exists</span> results_daily_idx
+  <span class="k">on</span> public.results (mode, (metrics-&gt;&gt;<span class="s">'daily'</span>), score <span class="k">desc</span>);</pre>
+      <p>
+        Ship those in <code>schema.sql</code> rather than leaving them optional, narrow the select to the columns a row
+        actually renders, and move the dedupe into a <code>distinct on (user_id)</code> view to remove the over-fetch
+        entirely.
+      </p>
+    </article>
+
+    <article class="finding qual">
+      <div class="finding-head"><span class="ref">3.2</span><span class="chip qual">Maint</span></div>
+      <h3>ESLint 8.57.1 is end-of-life</h3>
+      <p class="addr"><b>package.json</b> devDependencies</p>
+      <p>
+        No security impact, but it receives no fixes, and <code>next lint</code> now warns it is removed in Next.js 16.
+        The migration path is printed by the tool itself:
+        <code>npx @next/codemod@canary next-lint-to-eslint-cli .</code>
+      </p>
+    </article>
+
+    <article class="finding qual">
+      <div class="finding-head"><span class="ref">3.3</span><span class="chip qual">Lint</span></div>
+      <h3><code>&lt;img&gt;</code> instead of <code>next/image</code></h3>
+      <p class="addr"><b>components/share/ShareCard.tsx:132</b></p>
+      <p>
+        The single lint warning. Low impact here since <code>images: { unoptimized: true }</code> is set globally, so
+        <code>next/image</code> would add little — either migrate or add a scoped <code>eslint-disable</code> with the
+        reason, so the lint run stays clean and the next real warning is visible.
+      </p>
+    </article>
+  </section>
+
+  <!-- ── SOUND ────────────────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <span class="num">4</span>
+      <h2>Checked and found sound</h2>
+      <span class="count">Do not re-derive</span>
+    </div>
+    <p class="voice" style="margin-top:1.5rem;max-width:var(--measure)">
+      Recorded so a future reviewer doesn't spend the afternoon re-deriving it.
+    </p>
+    <ul class="sound-list">
+      <li><span><b>lib/mp/protocol.ts</b> — every inbound field is rebuilt rather than passed through, numbers are clamped, the protocol version is checked, and roster membership gates writes. The strongest part of the codebase.</span></li>
+      <li><span><b>lib/runEngine.ts</b> — <code>advanceYear</code> guards <code>status !== "playing"</code>, <code>trade</code>/<code>payDebt</code> floor both sides at zero with the historical bug documented, and <code>hasFullJournal</code> checks per-entry year identity rather than length.</span></li>
+      <li><span><b>Loop bounds</b> — <code>fastForward</code> (guard 500) and <code>drawEvents</code> (guards 60 and 400) are all bounded; no unbounded loop is reachable from wire input.</span></li>
+      <li><span><b>Animation hygiene</b> — <code>DataAtlas.tsx:86–110</code> gates its interval on <em>both</em> <code>IntersectionObserver</code> and <code>visibilitychange</code>; rAF and interval cleanups are present throughout.</span></li>
+      <li><span><b>app/api/og/[id]/route.tsx</b> — UUID-validated before interpolation, distinct cache TTLs for real vs fallback cards, and it never 500s on an unfurl.</span></li>
+      <li><span><b>Event and outcome weights</b> — all integers. The <code>weight: 1999</code> on the lottery card is a deliberate 1-in-2000 jackpot, not a typo.</span></li>
+      <li><span><b>No hardcoded secrets, no <code>dangerouslySetInnerHTML</code>, no <code>eval</code>.</b> <code>.env.local.example</code> explicitly warns against pasting an <code>sb_secret_</code> key into a <code>NEXT_PUBLIC_</code> variable.</span></li>
+    </ul>
+  </section>
+
+  <!-- ── ORDER OF WORK ────────────────────────────────────────────────── -->
+  <section class="section">
+    <div class="section-head">
+      <span class="num">5</span>
+      <h2>Suggested order of work</h2>
+      <span class="count">Cheapest wins first</span>
+    </div>
+    <ol class="queue">
+      <li><span><b>1.4 — dependency bumps.</b> Three in-range versions, about five minutes, clears 8 high advisories.</span></li>
+      <li><span><b>1.3 — stop publishing friend codes.</b> One-line query narrowing now; the view/RPC split next.</span></li>
+      <li><span><b>1.2 — friend consent.</b> Two RLS policies plus the <code>listFriendIds</code> fix.</span></li>
+      <li><span><b>1.1 — leaderboard integrity.</b> The largest change. Ship the CHECK constraints and pull the unbacked "Replayed" badge immediately; the RPC can follow.</span></li>
+      <li><span><b>2.5, 2.4, 2.1</b> — small, self-contained correctness fixes.</span></li>
+      <li><span><b>3.1 — leaderboard indexes.</b> Before the results table grows past a few thousand rows.</span></li>
+    </ol>
+  </section>
+
+  <div class="colophon">
+    <span>LifePatch · Survive the Internet Economy</span>
+    <span>200 files · 14 findings · 26 Aug 2026</span>
+  </div>
+
+</div>
