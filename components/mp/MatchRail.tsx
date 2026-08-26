@@ -133,7 +133,7 @@ function StandingRow({
 
   return (
     <li
-      className={`flex items-center gap-2 border-b border-hairline/50 px-1 py-1.5 last:border-b-0 ${
+      className={`flex items-center gap-2 border-b border-hairline px-1 py-1.5 last:border-b-0 ${
         isSelf ? "bg-ink/10" : ""
       }`}
     >

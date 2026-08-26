@@ -21,6 +21,26 @@ import { useReducedMotion } from "framer-motion";
 
 type SkipFn = () => void;
 
+/**
+ * `prefers-reduced-motion`, read live — **for effects only**.
+ *
+ * The provider's `reduced` is deliberately gated behind `mounted` (see below: framer's
+ * hook reads matchMedia synchronously on the client, so an ungated value mismatches the
+ * server markup and throws React #418). The cost is that the value is FALSE for exactly
+ * one render — and React runs a child's effects before the parent's, so any `[]`-pinned
+ * effect that mounts in the provider's first commit closes over `false` and starts a
+ * timeline the user asked not to see. `Intro` is that case, and it opens with a
+ * full-frame ink invert.
+ *
+ * An effect never runs on the server, so it can ask the browser directly with no
+ * hydration exposure at all. Rendering must keep using `reduced` from the context, or
+ * the mismatch comes straight back.
+ */
+export function prefersReducedMotionNow(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 type MotionCtxValue = {
   reduced: boolean;
   /** Register a skip-to-final handler; returns an unregister fn. */

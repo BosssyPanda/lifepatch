@@ -6,7 +6,7 @@ import { AnimatedNumber } from "@/components/story/AnimatedNumber";
 import { BlockSpark } from "@/components/ui/BlockSpark";
 import { ChevronDown, InfoIcon } from "@/components/icons";
 import { currency } from "@/lib/format";
-import { netWorth, type RunState, yearIndex } from "@/lib/runEngine";
+import { homeEquity, netWorth, type RunState, yearIndex } from "@/lib/runEngine";
 import { juiceTier } from "@/src/motion/juice";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE, SPRING } from "@/src/motion/tokens";
@@ -215,7 +215,14 @@ export function YearHud({
               <div className="space-y-2">
                 <KV label="Status" value={run.life.partner ? "Married" : "Single"} colorVar="var(--color-secondary)" />
                 <KV label="Kids" value={`${run.life.kids}`} colorVar="var(--color-secondary)" />
-                <KV label="Home" value={run.life.housing === "owned" ? "Homeowner" : "Renting"} colorVar="var(--color-secondary)" />
+                {/* "Homeowner" alone, next to a net-worth figure that silently includes the
+                    house's equity, is the one holding the run could not read. Commit 4 gave
+                    the Portfolio a Home tile; this is the HUD's half of the same fact. */}
+                <KV
+                  label="Home"
+                  value={run.life.housing === "owned" ? `Homeowner · ${currency(homeEquity(run))} equity` : "Renting"}
+                  colorVar="var(--color-secondary)"
+                />
               </div>
               <button type="button" onClick={onOpenAlmanac} className="eyebrow text-ink sm:hidden">Open the Almanac →</button>
             </div>

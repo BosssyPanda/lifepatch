@@ -387,7 +387,10 @@ export function BoardView({
       <div className="absolute inset-[2%] border border-hairline bg-bg" />
       <div aria-hidden className="absolute inset-[3.6%] border border-hairline" />
 
-      {/* newspaper corner crop-ticks */}
+      {/* Newspaper corner crop-ticks. Hairline-strong, not accent: DESIGN.md § Palette
+          lists the accent's six homes and says a seventh 'is a design decision, not a
+          styling one'. Registration marks on a board frame are not one of the six, and
+          3.43:1 keeps them reading as marks rather than as the hairline rule beside them. */}
       {CROP_TICKS.map((c, i) => (
         <span
           key={i}
@@ -398,10 +401,10 @@ export function BoardView({
             left: c.left,
             right: c.right,
             bottom: c.bottom,
-            borderTop: c.v === "top" ? "1px solid var(--color-accent)" : undefined,
-            borderBottom: c.v === "bottom" ? "1px solid var(--color-accent)" : undefined,
-            borderLeft: c.h === "left" ? "1px solid var(--color-accent)" : undefined,
-            borderRight: c.h === "right" ? "1px solid var(--color-accent)" : undefined,
+            borderTop: c.v === "top" ? "1px solid var(--color-hairline-strong)" : undefined,
+            borderBottom: c.v === "bottom" ? "1px solid var(--color-hairline-strong)" : undefined,
+            borderLeft: c.h === "left" ? "1px solid var(--color-hairline-strong)" : undefined,
+            borderRight: c.h === "right" ? "1px solid var(--color-hairline-strong)" : undefined,
           }}
         />
       ))}

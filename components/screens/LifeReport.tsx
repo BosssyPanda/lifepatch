@@ -26,6 +26,7 @@ import { annualExpenses, homeEquity, netWorth, operatingCashFlow, type RunState 
 import { deriveVerdict } from "@/lib/verdict";
 import { eventTeachesAny } from "@/lib/eventConcepts";
 import { rankWeakSpots, readTallies, type WeakSpot } from "@/lib/weakSpots";
+import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { STAGGER } from "@/src/motion/tokens";
 
 const container = { hidden: {}, show: { transition: { staggerChildren: STAGGER.list, delayChildren: STAGGER.loose } } };
@@ -171,6 +172,7 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
    *  out of the standings you were watching. Both other exits leave the room. */
   onBackToStandings?: () => void }) {
   const { mastery } = useProfile();
+  const { reduced } = useMotionCtx();
   const { runGains } = useConceptLearn();
   const { user } = useAuth();
   /**
@@ -293,7 +295,12 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
     <div className="mx-auto min-h-[100svh] w-full max-w-2xl px-5 py-16">
       {/* Outside the stagger: the sound control is chrome, not part of the reveal. */}
       <SoundCell className="mb-5" />
-      <motion.div variants={container} initial="hidden" animate="show">
+      {/* This screen never asked the motion context anything, so a reduced-motion
+          player got the full staggered 16px rise down every row of their own closing
+          statement — the `@media` block in globals.css cannot reach a framer transform.
+          `initial={false}` mounts each row already at its target, which is the same
+          idiom Intro and Setup use, and leaves the stagger intact for everyone else. */}
+      <motion.div variants={container} initial={reduced ? false : "hidden"} animate="show">
         {/* masthead — the statement header */}
         <motion.header variants={item} className="border-b border-hairline pb-4">
           <div className="flex items-baseline justify-between gap-3">

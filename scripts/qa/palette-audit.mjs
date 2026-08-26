@@ -16,10 +16,16 @@
 // would drag in the TypeScript build for a file whose entire content is sixteen hex
 // literals — and a gate that needs a build step is a gate that gets skipped.
 //
-// What it does NOT do: walk the DOM to find where a colour is spent. The accent budget
-// (~1–2% of pixels, six sanctioned homes) stays a human judgement, exactly as DESIGN.md
-// writes it. This measures the palette, not its usage.
-import { readFileSync } from "fs";
+// Sections 1–4 measure the palette. Sections 5–6 measure where it is SPENT — every
+// `text-<token>/NN` in the tree, composited and held to 4.5:1, plus the pairings the
+// record says were measured and refused. That half was missing for the life of the
+// contract, which is exactly how twelve text sites drifted under the floor wearing
+// alpha classes no named-token check could see.
+//
+// What it still does NOT do: judge the accent budget (~1–2% of pixels, six sanctioned
+// homes). That stays a human call, exactly as DESIGN.md writes it — nothing static can
+// count pixels, and a gate that guesses is a gate that gets switched off.
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -310,5 +316,186 @@ check("the weak-spot section stays in the ink scale", () => {
   return `${label.toFixed(2)}:1 label · ${prose.toFixed(2)}:1 prose`;
 });
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 5. Spent colour.
+//
+//    Everything above measures the PALETTE. Nothing has ever measured where it
+//    LANDS — and that is the hole every contrast defect in this codebase fell
+//    through. Tailwind's `/NN` suffix composites a token against whatever is
+//    behind it and paints a colour that exists in no source file and in no
+//    document, so `text-ink/45` (4.10:1) and `text-ink-dim/55` (2.74:1) shipped
+//    straight past a gate that asserts every named token to two decimal places.
+//
+//    A utility class is reusable by construction, so the scanner cannot know
+//    which panel any given use lands on. It measures against ALL THREE grounds
+//    and takes the worst — `bg3` is the brightest, so that is the honest read.
+// ─────────────────────────────────────────────────────────────────────────────
+console.log("\nSpent colour (every `text-<token>/NN` in the tree, worst ground)");
+
+const SRC_DIRS = ["app", "components", "src"];
+const SRC_EXT = /\.(tsx?|css)$/;
+
+/**
+ * Comments are not styling.
+ *
+ * `InsolvencyNotice.tsx` documents the rejected `border-loss/60` by name and
+ * `ModeSelect.tsx` cites `text-ink/60` when it explains a dim floor — a gate
+ * that read those as usages would punish the two files that get this right for
+ * saying so. Block comments go whole; a line comment only counts when the line
+ * IS one, so a `https://` in the middle of a className never truncates it.
+ * Blanked lines are kept in place so reported line numbers stay true.
+ */
+function code(text) {
+  return text
+    // blank the characters, keep the newlines: a `.replace(…, "")` would collapse
+    // every multi-line docblock and report line numbers that point at nothing.
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .split("\n")
+    .map((l) => (/^\s*(\/\/|\*)/.test(l) ? "" : l));
+}
+
+const FILES = (() => {
+  const out = [];
+  for (const dir of SRC_DIRS) {
+    const root = join(ROOT, dir);
+    if (!existsSync(root)) continue;
+    for (const entry of readdirSync(root, { recursive: true })) {
+      const abs = join(root, String(entry));
+      if (!SRC_EXT.test(abs) || !statSync(abs).isFile()) continue;
+      out.push({ rel: abs.slice(ROOT.length + 1), lines: code(readFileSync(abs, "utf8")) });
+    }
+  }
+  return out;
+})();
+
+/** Every `file:line` where `needle` appears in code (not in a comment). */
+function sites(needle) {
+  const out = [];
+  for (const f of FILES) {
+    f.lines.forEach((l, i) => {
+      if (l.includes(needle)) out.push(`${f.rel}:${i + 1}`);
+    });
+  }
+  return out;
+}
+
+/** What a browser actually paints for `token/alpha` sitting on `ground`. */
+function composite(hex, alpha, ground) {
+  const byte = (h, i) => parseInt(h.replace("#", "").slice(i, i + 2), 16);
+  return (
+    "#" +
+    [0, 2, 4]
+      .map((i) => Math.round(alpha * byte(hex, i) + (1 - alpha) * byte(ground, i)))
+      .map((v) => v.toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+/** The worst of the three grounds, which is the one that decides. */
+function worstGround(hex, alpha) {
+  return ["bg", "bg2", "bg3"]
+    .map((g) => ({ g, r: ratio(composite(hex, alpha, GROUND[g]()), GROUND[g]()) }))
+    .reduce((lo, x) => (x.r < lo.r ? x : lo));
+}
+
+// `ink-dim` before `ink`: alternation is ordered, and `text-ink-dim/55` must not
+// match as `text-ink` with a stray `-dim`.
+const TEXT_ALPHA = /\btext-(ink-bright|ink-dim|ink|secondary|tertiary|accent|highlight|gain|loss)\/(\d{1,3})\b/g;
+
+/**
+ * Sites the contract deliberately exempts — and it is empty on purpose.
+ *
+ * The cold open's set-dressing HUD (`Gate.tsx`) was the one real candidate: it
+ * is `aria-hidden`, decorative, and inside § Film. It was RAISED rather than
+ * exempted, because 0.55rem type at 2.74:1 is hard to read for everyone, not
+ * only for a spec. Adding an entry here is a decision that needs a reason
+ * written beside it.
+ */
+const TEXT_EXEMPT = new Set();
+
+const spent = new Map();
+for (const f of FILES) {
+  f.lines.forEach((line, i) => {
+    for (const m of line.matchAll(TEXT_ALPHA)) {
+      if (!spent.has(m[0])) spent.set(m[0], []);
+      spent.get(m[0]).push(`${f.rel}:${i + 1}`);
+    }
+  });
+}
+
+check("the scan reached the source tree", () => {
+  // A walk that silently matches nothing passes every check under it. This is the
+  // guard against a moved directory turning the whole section into a no-op.
+  if (FILES.length < 100) throw new Error(`only ${FILES.length} source files found — the walk is broken, not the tree`);
+  return `${FILES.length} files · ${spent.size} distinct alpha text classes`;
+});
+
+for (const [cls, at] of [...spent].sort()) {
+  const [, token, pct] = cls.match(/^text-(.+)\/(\d+)$/);
+  check(`${cls} clears the text floor`, () => {
+    const hex = CSS_T[token];
+    if (!hex) throw new Error(`${cls} names --color-${token}, which app/globals.css does not define`);
+    const worst = worstGround(hex, Number(pct) / 100);
+    const live = at.filter((s) => !TEXT_EXEMPT.has(s));
+    if (worst.r < 4.5 && live.length > 0) {
+      throw new Error(
+        `${worst.r.toFixed(2)}:1 on ${worst.g} — under the 4.5:1 floor (WCAG 1.4.3).\n` +
+          `       The named tiers pass on every ground: text-tertiary (4.92:1 worst), text-ink-dim (5.67:1 worst).\n` +
+          `       ${live.join("\n       ")}`,
+      );
+    }
+    return `${worst.r.toFixed(2)}:1 worst on ${worst.g}  ×${at.length}`;
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. Rejected values.
+//
+//    Section 3 already asserts that the red turned down during the riso pass
+//    still fails, so nobody re-proposes it from memory. The same idea, applied
+//    to USAGE: a pairing that was measured and refused must not quietly come
+//    back. Each entry asserts both halves — that the value still fails its
+//    floor, and that it is absent from the tree — because if a hex ever moves,
+//    the record is what is out of date, not the code.
+//
+//    Borders are not blanket-scanned. Nothing static separates a decorative rule
+//    from an operable control's boundary, and a gate that guesses is a gate that
+//    gets switched off. The named refusals are the honest subset.
+// ─────────────────────────────────────────────────────────────────────────────
+console.log("\nRejected values (measured, refused, and still out of the tree)");
+
+const REJECTED = [
+  {
+    cls: "border-loss/60",
+    token: "loss",
+    alpha: 0.6,
+    floor: 3,
+    where: "components/run/InsolvencyNotice.tsx",
+    why: "a warning or operable boundary owes 3:1 (WCAG 1.4.11); the solid left rule is 5.09:1",
+  },
+  {
+    cls: "bg-black/80",
+    token: null,
+    where: "app/globals.css .scrim",
+    why: "#000 is not in the palette at all — the modal scrim is --color-bg, through .scrim",
+  },
+];
+
+for (const r of REJECTED) {
+  check(`${r.cls} is not in the tree`, () => {
+    let note = "";
+    if (r.token) {
+      const worst = worstGround(CSS_T[r.token], r.alpha);
+      if (worst.r >= r.floor) {
+        throw new Error(`${r.cls} now measures ${worst.r.toFixed(2)}:1 — ${r.where}'s record is out of date, not the code`);
+      }
+      note = `${worst.r.toFixed(2)}:1 worst — still under ${r.floor}:1`;
+    }
+    const back = sites(r.cls);
+    if (back.length) throw new Error(`${r.cls} is back at ${back.join(", ")}\n       ${r.why} — see ${r.where}`);
+    return note || "absent";
+  });
+}
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) process.exit(1);

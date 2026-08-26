@@ -160,7 +160,7 @@ export function LedgerDialog({
       <div
         aria-hidden
         onClick={onScrim}
-        className={`absolute inset-0 ${fullBleed ? "bg-bg" : "bg-bg/85"}`}
+        className={`absolute inset-0 ${fullBleed ? "bg-bg" : "scrim"}`}
       />
       <motion.div
         ref={ref}

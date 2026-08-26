@@ -75,34 +75,79 @@ export function CharityCard({ s, onDonate, onSkip }: { s: CashflowState; onDonat
   );
 }
 
-/** One sellable line: what it fetches, what that nets, and whether it's a gain. */
+/**
+ * One sellable line: what it fetches, what that nets, and whether it's a gain.
+ *
+ * The hierarchy used to be backwards on the case that matters most. Leverage means a
+ * sale can hand you cash and destroy your net worth in the same move — at
+ * `mk-house-buyer`'s worst roll, `sd-house-2` fetches `+$144` of net cash while equity
+ * falls from $3,000 to $144 and $140/month of income stops. All three numbers were
+ * true; the green one was the loudest, so the row read as a win.
+ *
+ * So: when the sale destroys capital, the capital line leads — larger type, the `▲` the
+ * rest of the app uses for a warning (`InsolvencyNotice.tsx`) — and net cash steps down
+ * to the supporting line. Weight and order, not a new colour: DESIGN.md § "Colour is
+ * never the only channel" is exactly this rule read the other way round. The income
+ * being surrendered is stated because nothing on the card said it at all.
+ */
 function SaleRow({
   label,
   offer,
   debt,
   basis,
+  monthly,
   onSell,
 }: {
   label: string;
   offer: number;
   debt: number;
   basis: number;
+  /** Monthly cash flow this holding pays, and stops paying once it is sold. */
+  monthly?: number;
   onSell: () => void;
 }) {
   const net = offer - debt;
   const gain = offer - basis;
   const good = gain >= 0;
+  const capital = (
+    <>
+      {good ? "Capital gain +" : "Capital LOSS "}
+      {currency(gain)} vs. the {currency(basis)} you paid
+    </>
+  );
+  const cash = (
+    <>
+      Offer {currency(offer)} · net cash <Money n={net} className={net >= 0 ? "text-gain" : "text-loss"} />
+    </>
+  );
   return (
     <div className="flex items-center justify-between gap-2 bg-bg2 px-3 py-2">
       <div className="min-w-0">
         <p className="display-caps truncate text-[0.82rem] text-ink">{label}</p>
-        <p className="font-body text-[0.72rem] text-ink/60">
-          Offer {currency(offer)} · net cash <Money n={net} className={net >= 0 ? "text-gain" : "text-loss"} />
-        </p>
-        <p className={`num text-[0.7rem] ${good ? "text-gain" : "text-loss"}`}>
-          {good ? "Capital gain +" : "Capital LOSS "}
-          {currency(gain)} vs. the {currency(basis)} you paid
-        </p>
+        {good ? (
+          <>
+            <p className="font-body text-[0.72rem] text-ink/60">{cash}</p>
+            <p className="num text-[0.7rem] text-gain">{capital}</p>
+          </>
+        ) : (
+          <>
+            <p className="num text-[0.82rem] font-semibold text-loss">
+              <span aria-hidden>▲ </span>
+              {capital}
+            </p>
+            <p className="font-body text-[0.72rem] text-tertiary">{cash}</p>
+          </>
+        )}
+        {monthly !== undefined && monthly !== 0 && (
+          // A property can be an alligator: `cashFlow` is net of its mortgage and goes
+          // negative. Selling that one ENDS a drain, and "stops −$50/month of income"
+          // would report good news as a loss.
+          <p className="font-body text-[0.7rem] text-tertiary">
+            {monthly > 0
+              ? `Selling stops ${currency(monthly)}/month of income.`
+              : `Selling ends ${currency(-monthly)}/month of drain.`}
+          </p>
+        )}
       </div>
       {/* One variant for every row, whatever the maths says. A market card can list
           three sellable assets at once, so `good ? primary : secondary` would have put
@@ -212,6 +257,7 @@ export function MarketCardView({
               offer={propertySaleOffer(s, terms, h)}
               debt={h.mortgage}
               basis={h.price}
+              monthly={h.cashFlow}
               onSell={() => onSellProperty(h.uid, propertySaleOffer(s, terms, h))}
             />
           ))}
@@ -222,6 +268,7 @@ export function MarketCardView({
               offer={businessSaleOffer(s, terms, h)}
               debt={h.liability}
               basis={h.price}
+              monthly={h.cashFlow}
               onSell={() => onSellBusiness(h.uid, businessSaleOffer(s, terms, h))}
             />
           ))}

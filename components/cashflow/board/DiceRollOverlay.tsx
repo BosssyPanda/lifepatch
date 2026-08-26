@@ -300,8 +300,7 @@ export default function DiceRollOverlay({ values, onDone }: { values: number[]; 
     <div
       role="dialog"
       aria-label="Rolling the dice"
-      className="fixed inset-0 z-[95] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(14,14,12,0.9)" }}
+      className="scrim fixed inset-0 z-[95] flex items-center justify-center"
     >
       <div className="relative h-full max-h-[560px] w-full max-w-[720px]">
         <Canvas
@@ -345,14 +344,31 @@ export default function DiceRollOverlay({ values, onDone }: { values: number[]; 
         <div aria-hidden className="pointer-events-none absolute inset-0 border border-hairline" />
         <div aria-hidden className="pointer-events-none absolute inset-3 border border-hairline" />
 
-        {/* result stamp */}
+        {/* Result stamp.
+            The dialog is named "Rolling the dice" and the roll lands in a 3D canvas, so
+            until now the one fact the overlay exists to deliver — WHAT YOU ROLLED —
+            reached a screen-reader user never. The stamp's text is mounted only once the
+            dice come to rest, inside a polite live region, so its insertion IS the
+            announcement; and the spoken form is a sentence rather than "4 + 3 = 7", which
+            a screen reader reads as "four plus three equals seven" only by luck. */}
         <div
+          role="status"
+          aria-live="polite"
           className="pointer-events-none absolute inset-x-0 bottom-7 flex justify-center"
           style={{ opacity: stamped ? 1 : 0, transition: "opacity 160ms linear" }}
         >
-          <span className="num border border-ink bg-bg px-4 py-2 text-xl text-ink" style={{ letterSpacing: "0.18em" }}>
-            {values.join(" + ")}{values.length > 1 ? ` = ${total}` : ""}
-          </span>
+          {stamped && (
+            <>
+              <span className="sr-only">
+                {values.length > 1
+                  ? `Rolled ${values.slice(0, -1).join(", ")} and ${values[values.length - 1]}. Total ${total}.`
+                  : `Rolled ${total}.`}
+              </span>
+              <span aria-hidden className="num border border-ink bg-bg px-4 py-2 text-xl text-ink" style={{ letterSpacing: "0.18em" }}>
+                {values.join(" + ")}{values.length > 1 ? ` = ${total}` : ""}
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>

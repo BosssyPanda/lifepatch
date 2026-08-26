@@ -94,6 +94,7 @@ export function CashflowSetup({
                 <motion.button
                   key={p.id}
                   onClick={() => { audio.sfx("click"); setProf(p.id); }}
+                  aria-pressed={active}
                   initial={{ opacity: 0, y: 22 }}
                   animate={{ opacity: 1, y: 0, scale: active ? 1.02 : 1 }}
                   transition={{ delay: i * STAGGER.tight, ...SPRING.pop }}
@@ -113,17 +114,22 @@ export function CashflowSetup({
                       </span>
                     </>
                   )}
-                  <h2 className="display-caps text-xl text-ink">{p.title}</h2>
-                  <p className="mt-1 font-body text-[0.82rem] leading-snug text-ink/70">{p.blurb}</p>
-                  <div className="mt-3 space-y-1 border-t border-ink/15 pt-2 num text-[0.82rem]">
-                    <div className="flex justify-between"><span className="text-ink/60">Salary</span><span className="text-ink">{currency(p.salary)}/mo</span></div>
-                    <div className="flex justify-between"><span className="text-ink/60">Expenses</span><span className="text-loss">{currency(exp)}/mo</span></div>
-                    <div className="flex justify-between"><span className="text-ink/60">Payday</span><span className={pay >= 0 ? "text-gain" : "text-loss"}>{pay >= 0 ? "+" : ""}{currency(pay)}/mo</span></div>
-                  </div>
-                  <div className="mt-2.5 flex items-center gap-1.5">
+                  {/* Everything below is phrasing content on purpose. A <button> takes no flow
+                      content, and the headings in here were the part that actually cost
+                      something: they put one non-heading per card into screen-reader heading
+                      navigation, where a heading is a landmark you jump to. Same type, same
+                      rhythm — `block` and `flex` carry the display the elements used to. */}
+                  <span className="display-caps block text-xl text-ink">{p.title}</span>
+                  <span className="mt-1 block font-body text-[0.82rem] leading-snug text-ink/70">{p.blurb}</span>
+                  <span className="mt-3 block space-y-1 border-t border-ink/15 pt-2 num text-[0.82rem]">
+                    <span className="flex justify-between"><span className="text-ink/60">Salary</span><span className="text-ink">{currency(p.salary)}/mo</span></span>
+                    <span className="flex justify-between"><span className="text-ink/60">Expenses</span><span className="text-loss">{currency(exp)}/mo</span></span>
+                    <span className="flex justify-between"><span className="text-ink/60">Payday</span><span className={pay >= 0 ? "text-gain" : "text-loss"}>{pay >= 0 ? "+" : ""}{currency(pay)}/mo</span></span>
+                  </span>
+                  <span className="mt-2.5 flex items-center gap-1.5">
                     <span className="eyebrow text-secondary" style={{ fontSize: "0.54rem" }}>Difficulty</span>
                     <span className="flex items-center gap-1">{DOTS(p.difficulty)}</span>
-                  </div>
+                  </span>
                 </motion.button>
               );
             })}
@@ -156,6 +162,7 @@ export function CashflowSetup({
                 <motion.button
                   key={d.id}
                   onClick={() => { audio.sfx("click"); setDream(d.id); }}
+                  aria-pressed={active}
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0, scale: active ? 1.03 : 1 }}
                   transition={{ delay: i * 0.04, type: "spring", stiffness: 240, damping: 20 }}
@@ -165,9 +172,15 @@ export function CashflowSetup({
                   onPointerMove={onSpot}
                   className={`spotlight relative overflow-hidden border p-4 text-left ${active ? "border-accent bg-ink/15" : "border-hairline-strong bg-bg2 hover:border-ink"}`}
                 >
-                  <h3 className="display-caps text-base text-ink">{d.title}</h3>
-                  <p className="mt-1 font-body text-[0.78rem] leading-snug text-ink-dim">{d.blurb}</p>
-                  <p className="mt-2 num text-sm text-ink">{currency(d.cost)}</p>
+                  {active && (
+                    <span data-radius="round" className="absolute right-2.5 top-2.5 z-10 grid h-6 w-6 place-items-center bg-accent text-bg">
+                      <CheckIcon size={13} />
+                    </span>
+                  )}
+                  {/* pr-9 reserves the check badge's corner (right-2.5, 24px wide) */}
+                  <span className="display-caps block pr-9 text-base text-ink">{d.title}</span>
+                  <span className="mt-1 block font-body text-[0.78rem] leading-snug text-ink-dim">{d.blurb}</span>
+                  <span className="mt-2 block num text-sm text-ink">{currency(d.cost)}</span>
                 </motion.button>
               );
             })}

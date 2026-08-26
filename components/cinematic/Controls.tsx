@@ -46,8 +46,12 @@ export function MuteButton({
       <button
         type="button"
         onClick={onToggle}
-        aria-label={muted ? "Unmute" : "Mute"}
-        aria-pressed={muted}
+        // No aria-label: the visible "Sound" / "Muted" text IS the name, so the name is
+        // state-phrased and agrees with aria-pressed (pressed = sound is on). The old
+        // action-phrased label announced "Unmute, pressed" — a contradiction — and put
+        // words in the name that appear nowhere on screen, which breaks voice control
+        // (WCAG 2.5.3). Same reasoning, verbatim, as components/ui/HudRail.tsx.
+        aria-pressed={!muted}
         className={`${CHROME} gap-1.5 bg-bg px-2.5 py-1.5 text-ink-dim`}
       >
         <Speaker muted={muted} />
@@ -59,6 +63,7 @@ export function MuteButton({
             type="button"
             onClick={vol.toggle}
             {...vol.triggerProps}
+            // "Vol" is contained in "Volume", so 2.5.3 holds and the fuller word helps
             aria-label="Volume"
             className={`${CHROME} border-l-0 px-2 py-1.5 ${
               vol.open ? "bg-ink text-bg" : "bg-bg text-ink-dim"
@@ -66,7 +71,7 @@ export function MuteButton({
           >
             <span className="eyebrow" style={{ fontSize: "0.56rem" }}>Vol</span>
           </button>
-          <VolumePopover open={vol.open} onClose={vol.close} muted={muted} onToggleMute={onToggle} />
+          <VolumePopover open={vol.open} onClose={vol.close} triggerRef={vol.triggerRef} muted={muted} onToggleMute={onToggle} />
         </>
       )}
     </div>

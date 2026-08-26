@@ -280,7 +280,7 @@ function ResultRow({
       initial={reduced ? { opacity: 0 } : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DUR.instant, ease: EASE, delay: stepDelay(index, STAGGER.list) }}
-      className={`flex items-center gap-3 border-b border-hairline/60 px-2 py-2 last:border-b-0 ${
+      className={`flex items-center gap-3 border-b border-hairline px-2 py-2 last:border-b-0 ${
         isSelf ? "bg-ink/10" : ""
       }`}
     >

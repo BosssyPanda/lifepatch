@@ -70,7 +70,7 @@ export function BankPanel({
       <div className="mt-2 flex items-baseline justify-between">
         <div>
           <p className="text-[0.72rem] text-ink/60">Bank loan balance</p>
-          <p className="text-[0.66rem] text-ink/45">
+          <p className="text-[0.66rem] text-tertiary">
             Costs {currency(payment)}/mo — {Math.round(BANK_LOAN_RATE * 100)}% of the balance, forever
           </p>
         </div>

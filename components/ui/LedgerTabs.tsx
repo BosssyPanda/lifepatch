@@ -20,6 +20,7 @@ export function LedgerTabs<T extends string>({
   onChange,
   label,
   panelId,
+  idPrefix = panelId,
   size = "md",
   className = "",
 }: {
@@ -28,8 +29,16 @@ export function LedgerTabs<T extends string>({
   onChange: (id: T) => void;
   /** Accessible name for the tablist (there can be more than one per overlay). */
   label: string;
-  /** id of the `role="tabpanel"` these tabs drive. Also seeds each tab's own id. */
+  /** id of the `role="tabpanel"` these tabs drive. */
   panelId: string;
+  /**
+   * Namespace for the tabs' OWN ids. Defaults to `panelId`, which is right whenever
+   * one strip drives one panel — but the Leaderboard points three strips at a single
+   * panel, and two of them carry an item called "all". One seed minted
+   * `…-tab-all` twice, so `aria-labelledby` resolved to whichever node the browser
+   * found first. Distinct prefixes, one panel: both facts stay true.
+   */
+  idPrefix?: string;
   size?: "sm" | "md";
   className?: string;
 }) {
@@ -68,7 +77,7 @@ export function LedgerTabs<T extends string>({
             }}
             type="button"
             role="tab"
-            id={tabId(panelId, t.id)}
+            id={tabId(idPrefix, t.id)}
             aria-selected={on}
             aria-controls={panelId}
             // roving tabindex: one stop for the whole strip, arrows move within it
@@ -91,7 +100,8 @@ export function LedgerTabs<T extends string>({
   );
 }
 
-/** The id of one tab — panels use it for `aria-labelledby`. */
-export function tabId(panelId: string, id: string): string {
-  return `${panelId}-tab-${id}`;
+/** The id of one tab — panels use it for `aria-labelledby`. Pass the same
+ *  `idPrefix` the strip was given, not the panel id, when they differ. */
+export function tabId(prefix: string, id: string): string {
+  return `${prefix}-tab-${id}`;
 }

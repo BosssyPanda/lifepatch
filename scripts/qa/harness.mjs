@@ -195,8 +195,23 @@ export class Run {
   }
 
   /** Pick a selectable card (profession / dream / mode / background tile). */
+  /**
+   * Pick the nth selection card on a picker screen.
+   *
+   * The locator used to be `button:has(h1|h2|h3)` — it found the four card pickers by
+   * the very thing that was wrong with them. A <button> takes no flow content, and the
+   * headings inside those cards were putting one non-heading per card into screen-reader
+   * heading navigation; when they became spans, this went blind and the journeys reported
+   * "no profession card to pick" against a screen full of them.
+   *
+   * `aria-pressed` is the honest signal: it is what makes a control a SELECTION rather
+   * than an action, every picker carries it, and a card that lost it is a card whose
+   * chosen state no longer reaches a screen reader — which is a finding, not a miss.
+   * Scoped by `.display-caps` because `SoundCell` renders a mute toggle (also
+   * `aria-pressed`) above both setup screens, and it is not a card.
+   */
   async pickCard(index = 0, { wait = 700 } = {}) {
-    const cards = this.page.locator("button:has(h1), button:has(h2), button:has(h3)");
+    const cards = this.page.locator("button[aria-pressed]:has(.display-caps)");
     const n = await cards.count();
     if (n <= index) return false;
     const card = cards.nth(index);

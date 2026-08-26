@@ -162,9 +162,12 @@ export function Tutorial({
       </AnimatePresence>
 
       <div className="mt-5 flex items-center justify-between">
+        {/* `transition-all` tweened WIDTH across the w-5 ↔ w-1.5 flip — a layout
+            property, which § Motion forbids outright. The ink fade survives; the width
+            now snaps, which is what a printed step marker does anyway. */}
         <div className="flex gap-1.5">
           {steps.map((_, idx) => (
-            <span key={idx} className={`h-1.5 transition-all ${idx === i ? "w-5 bg-ink" : "w-1.5 bg-ink/25"}`} />
+            <span key={idx} className={`h-1.5 transition-colors ${idx === i ? "w-5 bg-ink" : "w-1.5 bg-ink/25"}`} />
           ))}
         </div>
         <div className="flex gap-2">

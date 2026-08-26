@@ -65,7 +65,7 @@ export function Gate({
       <div aria-hidden className="pointer-events-none absolute left-6 top-6 z-20 hidden items-center gap-2 lg:flex">
         <span className="num text-[0.7rem] text-ink">001</span>
         <span className="h-px w-8 bg-ink-dim/50" />
-        <span className="eyebrow text-ink-dim/70" style={{ fontSize: "0.55rem" }}>Survive the Internet Economy</span>
+        <span className="eyebrow text-tertiary" style={{ fontSize: "0.55rem" }}>Survive the Internet Economy</span>
       </div>
 
       <div className="absolute right-4 top-4 z-20">
@@ -178,7 +178,7 @@ export function Gate({
 
       {/* ---------------- HUD: footer status ticker ---------------- */}
       <div aria-hidden className="pointer-events-none absolute inset-x-6 bottom-5 z-20 hidden items-center justify-between lg:flex">
-        <div className="flex items-center gap-3 text-ink-dim/55">
+        <div className="flex items-center gap-3 text-tertiary">
           <span className="eyebrow" style={{ fontSize: "0.55rem" }}>System · Active</span>
           <span className="flex items-end gap-0.5">
             {[5, 9, 4, 11, 7, 10, 6, 8].map((h, i) => (
@@ -187,7 +187,7 @@ export function Gate({
           </span>
           <span className="num text-[0.6rem]">V1.0</span>
         </div>
-        <div className="flex items-center gap-2 text-ink-dim/55">
+        <div className="flex items-center gap-2 text-tertiary">
           <span className="eyebrow" style={{ fontSize: "0.55rem" }}>Rendering</span>
           {!reduce && (
             <span className="flex gap-1">

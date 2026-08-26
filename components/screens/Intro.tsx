@@ -23,7 +23,7 @@ const VerdictWall = dynamic(() => import("@/components/cinematic/landing/Verdict
 const StatBand = dynamic(() => import("@/components/cinematic/landing/StatBand").then((m) => m.StatBand), { ssr: false, loading: sectionFallback });
 import { useAudio } from "@/hooks/useAudio";
 import { useLenis } from "@/hooks/useLenis";
-import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { prefersReducedMotionNow, useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { useScramble } from "@/src/motion/useScramble";
 import { DUR, EASE, SPRING } from "@/src/motion/tokens";
@@ -59,7 +59,13 @@ export function Intro({
   onReplayIntro?: () => void;
 }) {
   const audio = useAudio();
-  const { reduced } = useMotionCtx();
+  const { reduced: reducedCtx } = useMotionCtx();
+  // MotionProvider holds `reduced` false for exactly one render — its docblock says why
+  // (an ungated matchMedia read mismatches the server markup and throws React #418).
+  // Intro mounts inside that very render, so it is the one screen for which "one render"
+  // is the whole opening ceremony. The effect below promotes this on the first tick.
+  const [reducedNow, setReducedNow] = useState(false);
+  const reduced = reducedCtx || reducedNow;
   // Smooth scrolling belongs HERE — this is the long scroll story, with pinned
   // sections, scroll-linked WebGL set pieces and a scroll-progress rail. It was
   // only ever mounted on YearLoop (an app-like screen with no scroll narrative).
@@ -86,7 +92,16 @@ export function Intro({
   // one-shot choreographed timeline (skipped entirely under reduced motion)
   useEffect(() => {
     audio.setPhase("title");
-    if (reduced) return;
+    // NOT the context's `reduced`: this effect is pinned to [] and Intro mounts inside
+    // MotionProvider's first commit, where `reduced` is still false by design. Reading
+    // the closure value ran the whole attract — the stamp's full-frame ink invert
+    // included — for someone who asked for no motion. Ask the browser instead.
+    if (prefersReducedMotionNow()) {
+      setReducedNow(true);
+      setStage(5);
+      setSettled(true);
+      return;
+    }
     const at = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(fn, ms));
     at(60, () => setStage(1)); // frame prints in
     at(480, () => { setStage(2); setFlash(true); try { audio.accent("title"); } catch {} }); // stamp + thud
@@ -287,7 +302,7 @@ export function Intro({
           <motion.p
             initial={reduced ? false : { opacity: 0, y: 8 }}
             animate={showMid ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-            transition={{ duration: DUR.slow, ease: EASE }}
+            transition={reduced ? { duration: 0 } : { duration: DUR.slow, ease: EASE }}
             className="mt-5 max-w-xl font-body text-[0.98rem] leading-relaxed text-ink-dim"
           >
             You&apos;re running out of money fast, and every choice costs something. Nine months.
@@ -297,7 +312,7 @@ export function Intro({
           <motion.p
             initial={reduced ? false : { opacity: 0, y: 8 }}
             animate={showMid ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
-            transition={{ duration: DUR.slow, ease: EASE, delay: reduced ? 0 : 0.06 }}
+            transition={reduced ? { duration: 0 } : { duration: DUR.slow, ease: EASE, delay: 0.06 }}
             className="voice mt-3 max-w-xl text-lg text-ink"
           >
             Try not to get financially cooked.

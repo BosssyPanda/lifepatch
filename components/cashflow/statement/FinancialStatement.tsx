@@ -84,10 +84,10 @@ function SectionLabel({ children }: { children: string }) {
 function HoldingLine({ label, price, debt }: { label: string; price: number; debt: number }) {
   return (
     <div className="flex items-baseline justify-between gap-2 py-[1px] pl-2.5 text-[0.72rem]">
-      <span className="min-w-0 flex-1 truncate text-ink/45" title={label}>
+      <span className="min-w-0 flex-1 truncate text-tertiary" title={label}>
         {label}
       </span>
-      <span className="num shrink-0 tabular-nums text-ink/45">
+      <span className="num shrink-0 tabular-nums text-tertiary">
         {currency(price)}
         {debt > 0 && <span className="text-loss"> − {currency(debt)}</span>}
         <span className="text-ink/70"> = {currency(price - debt)}</span>
@@ -127,7 +127,7 @@ function LiabilityRow({
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-[0.82rem] text-ink/50" title={hint}>
           {label}
-          {monthly > 0 && <span className="num text-[0.68rem] text-ink/35"> · {currency(monthly)}/mo</span>}
+          {monthly > 0 && <span className="num text-[0.68rem] text-tertiary"> · {currency(monthly)}/mo</span>}
         </span>
         <span className="num text-[0.8rem] tabular-nums text-ink">
           <AnimatedNumber value={balance} format={(n) => currency(n)} />
@@ -137,7 +137,7 @@ function LiabilityRow({
           disabled button on every liability put five dead targets in the panel.
           The button appears only when the move is actually available. */}
       {onPayoff && !able && (
-        <p className="num text-right text-[0.62rem] text-ink/35">
+        <p className="num text-right text-[0.62rem] text-tertiary">
           {currency(balance - s.cash)} more to clear it
         </p>
       )}
@@ -254,10 +254,10 @@ export function FinancialStatement({
         <Row label="Stocks (at market)" value={stocksValue(s)} dim hint="Valued at today's quote, not what you paid" />
         {s.stocks.map((h) => (
           <div key={h.uid} className="flex items-baseline justify-between gap-2 py-[1px] pl-2.5 text-[0.72rem]">
-            <span className="min-w-0 flex-1 truncate text-ink/45">
+            <span className="min-w-0 flex-1 truncate text-tertiary">
               {h.symbol} × {h.shares}
             </span>
-            <span className="num shrink-0 tabular-nums text-ink/45">
+            <span className="num shrink-0 tabular-nums text-tertiary">
               {currency(quote(s, h.symbol, h.costBasis))}/sh
               <span className="text-ink/70"> = {currency(Math.round(h.shares * quote(s, h.symbol, h.costBasis)))}</span>
             </span>
@@ -297,7 +297,7 @@ export function FinancialStatement({
         </div>
         {/* the identity, spelled out — this panel is the teaching surface, so it
             has to be checkable by hand */}
-        <p className="num mt-0.5 text-right text-[0.62rem] text-ink/45">
+        <p className="num mt-0.5 text-right text-[0.62rem] text-tertiary">
           {currency(assets)} assets − {currency(liabilities)} liabilities
         </p>
       </div>

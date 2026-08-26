@@ -204,7 +204,7 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
           {Array.from({ length: openSlots }, (_, i) => (
             <li
               key={`open-${i}`}
-              className="flex items-center gap-3 border-b border-hairline/60 py-2 last:border-b-0"
+              className="flex items-center gap-3 border-b border-hairline py-2 last:border-b-0"
             >
               <span aria-hidden className="h-[30px] w-[30px] shrink-0 border border-hairline" />
               <span className="eyebrow text-tertiary" style={{ fontSize: "0.6rem" }}>
@@ -486,7 +486,7 @@ function PlayerRow({
       initial={reduced ? { opacity: 0 } : { opacity: 0, x: -8 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: DUR.instant, ease: EASE, delay: stepDelay(index, STAGGER.tight) }}
-      className="flex items-center gap-3 border-b border-hairline/60 py-2 last:border-b-0"
+      className="flex items-center gap-3 border-b border-hairline py-2 last:border-b-0"
     >
       <Avatar seed={peer.avatarSeed} username={peer.name} size={30} />
       <span className={`min-w-0 flex-1 truncate font-body text-sm ${peer.connected ? "text-ink" : "text-tertiary"}`}>

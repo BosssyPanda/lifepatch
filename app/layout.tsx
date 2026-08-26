@@ -46,6 +46,19 @@ export const metadata: Metadata = {
   },
 };
 
+/**
+ * No `viewportFit: "cover"`, deliberately.
+ *
+ * Without it iOS insets the viewport for you and paints the safe areas in the page's own
+ * background — which is `themeColor` / `--color-bg` — so a notched phone already reads
+ * edge-to-edge paper. Adopting `cover` would move the gain from ~nothing to nothing while
+ * putting `AdvanceBar`'s sticky primary CTA and `HudRail`'s sticky top row under the
+ * hardware, unless every bottom- and top-anchored surface grows an `env(safe-area-inset-*)`
+ * term. That is the trade: the one safe-area term in the codebase
+ * (`components/cashflow/shared.tsx`, the toast) evaluates to 0 today and is defensive, not
+ * dead — it becomes live the moment this line changes, and it is the shape the rest would
+ * have to take.
+ */
 export const viewport: Viewport = {
   themeColor: PALETTE.bg,
   width: "device-width",

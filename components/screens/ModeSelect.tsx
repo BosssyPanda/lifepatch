@@ -96,19 +96,29 @@ export function ModeSelect({
                 <span className="absolute bottom-0 left-0 h-3 w-3 border-b-2 border-l-2 border-ink" />
                 <span className="absolute bottom-0 right-0 h-3 w-3 border-b-2 border-r-2 border-ink" />
               </span>
-              <div className="relative">
-                <div className="flex items-center justify-between border-b-2 border-ink pb-2">
+              {/* Everything below is phrasing content on purpose. A <button> takes no flow
+                  content, and the headings in here were the part that actually cost
+                  something: they put one non-heading per card into screen-reader heading
+                  navigation, where a heading is a landmark you jump to. Same type, same
+                  rhythm — `block` and `flex` carry the display the elements used to. */}
+              <span className="relative block">
+                <span className="flex items-center justify-between border-b-2 border-ink pb-2">
                   <span className="eyebrow text-secondary">{m.meta}</span>
-                  <span className="text-ink"><Icon size={22} /></span>
-                </div>
-                {/* live micro-preview window */}
-                <div className="relative mt-3 h-20 overflow-hidden border border-hairline bg-bg">
+                  {/* reserve, as on the background cards — the check badge sits over this corner */}
+                  <span className="mr-10 text-ink"><Icon size={22} /></span>
+                </span>
+                {/* Live micro-preview window. Its subtree is the one place this button
+                    still holds flow content: `ModePreview` mounts the same BoardView /
+                    sparkline the run and the landing render, and forking those into spans
+                    to satisfy a content model would fork the thing the card exists to show.
+                    It is `aria-hidden` at every root, so none of it reaches the name. */}
+                <span className="relative mt-3 block h-20 overflow-hidden border border-hairline bg-bg">
                   <ModePreview id={id} reduced={reduced} />
-                </div>
-                <h2 className="display-caps mt-3 text-4xl text-ink">{m.name}</h2>
-                <p className="voice mt-1 text-sm text-ink/60">{m.tagline}</p>
-                <p className="mt-3 font-body text-[0.95rem] leading-relaxed text-ink/80">{m.blurb}</p>
-              </div>
+                </span>
+                <span className="display-caps mt-3 block text-4xl text-ink">{m.name}</span>
+                <span className="voice mt-1 block text-sm text-ink/60">{m.tagline}</span>
+                <span className="mt-3 block font-body text-[0.95rem] leading-relaxed text-ink/80">{m.blurb}</span>
+              </span>
             </motion.button>
           );
         })}

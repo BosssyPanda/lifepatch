@@ -134,8 +134,8 @@ export function PortfolioPanel({
                 cursor while still refusing the click. */}
             {run.debt > 0 && (
               <div className="flex gap-1.5">
-                <button type="button" data-radius="" disabled={run.cash < 1000} onClick={() => handlePayDebt(1000)} className={`num border border-loss/60 px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 enabled:hover:bg-loss enabled:hover:text-bg ${DEBT_HIT}`}>−$1k</button>
-                <button type="button" data-radius="" disabled={run.cash <= 0} onClick={() => handlePayDebt(Math.min(run.cash, run.debt))} className={`num border border-loss/60 px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 enabled:hover:bg-loss enabled:hover:text-bg ${DEBT_HIT}`}>MAX</button>
+                <button type="button" data-radius="" disabled={run.cash < 1000} onClick={() => handlePayDebt(1000)} className={`num border border-hairline-strong px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 enabled:hover:bg-loss enabled:hover:text-bg ${DEBT_HIT}`}>−$1k</button>
+                <button type="button" data-radius="" disabled={run.cash <= 0} onClick={() => handlePayDebt(Math.min(run.cash, run.debt))} className={`num border border-hairline-strong px-1.5 py-0.5 text-[0.6rem] text-loss disabled:opacity-25 enabled:hover:bg-loss enabled:hover:text-bg ${DEBT_HIT}`}>MAX</button>
               </div>
             )}
           </div>

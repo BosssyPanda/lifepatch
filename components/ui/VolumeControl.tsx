@@ -65,12 +65,20 @@ export function VolumeSlider({
 export function VolumePopover({
   open,
   onClose,
+  triggerRef,
   align = "right",
   muted,
   onToggleMute,
 }: {
   open: boolean;
   onClose: () => void;
+  /**
+   * The button that opened this. The dismiss handler used to wrap the panel alone,
+   * and the trigger belongs to the caller — so tapping the trigger while open ran
+   * `pointerdown` → close, then the trailing `click` → toggle → reopen. The popover
+   * could not be closed by the one control every user reaches for first.
+   */
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
   align?: "left" | "right";
   muted: boolean;
   onToggleMute: () => void;
@@ -84,7 +92,10 @@ export function VolumePopover({
     };
     const onDown = (e: PointerEvent) => {
       const t = e.target;
-      if (t instanceof Node && ref.current && !ref.current.contains(t)) onClose();
+      if (!(t instanceof Node) || !ref.current) return;
+      // the trigger's own subtree is not "outside" — let its click do the toggling
+      if (ref.current.contains(t) || triggerRef?.current?.contains(t)) return;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     // non-capture: the panel's own controls handle their events first
@@ -93,7 +104,7 @@ export function VolumePopover({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onDown);
     };
-  }, [open, onClose]);
+  }, [open, onClose, triggerRef]);
 
   if (!open) return null;
 
@@ -109,7 +120,11 @@ export function VolumePopover({
       <button
         type="button"
         onClick={onToggleMute}
-        aria-pressed={muted}
+        // State-phrased, like HudRail's SOUND cell and cinematic/Controls' speaker:
+        // pressed = sound is on, and the visible word says which. It read "Unmute"
+        // beside `aria-pressed={muted}` — "Unmute, pressed" — until the same fault was
+        // found one file over, and three mute controls in one app should not disagree.
+        aria-pressed={!muted}
         // ~20px tall by design; a `::before` layer takes the *hit* box to ~40px without
         // changing the look (same trick as cinematic/Controls.tsx). 10px is exactly the
         // popover's own py-2.5, so the expander fills the padding and stops at the panel
@@ -118,7 +133,7 @@ export function VolumePopover({
         className="eyebrow relative border border-hairline-strong px-2 py-1 text-ink-dim transition-colors hover:bg-ink hover:text-bg before:absolute before:inset-x-0 before:-inset-y-[10px] before:content-['']"
         style={{ fontSize: "0.52rem", letterSpacing: "0.16em" }}
       >
-        {muted ? "Unmute" : "Mute"}
+        {muted ? "Muted" : "Sound"}
       </button>
       <VolumeSlider />
     </div>
@@ -128,13 +143,19 @@ export function VolumePopover({
 /** Open/close state + the a11y wiring a disclosure trigger needs. */
 export function useVolumePopover() {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const close = useCallback(() => setOpen(false), []);
   const toggle = useCallback(() => setOpen((o) => !o), []);
   return {
     open,
     close,
     toggle,
+    /** Hand this to `<VolumePopover triggerRef=…>` so the trigger can close it. */
+    triggerRef,
+    // `ref` rides in triggerProps, which both callers already spread — so the fix
+    // reaches every trigger without either surface changing shape.
     triggerProps: {
+      ref: triggerRef,
       "aria-expanded": open,
       "aria-haspopup": true as const,
     },

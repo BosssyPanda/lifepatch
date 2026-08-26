@@ -133,19 +133,25 @@ export function Setup({
                   </span>
                 </>
               )}
-              <div className="flex items-center justify-between border-b-2 border-ink pb-2">
+              {/* Everything below is phrasing content on purpose. A <button> takes no flow
+                  content, and the headings in here were the part that actually cost
+                  something: they put one non-heading per card into screen-reader heading
+                  navigation, where a heading is a landmark you jump to. Same type, same
+                  rhythm — `block` and `flex` carry the display the elements used to. */}
+              <span className="flex items-center justify-between border-b-2 border-ink pb-2">
                 <span className="eyebrow text-secondary">Age {b.startAge}</span>
-                <Badge tone={b.difficulty}>{b.difficulty}</Badge>
-              </div>
-              <h2 className="display-caps mt-3 text-2xl text-ink">{b.name}</h2>
-              <p className="voice mt-1 text-sm text-ink/60">{b.tagline}</p>
-              <p className="mt-2.5 font-body text-[0.86rem] leading-snug text-ink/75">{b.story}</p>
-              <dl className="mt-3 space-y-1">
+                {/* reserve: the check badge lands at right-3 and is 28px wide */}
+                <Badge tone={b.difficulty} className="mr-10">{b.difficulty}</Badge>
+              </span>
+              <span className="display-caps mt-3 block text-2xl text-ink">{b.name}</span>
+              <span className="voice mt-1 block text-sm text-ink/60">{b.tagline}</span>
+              <span className="mt-2.5 block font-body text-[0.86rem] leading-snug text-ink/75">{b.story}</span>
+              <span className="mt-3 block space-y-1">
                 <Row k="Cash" v={currency(b.cash)} />
                 <Row k="Debt" v={currency(b.debt)} />
                 <Row k="Salary" v={`${currency(b.salary)}/yr`} />
                 <Row k="Job" v={b.job} />
-              </dl>
+              </span>
             </motion.button>
           );
         })}
@@ -211,11 +217,14 @@ export function Setup({
   );
 }
 
+/** One stat line on a background card. Spans, not a <dl>: these live inside the
+ *  card's <button>, and a description list in there is a semantic claim the browser
+ *  flattens away anyway — it only ever cost the markup its validity. */
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex items-baseline justify-between border-b border-ink/15 pb-1">
-      <dt className="eyebrow text-secondary">{k}</dt>
-      <dd className="num text-sm text-ink">{v}</dd>
-    </div>
+    <span className="flex items-baseline justify-between border-b border-ink/15 pb-1">
+      <span className="eyebrow text-secondary">{k}</span>
+      <span className="num text-sm text-ink">{v}</span>
+    </span>
   );
 }

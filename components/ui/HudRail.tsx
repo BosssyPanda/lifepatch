@@ -83,7 +83,10 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
           type="button"
           onClick={vol.toggle}
           {...vol.triggerProps}
-          aria-label="Volume"
+          // No aria-label, for the reason two controls up: the cell reads "VOL 80" and
+          // "VOL 80" is not contained in "Volume", so the label it used to carry failed
+          // 2.5.3 as surely as the mute button's did. aria-expanded + aria-haspopup
+          // already announce it as a disclosure.
           className={`${cell} ${HIT} border-l border-hairline transition-colors hover:bg-ink hover:text-bg ${
             vol.open ? "bg-ink text-bg" : "text-tertiary"
           }`}
@@ -94,6 +97,7 @@ export function HudRail({ mode, counter, className = "" }: { mode: string; count
         <VolumePopover
           open={vol.open}
           onClose={vol.close}
+          triggerRef={vol.triggerRef}
           muted={audio.muted}
           onToggleMute={() => audio.setMuted(!audio.muted)}
         />

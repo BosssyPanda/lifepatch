@@ -205,10 +205,15 @@ function StockDealView({
         <StatLine label="Dividend" value={deal.dividend > 0 ? `${quoteText(deal.dividend)}/sh/mo` : "none"} tone={deal.dividend > 0 ? "good" : undefined} />
         <StatLine label="Dividend yield" value={`${yld.toFixed(0)}%/yr`} />
         <StatLine label="Typical range" value={`${quoteText(deal.range[0])} – ${quoteText(deal.range[1])}`} />
+        {/* No tone. Green and red are money, and only money (DESIGN.md § Palette) — a
+            quote sitting under its usual range is a CONDITION, not a gain, and painting
+            it green made the card recommend the trade. Until commit 4 clamped the price
+            walk it was worse than a recommendation: a stock at its floor could not lose,
+            and this line advertised the fact. "Above" / "Below" and the `Typical range`
+            row directly above carry the whole meaning with no hue at all. */}
         <StatLine
           label={price > deal.price ? "Above its usual price" : price < deal.price ? "Below its usual price" : "At its usual price"}
           value={`${price >= deal.price ? "+" : "−"}${Math.abs(Math.round(((price - deal.price) / deal.price) * 100))}%`}
-          tone={price < deal.price ? "good" : price > deal.price ? "bad" : undefined}
         />
       </div>
 

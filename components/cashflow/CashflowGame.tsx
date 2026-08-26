@@ -223,7 +223,7 @@ export function CashflowGame({
                   <span className="num text-gain">{currency(s.fastTrackCashflow)}</span> —{" "}
                   <span className="num">{currency(Math.max(0, FAST_TRACK_CASHFLOW_GOAL - s.fastTrackCashflow))}</span> to go.
                 </p>
-                <p className="mt-1 font-body text-[0.74rem] text-ink-dim/80">
+                <p className="mt-1 font-body text-[0.74rem] text-ink-dim">
                   Up here time runs in years: a <strong className="text-ink">Cash Flow Year</strong> pays twelve
                   months at once — {currency(fastTrackMonthly(s))}/mo × 12 ={" "}
                   <span className="num">{currency(cashflowDayPayout(s))}</span>. Your carried passive income
@@ -232,7 +232,7 @@ export function CashflowGame({
                 {/* Both routes run through the same lever, and a dream-chaser who never buys
                     an investment measures ~3× slower in simulation than one who does — so the
                     panel says it out loud rather than leaving it to be discovered. */}
-                <p className="mt-1 font-body text-[0.74rem] text-ink-dim/80">
+                <p className="mt-1 font-body text-[0.74rem] text-ink-dim">
                   Every investment you buy makes the next Cash Flow Year bigger — including the
                   one that finally pays for your dream.
                 </p>

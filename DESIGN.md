@@ -46,9 +46,21 @@ and fourth money colour and must never be used to grade a number.
 - **Semantic accents (never decorative):** loss `--color-loss` `#FE4030` (5.4:1 on bg), gain
   `--color-gain` `#2FCC71` (9.0:1 on bg). Red means losing money; green means making it.
   (`#E23B2E` was proposed during the riso pass and rejected — it measured 4.39:1 and failed.)
+- **One scrim.** A modal ground is `.scrim` (`app/globals.css`) — `--color-bg` at 85%. The
+  app carried three near-blacks behind three overlays (`bg-black/80`, which is Tailwind's
+  `#000` and not in the palette at all; `bg-bg/85`; a hand-written `rgba(14,14,12,0.9)`).
+  Never a `backdrop-filter`: § Motion bans glassmorphism, and a scrim is a sheet of paper
+  laid over the page, not frosted glass.
 - **Knockout is paper, never ink.** Text or a glyph sitting *on* an accent / highlight / gain /
   loss fill is painted `--color-bg`. Ink on orange measures **2.74:1 and fails**; paper on
   orange is 6.04:1. There is no exception to this and no fill is ever tinted to make one.
+- **An alpha suffix is a colour you have not measured.** `text-ink/45` composites to a hex
+  that appears in no file and in no document, and twelve text sites drifted under 4.5:1
+  wearing one. `npm run qa:palette` now scans every `text-<token>/NN` in the tree against
+  all three grounds and fails the worst; the named tiers (`tertiary` 4.92:1 worst,
+  `ink-dim` 5.67:1 worst) are what a faint tier is FOR. The same gate holds a list of
+  pairings that were measured and refused — `border-loss/60` at 2.56:1 — and fails if one
+  comes back.
 - **Colour is never the only channel.** Every gain or loss also carries its sign, the debt
   warning also carries `▲`, and a board tile also carries a glyph and a word. Strip the hue
   out of any screen and it must still be readable — that is the test, and it is not optional.
@@ -88,7 +100,7 @@ exactly these, and adding a seventh is a design decision, not a styling one:
    through one component, `components/ui/SectionMark.tsx`. The numeral is orange, the
    title beside it stays ink: colour marks position, never the sentence.
 3. The **focus ring** — `2px solid var(--color-accent)` at `2px` offset, replacing the
-   ink ring. 6.04:1 on bg, 5.72:1 on bg2, 5.36:1 on bg3, so it clears 1.4.11 on every
+   ink ring. 6.04:1 on bg, 5.72:1 on bg2, 5.37:1 on bg3, so it clears 1.4.11 on every
    ground the app paints. A control that is itself an accent fill cannot wear it (an
    orange ring 2px off an orange edge is one thick band), so it declares
    **`data-accent-fill`** and takes the ink ring instead. That attribute is the third
@@ -98,6 +110,10 @@ exactly these, and adding a seventh is a design decision, not a styling one:
 5. **What is live** — the HUD rail's turn/year counter, `YearHud`'s year numeral, the
    Rat Race turn number, the active step in the landing's run tour, and ROLL.
 6. The **active board square** and the player token (already shipped with the board).
+
+The board's corner crop-ticks are NOT a seventh home. They were painted `--color-accent`
+and are `--color-hairline-strong` now: they are registration marks on a frame, decorative
+and `aria-hidden`, and the rule above means what it says.
 
 Chartreuse has four homes and no more: the streak chip, the Money Brain meter, the
 mastery ticks, and the concept-noted toast. It is never a state and never a number.
@@ -235,6 +251,13 @@ these four surfaces stays strict LEDGER.
 
 ## Accessibility
 
-- Focus ring: 2px ink outline (global). Skip-link jumps to `#main`.
+- Focus ring: `2px solid var(--color-accent)` at `2px` offset — see § Palette item 3 for
+  the measurements and for the one exception (`data-accent-fill` takes the ink ring, because
+  an orange ring 2px off an orange edge reads as one thick band). This section said "2px ink
+  outline (global)" until the Risograph pass was reconciled: that described the build before
+  the accent became the keyboard's "you are here", and `app/globals.css` had already moved.
+- Skip-link jumps to `#main`. Every page that renders a `<main>` carries the id — including
+  `app/error.tsx`, which did not, so the link dead-ended on the one page a keyboard user is
+  most likely to be lost on.
 - Every icon-only control has an `aria-label`; live counters use `aria-live="polite"`.
 - Both breakpoints are first-class: design at 390, confirm at 1440.

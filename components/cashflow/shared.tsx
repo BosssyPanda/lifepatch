@@ -71,7 +71,7 @@ export function Modal({
       <motion.div
         aria-hidden
         onClick={onClose}
-        className="absolute inset-0 bg-black/80"
+        className="scrim absolute inset-0"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -147,7 +147,10 @@ export function Toast({ show, children }: { show: boolean; children: ReactNode }
            *
            * `--toast-inset` is published by whichever screen owns sticky bottom
            * chrome (AdvanceBar); it is 0 everywhere else, so the toast keeps its
-           * ordinary 8px gap. The safe-area term keeps it clear of a phone's home
+           * ordinary 8px gap. The safe-area term evaluates to 0 while `app/layout.tsx`
+           * declines `viewportFit: "cover"` (its docblock says why) — it is defensive, and
+           * it is the shape every edge-anchored surface would need if that ever changes.
+           * It keeps the toast clear of a phone's home
            * indicator. */
           style={{ bottom: "calc(var(--toast-inset, 0px) + 8px + env(safe-area-inset-bottom, 0px))" }}
           className="pointer-events-none fixed right-4 z-[90] max-w-[calc(100vw-2rem)]"

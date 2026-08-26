@@ -174,7 +174,7 @@ export function ConsequenceBeat({
             <motion.span
               aria-hidden
               className="pointer-events-none absolute inset-0"
-              style={{ background: "rgba(242,241,234,0.16)" }}
+              style={{ background: "color-mix(in srgb, var(--color-ink) 16%, transparent)" }}
               initial={false}
               animate={flash ? { opacity: [0, 1, 0] } : { opacity: 0 }}
               transition={{ duration: DUR.scene }}

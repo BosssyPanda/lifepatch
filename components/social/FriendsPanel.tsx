@@ -222,7 +222,7 @@ export function FriendsPanel({
           <TerminalOp label="Reading the roster" center />
         </p>
       ) : f.failed ? (
-        <p role="alert" className="mt-4 border-l-2 border-loss/50 bg-bg2 px-3 py-2.5 font-body text-[0.8rem] leading-snug text-loss">
+        <p role="alert" className="mt-4 border-l-2 border-l-loss bg-bg2 px-3 py-2.5 font-body text-[0.8rem] leading-snug text-loss">
           <span aria-hidden>▲ </span>
           Your list did not come back. This is a connection problem, not an empty list.
         </p>

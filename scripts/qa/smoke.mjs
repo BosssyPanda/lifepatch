@@ -10,6 +10,33 @@ import { Run, BASE, DESKTOP, MOBILE } from "./harness.mjs";
 const viewport = process.env.QA_VIEWPORT === "mobile" ? MOBILE : DESKTOP;
 const tag = process.env.QA_VIEWPORT === "mobile" ? "mobile" : "desktop";
 
+/**
+ * Two structural faults that no screenshot catches and that both shipped here.
+ *
+ *  • A DOM id minted twice. The Leaderboard pointed three tab strips at one `panelId`
+ *    and two of them carried an item called "all", so `…-tab-all` existed on two live
+ *    tabs and `aria-labelledby` resolved to whichever one the browser found first.
+ *  • A heading inside a <button>. Four card pickers put one non-heading per card into
+ *    screen-reader heading navigation, where a heading is a thing you jump to.
+ *
+ * Cheap enough to run at every screen the journeys already stop on, which is the only
+ * way it stays true — both faults were invisible until someone went looking.
+ */
+async function structure(run, where) {
+  const found = await run.page.evaluate(() => {
+    const count = new Map();
+    for (const el of document.querySelectorAll("[id]")) count.set(el.id, (count.get(el.id) ?? 0) + 1);
+    return {
+      dupes: [...count].filter(([, n]) => n > 1).map(([id, n]) => `${id} ×${n}`),
+      headings: [...document.querySelectorAll("button :is(h1,h2,h3,h4,h5,h6), [role=button] :is(h1,h2,h3,h4,h5,h6)")].map(
+        (h) => `<${h.tagName.toLowerCase()}> "${(h.textContent ?? "").trim().slice(0, 40)}"`,
+      ),
+    };
+  });
+  for (const d of found.dupes) run.finding("MED", "structure", `${where}: duplicate DOM id — ${d}`);
+  for (const h of found.headings) run.finding("MED", "structure", `${where}: heading inside a button — ${h}`);
+}
+
 async function landing(run) {
   const page = await run.open(viewport);
   await run.settle();
@@ -26,6 +53,7 @@ async function landing(run) {
   }
   await page.waitForTimeout(700);
   await run.snap("02-landing-bottom");
+  await structure(run, "landing");
 
   const canvases = await page.$$eval("canvas", (els) => els.length);
   console.log(`  landing canvases: ${canvases}`);
@@ -38,6 +66,7 @@ async function intoModeSelect(run) {
   const hit = await run.clickAny(["begin a run", "^begin$", "^start", "play"], { wait: 1800 });
   if (!hit) { run.finding("HIGH", "landing", "no CTA reached the mode select"); return false; }
   await run.snap("03-mode-select");
+  await structure(run, "mode-select");
   const text = await run.text();
   for (const mode of ["Story", "Infinite", "Rat Race"]) {
     if (!new RegExp(mode, "i").test(text)) run.finding("MED", "mode-select", `mode "${mode}" not offered`);
@@ -70,7 +99,7 @@ async function clearOverlays(run) {
 // of these as a "fallback" is how the journey used to walk itself backwards out
 // of a run and report a phantom failure.
 const CHROME =
-  /^(sound|vol|exit|open the almanac|almanac|glossary|roll|…|skip to content|leaderboard|share|learn|back|← ?back|sign out|toggle|end run|replay|intro|max|[-−+]$)/i;
+  /^(sound|muted|vol|exit|open the almanac|almanac|glossary|roll|…|skip to content|leaderboard|share|learn|back|← ?back|sign out|toggle|end run|replay|intro|max|[-−+]$)/i;
 
 /**
  * Last resort for a blocker whose labels we do not know (pop quizzes, coach
@@ -348,8 +377,11 @@ const run = new Run(`smoke-${tag}`);
 try {
   await landing(run);
   if (await intoModeSelect(run)) await ratRace(run);
+  await structure(run, "rat-race");
   await storyRun(run);
+  await structure(run, "story");
   await friendsTab(run);
+  await structure(run, "friends");
 } catch (e) {
   run.finding("HIGH", "harness", `journey threw: ${e.message}`);
 } finally {

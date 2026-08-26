@@ -9,7 +9,7 @@ import { macroEvent, sp500Return } from "@/lib/markets";
 import { netWorth, type RunState, type YearRecord } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { RECAP_SCENES, YEARS_FLIP_MS, YEARS_HOLD_MS, YEARS_MIN_MS } from "@/lib/cinematic";
-import { useMotionCtx } from "@/src/motion/MotionProvider";
+import { prefersReducedMotionNow, useMotionCtx } from "@/src/motion/MotionProvider";
 import { useSkippable } from "@/src/motion/useSkippable";
 import { DUR, EASE } from "@/src/motion/tokens";
 import { buzz, BUZZ } from "@/src/motion/haptics";
@@ -111,7 +111,10 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
 
   // the film's timeline — scene transitions + per-scene audio cues
   useEffect(() => {
-    if (reduced) return;
+    // live read, not the closure: this effect is pinned to [] like Intro's. Outro mounts
+    // long after MotionProvider promotes, so the closure value is correct today — and
+    // "correct because of where it happens to be mounted" is not a thing to rely on.
+    if (prefersReducedMotionNow()) return;
     const at = (ms: number, fn: () => void) => timers.current.push(window.setTimeout(fn, Math.max(0, ms)));
     // `cue` is the quantized accent (fired a pre-roll ahead of the cut so it lands
     // ON it); `enter` is everything that belongs to the visible frame itself.
