@@ -60,6 +60,23 @@ create index if not exists results_daily_idx
 
 Safe to run at any time on a live table.
 
+## Dependency advisories
+
+`npm audit` is part of the gate. As of the last pass it reports **2 residual** findings, both for
+`postcss` — and both live in `node_modules/next/node_modules/postcss`, the copy Next.js vendors for
+its own build pipeline rather than one this project installs. They are reachable only by a
+`sourceMappingURL` comment in CSS that Next compiles, i.e. by this repo's own stylesheets, and only
+at build time; nothing is exposed at runtime.
+
+`npm audit fix --force` would clear them by installing **`next@16`**, a breaking major. That is a
+deliberate migration, not a patch, so the two are accepted and recorded here instead. Everything
+else — including all 8 `next` advisories fixed in `15.5.21` — is resolved by a plain
+`npm audit fix --package-lock-only`, which stays inside the declared `^15.1.6` range and leaves
+`package.json` untouched.
+
+(Related, and also deferred to that migration: `next lint` is deprecated and is removed in Next 16,
+so `npm run lint` will need to move to the ESLint CLI at the same time.)
+
 ## Notes
 
 Historical returns are curated and approximate (easy to refine in `lib/markets.ts`); individual stocks are era-tuned and brand-free. Not financial advice — it's a game.
