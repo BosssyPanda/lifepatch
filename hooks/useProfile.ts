@@ -21,6 +21,9 @@ export function useProfile() {
   const [streak, setStreak] = useState<Streak | null>(null);
   const [mastery, setMastery] = useState<MasteryRow[]>([]);
   const [loading, setLoading] = useState(true);
+  /** The load rejected. Distinct from `loading` and from a null `profile`: it means
+   *  we asked and were refused, which is a different sentence on screen. */
+  const [failed, setFailed] = useState(false);
 
   // Resolve identity on the client (the device-id fallback needs localStorage).
   useEffect(() => {
@@ -41,6 +44,7 @@ export function useProfile() {
       setProfile(null);
       setStreak(null);
       setMastery([]);
+      setFailed(false);
       setLoading(false);
       return;
     }
@@ -53,6 +57,16 @@ export function useProfile() {
         setProfile(p);
         setStreak(s);
         setMastery(m);
+        setFailed(false);
+      } catch (err) {
+        // This had `finally` and no `catch`, so any rejection from the three
+        // loaders became an unhandled promise rejection and `profile` stayed null
+        // for the session with nothing on screen saying why. `ensureProfile` can
+        // still legitimately fail — a real collision, or the cloud being down —
+        // and the social strip needs to render a degraded state rather than a lie.
+        if (!active) return;
+        console.error("useProfile: could not load the player's profile", err);
+        setFailed(true);
       } finally {
         if (active) setLoading(false);
       }
@@ -64,10 +78,16 @@ export function useProfile() {
 
   const refresh = useCallback(async () => {
     if (!playerId) return;
-    const { p, s, m } = await load(playerId);
-    setProfile(p);
-    setStreak(s);
-    setMastery(m);
+    try {
+      const { p, s, m } = await load(playerId);
+      setProfile(p);
+      setStreak(s);
+      setMastery(m);
+      setFailed(false);
+    } catch (err) {
+      console.error("useProfile: refresh failed", err);
+      setFailed(true);
+    }
   }, [playerId, load]);
 
   const renameUsername = useCallback(
@@ -79,5 +99,5 @@ export function useProfile() {
     [playerId],
   );
 
-  return { profile, streak, mastery, loading, refresh, renameUsername };
+  return { profile, streak, mastery, loading, failed, refresh, renameUsername };
 }

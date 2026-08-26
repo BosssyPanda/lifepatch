@@ -43,6 +43,10 @@ export function useShareUrlFor(mode: string, score: number, seed?: number): stri
   useEffect(() => {
     if (!isCloud || !supabase || !playerId) return;
     let cancelled = false;
+    // `cancelled` alone guarded only the setState. The retry itself was an
+    // un-cleared `setTimeout`, so leaving the report screen inside five attempts
+    // left a chain still issuing Supabase queries for a URL nobody would read.
+    let retry: number | undefined;
 
     const lookup = async (attempt: number): Promise<void> => {
       let q = supabase!
@@ -60,12 +64,13 @@ export function useShareUrlFor(mode: string, score: number, seed?: number): stri
         setUrl(`${origin}/r/${id}`);
         return;
       }
-      if (attempt < ATTEMPTS) setTimeout(() => void lookup(attempt + 1), RETRY_MS);
+      if (attempt < ATTEMPTS) retry = window.setTimeout(() => void lookup(attempt + 1), RETRY_MS);
     };
 
     void lookup(1);
     return () => {
       cancelled = true;
+      if (retry !== undefined) window.clearTimeout(retry);
     };
   }, [playerId, mode, score, seed, origin]);
 

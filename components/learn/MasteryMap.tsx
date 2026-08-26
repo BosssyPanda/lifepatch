@@ -29,7 +29,7 @@ function nodeState(level: number, seen: boolean): NodeState {
  * (proven through correct application). Same overlay pattern as the Leaderboard.
  */
 export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { mastery, loading } = useProfile();
+  const { mastery, loading, failed } = useProfile();
   const { setBrainGlow } = useAudio();
   const { reduced } = useMotionCtx();
   const [selected, setSelected] = useState<string | null>(null);
@@ -95,17 +95,29 @@ export function MasteryMap({ open, onClose }: { open: boolean; onClose: () => vo
                 <p className="voice mt-1.5 text-xs text-secondary">
                   {loading
                     ? "Reading your record…"
-                    : `${masteredCount} of ${CONCEPTS.length} concepts mastered · master by applying them well, not just seeing them.`}
+                    : failed
+                      ? "Your record could not be read — this is not a score."
+                      : `${masteredCount} of ${CONCEPTS.length} concepts mastered · master by applying them well, not just seeing them.`}
                 </p>
               </div>
             </header>
 
             <div className="thin-scroll flex-1 overflow-y-auto px-5 py-4" data-lenis-prevent>
               {/* While the profile is in flight every concept resolves to "Locked", which is
-                  indistinguishable from a genuine zero — say we're still reading instead. */}
+                  indistinguishable from a genuine zero — say we're still reading instead.
+                  A load that FAILED has the same problem and never resolves out of it, so it
+                  gets its own sentence rather than silently printing a map of zeroes. */}
               {loading ? (
                 <div className="grid place-items-center py-16">
                   <TerminalOp label="Reading your record" center />
+                </div>
+              ) : failed ? (
+                <div className="grid place-items-center gap-2 px-6 py-16 text-center">
+                  <p className="display-caps text-lg text-ink">RECORD UNAVAILABLE</p>
+                  <p className="voice max-w-sm text-[0.95rem] text-ink-dim">
+                    We couldn&apos;t read your concept record just now. Nothing has been lost —
+                    close this and open it again once you&apos;re back online.
+                  </p>
                 </div>
               ) : (
               ORDER.map((cat) => {

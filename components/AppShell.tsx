@@ -17,7 +17,7 @@ import { wipeFor } from "@/src/motion/transitions";
 import type { DailyPuzzle } from "@/lib/daily";
 import { lastPlayerName } from "@/lib/mp/matchStore";
 import { resolvePlayerId } from "@/lib/cloud/identity";
-import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
+import { flushPendingResults, resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
 import { yearIndex, type RunState } from "@/lib/runEngine";
 
@@ -157,6 +157,18 @@ function AppShellInner() {
     const id = resolvePlayerId(auth.user?.id ?? null);
     void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r));
   }, [phase, run.run, auth.user]);
+
+  // Runs that finished while the network was not listening. `submitRunOnce` used
+  // to mark a run posted before it knew whether it was, so one dropped connection
+  // at the report screen lost it permanently; failures are queued now, and this is
+  // where they get their next try. Once per resolved identity, not once per render.
+  const flushedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const id = resolvePlayerId(auth.user?.id ?? null);
+    if (!id || flushedFor.current === id) return;
+    flushedFor.current = id;
+    void flushPendingResults(id);
+  }, [auth.user]);
 
   // ── the room ──────────────────────────────────────────────────────────────
   // A match run reports itself to the room once per YEAR and once at its end.

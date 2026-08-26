@@ -63,15 +63,19 @@ export async function addByCode(userId: string, code: string): Promise<AddFriend
 }
 
 /** Accept an incoming request: mark my own edge to that friend accepted. */
-export async function accept(userId: string, friendId: string): Promise<void> {
+export async function accept(userId: string, friendId: string): Promise<boolean> {
   if (isCloud && supabase) {
-    await supabase
+    const { error } = await supabase
       .from("friends")
       .upsert(
         { user_id: userId, friend_id: friendId, status: "accepted" },
         { onConflict: "user_id,friend_id" },
       );
-    return;
+    if (error) {
+      console.error("accept: could not accept the friend request", error);
+      return false;
+    }
+    return true;
   }
   const edges = readLocal(userId);
   const existing = edges.find((e) => e.friendId === friendId);
@@ -79,15 +83,17 @@ export async function accept(userId: string, friendId: string): Promise<void> {
     ? edges.map((e) => (e.friendId === friendId ? { ...e, status: "accepted" } : e))
     : [...edges, { userId, friendId, status: "accepted", createdAt: new Date().toISOString() }];
   writeLocal(userId, nextEdges);
+  return true;
 }
 
 /** All edges where I'm the owner or the target (cloud RLS allows both sides). */
 export async function listEdges(userId: string): Promise<FriendEdge[]> {
   if (isCloud && supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("friends")
       .select("*")
       .or(`user_id.eq.${userId},friend_id.eq.${userId}`);
+    if (error) console.error("listEdges: cloud read failed", error);
     return (data ?? []).map(fromRow);
   }
   return readLocal(userId);

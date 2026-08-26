@@ -299,11 +299,29 @@ function eventContext(s: RunState): EventContext {
  */
 export const WEAK_SPOT_WEIGHT = 2;
 
+/**
+ * How many slots this event occupies in the draw pool.
+ *
+ * The result feeds `Array(n)`, which is unforgiving in two directions a bare
+ * `e.weight ?? 1` never checked: `Array(0)` contributes nothing, and a pool that
+ * ends up empty makes `weighted[Math.floor(rng() * 0)]` an `undefined` that is
+ * pushed into `pendingEvents` and travels into the journal and onto the wire;
+ * `Array(0.5)` throws `RangeError` at draw time instead. Every authored weight is
+ * already a positive integer, so this clamp is a no-op on today's content and
+ * `scripts/qa/golden-draws.json` still pins byte-identical draws — it is here so
+ * that authoring a bad weight is a dull card rather than a broken year.
+ */
 function weightFor(e: LifeEvent, s: RunState): number {
-  const base = e.weight ?? 1;
+  const base = poolSlots(e.weight);
   const weak = s.weakSpots;
   if (!weak || weak.length === 0) return base;
   return eventTeachesAny(e.id, weak) ? base * WEAK_SPOT_WEIGHT : base;
+}
+
+/** A weight as `Array()` can actually use it: an integer, at least one. */
+function poolSlots(weight: number | undefined): number {
+  const n = Math.floor(weight ?? 1);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
 }
 
 /**
@@ -372,7 +390,7 @@ function drawEvents(s: RunState): string[] {
   // The stream is re-seeded from (seed, year) every year, so it does not matter
   // that two lives stop reading this order at different points — next year they
   // both start again from the same first card.
-  const weighted = LIFE_EVENTS.flatMap((e) => Array(e.weight ?? 1).fill(e.id));
+  const weighted = LIFE_EVENTS.flatMap((e) => Array(poolSlots(e.weight)).fill(e.id));
   const canFace = new Set(mine.map((e) => e.id));
   for (let i = 0; i < 400 && picks.length < want; i++) {
     const id = weighted[Math.floor(rng() * weighted.length)];
@@ -381,7 +399,7 @@ function drawEvents(s: RunState): string[] {
   if (picks.length === 0) {
     // The order never turned up a card this life could face. It still gets a year:
     // fall back to its own hand, off a side stream so nothing above is disturbed.
-    const own = mine.flatMap((e) => Array(e.weight ?? 1).fill(e.id));
+    const own = mine.flatMap((e) => Array(poolSlots(e.weight)).fill(e.id));
     const side = mulberry32(s.seed + s.year * 101 + strHash("no-shared-card"));
     picks.push(own[Math.floor(side() * own.length)]);
   }
@@ -486,7 +504,12 @@ export function allEventsResolved(s: RunState): boolean {
   return s.pendingEvents.every((id) => s.yearChoices[id]);
 }
 
+/** The index of the outcome this choice rolls, or **-1** for a choice that has no
+ *  outcomes to roll. Callers must treat -1 as "refuse", never as an index: the
+ *  loop below fell through to `length - 1` on an empty list, and `outcomes[-1].effect`
+ *  threw four frames later. `lib/mp/autoResolve.ts` already contemplates this shape. */
 function rollOutcome(s: RunState, eventId: string, choice: LifeChoice): number {
+  if (choice.outcomes.length === 0) return -1;
   if (choice.outcomes.length === 1) return 0;
   const rng = mulberry32(s.seed + s.year * 131 + strHash(`${eventId}:${choice.id}`));
   const total = choice.outcomes.reduce((t, o) => t + o.weight, 0);
@@ -517,6 +540,11 @@ export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice
   if (s.status !== "playing") return s;
   if (s.yearChoices[eventId]) return s;
   const idx = rollOutcome(s, eventId, choice);
+  // A choice with no outcomes is refused the same way an out-of-phase choice is:
+  // by returning the state untouched. That is already the engine's "I will not do
+  // that" signal — `useRun.commit` suppresses it and `replayRun` reads it as a
+  // desync — so a malformed card costs a card, never a run.
+  if (idx < 0) return s;
   const o = choice.outcomes[idx];
   const e = o.effect;
 

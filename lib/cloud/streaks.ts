@@ -1,4 +1,5 @@
 import { isCloud, supabase } from "../supabase";
+import { isGuestId } from "./identity";
 import type { Streak } from "./types";
 
 /**
@@ -13,6 +14,12 @@ const EMPTY: Streak = { current: 0, longest: 0, lastPlayedOn: null };
 
 function localKey(userId: string): string {
   return `${PREFIX}${userId}`;
+}
+
+/** A guest's streak lives on the device — RLS has no row for `device-…`. Same
+ *  gate as `lib/cloud/mastery.ts` and `lib/cloud/profiles.ts`. */
+function cloudStreakFor(userId: string): boolean {
+  return Boolean(isCloud && supabase && !isGuestId(userId));
 }
 
 function fromRow(row: Record<string, unknown>): Streak {
@@ -48,7 +55,7 @@ function readLocal(userId: string): Streak {
 }
 
 export async function getStreak(userId: string): Promise<Streak> {
-  if (isCloud && supabase) {
+  if (cloudStreakFor(userId) && supabase) {
     const { data } = await supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle();
     return data ? fromRow(data) : EMPTY;
   }
@@ -73,8 +80,8 @@ export async function bumpStreak(userId: string): Promise<Streak> {
   const next = nextStreak(prev, todayStr());
   if (next === prev) return prev;
 
-  if (isCloud && supabase) {
-    await supabase.from("streaks").upsert(
+  if (cloudStreakFor(userId) && supabase) {
+    const { error } = await supabase.from("streaks").upsert(
       {
         user_id: userId,
         current: next.current,
@@ -83,6 +90,14 @@ export async function bumpStreak(userId: string): Promise<Streak> {
       },
       { onConflict: "user_id" },
     );
+    // A dropped streak bump is not worth interrupting a finished run over, but it
+    // was previously indistinguishable from a successful one — the caller got the
+    // incremented value back either way and showed the player a streak the server
+    // had never agreed to.
+    if (error) {
+      console.error("bumpStreak: cloud upsert failed", error);
+      return prev;
+    }
     return next;
   }
   try {

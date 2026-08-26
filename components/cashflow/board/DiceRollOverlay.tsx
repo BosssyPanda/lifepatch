@@ -257,17 +257,32 @@ export default function DiceRollOverlay({ values, onDone }: { values: number[]; 
     onDone();
   };
 
+  // Every hand-back timer, so unmounting disarms them. The 3200ms safety cap below
+  // was already cleaned up; these two were not, so leaving the board mid-roll left
+  // `finish` (and through it `onDone`) armed against a torn-down overlay.
+  const timers = useRef<number[]>([]);
+  const at = (ms: number) => {
+    timers.current.push(window.setTimeout(finish, ms));
+  };
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+    },
+    [],
+  );
+
   // rest → stamp the total → brief hold → hand control back to the game
   const handleRest = () => {
     setStamped(true);
-    window.setTimeout(finish, 520);
+    at(520);
   };
 
   // any input skips the choreography and lands the result instantly
   useSkippable(!stamped, () => {
     phaseRef.current = "rest";
     setStamped(true);
-    window.setTimeout(finish, 140);
+    at(140);
   });
 
   // safety: never trap the game behind the overlay

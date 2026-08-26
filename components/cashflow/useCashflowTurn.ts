@@ -81,6 +81,31 @@ export function useCashflowTurn({
   const [rollFx, setRollFx] = useState<number[] | null>(null);
   const landRef = useRef<(() => void) | null>(null);
 
+  /**
+   * Every timer this turn machine arms, so unmounting can disarm them.
+   *
+   * Three were previously fired and forgotten: the payday toast's dismissal, the
+   * travel timer that calls `resolveLanding`/`endTurn`, and the non-physics land
+   * timer. Quit to the menu mid-roll and the travel timer still fired ~1–2s later,
+   * calling into a turn machine whose component had gone — React logged a
+   * setState-on-unmounted warning and the board could resolve a landing, and
+   * advance a turn, on a game the player had already left.
+   *
+   * `components/run/useConsequenceLadder.ts` already does exactly this; the
+   * pattern is borrowed rather than reinvented.
+   */
+  const timers = useRef<number[]>([]);
+  const at = (ms: number, fn: () => void) => {
+    timers.current.push(window.setTimeout(fn, ms));
+  };
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+    },
+    [],
+  );
+
   // Warm the physics chunk + wasm while the player reads the board, so the
   // first roll's overlay appears instantly instead of after a module load.
   useEffect(() => {
@@ -282,6 +307,13 @@ export function useCashflowTurn({
         // `(cursor * 7) % 6` reduces to `cursor % 6` — the six Fast Track deals
         // came out in fixed rotation, every run. Use the run's actual RNG.
         const idx = pickIndex(state.seed, state.rngCursor + 47, FAST_TRACK_DEALS.length);
+        // -1 means there was no deal to draw. Opening a card on `undefined` would
+        // white-screen the board mid-turn; ending the turn costs the player one
+        // square. See `pickIndex`.
+        if (idx < 0) {
+          endTurn(state);
+          return;
+        }
         commit(() => ({ ...state, rngCursor: state.rngCursor + 1 }));
         setPending({ kind: "ftdeal", deal: FAST_TRACK_DEALS[idx] });
         return;
@@ -352,11 +384,11 @@ export function useCashflowTurn({
         setPaydayFlash((n) => n + 1);
         if (mv.paydayAmount >= 0) audio.sfx("cash");
         else audio.sting("bad");
-        window.setTimeout(() => setPaydayToast(null), 1800);
+        at(1800, () => setPaydayToast(null));
       }
 
       const travel = reduce ? 0 : rolled.total * 165 + 380;
-      window.setTimeout(() => {
+      at(travel, () => {
         audio.accent("stab");
         // Passing Payday can itself end the run (a payday that the bank will no
         // longer cover). Don't open a card on top of a finished game.
@@ -365,7 +397,7 @@ export function useCashflowTurn({
           return;
         }
         resolveLanding(mv.state, mv.landedType);
-      }, travel);
+      });
     };
 
     // Physics overlay performs the engine's roll; classic timing otherwise.
@@ -373,7 +405,7 @@ export function useCashflowTurn({
       landRef.current = land;
       setRollFx(rolled.rolls);
     } else {
-      window.setTimeout(land, reduce ? 120 : 820);
+      at(reduce ? 120 : 820, land);
     }
   }
 

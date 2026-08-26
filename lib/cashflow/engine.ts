@@ -203,6 +203,12 @@ export function applyMove(s: CashflowState, steps: number): MoveResult {
 // ── Deck draws ────────────────────────────────────────────────────────────────
 function draw<T>(s: CashflowState, deck: T[]): { card: T; next: CashflowState } {
   const idx = pickIndex(s.seed, s.rngCursor, deck.length);
+  // Every deck is a non-empty module constant, so this cannot fire today. It exists
+  // because the alternative to failing here is `deck[-1]` — an `undefined` card that
+  // is destructured by a draw helper, stored in `pending`, and only explodes once
+  // something tries to render it, by which point the empty deck is nowhere in the
+  // stack trace. Filter a deck one day and this names the mistake at the mistake.
+  if (idx < 0) throw new Error("cashflow: cannot draw from an empty deck");
   return { card: deck[idx], next: { ...s, rngCursor: s.rngCursor + 1 } };
 }
 

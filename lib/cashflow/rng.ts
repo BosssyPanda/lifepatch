@@ -28,7 +28,22 @@ export function rollDice(seed: number, cursor: number, count: number): number[] 
   return out;
 }
 
-/** Pick an index into an array of length `len`. */
+/**
+ * Pick an index into an array of length `len`, or **-1** when there is nothing to
+ * pick from.
+ *
+ * This used to end `% Math.max(1, len)`, which reads like a guard and is not one.
+ * `rngAt` returns [0,1), so `Math.floor(r * len)` is already inside `[0, len-1]`
+ * for every `len >= 1` and the modulo was a no-op — its only effect was on the
+ * case it appeared to protect: for `len === 0` it turned `0 % 1` into a confident
+ * `0`, and the caller indexed an empty array and got `undefined`. That `undefined`
+ * then travelled — into `pending.deal`, into a render — and surfaced as a crash
+ * several frames from the mistake.
+ *
+ * -1 is the honest answer, and callers are required to handle it. Removing the
+ * modulo cannot change a draw, so every recorded board replays identically.
+ */
 export function pickIndex(seed: number, cursor: number, len: number): number {
-  return Math.floor(rngAt(seed, cursor) * len) % Math.max(1, len);
+  if (!Number.isInteger(len) || len < 1) return -1;
+  return Math.floor(rngAt(seed, cursor) * len);
 }

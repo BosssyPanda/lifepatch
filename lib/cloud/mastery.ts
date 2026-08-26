@@ -100,7 +100,7 @@ export async function recordConcepts(userId: string, conceptIds: string[]): Prom
   }
 
   if (supabase && cloudMasteryFor(userId)) {
-    await supabase.from("mastery").upsert(
+    const { error } = await supabase.from("mastery").upsert(
       updatedRows.map((r) => ({
         user_id: userId,
         concept_id: r.conceptId,
@@ -109,6 +109,13 @@ export async function recordConcepts(userId: string, conceptIds: string[]): Prom
       })),
       { onConflict: "user_id,concept_id" },
     );
+    // Reporting gains the server refused is the precise shape of the bug the auth
+    // refactor was written to kill: a report announcing "this run sharpened
+    // Compounding" over a Money Brain that never moved.
+    if (error) {
+      console.error("recordConcepts: cloud upsert failed", error);
+      return [];
+    }
     return gains;
   }
 

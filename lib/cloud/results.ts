@@ -40,6 +40,24 @@ export type TopOptions = {
   daily?: string;
 };
 
+/**
+ * `metrics` is `jsonb not null default '{}'` in the schema, but a column default
+ * only covers rows that omit it — an explicit `null`, a legacy row, or anything
+ * inserted outside this module can still arrive null, which is why `/r/[id]`
+ * defensively writes `row.metrics ?? {}` at every single read. One consumer that
+ * forgets (and `Leaderboard` did, twice) throws mid-render and takes the whole
+ * board down for every player, not just that row.
+ *
+ * So it is normalized ONCE, here, at the boundary. Past this function the
+ * non-optional type on `ResultRow` is true rather than hopeful. `?? {}` alone was
+ * not enough: a JSON scalar or array is not null and would still not be an object.
+ */
+function toMetrics(raw: unknown): ResultRow["metrics"] {
+  return raw && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as ResultRow["metrics"])
+    : {};
+}
+
 function fromRow(row: Record<string, unknown>): ResultRow {
   return {
     id: String(row.id),
@@ -47,7 +65,7 @@ function fromRow(row: Record<string, unknown>): ResultRow {
     mode: row.mode as GameMode,
     score: Number(row.score),
     verdict: String(row.verdict),
-    metrics: (row.metrics as ResultRow["metrics"]) ?? {},
+    metrics: toMetrics(row.metrics),
     createdAt: String(row.created_at),
   };
 }
@@ -55,7 +73,13 @@ function fromRow(row: Record<string, unknown>): ResultRow {
 function readLocal(): ResultRow[] {
   try {
     const raw = localStorage.getItem(LIST_KEY);
-    return raw ? (JSON.parse(raw) as ResultRow[]) : [];
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    // Same normalization the cloud rows get, for the same reason: this key is
+    // hand-editable, and a row whose `metrics` is null renders identically to a
+    // legacy cloud row right up until something dereferences it.
+    return parsed.map((r) => ({ ...(r as ResultRow), metrics: toMetrics((r as ResultRow)?.metrics) }));
   } catch {
     return [];
   }
@@ -155,6 +179,40 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
   return bestPerUser(rows).slice(0, limit);
 }
 
+/**
+ * Has this exact run already been posted?
+ *
+ * Only asked on the RETRY path, and only because the failure it guards against is
+ * invisible from here: a response lost after the server committed looks identical
+ * to a request that never landed. Retrying the second is correct; retrying the
+ * first duplicates the row — and `useShareUrl` resolves a run's `/r/{id}` link with
+ * `order(created_at desc).limit(1)`, so the duplicate would also steal the link.
+ *
+ * Keyed on the run seed, which is unique to a run, exactly as `useShareUrl` keys
+ * its own lookup. A row written before seeds were recorded cannot be matched, and
+ * says so by returning false rather than guessing.
+ */
+export async function resultAlreadyPosted(userId: string, result: NewResult): Promise<boolean> {
+  const seed = result.metrics?.seed;
+  if (seed === undefined) return false;
+  if (isCloud && supabase) {
+    const { data, error } = await supabase
+      .from("results")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("mode", result.mode)
+      .eq("metrics->>seed", String(seed))
+      .limit(1);
+    // Unknown is not "no". Claiming the row is absent when the check itself failed
+    // would re-insert it, which is the duplicate this exists to avoid.
+    if (error) throw new Error(`resultAlreadyPosted: lookup failed: ${error.message}`);
+    return (data?.length ?? 0) > 0;
+  }
+  return readLocal().some(
+    (r) => r.userId === userId && r.mode === result.mode && String(r.metrics.seed) === String(seed),
+  );
+}
+
 export async function myBest(userId: string, mode: GameMode): Promise<ResultRow | null> {
   if (isCloud && supabase) {
     const { data } = await supabase
@@ -184,6 +242,12 @@ export async function getResult(id: string): Promise<ResultRow | null> {
 // A finished run must post exactly once — even across page reloads or re-viewing
 // the report after a resume. A per-mount ref can't guarantee that; this persists
 // the set of submitted run keys so the guard survives reloads.
+//
+// "Exactly once" is two obligations, and only the first was being met. A key
+// written BEFORE the insert was awaited guarantees at-most-once and nothing else:
+// one dropped connection at the report screen and the run was marked posted, never
+// retried, and never mentioned again. The key is now written only on a confirmed
+// insert, and the failures land in the retry queue below.
 const SUBMITTED_KEY = "lifepatch.submittedRuns";
 
 function readSubmitted(): Set<string> {
@@ -204,4 +268,91 @@ export function markSubmitted(runKey: string): void {
     set.add(runKey);
     localStorage.setItem(SUBMITTED_KEY, JSON.stringify([...set]));
   } catch {}
+}
+
+// ── The retry queue ──────────────────────────────────────────────────────────
+
+/**
+ * Runs that finished but did not reach the board.
+ *
+ * A finished run is the whole point of playing, and the network is allowed to be
+ * down when one ends. Rather than losing it, the row is parked here and re-tried
+ * on the next page load. Bounded in both directions so it can never become the
+ * thing that fills the player's storage quota: at most `MAX_PENDING` rows, at most
+ * `MAX_ATTEMPTS` tries each, oldest dropped first.
+ */
+const PENDING_KEY = "lifepatch.pendingResults";
+const MAX_PENDING = 12;
+const MAX_ATTEMPTS = 6;
+
+export type PendingResult = {
+  runKey: string;
+  playerId: string;
+  result: NewResult;
+  attempts: number;
+  queuedAt: string;
+};
+
+export function readPending(): PendingResult[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p): p is PendingResult =>
+        !!p && typeof (p as PendingResult).runKey === "string" && !!(p as PendingResult).result,
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writePending(rows: PendingResult[]): void {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(rows.slice(-MAX_PENDING)));
+  } catch {}
+}
+
+/**
+ * Park a run that could not be posted.
+ *
+ * Deliberately does NOT touch `attempts`: parking is idempotent. `AppShell` fires
+ * the submit effect for both `report` and `podium`, and the player can toggle
+ * between them, so counting a try per CALL let six re-fires inside one offline
+ * session exhaust the budget and delete the run — the precise outcome the queue
+ * exists to prevent. `attempts` counts load-time retries, and only
+ * `countPendingAttempt` increments it.
+ */
+export function queuePending(runKey: string, playerId: string, result: NewResult): void {
+  const all = readPending();
+  const prev = all.find((p) => p.runKey === runKey);
+  const others = all.filter((p) => p.runKey !== runKey);
+  writePending([
+    ...others,
+    { runKey, playerId, result, attempts: prev?.attempts ?? 0, queuedAt: prev?.queuedAt ?? new Date().toISOString() },
+  ]);
+}
+
+/**
+ * Record that a load-time retry was spent on this run. Returns false once the
+ * budget is gone and the row has been dropped — a run that has failed on six
+ * separate loads is not failing for a reason a seventh will fix.
+ */
+export function countPendingAttempt(runKey: string): boolean {
+  const all = readPending();
+  const prev = all.find((p) => p.runKey === runKey);
+  if (!prev) return false;
+  const others = all.filter((p) => p.runKey !== runKey);
+  const attempts = prev.attempts + 1;
+  if (attempts > MAX_ATTEMPTS) {
+    console.error(`pendingResults: giving up on ${runKey} after ${MAX_ATTEMPTS} retries`);
+    writePending(others);
+    return false;
+  }
+  writePending([...others, { ...prev, attempts }]);
+  return true;
+}
+
+export function dropPending(runKey: string): void {
+  const rows = readPending();
+  if (rows.some((p) => p.runKey === runKey)) writePending(rows.filter((p) => p.runKey !== runKey));
 }

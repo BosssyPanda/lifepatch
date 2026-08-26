@@ -42,41 +42,89 @@ function cloudSavesFor(userId: string): boolean {
   return Boolean(isCloud && supabase && !isGuestId(userId));
 }
 
-export async function saveRun(userId: string, mode: ModeId, state: RunState): Promise<void> {
-  if (cloudSavesFor(userId)) {
-    await supabase!
-      .from("saves")
-      .upsert(
-        { user_id: userId, mode, state, updated_at: new Date().toISOString() },
-        { onConflict: "user_id,mode" },
-      );
-    return;
-  }
+/** Where a save actually landed. `"failed"` means nowhere — the only value a
+ *  caller must react to. */
+export type SaveOutcome = "cloud" | "local" | "failed";
+
+function writeLocalSave(userId: string, mode: ModeId, state: RunState, at: string): boolean {
   try {
     localStorage.setItem(
       localKey(userId, mode),
-      JSON.stringify({ mode, state, updatedAt: new Date().toISOString() } satisfies SaveRow),
+      JSON.stringify({ mode, state, updatedAt: at } satisfies SaveRow),
     );
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-export async function loadRun(userId: string, mode: ModeId): Promise<RunState | null> {
+/**
+ * Persist a run, and say where it went.
+ *
+ * The cloud branch used to `await` the upsert and drop the `{ error }` on the
+ * floor, then `return`. Every failure mode — RLS refusing the row, the session
+ * having expired, the network being down — produced a resolved promise that was
+ * indistinguishable from success, so the autosave indicator said "saved" while the
+ * year the player had just finished existed nowhere at all.
+ *
+ * Two changes. The error is read, and a failed cloud write falls back to the
+ * device rather than evaporating: `loadRun` now reconciles the two by timestamp,
+ * so a run saved through an outage comes back when the connection does.
+ */
+export async function saveRun(userId: string, mode: ModeId, state: RunState): Promise<SaveOutcome> {
+  const at = new Date().toISOString();
   if (cloudSavesFor(userId)) {
-    const { data } = await supabase!
+    const { error } = await supabase!
       .from("saves")
-      .select("state")
-      .eq("user_id", userId)
-      .eq("mode", mode)
-      .maybeSingle();
-    return (data?.state as RunState) ?? null;
+      .upsert({ user_id: userId, mode, state, updated_at: at }, { onConflict: "user_id,mode" });
+    if (!error) return "cloud";
+    console.error(`saveRun: cloud write failed for ${mode}, keeping a local copy`, error);
+    return writeLocalSave(userId, mode, state, at) ? "local" : "failed";
   }
+  return writeLocalSave(userId, mode, state, at) ? "local" : "failed";
+}
+
+function readLocalSave(userId: string, mode: ModeId): SaveRow | null {
   try {
     const raw = localStorage.getItem(localKey(userId, mode));
     if (!raw) return null;
-    return (JSON.parse(raw) as SaveRow).state;
+    const row = JSON.parse(raw) as SaveRow;
+    return row && row.state ? row : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * The newest save for this player and mode.
+ *
+ * A cloud player is read from the cloud, and then reconciled against any local
+ * copy `saveRun` left behind during an outage — whichever is newer wins. Without
+ * that comparison the fallback write would be unreachable: the cloud row would
+ * always be returned, and the newer offline run would sit on the device forever.
+ */
+export async function loadRun(userId: string, mode: ModeId): Promise<RunState | null> {
+  if (cloudSavesFor(userId)) {
+    const { data, error } = await supabase!
+      .from("saves")
+      .select("state, updated_at")
+      .eq("user_id", userId)
+      .eq("mode", mode)
+      .maybeSingle();
+    // supabase-js returns `{ data: null, error }` for a failed read and
+    // `{ data: null, error: null }` for a genuinely empty one, and conflating them
+    // is worse than either failure alone: the reconcile below would serve a stale
+    // local copy as if it were the newest save, and the next `saveRun` would upsert
+    // that older state straight over a newer cloud row. "I could not reach the
+    // cloud" is not "you have no save", so it is thrown — which is the contract
+    // `loadRunChecked` documents, and `AuthGate` already has a `.catch` for it.
+    if (error) throw new Error(`loadRun: could not read the cloud save for ${mode}: ${error.message}`);
+    const local = readLocalSave(userId, mode);
+    const cloudAt = data ? String(data.updated_at ?? "") : null;
+    if (local && (cloudAt === null || local.updatedAt > cloudAt)) return local.state;
+    return (data?.state as RunState) ?? local?.state ?? null;
+  }
+  return readLocalSave(userId, mode)?.state ?? null;
 }
 
 /**
@@ -95,29 +143,45 @@ export async function loadRunChecked(userId: string, mode: ModeId): Promise<Save
   return isCompatibleSave(state) ? { kind: "ok", state } : { kind: "outdated" };
 }
 
+const SAVE_MODES: ModeId[] = ["story", "infinite"];
+
+/**
+ * Every mode this player has a save for, newest timestamp per mode.
+ *
+ * Reconciled the same way `loadRun` is, and for the same reason: a run that only
+ * exists in the local backstop must still be OFFERED, or the fallback write is a
+ * copy nothing ever shows the player a way back to.
+ */
 export async function listSaves(userId: string): Promise<{ mode: ModeId; updatedAt: string }[]> {
+  const byMode = new Map<ModeId, string>();
   if (cloudSavesFor(userId)) {
-    const { data } = await supabase!
+    const { data, error } = await supabase!
       .from("saves")
       .select("mode, updated_at")
       .eq("user_id", userId);
-    return (data ?? []).map((r) => ({ mode: r.mode as ModeId, updatedAt: r.updated_at as string }));
+    // Same reasoning as `loadRun`: advertising the local fallback as the whole
+    // picture, when the cloud simply could not be reached, offers a stale run as
+    // resumable and loses the newer one the moment it is saved over.
+    if (error) throw new Error(`listSaves: could not read cloud saves: ${error.message}`);
+    for (const r of data ?? []) byMode.set(r.mode as ModeId, String(r.updated_at));
   }
-  const out: { mode: ModeId; updatedAt: string }[] = [];
-  for (const mode of ["story", "infinite"] as ModeId[]) {
-    try {
-      const raw = localStorage.getItem(localKey(userId, mode));
-      if (raw) out.push({ mode, updatedAt: (JSON.parse(raw) as SaveRow).updatedAt });
-    } catch {}
+  for (const mode of SAVE_MODES) {
+    const local = readLocalSave(userId, mode);
+    if (!local) continue;
+    const seen = byMode.get(mode);
+    if (!seen || local.updatedAt > seen) byMode.set(mode, local.updatedAt);
   }
-  return out;
+  return [...byMode].map(([mode, updatedAt]) => ({ mode, updatedAt }));
 }
 
 export async function deleteSave(userId: string, mode: ModeId): Promise<void> {
   if (cloudSavesFor(userId)) {
-    await supabase!.from("saves").delete().eq("user_id", userId).eq("mode", mode);
-    return;
+    const { error } = await supabase!.from("saves").delete().eq("user_id", userId).eq("mode", mode);
+    if (error) console.error(`deleteSave: cloud delete failed for ${mode}`, error);
   }
+  // Always clear the device copy too. `saveRun` can leave one behind on a failed
+  // cloud write, and a delete that removed only the cloud row would resurrect the
+  // run on the next `loadRun` reconcile.
   try {
     localStorage.removeItem(localKey(userId, mode));
   } catch {}

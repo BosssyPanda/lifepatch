@@ -1,5 +1,6 @@
 import { isCloud, supabase } from "../supabase";
 import { generateAvatarSeed, generateFriendCode, generateUsername } from "./generate";
+import { isGuestId } from "./identity";
 import type { Profile } from "./types";
 
 /**
@@ -10,6 +11,24 @@ import type { Profile } from "./types";
 
 const PROFILE_PREFIX = "lifepatch.profile.";
 const MAX_CREATE_ATTEMPTS = 5;
+
+/**
+ * Does this player have a cloud profile to read or write?
+ *
+ * A guest is the anonymous device id (`device-…`) with no auth session behind it.
+ * `profiles` is row-level-secured on `auth.uid()`, and a `device-…` string is not
+ * even a uuid, so every cloud call for a guest is refused twice over. Without this
+ * gate `ensureProfile` spent all five of its attempts on inserts that could never
+ * land, re-read after each one, and then THREW — into `useProfile`'s effect, which
+ * had no catch. The result was ten guaranteed-failing requests and a permanently
+ * null profile on every guest page load in a cloud deployment.
+ *
+ * `lib/cloud/mastery.ts` and `lib/saves.ts` already draw this exact line; this is
+ * the same rule, finally applied to the table that needed it most.
+ */
+function cloudProfileFor(userId: string): boolean {
+  return Boolean(isCloud && supabase && !isGuestId(userId));
+}
 
 function localKey(userId: string): string {
   return `${PROFILE_PREFIX}${userId}`;
@@ -26,7 +45,7 @@ function fromRow(row: Record<string, unknown>): Profile {
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
-  if (isCloud && supabase) {
+  if (cloudProfileFor(userId) && supabase) {
     const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
     return data ? fromRow(data) : null;
   }
@@ -43,7 +62,7 @@ export async function ensureProfile(userId: string): Promise<Profile> {
   const existing = await getProfile(userId);
   if (existing) return existing;
 
-  if (isCloud && supabase) {
+  if (cloudProfileFor(userId) && supabase) {
     // Retry to dodge username/friend_code unique-constraint collisions.
     for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
       const candidate = {
@@ -83,7 +102,7 @@ export async function updateUsername(userId: string, username: string): Promise<
   if (clean.length < USERNAME_MIN) {
     throw new Error(`Username must be at least ${USERNAME_MIN} characters.`);
   }
-  if (isCloud && supabase) {
+  if (cloudProfileFor(userId) && supabase) {
     const { data, error } = await supabase
       .from("profiles")
       .update({ username: clean })
@@ -135,15 +154,24 @@ export async function getProfiles(userIds: string[]): Promise<Record<string, Pro
   const unique = Array.from(new Set(userIds));
   const out: Record<string, Profile> = {};
   if (unique.length === 0) return out;
-  if (isCloud && supabase) {
-    const { data } = await supabase.from("profiles").select("*").in("id", unique);
+
+  // Guest ids are `device-…`, not uuids. Passing one to `.in("id", …)` does not
+  // merely fail to match it — Postgres rejects the whole predicate as malformed
+  // input for type uuid, so ONE guest id in the list returns zero profiles and the
+  // entire leaderboard renders as "anonymous". They are split out and resolved on
+  // the device, which is the only place a guest profile has ever existed.
+  const cloudIds = unique.filter((id) => !isGuestId(id));
+  const localIds = unique.filter((id) => isGuestId(id));
+
+  if (isCloud && supabase && cloudIds.length > 0) {
+    const { data, error } = await supabase.from("profiles").select("*").in("id", cloudIds);
+    if (error) console.error("getProfiles: cloud read failed", error);
     for (const row of data ?? []) {
       const p = fromRow(row);
       out[p.id] = p;
     }
-    return out;
   }
-  for (const id of unique) {
+  for (const id of isCloud && supabase ? localIds : unique) {
     const p = await getProfile(id);
     if (p) out[id] = p;
   }

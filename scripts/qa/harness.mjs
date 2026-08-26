@@ -79,8 +79,22 @@ export class Run {
     // for a CDN that is not under test: smoke logged four, audio-integration
     // failed outright on two. Serving them as an empty 200 removes the failure
     // instead of hiding it, and leaves real load errors as loud as they were.
-    await this.page.route(/va\.vercel-scripts\.com/, (route) =>
-      route.fulfill({ status: 200, contentType: "application/javascript", body: "" }));
+    //
+    // `@vercel/analytics/next` and `@vercel/speed-insights/next` do not only use
+    // that CDN. They also request SAME-ORIGIN `/_vercel/insights/script.js` and
+    // `/_vercel/speed-insights/script.js`, which exist only on a Vercel deployment
+    // with those features switched on. Anywhere else the Next server answers the
+    // app's own 404 page, and Chromium logs two errors per page — a 404 plus a
+    // strict-MIME refusal — which failed every journey on eight phantom errors
+    // that had nothing to do with the code under test. Same remedy, same reason.
+    const VERCEL_TELEMETRY = [
+      /va\.vercel-scripts\.com/,
+      /\/_vercel\/(insights|speed-insights)\//,
+    ];
+    for (const pattern of VERCEL_TELEMETRY) {
+      await this.page.route(pattern, (route) =>
+        route.fulfill({ status: 200, contentType: "application/javascript", body: "" }));
+    }
 
     this.page.on("console", (m) => {
       if (m.type() !== "error" && m.type() !== "warning") return;
