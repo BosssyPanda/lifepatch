@@ -87,7 +87,12 @@ export function ConceptLearnProvider({ children }: { children: ReactNode }) {
               // newly mastered is the bigger moment; otherwise a level-up flourish
               accent(rose.some((g) => g.isFirst) ? "mastered" : "levelup");
             })
-            .catch(() => {});
+            .catch((err) => {
+              // Never blocks play — but it is logged rather than swallowed. A read
+              // failure inside `recordConcepts` used to look like "no progress yet"
+              // and overwrite real levels; it now propagates here instead.
+              console.error("useConceptLearn: could not record concept progress", err);
+            });
         } else {
           setRunGains((r) => Array.from(new Set([...r, ...ids])));
         }

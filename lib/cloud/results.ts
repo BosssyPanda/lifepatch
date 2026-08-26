@@ -270,6 +270,49 @@ export function markSubmitted(runKey: string): void {
   } catch {}
 }
 
+// ── Interrupted submits ──────────────────────────────────────────────────────
+//
+// `markSubmitted` correctly fires only once the insert has landed, which leaves a
+// window: kill the tab (or open a second one) while a submit is in flight and the
+// next load has no idea one was ever started. An in-memory guard cannot survive a
+// reload, so the fact that a submit BEGAN is written down too.
+//
+// The marker is not a lock and does not try to be — it is a hint that the direct
+// path should check for an existing row before inserting, which it otherwise skips
+// to keep the common case one round-trip. The durable fix for the concurrent-tab
+// race is a unique index on `results`, which lands with the schema work.
+const SUBMITTING_KEY = "lifepatch.submittingRuns";
+
+function readSubmitting(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(SUBMITTING_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((k): k is string => typeof k === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Was a submit for this run started and never seen to finish? */
+export function wasInterrupted(runKey: string): boolean {
+  return readSubmitting().includes(runKey);
+}
+
+export function markSubmitting(runKey: string): void {
+  try {
+    const keys = readSubmitting();
+    if (!keys.includes(runKey)) localStorage.setItem(SUBMITTING_KEY, JSON.stringify([...keys, runKey]));
+  } catch {}
+}
+
+export function clearSubmitting(runKey: string): void {
+  try {
+    const keys = readSubmitting();
+    if (keys.includes(runKey)) {
+      localStorage.setItem(SUBMITTING_KEY, JSON.stringify(keys.filter((k) => k !== runKey)));
+    }
+  } catch {}
+}
+
 // ── The retry queue ──────────────────────────────────────────────────────────
 
 /**

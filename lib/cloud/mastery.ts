@@ -70,9 +70,20 @@ function cloudMasteryFor(userId: string): boolean {
   return Boolean(isCloud && supabase && !isGuestId(userId));
 }
 
+/**
+ * This player's concept levels.
+ *
+ * Throws on a failed cloud read rather than returning `[]`, because `[]` is not a
+ * harmless default here — it is a destructive one. `recordConcepts` derives
+ * `prevLevel` from this list, so an empty answer makes every concept look
+ * unlearned, and the upsert that follows writes `level: 1` over a player's real
+ * level 5. A read that failed must not be allowed to look like a player who has
+ * learned nothing.
+ */
 export async function getMastery(userId: string): Promise<MasteryRow[]> {
   if (supabase && cloudMasteryFor(userId)) {
-    const { data } = await supabase.from("mastery").select("*").eq("user_id", userId);
+    const { data, error } = await supabase.from("mastery").select("*").eq("user_id", userId);
+    if (error) throw new Error(`getMastery: could not read concept levels: ${error.message}`);
     return (data ?? []).map(fromRow);
   }
   return readLocal(userId);
@@ -85,6 +96,9 @@ export async function recordConcepts(userId: string, conceptIds: string[]): Prom
   const unique = Array.from(new Set(conceptIds)).filter(Boolean);
   if (unique.length === 0) return [];
 
+  // A read failure propagates rather than being treated as "no progress yet" —
+  // see `getMastery`. The caller loses one recording; guessing here would lose the
+  // player's whole record.
   const current = await getMastery(userId);
   const byId = new Map(current.map((r) => [r.conceptId, r]));
   const now = new Date().toISOString();

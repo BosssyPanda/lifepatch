@@ -77,7 +77,17 @@ export async function saveRun(userId: string, mode: ModeId, state: RunState): Pr
     const { error } = await supabase!
       .from("saves")
       .upsert({ user_id: userId, mode, state, updated_at: at }, { onConflict: "user_id,mode" });
-    if (!error) return "cloud";
+    if (!error) {
+      // The cloud row is now authoritative, so the fallback copy is retired. Left
+      // behind, it would sit in the `loadRun` reconcile forever being compared by
+      // two independently generated timestamps — and on a device whose clock runs
+      // fast it would keep winning, and keep being upserted back over newer cloud
+      // state. The local copy exists only while the cloud write has failed.
+      try {
+        localStorage.removeItem(localKey(userId, mode));
+      } catch {}
+      return "cloud";
+    }
     console.error(`saveRun: cloud write failed for ${mode}, keeping a local copy`, error);
     return writeLocalSave(userId, mode, state, at) ? "local" : "failed";
   }

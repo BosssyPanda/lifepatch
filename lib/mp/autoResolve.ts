@@ -82,18 +82,54 @@ export function autoChoiceFor(s: RunState, eventId: string): LifeChoice | null {
   return best;
 }
 
-/** Answer every still-unanswered pending event with `autoChoiceFor`. */
-export function resolveAllPending(s: RunState): RunState {
+/** One auto-decision: the event, and what was chosen for it. */
+export type AutoDecision = { eventId: string; choice: LifeChoice };
+
+/**
+ * Answer every still-unanswered pending event, threading each decision into the
+ * state the next one is measured against.
+ *
+ * The threading is the whole point, and is what caller (1) was missing. Scoring
+ * every card against the state the YEAR started in is not a smaller version of
+ * this — it is a different policy. Deal `["layoff", "relocate"]` and let the clock
+ * run out: measured in order, `layoff` zeroes the salary and `relocate` is then
+ * correctly refused, because a 28% raise on nothing does not repay $6,000.
+ * Measured against the pre-layoff state it looks like +$78,000 and is taken. Two
+ * different lives, same seed, same year — and (2) and (3) would have produced the
+ * other one, which is exactly the disagreement this module's header forbids.
+ *
+ * Returns the decisions AND the resulting state, so a caller that must dispatch
+ * through React (the timer in `components/run/YearLoop.tsx`) and a caller that
+ * folds the state directly (`fastForward`) share one implementation and cannot
+ * drift apart by inspection.
+ */
+function autoResolveYear(s: RunState): { decisions: AutoDecision[]; state: RunState } {
+  const decisions: AutoDecision[] = [];
   let cur = s;
-  for (const id of s.pendingEvents) {
-    if (cur.yearChoices[id]) continue;
-    const choice = autoChoiceFor(cur, id);
+  for (const eventId of s.pendingEvents) {
+    if (cur.yearChoices[eventId]) continue;
+    const choice = autoChoiceFor(cur, eventId);
     // An event this build no longer knows would block the year forever, so it is
     // skipped rather than retried — `advanceYear` clears the pending list anyway.
     if (!choice) continue;
-    cur = applyLifeChoice(cur, id, choice);
+    decisions.push({ eventId, choice });
+    cur = applyLifeChoice(cur, eventId, choice);
   }
-  return cur;
+  return { decisions, state: cur };
+}
+
+/**
+ * What auto-play would choose for this year, in order. For callers that have to
+ * apply the choices themselves; the decisions are identical to the ones
+ * `resolveAllPending` folds in.
+ */
+export function autoDecisionsFor(s: RunState): AutoDecision[] {
+  return autoResolveYear(s).decisions;
+}
+
+/** Answer every still-unanswered pending event with `autoChoiceFor`. */
+export function resolveAllPending(s: RunState): RunState {
+  return autoResolveYear(s).state;
 }
 
 /**

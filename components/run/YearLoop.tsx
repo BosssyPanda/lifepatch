@@ -12,7 +12,7 @@ import { ambienceForTag } from "@/lib/audioMap";
 import { LIFE_EVENTS } from "@/lib/lifeEvents";
 import { macroEvent } from "@/lib/markets";
 import { MODES } from "@/lib/modes";
-import { autoChoiceFor } from "@/lib/mp/autoResolve";
+import { autoDecisionsFor } from "@/lib/mp/autoResolve";
 import { canRetire, netWorth, yearIndex } from "@/lib/runEngine";
 import { HudRail } from "@/components/ui/HudRail";
 import { AdvanceBar } from "./AdvanceBar";
@@ -96,13 +96,14 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   useEffect(() => {
     if (!match || !s || s.status !== "playing" || !stillPlaying()) return;
     if (match.roomYearIndex <= yearIndex(s)) return;
-    for (const id of s.pendingEvents) {
-      if (s.yearChoices[id]) continue;
-      const auto = autoChoiceFor(s, id);
-      // An event this build no longer knows can't be answered; `advanceYear`
-      // clears the pending list anyway, so the year still turns.
-      if (auto) choose(id, auto);
-    }
+    // Every decision is measured against the state the ones before it produced —
+    // see `autoDecisionsFor`. Scoring them all against the year's opening state,
+    // which is what this loop used to do, made the timer a DIFFERENT auto-player
+    // from the one that ghost-plays absent peers: same seed, same year, two
+    // different lives. `choose` dispatches through `mutate`, whose setState
+    // updater threads correctly, so applying them in order reproduces exactly the
+    // state `resolveAllPending` would have folded.
+    for (const { eventId, choice } of autoDecisionsFor(s)) choose(eventId, choice);
     // The same page turn the solo bar plays on "Advance the year". In a match the
     // bar only locks in, so without this the room's loudest shared beat — the year
     // actually turning — would be silent.

@@ -85,8 +85,12 @@ export function useProfile() {
       setMastery(m);
       setFailed(false);
     } catch (err) {
-      console.error("useProfile: refresh failed", err);
-      setFailed(true);
+      // Deliberately does NOT set `failed`. A refresh runs over state that is
+      // already correct, and flipping the flag would replace a good Money Brain
+      // with "RECORD UNAVAILABLE" — turning a failed background refresh into a
+      // worse experience than not refreshing at all. `failed` means "we have
+      // nothing to show", which only the initial load can establish.
+      console.error("useProfile: refresh failed; keeping the last good record", err);
     }
   }, [playerId, load]);
 

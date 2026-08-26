@@ -12,13 +12,16 @@ import type { CashflowState } from "../cashflow/types";
 import { ensureProfile } from "./profiles";
 import {
   alreadySubmitted,
+  clearSubmitting,
   countPendingAttempt,
   dropPending,
   markSubmitted,
+  markSubmitting,
   queuePending,
   readPending,
   resultAlreadyPosted,
   submitResult,
+  wasInterrupted,
 } from "./results";
 import { bumpStreak } from "./streaks";
 import type { GameMode, NewResult } from "./types";
@@ -98,6 +101,10 @@ export function resultFromCashflow(s: CashflowState): NewResult {
     verdict: s.status === "lost" ? "Buried in Debt" : escaped ? "Escaped the Rat Race" : "Still Racing",
     metrics: {
       scoreVersion: CASHFLOW_SCORE_VERSION,
+      // The run's seed, for the same reason the life sim records one: it is the only
+      // field unique to a run, and `resultAlreadyPosted` keys the retry dedupe on it.
+      // Without it every Rat Race retry was a blind re-insert.
+      seed: s.seed,
       passiveIncome: passive,
       netWorth: cashflowNetWorth(s),
       payday: cashflowPayday(s),
@@ -145,8 +152,18 @@ export async function submitRunOnce(
 ): Promise<SubmitOutcome> {
   if (!playerId || alreadySubmitted(runKey) || inFlight.has(runKey)) return "skipped";
   inFlight.add(runKey);
+  // Did a previous attempt begin and never report back? Then the row may already
+  // be on the board and this call would duplicate it. Only that case pays for the
+  // extra lookup; a first attempt stays one round-trip.
+  const interrupted = wasInterrupted(runKey);
+  markSubmitting(runKey);
   try {
     await ensureProfile(playerId);
+    if (interrupted && (await resultAlreadyPosted(playerId, result))) {
+      markSubmitted(runKey);
+      dropPending(runKey);
+      return "posted";
+    }
     await submitResult(playerId, result);
     markSubmitted(runKey);
     dropPending(runKey);
@@ -164,6 +181,7 @@ export async function submitRunOnce(
     queuePending(runKey, playerId, result);
     return "failed";
   } finally {
+    clearSubmitting(runKey);
     inFlight.delete(runKey);
   }
 }

@@ -69,6 +69,14 @@ export type ReplayTicket = {
   journal: YearJournal[];
 };
 
+/** Two deals are the same deal only if they are the same cards in the same order.
+ *  Order matters: `drawEvents` returns its picks in draw order and `record` copies
+ *  that list verbatim, so a reordering is a different stream, not a cosmetic
+ *  difference. */
+function sameDeal(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
+}
+
 /** A counterfactual's money policy: one decision per year, after every card is
  *  answered and before the year turns. */
 export type Allocator = (s: RunState) => RunState;
@@ -129,6 +137,24 @@ export function replayRun(t: ReplayTicket, opts: ReplayOpts = {}): RunState | nu
       return opts.allocate ? s : null;
     }
     if (s.year !== entry.y) return null; // desync — refuse, never interpolate
+
+    // The deal the ENGINE just produced for this year, before the journal's is
+    // forced over it.
+    //
+    // `record` writes `deal` as a verbatim copy of `pendingEvents`, so for a
+    // VERIFICATION replay these two must be the same list in the same order. This
+    // is the check the note above already promised ("a free second check on the
+    // first one") and never actually made: `verifyResult` compared only the final
+    // net worth, so a journal whose deal disagreed with what `drawEvents` produces
+    // on this build still verified clean — which is precisely the case a content
+    // change causes, and precisely what the check was for.
+    //
+    // A COUNTERFACTUAL is exempt, and must be. `drawEvents` builds its pool from
+    // `eligibleEvents(eventContext(s))`, and that context carries cash, debt and
+    // salary — so a life that invested differently is legitimately dealt a
+    // different hand. Forcing the recorded deal over it is the ghost's entire
+    // mechanism, not a disagreement.
+    if (!opts.allocate && !sameDeal(s.pendingEvents, entry.deal)) return null;
 
     // The forced deal. See this file's note.
     s = { ...s, pendingEvents: [...entry.deal] };
