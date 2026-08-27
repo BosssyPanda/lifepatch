@@ -9,12 +9,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "audio:meta": "node scripts/audio/check-meta.mjs",
     "audio:preview": "node scripts/audio/render-previews.mjs",
     "qa:audio": "node scripts/qa/audio-integration.mjs",
-    "qa:rls": "node scripts/qa/rls-migration.mjs"
+    "qa:rls": "node scripts/qa/rls-migration.mjs",
+    "qa:username": "node scripts/qa/username-filter.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",
@@ -37,14 +38,15 @@
     "tone": "^15.1.22"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^22.10.0",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.185.0",
-    "eslint": "^8.57.1",
-    "eslint-config-next": "^15.1.6",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.24",
     "playwright": "^1.62.1",
     "postcss": "^8.5.26",
     "shadcn": "^4.12.0",

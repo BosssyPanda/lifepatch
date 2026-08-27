@@ -1,11 +1,19 @@
 import { isCloud, supabase } from "../supabase";
 import { generateAvatarSeed, generateFriendCode, generateUsername } from "./generate";
-import type { Profile } from "./types";
+import { checkUsername } from "./profanity";
+import type { Profile, PublicProfile } from "./types";
 
 /**
  * Public player identity. Cloud → `profiles` table; dev → namespaced localStorage.
  * Mirrors the hybrid switch in lib/saves.ts. Friend code + avatar seed are
- * generated here; username editing/profanity screening lands in Phase 2.
+ * generated here; username screening lives in ./profanity, which the database
+ * backs with a matching charset CHECK.
+ *
+ * WHAT IS AND IS NOT READABLE. `profiles` is now select-own-row-only, so
+ * `getProfile` / `ensureProfile` / `updateUsername` — all of which operate on the
+ * signed-in player's own row — return a full `Profile` with its friend code, and
+ * anything about ANOTHER player comes back as a `PublicProfile` from the
+ * `profiles_public` view or the `profile_by_friend_code` RPC.
  */
 
 const PROFILE_PREFIX = "lifepatch.profile.";
@@ -15,6 +23,7 @@ function localKey(userId: string): string {
   return `${PROFILE_PREFIX}${userId}`;
 }
 
+/** A row from `profiles` — your own, and the only shape that carries a friend code. */
 function fromRow(row: Record<string, unknown>): Profile {
   return {
     id: String(row.id),
@@ -22,6 +31,24 @@ function fromRow(row: Record<string, unknown>): Profile {
     avatarSeed: String(row.avatar_seed),
     friendCode: String(row.friend_code),
     createdAt: String(row.created_at),
+  };
+}
+
+/**
+ * A row from `profiles_public` or from `profile_by_friend_code`.
+ *
+ * Separate from `fromRow` on purpose. Running the full mapper over a row that has
+ * no `friend_code` does not fail — it produces the STRING "undefined", which then
+ * travels as if it were a real code. `createdAt` is optional for the same reason:
+ * the RPC returns three columns, and a missing one should read as absent rather
+ * than as the word "undefined" on a leaderboard row.
+ */
+function fromPublicRow(row: Record<string, unknown>): PublicProfile {
+  return {
+    id: String(row.id),
+    username: String(row.username),
+    avatarSeed: String(row.avatar_seed),
+    createdAt: row.created_at == null ? "" : String(row.created_at),
   };
 }
 
@@ -74,15 +101,20 @@ export async function ensureProfile(userId: string): Promise<Profile> {
   return profile;
 }
 
-/** Username bounds — also enforced by a CHECK constraint in supabase/schema.sql. */
-export const USERNAME_MIN = 3;
-export const USERNAME_MAX = 24;
+/** Username bounds — also enforced by CHECK constraints in supabase/schema.sql. */
+export { USERNAME_MIN, USERNAME_MAX } from "./profanity";
 
+/**
+ * Rename the player.
+ *
+ * Throws with a message meant for the player, rather than truncating. The old code
+ * did `slice(0, USERNAME_MAX)`, which silently renamed them to something they had
+ * not typed; "that name is too long" is a better answer than a different name.
+ */
 export async function updateUsername(userId: string, username: string): Promise<Profile> {
-  const clean = username.trim().slice(0, USERNAME_MAX);
-  if (clean.length < USERNAME_MIN) {
-    throw new Error(`Username must be at least ${USERNAME_MIN} characters.`);
-  }
+  const checked = checkUsername(username);
+  if (!checked.ok) throw new Error(checked.message);
+  const clean = checked.value;
   if (isCloud && supabase) {
     const { data, error } = await supabase
       .from("profiles")
@@ -102,16 +134,29 @@ export async function updateUsername(userId: string, username: string): Promise<
   return updated;
 }
 
-export async function getByFriendCode(code: string): Promise<Profile | null> {
+/**
+ * Resolve a friend code to the player it belongs to.
+ *
+ * Cloud goes through the `profile_by_friend_code` RPC, not a table filter. The
+ * filter used to run against `profiles` under a `using (true)` policy, which meant
+ * the same grant that answered this question also answered "give me everyone" —
+ * `select=username,friend_code` with the publishable key returned the entire player
+ * base and every code in it. The RPC takes a code and returns at most one row with
+ * no code in it, so there is nothing to page through and no result that seeds the
+ * next lookup.
+ *
+ * Returns a `PublicProfile`: the caller (`addByCode`) needs the id, and nobody is
+ * entitled to a stranger's own-row fields.
+ */
+export async function getByFriendCode(code: string): Promise<PublicProfile | null> {
   const clean = code.trim().toUpperCase();
   if (!clean) return null;
   if (isCloud && supabase) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("friend_code", clean)
+    const { data, error } = await supabase
+      .rpc("profile_by_friend_code", { code: clean })
       .maybeSingle();
-    return data ? fromRow(data) : null;
+    if (error || !data) return null;
+    return fromPublicRow(data as Record<string, unknown>);
   }
   try {
     for (let i = 0; i < localStorage.length; i++) {
@@ -130,15 +175,24 @@ export async function getByFriendCode(code: string): Promise<Profile | null> {
   return null;
 }
 
-/** Resolve display info for a set of user ids (leaderboard rendering). */
-export async function getProfiles(userIds: string[]): Promise<Record<string, Profile>> {
+/**
+ * Resolve display info for a set of user ids (leaderboard rendering).
+ *
+ * Reads the `profiles_public` VIEW, never the table. A leaderboard needs a name and
+ * an avatar; it has never needed a friend code, and the old `select("*")` against
+ * `profiles` was handing one over for every row it drew.
+ */
+export async function getProfiles(userIds: string[]): Promise<Record<string, PublicProfile>> {
   const unique = Array.from(new Set(userIds));
-  const out: Record<string, Profile> = {};
+  const out: Record<string, PublicProfile> = {};
   if (unique.length === 0) return out;
   if (isCloud && supabase) {
-    const { data } = await supabase.from("profiles").select("*").in("id", unique);
+    const { data } = await supabase
+      .from("profiles_public")
+      .select("id,username,avatar_seed,created_at")
+      .in("id", unique);
     for (const row of data ?? []) {
-      const p = fromRow(row);
+      const p = fromPublicRow(row);
       out[p.id] = p;
     }
     return out;

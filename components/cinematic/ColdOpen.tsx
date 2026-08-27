@@ -110,7 +110,9 @@ export function ColdOpen({
     // the film's timeline is a one-shot ladder: mute / volume mint a new audio
     // api object, and restarting the effect would re-grant the current line a
     // full fresh hold. Same reason Outro pins its timeline to [].
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // (The exhaustive-deps disable that sat here reported as unused under ESLint 9
+    // and is gone; the pinning above is still deliberate, and the rule is now free
+    // to speak up if a future edit does introduce a missing dependency.)
   }, [i, clock, reduced]);
 
   const skip = () => {

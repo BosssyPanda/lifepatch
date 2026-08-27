@@ -32,6 +32,45 @@ export const VERDICTS = {
   estate: { title: "The Estate", blurb: "You can't take it with you — but you can leave it behind. Here's the ledger you left.", hex: INK_TIER.mid, good: false },
 } satisfies Record<string, Verdict>;
 
+/**
+ * The Rat Race's three outcomes.
+ *
+ * Named here rather than as string literals in `resultFromCashflow`, because these
+ * nine strings are now a closed set with a `results_verdict_known` CHECK behind them
+ * in supabase/schema.sql. Three sources of truth for one list is two too many:
+ * ADDING OR RENAMING A VERDICT MEANS THIS FILE AND A MIGRATION, TOGETHER.
+ */
+export const CASHFLOW_VERDICTS = {
+  escaped: "Escaped the Rat Race",
+  racing: "Still Racing",
+  buried: "Buried in Debt",
+} as const;
+
+/** Every verdict this build can produce. Mirrors `results_verdict_known`. */
+export const KNOWN_VERDICTS: ReadonlySet<string> = new Set<string>([
+  ...Object.values(VERDICTS).map((v) => v.title),
+  ...Object.values(CASHFLOW_VERDICTS),
+]);
+
+/**
+ * A verdict this build does not recognise is not a verdict.
+ *
+ * `results.verdict` is written by the client and rendered on an unauthenticated
+ * page: it is the <h1> of /r/{id}, the page <title> and og:description, and
+ * up-to-118px display type on the OG image. That is not an XSS risk — React escapes
+ * the JSX, Next escapes the metadata, and Satori renders text rather than markup —
+ * but it let any account mint an official-looking statement on this origin, with a
+ * matching unfurl card, which is a ready-made phishing artifact wearing the game's
+ * branding.
+ *
+ * The database now refuses an unknown verdict on the way in. This is the other half:
+ * rows written BEFORE that constraint existed are still out there, and a reader that
+ * trusts them is trusting a client that no longer exists to have behaved.
+ */
+export function safeVerdict(verdict: string): string {
+  return KNOWN_VERDICTS.has(verdict) ? verdict : "Run Closed";
+}
+
 /** The final class for a run — shared by the outro recap and the report. */
 export function deriveVerdict(run: RunState): Verdict {
   const nw = netWorth(run);

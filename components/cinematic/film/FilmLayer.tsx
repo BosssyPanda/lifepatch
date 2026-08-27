@@ -165,7 +165,7 @@ export function FilmLayer({
     };
     // grain / flicker / vignette are read from `levels` per frame — depending on them
     // here would rebuild the entire canvas pipeline mid-transition (see above).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // (Directive removed: unused under ESLint 9. The pinning is still deliberate.)
   }, [reduced]);
 
   return (

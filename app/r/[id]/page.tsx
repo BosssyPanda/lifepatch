@@ -8,7 +8,30 @@ import { isCloud } from "@/lib/supabase";
 import type { ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
 import { scoreLabel } from "@/lib/scoreLabel";
-import { VERDICTS } from "@/lib/verdict";
+import { CASHFLOW_VERDICTS, safeVerdict, VERDICTS } from "@/lib/verdict";
+
+/**
+ * A `results` row is immutable — the table has insert, select and delete policies
+ * and no update — so the only thing an hour of caching can serve is the same bytes.
+ * Without it every visit to a shared link, from a crawler or a person, is an
+ * uncached and unauthenticated database read. A link is never minted before its row
+ * exists (`useShareUrl` looks the id up), so this cannot cache a premature 404.
+ */
+export const revalidate = 3600;
+
+/**
+ * Returning NOTHING here is the point: it opts `/r/[id]` into incremental static
+ * regeneration without naming a single id up front. `dynamicParams` defaults to
+ * true, so any id is still generated on first request — and then cached and reused
+ * for `revalidate` seconds instead of hitting the database again.
+ *
+ * `revalidate` alone does not do this. Verified against `.next/prerender-manifest.json`:
+ * with only the export above, `/r/[id]` was absent from `dynamicRoutes` entirely and
+ * every request re-rendered and re-queried.
+ */
+export function generateStaticParams(): { id: string }[] {
+  return [];
+}
 
 /**
  * Share-landing for one finished run (Addendum §13 #9). The URL that rides on
@@ -20,8 +43,13 @@ import { VERDICTS } from "@/lib/verdict";
 
 function verdictHex(title: string): string {
   for (const v of Object.values(VERDICTS)) if (v.title === title) return v.hex;
-  if (title === "Escaped the Rat Race") return "var(--color-gain)";
-  if (title === "Still Racing") return "var(--color-secondary)";
+  if (title === CASHFLOW_VERDICTS.escaped) return "var(--color-gain)";
+  if (title === CASHFLOW_VERDICTS.racing) return "var(--color-secondary)";
+  // "Buried in Debt" fell through to plain ink, which made the Rat Race's only
+  // losing verdict the one outcome in the game that does not read as one. DESIGN.md
+  // § Palette: red means losing money, and "Underwater" — its exact counterpart in
+  // the life sim — is already loss red.
+  if (title === CASHFLOW_VERDICTS.buried) return "var(--color-loss)";
   return "var(--color-ink)";
 }
 
@@ -123,8 +151,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const row = isCloud ? await getResult(id).catch(() => null) : null;
   if (!row) return { title: "LifePatch — Survive the Internet Economy" };
-  const title = `LIFEPATCH — ${row.verdict}`;
-  const description = `Run closed: ${row.verdict}. ${scoreLabel(row.mode)} ${currency(
+  // The row's own text reaches the <title> and og:description here, so it goes
+  // through the same guard as the heading. See `safeVerdict`.
+  const verdict = safeVerdict(row.verdict);
+  const title = `LIFEPATCH — ${verdict}`;
+  const description = `Run closed: ${verdict}. ${scoreLabel(row.mode)} ${currency(
     row.score,
   )}. Survive the internet economy — run your own life.`;
   return {
@@ -141,13 +172,25 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
   const row = await getResult(id).catch(() => null);
   if (!row) notFound();
 
-  const hex = verdictHex(row.verdict);
+  const verdict = safeVerdict(row.verdict);
+  const hex = verdictHex(verdict);
   const good = row.mode === "cashflow" ? Number(row.metrics?.escaped) === 1 : row.score >= 0;
 
-  // per-year net-worth series, present only on runs submitted after Phase M3
+  // per-year net-worth series, present only on runs submitted after Phase M3.
+  //
+  // Capped HERE as well as at the writer. `resultFromRun` slices to 100 points, but
+  // that cap lives in the client and a row is not the client: a row posted straight
+  // at PostgREST with a 100,000-element history would be mapped twice and handed to
+  // `AnnotatedLifeChart` as six figures of SVG geometry, on a page that is
+  // unauthenticated and served per request. The database refuses that on the way in
+  // now (`results_metrics_history_bounded`), but rows predating the constraint are
+  // still out there, and 200 is already twice the longest honest run.
+  const MAX_SERIES = 200;
   const rawHistory = row.metrics?.history;
   const startYear = Number(row.metrics?.startYear);
-  const series = Array.isArray(rawHistory) ? rawHistory.map(Number).filter(Number.isFinite) : [];
+  const series = Array.isArray(rawHistory)
+    ? rawHistory.slice(0, MAX_SERIES).map(Number).filter(Number.isFinite)
+    : [];
   const chartPoints =
     series.length > 1 && Number.isFinite(startYear)
       ? series.map((v, i) => ({ year: startYear + i, netWorth: v }))
@@ -168,7 +211,7 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
           Run closed · {MODE_LABEL[row.mode] ?? row.mode} · Final verdict
         </p>
         <h1 className="display-caps mt-2 text-5xl leading-none sm:text-6xl" style={{ color: hex }}>
-          {row.verdict}
+          {verdict}
         </h1>
 
         {/* statement rows — `.rule-dotted`, the same dot leader the in-app statement uses.

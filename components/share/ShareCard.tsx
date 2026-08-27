@@ -129,6 +129,11 @@ export function ShareCard({ data, onClose }: { data: ShareCardData; onClose: () 
           style={{ aspectRatio: String(aspect), maxHeight: "58svh" }}
         >
           {preview ? (
+            /* `preview` is a data: URL this component just drew on a canvas, so there
+               is no remote asset to optimize and no width/height known ahead of the
+               draw. `next/image` cannot help here, and `images.unoptimized` is set
+               globally in next.config.ts regardless. */
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={preview} alt="Share card preview" className="h-full w-full object-contain" />
           ) : drawFailed ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-5 text-center" role="alert">

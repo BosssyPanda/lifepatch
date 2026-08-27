@@ -1,6 +1,6 @@
 import { ticketFor, verifyResult } from "../replay";
 import { netWorth, RUN_VERSION, type RunState } from "../runEngine";
-import { deriveVerdict } from "../verdict";
+import { CASHFLOW_VERDICTS, deriveVerdict } from "../verdict";
 import {
   hasEscaped,
   netWorth as cashflowNetWorth,
@@ -86,7 +86,11 @@ export function resultFromCashflow(s: CashflowState): NewResult {
   return {
     mode: "cashflow",
     score: cashflowScore(s),
-    verdict: s.status === "lost" ? "Buried in Debt" : escaped ? "Escaped the Rat Race" : "Still Racing",
+    verdict: s.status === "lost"
+      ? CASHFLOW_VERDICTS.buried
+      : escaped
+        ? CASHFLOW_VERDICTS.escaped
+        : CASHFLOW_VERDICTS.racing,
     metrics: {
       scoreVersion: CASHFLOW_SCORE_VERSION,
       passiveIncome: passive,

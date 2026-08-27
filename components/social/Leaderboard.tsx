@@ -16,7 +16,7 @@ import { todaysDaily } from "@/lib/daily";
 import { listFriendIds } from "@/lib/cloud/friends";
 import { getProfiles } from "@/lib/cloud/profiles";
 import { topResults, type LeaderboardScope } from "@/lib/cloud/results";
-import type { GameMode, Profile, ResultRow } from "@/lib/cloud/types";
+import type { GameMode, PublicProfile, ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
 import { scoreMetric } from "@/lib/scoreLabel";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
@@ -113,7 +113,10 @@ export function Leaderboard({
   const [scopePick, setScope] = useState<LeaderboardScope>("all");
   const [backgroundPick, setBackground] = useState<string>(ALL_BACKGROUNDS);
   const [rows, setRows] = useState<ResultRow[]>([]);
-  const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+  // PublicProfile, not Profile: a board needs a name and an avatar. It never needed
+  // a friend code, and `getProfiles` no longer has one to give — it reads the
+  // `profiles_public` view, which does not carry the column.
+  const [profiles, setProfiles] = useState<Record<string, PublicProfile>>({});
   const [loading, setLoading] = useState(true);
   /** The fetch failed. Distinct from "no rows" — telling a player the board is empty
    *  when the network dropped is a lie the old try/finally told every time. */

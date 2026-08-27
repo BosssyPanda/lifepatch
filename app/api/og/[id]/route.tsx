@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { PALETTE } from "@/lib/palette";
 import { currency } from "@/lib/format";
-import { VERDICTS } from "@/lib/verdict";
+import { CASHFLOW_VERDICTS, safeVerdict, VERDICTS } from "@/lib/verdict";
 
 export const runtime = "edge";
 
@@ -52,8 +52,10 @@ async function fetchRow(id: string): Promise<Row | null> {
 
 function verdictHex(title: string): string {
   for (const v of Object.values(VERDICTS)) if (v.title === title) return v.hex;
-  if (title === "Escaped the Rat Race") return GAIN;
-  if (title === "Still Racing") return SECONDARY;
+  if (title === CASHFLOW_VERDICTS.escaped) return GAIN;
+  if (title === CASHFLOW_VERDICTS.racing) return SECONDARY;
+  // Matches /r/[id]: the Rat Race's losing verdict reads as a loss, like Underwater.
+  if (title === CASHFLOW_VERDICTS.buried) return LOSS;
   return INK;
 }
 
@@ -144,7 +146,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     );
   }
 
-  const hex = verdictHex(row.verdict);
+  // The unfurl card is the widest-travelling surface this string reaches — up to
+  // 118px of display type on an image served from this origin. Guarded exactly as
+  // the page's <h1> is; see `safeVerdict`.
+  const verdict = safeVerdict(row.verdict);
+  const hex = verdictHex(verdict);
   const isCash = row.mode === "cashflow";
   // Not "PASSIVE INCOME / MO": the Rat Race score is net worth plus a year of
   // cash flow (lib/scoreLabel.ts), and the `/mo` printed it as a wage.
@@ -180,14 +186,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         <span
           style={{
             fontFamily: "Anton",
-            fontSize: verdictSize(row.verdict),
+            fontSize: verdictSize(verdict),
             color: hex,
             letterSpacing: 2,
             marginTop: 10,
             textTransform: "uppercase",
           }}
         >
-          {row.verdict}
+          {verdict}
         </span>
 
         {/* score + stats */}

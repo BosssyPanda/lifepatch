@@ -6,12 +6,28 @@
 
 export type GameMode = "story" | "infinite" | "cashflow";
 
-export type Profile = {
+/**
+ * What anyone may see about a player. This is the whole public surface, and it is
+ * a real boundary rather than a convention: `profiles_public` is a view with these
+ * four columns and no others, so there is no query that returns a friend code for
+ * someone else. Leaderboard rows and friend-code lookups both land here.
+ */
+export type PublicProfile = {
   id: string;
   username: string;
   avatarSeed: string;
-  friendCode: string;
   createdAt: string;
+};
+
+/**
+ * Your OWN profile — the public columns plus the friend code.
+ *
+ * Only ever your own: the `profiles` table's select policy is `auth.uid() = id`.
+ * A function that can hand you one of these for an arbitrary player id would be a
+ * bug, which is why `getProfiles` and `getByFriendCode` return `PublicProfile`.
+ */
+export type Profile = PublicProfile & {
+  friendCode: string;
 };
 
 // number[] carries the per-year net-worth series for the share-page chart (Phase M3)
