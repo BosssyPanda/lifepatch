@@ -257,10 +257,44 @@ export function sellStock(s: CashflowState, symbol: string, shares: number): Cas
 
 // ── The quote board ───────────────────────────────────────────────────────────
 /**
+ * How hard the published range pulls a quote that has left it.
+ *
+ * Applied in log space (see `tickStockPrices`), so it is a proportion of the
+ * distance out rather than a number of dollars: at 0.5 a quote sitting at half its
+ * floor is pulled back to ~71% of that floor — still outside, still falling if the
+ * next shock is negative. 0 would be a pure random walk with no character per
+ * ticker; 1 would be the hard wall this replaced.
+ */
+const BAND_PULL = 0.5;
+
+/** No quote is ever worth exactly nothing, and a price of 0 would be absorbing. */
+const MIN_QUOTE = 0.01;
+
+/**
  * Move every quote. `drift` is the card's centre; each ticker then gets its own
- * RNG shock scaled by how wide its published range is, and is clamped to that
- * range so PLSE stays a lottery ticket and GRID stays a utility. Deterministic
- * from (seed, cursor) like every other draw, so a run replays exactly.
+ * RNG shock scaled by how wide its published range is, so PLSE stays a lottery
+ * ticket and GRID stays a utility. Deterministic from (seed, cursor) like every
+ * other draw, so a run replays exactly.
+ *
+ * THE RANGE IS A PULL, NOT A WALL — and it used to be a wall:
+ *
+ *     Math.max(lo, Math.min(hi, moved))
+ *
+ * The deal card publishes that same pair to the player under the label "Typical
+ * range" (components/cashflow/cards/DealCard.tsx), so the engine was contradicting
+ * its own card. It was also the most expensive contradiction in the game. A floor
+ * that the player can see, reach, and rest on is a free put option: measured over
+ * 200,000 ticks, quotes sat exactly on the published floor between 9.6% and 24.4%
+ * of the time while the ceiling was touched 0.0–0.2%. At the floor the next move
+ * could only be sideways or up. "Buy PLSE at $1.00" was therefore a position that
+ * could not lose a cent and could pay $60 — not a decision, an arbitrage, and the
+ * one lesson the Rat Race must never teach.
+ *
+ * So the band now reverts rather than clamps, in log space, which is the shape a
+ * price actually has: outside the range a quote is pulled back by a FRACTION of how
+ * far out it is, keeps its own multiplicative motion, and can keep falling. Nothing
+ * above zero absorbs it. Buying low is still the right instinct — it is just a bet
+ * again, which is the whole point of putting it on a card.
  */
 export function tickStockPrices(s: CashflowState, drift: number): CashflowState {
   const prices: Record<string, number> = { ...s.stockPrices };
@@ -269,8 +303,14 @@ export function tickStockPrices(s: CashflowState, drift: number): CashflowState 
     const now = quote(s, d.symbol, d.price);
     const volatility = (hi - lo) / d.price; // GRID ≈ 0.87, PLSE ≈ 11.8
     const shock = (rngAt(s.seed, s.rngCursor + 101 + i) - 0.5) * 0.14 * Math.min(volatility, 4);
-    const moved = now * (1 + drift * Math.min(1, volatility) + shock);
-    prices[d.symbol] = Math.max(lo, Math.min(hi, Math.round(moved * 100) / 100));
+    let moved = now * (1 + drift * Math.min(1, volatility) + shock);
+    // `x → edge * (x / edge)^(1 - BAND_PULL)` — the identity at the edge itself, so
+    // there is no kink for a player to feel, and monotonic, so a bigger shock is
+    // still a bigger move. Both branches are guarded on the edge being positive;
+    // every published range is, but a zero would make the ratio undefined.
+    if (moved > hi && hi > 0) moved = hi * Math.pow(moved / hi, 1 - BAND_PULL);
+    else if (moved < lo && lo > 0) moved = lo * Math.pow(Math.max(moved, MIN_QUOTE) / lo, 1 - BAND_PULL);
+    prices[d.symbol] = Math.max(MIN_QUOTE, Math.round(moved * 100) / 100);
   });
   return { ...s, stockPrices: prices, rngCursor: s.rngCursor + 1 };
 }

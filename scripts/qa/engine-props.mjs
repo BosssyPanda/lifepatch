@@ -129,6 +129,7 @@ const lifeEvents = R("lifeEvents");
 const cashflow = R("cashflow/engine");
 const dreams = R("cashflow/dreams");
 const professions = R("cashflow/professions");
+const decks = R("cashflow/decks");
 const { BACKGROUNDS } = R("backgrounds");
 
 /** Assets a player could actually have bought that year (crypto is gated to 2011+). */
@@ -889,6 +890,62 @@ check("P16 the money formatter never prints NaN or Infinity", () => {
   eq(format.currency(0), "$0", "currency(0)");
   eq(format.currency(-3711410), "−$3,711,410", "currency at the measured honest minimum");
   eq(format.currency(15511231154), "$15,511,231,154", "currency at the measured honest maximum");
+});
+
+// ── a stock you buy at the bottom has to be able to go down ─────────────────
+// The quote board used to clamp every ticker inside its published range, and the
+// deal card publishes that range to the player as its "Typical range". A floor you
+// can see and rest on is a free put: buying PLSE at $1.00 could not lose a cent and
+// could pay $60. Measured over 2,000 runs before the fix, 294 purchases at or under
+// the published floor went underwater exactly 0.0% of the time.
+//
+// This is the property that says it stays fixed. It asserts the DOWNSIDE exists,
+// not any particular number — a later re-tune of BAND_PULL should be free to change
+// how far a quote wanders without having to come and edit a test.
+check("P17 buying at a published floor is a bet, not an arbitrage", () => {
+  const DRIFTS = [0.18, -0.16];
+  let bought = 0;
+  let sank = 0;
+  let worst = 0;
+  for (let seed = 1; seed <= 600; seed++) {
+    const prof = professions.PROFESSIONS[seed % professions.PROFESSIONS.length].id;
+    let s = cashflow.initCashflow(prof, "dinner", "P", seed);
+    for (let t = 0; t < 12; t++) s = cashflow.tickStockPrices(s, DRIFTS[(seed + t) % 2]);
+    for (const d of decks.STOCK_CATALOG) {
+      const entry = s.stockPrices[d.symbol];
+      if (entry > d.range[0]) continue; // only the exploit's own entry price
+      bought++;
+      let low = entry;
+      let ahead = s;
+      for (let t = 0; t < 40; t++) {
+        ahead = cashflow.tickStockPrices(ahead, DRIFTS[(seed + t) % 2]);
+        low = Math.min(low, ahead.stockPrices[d.symbol]);
+      }
+      const dd = (low - entry) / entry;
+      if (dd < 0) sank++;
+      if (dd < worst) worst = dd;
+    }
+  }
+  if (bought < 40) throw new Error(`only ${bought} floor purchases — the check proved little`);
+  const rate = sank / bought;
+  if (rate < 0.5) {
+    throw new Error(
+      `a floor purchase went underwater only ${(100 * rate).toFixed(1)}% of ${bought} times ` +
+      `(worst ${(100 * worst).toFixed(1)}%) — the quote board has an absorbing floor again`,
+    );
+  }
+  // And no quote may ever reach a price that multiplication cannot move off.
+  for (let seed = 700; seed < 740; seed++) {
+    const prof = professions.PROFESSIONS[seed % professions.PROFESSIONS.length].id;
+    let s = cashflow.initCashflow(prof, "dinner", "P", seed);
+    for (let t = 0; t < 200; t++) {
+      s = cashflow.tickStockPrices(s, DRIFTS[(seed + t) % 2]);
+      for (const d of decks.STOCK_CATALOG) {
+        const p = s.stockPrices[d.symbol];
+        if (!(p > 0)) throw new Error(`seed ${seed} tick ${t}: ${d.symbol} quoted ${p}`);
+      }
+    }
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
