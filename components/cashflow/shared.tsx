@@ -71,7 +71,10 @@ export function Modal({
       <motion.div
         aria-hidden
         onClick={onClose}
-        className="absolute inset-0 bg-black/80"
+        // Warm paper, not pure #000: every Rat Race resolution modal scrimmed in raw
+        // black while the house dialog (LedgerDialog.tsx:163) scrimmed in `bg-bg/85`.
+        // This was the codebase's only bg-black/bg-white utility.
+        className="absolute inset-0 bg-bg/85"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}

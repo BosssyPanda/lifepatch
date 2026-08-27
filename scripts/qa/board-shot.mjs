@@ -21,7 +21,13 @@ const viewport = process.env.QA_VIEWPORT === "mobile" ? MOBILE : DESKTOP;
 const tag = process.env.QA_VIEWPORT === "mobile" ? "mobile" : "desktop";
 
 const BACKGROUNDS = ["student", "trade", "hustler"];
-const VERDICTS = ["Rich Enough", "Comfortable", "Broke but Free", "Buried in Debt"];
+// Real verdicts only. "Broke but Free" was in here and the game has never produced
+// it — so the board screenshots were showing players a row that cannot exist, and
+// now that `results_verdict_known` pins the set, a fixture off that list is a
+// fixture testing nothing. Story/Infinite rows get life-sim verdicts; the Rat Race
+// rows below get its three. See lib/verdict.ts.
+const VERDICTS = ["Rich Enough", "Comfortable", "Getting By", "Underwater"];
+const CASHFLOW_VERDICTS = ["Escaped the Rat Race", "Still Racing", "Buried in Debt"];
 
 const TODAY = daily.todaysDaily()?.date ?? null;
 
@@ -67,6 +73,36 @@ function rows() {
             engine: 6,
             verified: 1,
           },
+      createdAt: new Date(Date.UTC(2026, 6, 1 + i)).toISOString(),
+    });
+  }
+  // The Rat Race board had NO fixture rows at all, so its screenshot only ever
+  // captured the empty state and the one board with its own score label and its own
+  // three verdicts went visually unchecked.
+  for (let i = 0; i < 6; i++) {
+    const escaped = i < 2;
+    const lost = i === 5;
+    out.push({
+      id: `local-cf${i}`,
+      userId: `player-${i}`,
+      mode: "cashflow",
+      score: 310_000 - i * 44_500,
+      verdict: lost
+        ? CASHFLOW_VERDICTS[2]
+        : escaped
+          ? CASHFLOW_VERDICTS[0]
+          : CASHFLOW_VERDICTS[1],
+      metrics: {
+        scoreVersion: 3,
+        netWorth: 250_000 - i * 40_000,
+        passiveIncome: 5_000 - i * 700,
+        payday: 5_000 - i * 700,
+        expenses: 2_400 + i * 120,
+        bankLoan: lost ? 60_000 : 0,
+        turns: 18 + i,
+        escaped: escaped ? 1 : 0,
+        lost: lost ? 1 : 0,
+      },
       createdAt: new Date(Date.UTC(2026, 6, 1 + i)).toISOString(),
     });
   }

@@ -20,6 +20,7 @@ export function LedgerTabs<T extends string>({
   onChange,
   label,
   panelId,
+  idPrefix,
   size = "md",
   className = "",
 }: {
@@ -30,6 +31,18 @@ export function LedgerTabs<T extends string>({
   label: string;
   /** id of the `role="tabpanel"` these tabs drive. Also seeds each tab's own id. */
   panelId: string;
+  /**
+   * Namespace for the tabs' OWN ids, when more than one strip drives one panel.
+   *
+   * The Leaderboard renders three strips against a single `panelId`, and two of them
+   * carry an item called "all" (the "All-time" scope and the "Any start" background),
+   * so both minted `${panelId}-tab-all` — two live `<button>`s with the same id
+   * whenever the background row is visible, which is the default Story view and the
+   * whole /leaderboard route. That is an HTML validity error and an axe
+   * duplicate-id-active violation, and any id-based lookup silently binds to
+   * whichever came first. Defaults to `panelId`, so a lone strip is unchanged.
+   */
+  idPrefix?: string;
   size?: "sm" | "md";
   className?: string;
 }) {
@@ -68,7 +81,7 @@ export function LedgerTabs<T extends string>({
             }}
             type="button"
             role="tab"
-            id={tabId(panelId, t.id)}
+            id={tabId(idPrefix ?? panelId, t.id)}
             aria-selected={on}
             aria-controls={panelId}
             // roving tabindex: one stop for the whole strip, arrows move within it
@@ -91,7 +104,8 @@ export function LedgerTabs<T extends string>({
   );
 }
 
-/** The id of one tab — panels use it for `aria-labelledby`. */
-export function tabId(panelId: string, id: string): string {
-  return `${panelId}-tab-${id}`;
+/** The id of one tab — panels use it for `aria-labelledby`. Pass the strip's
+ *  `idPrefix` when it has one, or its `panelId` when it does not. */
+export function tabId(prefix: string, id: string): string {
+  return `${prefix}-tab-${id}`;
 }

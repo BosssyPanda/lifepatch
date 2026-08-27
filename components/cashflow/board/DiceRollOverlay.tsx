@@ -286,7 +286,12 @@ export default function DiceRollOverlay({ values, onDone }: { values: number[]; 
       role="dialog"
       aria-label="Rolling the dice"
       className="fixed inset-0 z-[95] flex items-center justify-center"
-      style={{ backgroundColor: "rgba(14,14,12,0.9)" }}
+      // `rgba(14,14,12,.9)` was #0e0e0c — the SPENT-era ground, retired by amendment E
+      // in favour of #131110. This file already imports the right value (`BG`) and was
+      // not using it here, so the most frequent full-screen moment in the Rat Race
+      // veiled the viewport in the old, cooler paper. An rgba() triplet is invisible to
+      // a search for hex, which is how it survived — the same note YearHud.tsx:36 makes.
+      style={{ backgroundColor: `${BG}e6` }}
     >
       <div className="relative h-full max-h-[560px] w-full max-w-[720px]">
         <Canvas

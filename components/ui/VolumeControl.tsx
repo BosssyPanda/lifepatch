@@ -84,6 +84,14 @@ export function VolumePopover({
     };
     const onDown = (e: PointerEvent) => {
       const t = e.target;
+      // The TRIGGER is not "outside". `ref` is on the panel and every call site
+      // renders the trigger as a sibling, so a second tap on VOL used to run
+      // pointerdown -> onClose() -> unmount, and only THEN click -> toggle, which
+      // flipped an already-false `open` back to true. The popover shut and
+      // reopened in one gesture, and the button advertising aria-expanded could
+      // never collapse it — leaving Escape or a tap elsewhere on the board, which
+      // on a touch device is a tap that also does something else.
+      if (t instanceof Element && t.closest(`[${TRIGGER_ATTR}]`)) return;
       if (t instanceof Node && ref.current && !ref.current.contains(t)) onClose();
     };
     window.addEventListener("keydown", onKey);
@@ -125,6 +133,14 @@ export function VolumePopover({
   );
 }
 
+/**
+ * Marks the element that opens the popover, so the outside-click handler can tell
+ * "outside the panel" from "the button that owns the panel". A data attribute
+ * rather than the `aria-haspopup` the trigger also carries: this is load-bearing
+ * behaviour, and it should not break the day some other control grows a popup.
+ */
+const TRIGGER_ATTR = "data-volume-trigger";
+
 /** Open/close state + the a11y wiring a disclosure trigger needs. */
 export function useVolumePopover() {
   const [open, setOpen] = useState(false);
@@ -137,6 +153,7 @@ export function useVolumePopover() {
     triggerProps: {
       "aria-expanded": open,
       "aria-haspopup": true as const,
+      [TRIGGER_ATTR]: "",
     },
   };
 }

@@ -93,6 +93,15 @@ export function CashflowSetup({
               return (
                 <motion.button
                   key={p.id}
+                  type="button"
+                  // The selected card was signalled by an outline, an ink wash and a
+                  // check badge — all three style-only, and CheckIcon is aria-hidden by
+                  // construction (icons/index.tsx:15). So a screen-reader user tabbing
+                  // this picker got no indication of what they had chosen, while the CTA
+                  // below said "Pick your dream" either way. The three sibling pickers
+                  // (ModeSelect:67, Setup:113, LobbyScreen:236) all carry aria-pressed;
+                  // this file had no ARIA attributes at all.
+                  aria-pressed={active}
                   onClick={() => { audio.sfx("click"); setProf(p.id); }}
                   initial={{ opacity: 0, y: 22 }}
                   animate={{ opacity: 1, y: 0, scale: active ? 1.02 : 1 }}
@@ -155,6 +164,8 @@ export function CashflowSetup({
               return (
                 <motion.button
                   key={d.id}
+                  type="button"
+                  aria-pressed={active}
                   onClick={() => { audio.sfx("click"); setDream(d.id); }}
                   initial={{ opacity: 0, y: 18 }}
                   animate={{ opacity: 1, y: 0, scale: active ? 1.03 : 1 }}

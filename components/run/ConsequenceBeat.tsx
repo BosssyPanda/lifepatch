@@ -174,7 +174,9 @@ export function ConsequenceBeat({
             <motion.span
               aria-hidden
               className="pointer-events-none absolute inset-0"
-              style={{ background: "rgba(242,241,234,0.16)" }}
+              // #f2f1ea is NOT --color-ink (#f4f0e6), though the note above called it
+              // "identical colour". Same fix YearHud.tsx:36-39 used for the same bug.
+              style={{ background: "color-mix(in srgb, var(--color-ink) 16%, transparent)" }}
               initial={false}
               animate={flash ? { opacity: [0, 1, 0] } : { opacity: 0 }}
               transition={{ duration: DUR.scene }}

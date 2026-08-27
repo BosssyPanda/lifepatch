@@ -192,6 +192,10 @@ export function Leaderboard({
   }, [open, mode, scope, background, today, profileId, sfx, retry]);
 
   const metric = scoreMetric(mode);
+  // Each tab strip namespaces its own tab ids (see LedgerTabs' `idPrefix`). The MODE
+  // strip's prefix is named here because the panel below points `aria-labelledby` at
+  // one of its tabs, and the two must not drift apart.
+  const modeTabs = `${panelId}-mode`;
   const isPage = chrome === "page";
   // The page breathes at the section rhythm the rest of the site uses; the dialog stays tight
   // because it is a card, not a document.
@@ -205,6 +209,7 @@ export function Leaderboard({
         onChange={setMode}
         label="Leaderboard mode"
         panelId={panelId}
+        idPrefix={modeTabs}
         className={`${gutter} pt-4`}
       />
       <LedgerTabs
@@ -213,6 +218,9 @@ export function Leaderboard({
         onChange={setScope}
         label="Leaderboard range"
         panelId={panelId}
+        // Namespaced because "all" is an id in BOTH this strip and the background
+        // strip below, and they share one panel.
+        idPrefix={`${panelId}-scope`}
         size="sm"
         className={`${gutter} pt-2`}
       />
@@ -223,6 +231,7 @@ export function Leaderboard({
           onChange={setBackground}
           label="Leaderboard starting background"
           panelId={panelId}
+          idPrefix={`${panelId}-bg`}
           size="sm"
           className={`${gutter} pt-2`}
         />
@@ -328,7 +337,7 @@ export function Leaderboard({
 
         {board}
 
-        <div className={`${gutter} flex-1 pb-10 pt-2`} id={panelId} role="tabpanel" aria-labelledby={tabId(panelId, mode)}>
+        <div className={`${gutter} flex-1 pb-10 pt-2`} id={panelId} role="tabpanel" aria-labelledby={tabId(modeTabs, mode)}>
           {body}
         </div>
 
@@ -387,7 +396,7 @@ export function Leaderboard({
               className="thin-scroll mt-2 flex-1 overflow-y-auto px-3 pb-3 [&:focus-visible]:[outline-offset:-2px]"
               id={panelId}
               role="tabpanel"
-              aria-labelledby={tabId(panelId, mode)}
+              aria-labelledby={tabId(modeTabs, mode)}
               tabIndex={0}
               data-lenis-prevent
             >

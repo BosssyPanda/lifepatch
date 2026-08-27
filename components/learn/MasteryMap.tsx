@@ -178,9 +178,19 @@ function ConceptNode({
       data-radius=""
       layout={reduced ? false : true}
       transition={{ duration: DUR.base, ease: EASE }}
+      // A blanket `opacity-55` used to dim the whole locked node, which multiplied
+      // through to its text: the status word sat at 2.72:1 on the dialog's ground, at
+      // 0.55rem, on a live enabled button — so the WCAG inactive-component exemption
+      // did not apply, and `nodeState` returns "locked" for every concept a new player
+      // has not met yet, i.e. the WHOLE map on first open. RunTour.tsx:254 had already
+      // found and fixed exactly this ("was opacity 0.35 on already-dim grey, which put
+      // the three inactive steps far under AA — axe flagged all three"), and the fix is
+      // the same: drop the blanket opacity and let the tokens carry the state. Locked
+      // still reads dimmer (ink-dim 6.1:1 against ink 16.5:1) and still carries the
+      // lock glyph, so the state survives without the contrast failure.
       className={`border px-3 py-2 text-left transition-colors ${
         locked
-          ? "border-hairline opacity-55"
+          ? "border-hairline"
           : "border-hairline-strong hover:border-ink hover:bg-ink/[0.03]"
       } ${expanded ? "col-span-2 bg-ink/[0.04] sm:col-span-3" : ""}`}
       style={state === "mastering" ? { borderColor: "var(--color-secondary)" } : undefined}
@@ -189,13 +199,22 @@ function ConceptNode({
           children ride along on translate only and never get scale-distorted. */}
       <motion.span
         layout={reduced ? false : "position"}
-        className="inline-flex items-center gap-1 font-mono text-[0.82rem] font-semibold leading-tight text-ink"
+        className={`inline-flex items-center gap-1 font-mono text-[0.82rem] font-semibold leading-tight ${
+          locked ? "text-ink-dim" : "text-ink"
+        }`}
       >
         {locked && <LockIcon size={11} className="shrink-0 opacity-70" />}
         {concept.title}
       </motion.span>
       {state === "mastering" ? (
-        <span className="mt-1.5 flex gap-0.5" aria-label={`Level ${level} of ${MAX_MASTERY_LEVEL}`}>
+        // role="img", because a bare <span> maps to role=generic and ARIA PROHIBITS a
+        // name there — the aria-label was being discarded outright, so a mastered
+        // concept announced as its title and nothing else, and the level was carried
+        // by chartreuse-versus-hairline alone. DESIGN.md § Palette: "Colour is never
+        // the only channel... that is the test, and it is not optional." The codebase
+        // already states the rule twice (StreakChip.tsx:70, HudRail.tsx:38) and
+        // BlockSpark.tsx:67 shows this exact pattern working.
+        <span role="img" className="mt-1.5 flex gap-0.5" aria-label={`Level ${level} of ${MAX_MASTERY_LEVEL}`}>
           {Array.from({ length: MAX_MASTERY_LEVEL }).map((_, i) => (
             <span
               key={i}
@@ -207,7 +226,7 @@ function ConceptNode({
           ))}
         </span>
       ) : (
-        <span className="eyebrow mt-1.5 block text-[0.55rem] text-secondary">
+        <span className="eyebrow mt-1.5 block text-[0.55rem] text-tertiary">
           {state === "introduced" ? "Introduced" : "Locked"}
         </span>
       )}

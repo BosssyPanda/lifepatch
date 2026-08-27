@@ -1,5 +1,6 @@
 import { isCloud, supabase } from "../supabase";
 import type { GameMode, NewResult, ResultRow } from "./types";
+import { safeVerdict } from "../verdict";
 
 /**
  * Finished-run results → leaderboards + shareable cards. Cloud → `results` table
@@ -46,7 +47,13 @@ function fromRow(row: Record<string, unknown>): ResultRow {
     userId: String(row.user_id),
     mode: row.mode as GameMode,
     score: Number(row.score),
-    verdict: String(row.verdict),
+    // Guarded HERE, at the one boundary every reader crosses, rather than at each
+    // render site. `verdict` is client-written and renders publicly in more places
+    // than the share page the constraint was written for — the leaderboard prints it
+    // under every row too. A guard per call site is a guard someone forgets to add
+    // to the next one. (The OG route fetches over raw REST and does not pass through
+    // here, so it carries its own; see app/api/og/[id]/route.tsx.)
+    verdict: safeVerdict(String(row.verdict)),
     metrics: (row.metrics as ResultRow["metrics"]) ?? {},
     createdAt: String(row.created_at),
   };
