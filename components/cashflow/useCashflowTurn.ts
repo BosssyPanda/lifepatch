@@ -81,6 +81,31 @@ export function useCashflowTurn({
   const [rollFx, setRollFx] = useState<number[] | null>(null);
   const landRef = useRef<(() => void) | null>(null);
 
+  /**
+   * Every timer a roll schedules, so leaving the board cancels them.
+   *
+   * One roll queues up to three: the payday toast's dismissal, the token's travel,
+   * and — without the physics overlay — the landing itself. None were tracked, and
+   * Exit is reachable mid-roll on purpose: a roll takes up to three seconds, and a
+   * control the player cannot press for three seconds is a worse bug than this one.
+   * So a player who rolled and then left took the timers with them, and they fired
+   * against a screen that was gone.
+   *
+   * The state setters in those callbacks are harmless after unmount — React 19 drops
+   * them silently. The audio is not. `audio` is a singleton that outlives this hook,
+   * so `accent("stab")` played over the mode select, and a losing landing went on to
+   * `endTurn` → `pushIntensity`, which re-aimed the adaptive score's intensity and
+   * could fire a freedom-milestone sting on a screen with no board on it.
+   */
+  const timers = useRef<number[]>([]);
+  const later = (fn: () => void, ms: number) => {
+    timers.current.push(window.setTimeout(fn, ms));
+  };
+  useEffect(() => () => {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+  }, []);
+
   // Warm the physics chunk + wasm while the player reads the board, so the
   // first roll's overlay appears instantly instead of after a module load.
   useEffect(() => {
@@ -352,11 +377,11 @@ export function useCashflowTurn({
         setPaydayFlash((n) => n + 1);
         if (mv.paydayAmount >= 0) audio.sfx("cash");
         else audio.sting("bad");
-        window.setTimeout(() => setPaydayToast(null), 1800);
+        later(() => setPaydayToast(null), 1800);
       }
 
       const travel = reduce ? 0 : rolled.total * 165 + 380;
-      window.setTimeout(() => {
+      later(() => {
         audio.accent("stab");
         // Passing Payday can itself end the run (a payday that the bank will no
         // longer cover). Don't open a card on top of a finished game.
@@ -373,7 +398,7 @@ export function useCashflowTurn({
       landRef.current = land;
       setRollFx(rolled.rolls);
     } else {
-      window.setTimeout(land, reduce ? 120 : 820);
+      later(land, reduce ? 120 : 820);
     }
   }
 
