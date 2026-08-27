@@ -111,7 +111,18 @@ create table if not exists public.results (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   mode text not null check (mode in ('story', 'infinite', 'cashflow')),
-  score numeric not null,
+  -- Bounded because `numeric` is not. Postgres orders NaN ABOVE every real
+  -- number, so one hand-posted `{"score": "NaN"}` takes permanent first place on
+  -- `order by score desc` and no honest run can displace it; a 100,001-digit
+  -- integer inserts just as happily and reaches the client as `Infinity`. Watch
+  -- which test does the work: for `numeric`, `'NaN' = 'NaN'` is TRUE, so only the
+  -- upper bound refuses NaN. ±1e15 clears the largest score 12,000 headless
+  -- Infinite runs could produce (15,511,231,154) by ~64,000x — see
+  -- supabase/migrations/2026-08-27_01b_score_bounds.sql for the measurement, and
+  -- engine-props P15 for the check that keeps it honest.
+  score numeric not null constraint results_score_sane check (
+    score > -1e15 and score < 1e15
+  ),
   -- The closed set the game can actually produce: lib/verdict.ts VERDICTS (six
   -- life-sim archetypes) plus the three Rat Race strings in lib/cloud/buildResult.ts.
   -- Unconstrained, this column let any account mint an official-looking

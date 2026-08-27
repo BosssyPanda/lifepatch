@@ -42,6 +42,7 @@ const DB = "lp_rls_test";
 const OLD_SCHEMA = "supabase/tests/01_schema_before_2026-08-27.sql";
 const MIGRATIONS = [
   "supabase/migrations/2026-08-27_01_security_additive.sql",
+  "supabase/migrations/2026-08-27_01b_score_bounds.sql",
   "supabase/migrations/2026-08-27_02_profiles_lockdown.sql",
 ];
 

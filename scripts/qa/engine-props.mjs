@@ -120,6 +120,7 @@ const engine = R("runEngine");
 const replay = R("replay");
 const protocol = R("mp/protocol");
 const buildResult = R("cloud/buildResult");
+const format = R("format");
 const daily = R("daily");
 const dailyShare = R("dailyShare");
 const eventConcepts = R("eventConcepts");
@@ -829,6 +830,65 @@ check("P14b a Fast Track deal is scored on its merits, not its price", () => {
   const m = buildResult.resultFromCashflow(bought).metrics;
   eq(m.scoreVersion, buildResult.CASHFLOW_SCORE_VERSION, "the row lost its score version");
   eq(m.fastTrackCashflow, 20000, "the row lost the Fast Track cash flow");
+});
+
+// ── the score column's bound is only as good as the number it was measured from ──
+// `results_score_sane` refuses anything outside ±1e15, and that bound was chosen
+// from a headless sweep of the engine's most aggressive honest line. A bound picked
+// once from a measurement is a bound that goes stale the next time the economy is
+// tuned: raise a return, add an asset, extend the mortality curve, and the honest
+// ceiling moves while the SQL does not. Then the constraint starts refusing real
+// runs, and it does it at the database, at submit time, on a finished game.
+//
+// So this re-derives the ceiling every run and asserts the headroom is still there.
+// It is deliberately cheaper than the 12,000-run sweep that set the bound (that
+// number is in the migration header); it only has to catch an economy that has
+// moved by orders of magnitude.
+check("P15 an honest score stays far inside the database's bound", () => {
+  const BOUND = 1e15; // supabase/migrations/2026-08-27_01b_score_bounds.sql
+  const MIN_HEADROOM = 1000; // if an honest run gets within 1000x, re-measure and widen
+  let worst = 0;
+  let where = null;
+  for (let seed = 9000; seed < 9400; seed++) {
+    const bg = BG_IDS[seed % BG_IDS.length];
+    const mode = seed % 2 ? "infinite" : "story";
+    // `index` is the compounding policy — the one that actually grows a portfolio.
+    const s = playRun({ seed, mode, backgroundId: bg, policy: "index", maxYears: 120 });
+    if (s.status !== "ended") continue;
+    const { score } = buildResult.resultFromRun(s);
+    if (!Number.isFinite(score)) {
+      throw new Error(`seed ${seed} ${mode}/${bg}: honest play produced a non-finite score (${score})`);
+    }
+    if (Math.abs(score) > worst) {
+      worst = Math.abs(score);
+      where = `seed ${seed} ${mode}/${bg} age ${s.age}`;
+    }
+  }
+  if (worst === 0) throw new Error("no run finished — the check proved nothing");
+  const headroom = BOUND / worst;
+  if (headroom < MIN_HEADROOM) {
+    throw new Error(
+      `honest scores have grown into the CHECK: max ${Math.round(worst).toLocaleString()} ` +
+      `(${where}) leaves only ${Math.round(headroom)}x headroom under ${BOUND.toExponential()}. ` +
+      `Re-measure and widen results_score_sane before this refuses a real run.`,
+    );
+  }
+});
+
+// ── and the formatter refuses to print a number that is not one ─────────────
+// The CHECK stops new rows. Rows already in the table, and every other client-written
+// figure that reaches a render site, are stopped here instead — see lib/format.ts.
+check("P16 the money formatter never prints NaN or Infinity", () => {
+  for (const bad of [NaN, Infinity, -Infinity]) {
+    const money = format.currency(bad);
+    if (/NaN|Infinity|∞/.test(money)) throw new Error(`currency(${bad}) printed ${money}`);
+    const pct = format.percent(bad);
+    if (/NaN|Infinity|∞/.test(pct)) throw new Error(`percent(${bad}) printed ${pct}`);
+  }
+  // and it still prints the honest extremes it was guarding
+  eq(format.currency(0), "$0", "currency(0)");
+  eq(format.currency(-3711410), "−$3,711,410", "currency at the measured honest minimum");
+  eq(format.currency(15511231154), "$15,511,231,154", "currency at the measured honest maximum");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

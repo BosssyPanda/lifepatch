@@ -44,7 +44,13 @@ async function fetchRow(id: string): Promise<Row | null> {
     );
     if (!res.ok) return null;
     const rows = (await res.json()) as Row[];
-    return rows[0] ?? null;
+    const row = rows[0] ?? null;
+    // The same stance `/r/{id}` takes, for the same reason: `score` is a
+    // client-written `numeric`, and a value that is not a finite number is not a
+    // statement this origin should render at 84px. Returning null falls through to
+    // the generic card below, which is the right answer for a row that is not one.
+    if (!row || !Number.isFinite(Number(row.score))) return null;
+    return row;
   } catch {
     return null;
   }

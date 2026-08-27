@@ -78,6 +78,39 @@ end $$;
 reset role;
 
 \echo ''
+\echo '--- 6. a score that outranks every real one --------------------------'
+-- Postgres orders NaN above every numeric, and every board is `order by score
+-- desc`. So this single row is permanent first place until a CHECK refuses it.
+-- The probe asserts the ORDERING, not just the insert: a row that lands but sorts
+-- below an honest score would not be the bug.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+declare top numeric;
+begin
+  begin
+    insert into public.results (user_id, mode, score, verdict, metrics)
+    values ('22222222-2222-2222-2222-222222222222', 'infinite', 'NaN', 'Comfortable', '{}'::jsonb);
+    select score into top from public.results where mode = 'infinite' order by score desc limit 1;
+    if top is not null and top = 'NaN'::numeric then
+      raise notice 'VULNERABLE: NaN score accepted AND holds first place on the board';
+    else
+      raise notice 'VULNERABLE: NaN score accepted (top of board is %)', top;
+    end if;
+  exception when check_violation then
+    raise notice 'CLOSED: score CHECK refused NaN';
+  end;
+  begin
+    insert into public.results (user_id, mode, score, verdict, metrics)
+    values ('22222222-2222-2222-2222-222222222222', 'infinite', 1e100000, 'Comfortable', '{}'::jsonb);
+    raise notice 'VULNERABLE: a 100001-digit score accepted';
+  exception when check_violation then
+    raise notice 'CLOSED: score CHECK refused a 100001-digit score';
+  end;
+end $$;
+reset role;
+
+\echo ''
 \echo '--- 5. homoglyph / RTL username -------------------------------------'
 select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
 set role authenticated;

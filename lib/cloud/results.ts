@@ -59,6 +59,24 @@ function fromRow(row: Record<string, unknown>): ResultRow {
   };
 }
 
+/**
+ * Is this a row a board can rank?
+ *
+ * `score` is `numeric` and client-written, and PostgREST takes anything that column
+ * accepts. Two values in particular are not scores. `NaN` is one: Postgres orders it
+ * ABOVE every real number, so a single insert takes first place on
+ * `order by score desc` and no honest run can ever displace it — and `bestPerUser`'s
+ * own comparison, `r.score > prev.score`, is false against it in both directions. An
+ * integer with more digits than a double can carry is the other; it arrives here as
+ * `Infinity`.
+ *
+ * The `results_score_sane` CHECK is the fix for rows written from now on. This is the
+ * fix for whatever is already in the table, and it needs no migration to work.
+ */
+function rankable(r: ResultRow): boolean {
+  return Number.isFinite(r.score);
+}
+
 function readLocal(): ResultRow[] {
   try {
     const raw = localStorage.getItem(LIST_KEY);
@@ -82,6 +100,7 @@ function weekAgoIso(): string {
 function bestPerUser(rows: ResultRow[]): ResultRow[] {
   const best = new Map<string, ResultRow>();
   for (const r of rows) {
+    if (!rankable(r)) continue;
     const prev = best.get(r.userId);
     if (!prev || r.score > prev.score) best.set(r.userId, r);
   }
@@ -130,22 +149,58 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
   if (scope === "daily" && !daily) return [];
 
   if (isCloud && supabase) {
-    let query = supabase
-      .from("results")
-      .select("*")
-      .eq("mode", mode)
-      .order("score", { ascending: false });
-    if (scope === "week") query = query.gte("created_at", weekAgoIso());
-    if (scope === "friends") query = query.in("user_id", friendIds);
-    // `metrics->>backgroundId` is Postgres' text arrow, which PostgREST exposes as
-    // a filterable column — the filter runs in the database, not over a page of
-    // rows this client happened to fetch. Unindexed by design (no new SQL is
-    // required to run this build); README carries the optional expression index.
-    if (background) query = query.eq("metrics->>backgroundId", background);
-    if (scope === "daily" && daily) query = query.eq("metrics->>daily", daily);
-    // Over-fetch so best-per-user dedupe still fills the board.
-    const { data } = await query.limit(limit * 5);
-    return bestPerUser((data ?? []).map(fromRow)).slice(0, limit);
+    // Rebuilt per page: a PostgREST builder is single-use once awaited.
+    const page = (from: number, to: number) => {
+      let q = supabase!
+        .from("results")
+        .select("*")
+        .eq("mode", mode)
+        .order("score", { ascending: false });
+      if (scope === "week") q = q.gte("created_at", weekAgoIso());
+      if (scope === "friends") q = q.in("user_id", friendIds);
+      // `metrics->>backgroundId` is Postgres' text arrow, which PostgREST exposes as
+      // a filterable column — the filter runs in the database, not over a page of
+      // rows this client happened to fetch. Unindexed by design (no new SQL is
+      // required to run this build); README carries the optional expression index.
+      if (background) q = q.eq("metrics->>backgroundId", background);
+      if (scope === "daily" && daily) q = q.eq("metrics->>daily", daily);
+      // A second sort key, so the pages below tile the same list every time. `score`
+      // alone is not a total order — ties are returned in whatever order the planner
+      // produces, which can differ between two requests and would then let a row
+      // appear on two pages, or on neither.
+      return q.order("id", { ascending: true }).range(from, to);
+    };
+
+    /**
+     * Walk the score-ordered rows until enough DIFFERENT players have appeared.
+     *
+     * The board shows each player's single best run, and that dedupe can only
+     * happen in the client: PostgREST has no `distinct on`. A single fixed
+     * over-fetch — which is what this was, `limit * 5` — quietly assumes the top
+     * `limit * 5` scores belong to at least `limit` different people. They often
+     * do not. Ten regulars with twenty finished runs each can hold the top 125
+     * scores between three of them, and the "Top 25" board then renders three rows
+     * and silently hides everybody else. It gets worse the more the regulars play,
+     * which is the wrong way round for a leaderboard.
+     *
+     * So the first page is exactly the old fetch — the common case costs what it
+     * always cost — and pages only continue while the board is still short.
+     */
+    const PAGE = limit * 5;
+    const MAX_PAGES = 6;
+    const collected: ResultRow[] = [];
+    const players = new Set<string>();
+    for (let p = 0; p < MAX_PAGES; p++) {
+      const { data } = await page(p * PAGE, (p + 1) * PAGE - 1);
+      const rows = data ?? [];
+      for (const row of rows.map(fromRow)) {
+        collected.push(row);
+        if (rankable(row)) players.add(row.userId);
+      }
+      if (rows.length < PAGE) break; // the list is exhausted
+      if (players.size >= limit) break; // the board is full
+    }
+    return bestPerUser(collected).slice(0, limit);
   }
 
   let rows = readLocal().filter((r) => r.mode === mode);
@@ -170,9 +225,11 @@ export async function myBest(userId: string, mode: GameMode): Promise<ResultRow 
       .eq("user_id", userId)
       .eq("mode", mode)
       .order("score", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return data ? fromRow(data) : null;
+      // A small window rather than `.limit(1)`: an unrankable row sorts to the top
+      // (see `rankable`), and taking one row would then report that this player has
+      // no best run at all rather than skipping past the bad one to their real one.
+      .limit(5);
+    return (data ?? []).map(fromRow).find(rankable) ?? null;
   }
   const rows = readLocal().filter((r) => r.userId === userId && r.mode === mode);
   if (rows.length === 0) return null;
@@ -182,7 +239,13 @@ export async function myBest(userId: string, mode: GameMode): Promise<ResultRow 
 export async function getResult(id: string): Promise<ResultRow | null> {
   if (isCloud && supabase) {
     const { data } = await supabase.from("results").select("*").eq("id", id).maybeSingle();
-    return data ? fromRow(data) : null;
+    if (!data) return null;
+    // `/r/{id}` republishes this row as a statement on your own domain, inside your
+    // own <title> and og:description. A row whose score is not a number is not a
+    // statement worth hosting, so it gets the same answer the verdict CHECK gives a
+    // forged verdict: it does not exist.
+    const row = fromRow(data);
+    return rankable(row) ? row : null;
   }
   return readLocal().find((r) => r.id === id) ?? null;
 }

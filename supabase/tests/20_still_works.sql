@@ -125,6 +125,27 @@ exception when others then raise notice 'FAIL: honest result refused — %', sql
 end $$;
 
 \echo ''
+\echo '--- E2. the honest extremes of the score column -----------------------'
+-- The bound is only correct if it still admits the best and worst runs the engine
+-- can actually produce. Both numbers are measured, not chosen: 12,000 headless
+-- Infinite runs on the most aggressive honest line topped out at 15,511,231,154
+-- and bottomed out at -3,711,410 (see the 01b migration header).
+do $$
+begin
+  insert into public.results (user_id, mode, score, verdict, metrics)
+  values (auth.uid(), 'infinite', 15511231154, 'Financially Free', '{}'::jsonb);
+  raise notice 'PASS: the best measured honest run still inserts (15,511,231,154)';
+exception when others then raise notice 'FAIL: honest maximum refused — %', sqlerrm;
+end $$;
+do $$
+begin
+  insert into public.results (user_id, mode, score, verdict, metrics)
+  values (auth.uid(), 'infinite', -3711410, 'Underwater', '{}'::jsonb);
+  raise notice 'PASS: the worst measured honest run still inserts (-3,711,410)';
+exception when others then raise notice 'FAIL: honest minimum refused — %', sqlerrm;
+end $$;
+
+\echo ''
 \echo '--- F. a legitimate username change ----------------------------------'
 do $$
 begin
