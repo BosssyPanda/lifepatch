@@ -1,9 +1,10 @@
-import { getEvent, type LifeChoice } from "@/lib/lifeEvents";
+import { availableChoices, getEvent, type LifeChoice } from "@/lib/lifeEvents";
 import {
   advanceYear,
   allEventsResolved,
   annualExpenses,
   applyLifeChoice,
+  eventContext,
   trade,
   yearIndex,
   type RunState,
@@ -58,9 +59,12 @@ const SALARY_WEIGHT = 6;
 export function autoChoiceFor(s: RunState, eventId: string): LifeChoice | null {
   const ev = getEvent(eventId);
   if (!ev || ev.choices.length === 0) return null;
+  // Only what is actually on the table — the engine refuses a closed choice, so
+  // picking one would leave the card unanswered and hold the room's year open.
+  const choices = availableChoices(ev, eventContext(s));
   let best: LifeChoice | null = null;
   let bestWorst = -Infinity;
-  for (const choice of ev.choices) {
+  for (const choice of choices) {
     let worst = Infinity;
     for (const o of choice.outcomes) {
       // `salaryTo` is an absolute figure and `salaryPct` a multiplier (lib/lifeEvents).

@@ -29,6 +29,23 @@ export type LifeChoice = {
   label: string;
   blurb: string;
   outcomes: Outcome[];
+  /**
+   * A precondition on THIS choice, re-checked at the moment it is taken.
+   *
+   * An event-level `requires` is read once, by `drawEvents`, when the card is
+   * dealt — and a year is not an instant. The player can be dealt "a starter home
+   * is just in reach", put the down payment into the market, and then buy the
+   * house anyway: `applyLifeChoice` never looked again, so the cash went negative
+   * and the engine still minted a $220k home and a $176k mortgage. That is the
+   * "free house" bug wearing a different hat.
+   *
+   * So affordability belongs to the CHOICE, not the card. The card stays dealt
+   * and stays answerable — "keep renting" is always a valid answer — and the one
+   * option you can no longer pay for is locked. See `availableChoices`.
+   */
+  requires?: (c: EventContext) => boolean;
+  /** Shown in place of the blurb while `requires` is false. */
+  locked?: string;
 };
 
 export type EventContext = {
@@ -147,7 +164,7 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     // to be real cash the player actually accumulated.
     requires: (c) => c.life.housing === "renting" && c.salary > 0 && c.cash >= HOME_DOWN_PAYMENT,
     choices: [
-      { id: "buy", label: "Buy the house", blurb: "20% down + a 30-year mortgage.", outcomes: [{ weight: 100, effect: { cash: -HOME_DOWN_PAYMENT, happiness: 8 }, tone: "warning", setFlags: ["owned"], consequence: "Keys in hand — and a 30-year obligation. Property tax, insurance and a roof that will, eventually, leak.", lesson: "A house is shelter first, investment second. The down payment is gone from the market, and the mortgage doesn't shrink when prices do." }] },
+      { id: "buy", label: "Buy the house", blurb: "20% down + a 30-year mortgage.", requires: (c) => c.cash >= HOME_DOWN_PAYMENT, locked: "You no longer have the down payment in cash.", outcomes: [{ weight: 100, effect: { cash: -HOME_DOWN_PAYMENT, happiness: 8 }, tone: "warning", setFlags: ["owned"], consequence: "Keys in hand — and a 30-year obligation. Property tax, insurance and a roof that will, eventually, leak.", lesson: "A house is shelter first, investment second. The down payment is gone from the market, and the mortgage doesn't shrink when prices do." }] },
       { id: "rent", label: "Keep renting, invest the rest", blurb: "Stay flexible and liquid.", outcomes: [{ weight: 100, effect: { happiness: -2 }, tone: "neutral", consequence: "No yard, no upkeep, full flexibility. The down payment stays working in the market.", lesson: "Renting isn't 'throwing money away' — it buys flexibility and dodges maintenance." }] },
     ],
   },
@@ -327,7 +344,12 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     once: true,
     weight: 1,
     choices: [
-      { id: "invest", label: "Invest most of it", blurb: "Future-you's gift.", outcomes: [{ weight: 100, effect: { cash: 25000, happiness: 4 }, tone: "good", consequence: "You resist the urge to blow it. Future-you is quietly grateful.", lesson: "Windfalls build wealth only if they hit your portfolio, not your dopamine." }] },
+      // Same correction `bonus` already carries, missed in its sibling: the effect can
+      // only move CASH, and cash earns nothing here on purpose. Labelling this "invest
+      // most of it" and promising the portfolio was a claim about something the engine
+      // never did — the windfall sat idle unless the player allocated it themselves.
+      // The card now says where the money actually went, and names the second step.
+      { id: "invest", label: "Bank it, don't blow it", blurb: "Future-you's gift.", outcomes: [{ weight: 100, effect: { cash: 25000, happiness: 4 }, tone: "good", consequence: "You resist the urge to blow it. The whole sum is in your account — and it earns nothing until you put it to work below.", lesson: "Windfalls build wealth only if they reach your portfolio. Banking one is step one; allocating it is step two." }] },
       { id: "splurge", label: "Treat yourself big", blurb: "You only live once.", outcomes: [{ weight: 100, effect: { cash: 7000, happiness: 12, health: 2 }, tone: "warning", consequence: "New everything. Incredible month, ordinary decade.", lesson: "A windfall spent is a one-time high; invested, it's a raise that lasts." }] },
     ],
   },
@@ -482,7 +504,12 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     prompt: "Your student loans sit there compounding. You could throw everything at them or just pay the minimum.",
     minAge: 22,
     weight: 1,
-    requires: (c) => c.salary > 0 && c.life.health > 0,
+    // `c.debt > 0` is the load-bearing clause. Without it this was dealt to players
+    // who owe nothing — "Attack the debt" then spent $8,000 of cash against a $0
+    // balance, because `applyLifeChoice` floored the debt leg at zero and left the
+    // cash leg alone. It fired on ~15% of draws. The engine now clamps the pair as
+    // well (see `applyLifeChoice`), so a partial balance costs only what it clears.
+    requires: (c) => c.salary > 0 && c.life.health > 0 && c.debt > 0,
     choices: [
       { id: "attack", label: "Attack the debt", blurb: "Kill it fast.", outcomes: [{ weight: 100, effect: { cash: -8000, debt: -8000, happiness: -3 }, tone: "good", consequence: "Lean months, but the balance drops hard. Future-you gets a raise called 'no payment.'", lesson: "Paying off debt is a guaranteed return equal to its interest rate. Often unbeatable." }] },
       { id: "minimum", label: "Pay the minimum, invest more", blurb: "Bet on the market.", outcomes: [{ weight: 100, effect: { happiness: 1 }, tone: "neutral", consequence: "You keep the cash liquid and invest instead. Works if your returns beat the loan rate.", lesson: "Low-rate debt can coexist with investing. High-rate debt should always die first." }] },
@@ -610,9 +637,21 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
         id: "stock",
         label: "Bet on the stock",
         blurb: "Double — if it works.",
+        // THE LESSON HAS TO BE TRUE OF THE MECHANIC. This card taught "your job AND
+        // your savings riding on one company is double the risk" over two outcomes
+        // worth +$16,000 and +$4,000 — the bet could not lose, beat the cash on
+        // expectation by 57%, and never once touched the job. A player who read the
+        // lesson and took the cash was simply worse off, every time, which teaches
+        // the opposite of what the words say.
+        //
+        // The third branch is the second bet the lesson names: the shares are worth
+        // nothing AND the company that signs the paycheck is in trouble. That is the
+        // only version of this card where "don't tie your net worth to your employer"
+        // is advice rather than decoration.
         outcomes: [
           { weight: 45, note: "Stock soared.", effect: { cash: 16000, happiness: 6 }, tone: "good", consequence: "The shares climbed and vested. The gamble doubled your bonus and then some.", lesson: "Concentrated bets can pay big — but your job AND your savings riding on one company is double the risk." },
-          { weight: 55, note: "It sagged.", effect: { cash: 4000, happiness: -3 }, tone: "warning", consequence: "The stock drifted sideways and down. You'd have done better with the cash.", lesson: "Don't tie your net worth to the same company that signs your paycheck. That's two bets, not one." },
+          { weight: 40, note: "It sagged.", effect: { cash: 3000, happiness: -3 }, tone: "warning", consequence: "The stock drifted sideways and down. You'd have done better with the cash.", lesson: "Don't tie your net worth to the same company that signs your paycheck. That's two bets, not one." },
+          { weight: 15, note: "The company cracked.", effect: { salaryPct: -8, happiness: -8, health: -3 }, tone: "bad", consequence: "The shares vested at roughly nothing, and the bad year came for payroll too — a pay cut on top of the write-off.", lesson: "This is the double risk: the same bad year takes your savings and your salary. Cash you already hold can't do that to you." },
         ],
       },
     ],
@@ -642,4 +681,25 @@ export function eligibleEvents(ctx: EventContext, used: string[]): (LifeEvent & 
 
 export function getEvent(id: string) {
   return LIFE_EVENTS.find((e) => e.id === id);
+}
+
+/**
+ * The choices on a dealt card that can still be taken RIGHT NOW.
+ *
+ * Every reader of a card's options goes through here — the card UI, the
+ * auto-resolver that answers for an absent player, and `applyLifeChoice` itself —
+ * so all three agree about what is on the table. See `LifeChoice.requires` for
+ * why a card-level precondition is not enough.
+ *
+ * NEVER RETURNS EMPTY. An unanswerable card blocks "Advance the year" forever,
+ * which is a worse bug than the one this closes, so if a card ever gates all of
+ * its options at once the gates are ignored rather than the year lost. No card
+ * does that today; the fallback is here so that adding one cannot softlock a run.
+ */
+export function availableChoices(
+  event: LifeEvent & { choices: LifeChoice[] },
+  ctx: EventContext,
+): LifeChoice[] {
+  const open = event.choices.filter((c) => !c.requires || c.requires(ctx));
+  return open.length > 0 ? open : event.choices;
 }

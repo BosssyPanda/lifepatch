@@ -123,6 +123,8 @@ const buildResult = R("cloud/buildResult");
 const daily = R("daily");
 const dailyShare = R("dailyShare");
 const eventConcepts = R("eventConcepts");
+const economy = R("economy");
+const lifeEvents = R("lifeEvents");
 const { BACKGROUNDS } = R("backgrounds");
 
 /** Assets a player could actually have bought that year (crypto is gated to 2011+). */
@@ -619,6 +621,128 @@ check("P9d a replay reproduces a biased run exactly", () => {
     eq(Math.round(engine.netWorth(again)), Math.round(engine.netWorth(s)), `seed ${seed}: replayed to a different number`);
     eq(replay.verifyResult(t, engine.netWorth(s)), true, `seed ${seed}: verification declined`);
   }
+});
+
+// ── rule gates ──────────────────────────────────────────────────────────────
+// Four cards used to contradict the rule they were written to teach. Each check
+// below is the rule, stated as a property, so the card cannot drift back.
+
+check("P10 a debt card is never dealt to a player who owes nothing", () => {
+  // "Your student loans sit there compounding" was dealt regardless of balance,
+  // and "Attack the debt" then spent $8,000 against $0. Two properties in one:
+  // the card only comes up against a real balance, and the payment can never
+  // exceed it even if the balance is cleared after the deal.
+  let seen = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    let s = engine.initRun("infinite", BG_IDS[seed % BG_IDS.length], "A", seed);
+    const rand = rng.mulberry32(seed);
+    let n = 0;
+    while (s.status === "playing" && n < 40) {
+      if (s.pendingEvents.includes("studentLoans")) {
+        seen++;
+        if (s.debt <= 0) throw new Error(`seed ${seed} y${s.year}: dealt with $0 owed`);
+      }
+      for (const id of [...s.pendingEvents]) {
+        const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+        if (ev) s = engine.applyLifeChoice(s, id, ev.choices[Math.floor(rand() * ev.choices.length)] ?? ev.choices[0]);
+      }
+      if (rand() < 0.4) s = engine.trade(s, "index", Math.round(rand() * 5000));
+      s = engine.advanceYear(s);
+      n++;
+    }
+  }
+  if (seen < 50) throw new Error(`only ${seen} draws of studentLoans — the check proved little`);
+
+  // The clamp, stated directly: pay the whole balance off after the deal, then
+  // attack it. Nothing may leave the account.
+  const card = engine.LIFE_EVENTS.find((e) => e.id === "studentLoans");
+  const attack = card.choices.find((c) => c.id === "attack");
+  for (const owed of [0, 1, 2000, 7999, 8000, 25000]) {
+    const base = { ...engine.initRun("story", "student", "A", 5), debt: owed, cash: 40000, pendingEvents: ["studentLoans"] };
+    const after = engine.applyLifeChoice(base, "studentLoans", attack);
+    const cleared = owed - after.debt;
+    eq(cleared, Math.min(owed, 8000), `owed ${owed}: balance cleared`);
+    eq(base.cash - after.cash, cleared, `owed ${owed}: cash spent equals balance cleared`);
+  }
+});
+
+check("P11 a card this build no longer has does not hold the year open", () => {
+  // `pendingEvents` is restored from a save and forced by a journal, so it can
+  // name a retired event. `YearLoop` renders nothing for it, so an id that still
+  // counted toward "all resolved" disabled Advance for the rest of that life.
+  const s = engine.initRun("story", "student", "A", 11);
+  const ghostCard = { ...s, pendingEvents: ["anEventThisBuildRetired"] };
+  eq(engine.allEventsResolved(ghostCard), true, "an unknown id blocked the year");
+  // A card it DOES have still has to be answered.
+  const real = { ...s, pendingEvents: ["studentLoans"], yearChoices: {} };
+  eq(engine.allEventsResolved(real), false, "a real card stopped counting");
+  eq(engine.allEventsResolved({ ...real, yearChoices: { studentLoans: "attack|0" } }), true, "an answered card still blocked");
+  // Mixed: the known one is what decides.
+  eq(engine.allEventsResolved({ ...s, pendingEvents: ["studentLoans", "gone"] }), false, "the known card was skipped too");
+});
+
+check("P12 the house cannot be bought with money already spent", () => {
+  const card = engine.LIFE_EVENTS.find((e) => e.id === "rentOrBuy");
+  const buy = card.choices.find((c) => c.id === "buy");
+  const rent = card.choices.find((c) => c.id === "rent");
+  const dealt = {
+    ...engine.initRun("story", "student", "A", 12),
+    age: 30,
+    cash: economy.HOME_DOWN_PAYMENT,
+    salary: 60000,
+    pendingEvents: ["rentOrBuy"],
+  };
+  // Affordable at the deal: the purchase goes through, house and mortgage together.
+  const bought = engine.applyLifeChoice(dealt, "rentOrBuy", buy);
+  eq(bought.life.housing, "owned", "an affordable buy was refused");
+  eq(bought.cash, 0, "the down payment did not leave");
+  eq(bought.mortgage, economy.HOME_PRICE - economy.HOME_DOWN_PAYMENT, "no mortgage came with the house");
+
+  // The same card, after the money went into the market. This is the actual bug:
+  // the gate was read once at deal time and never again.
+  const spent = engine.trade(dealt, "index", economy.HOME_DOWN_PAYMENT);
+  eq(spent.cash, 0, "the trade did not take the cash");
+  const refused = engine.applyLifeChoice(spent, "rentOrBuy", buy);
+  eq(refused, spent, "a house was bought with money that was gone");
+  eq(lifeEvents.availableChoices(card, engine.eventContext(spent)).map((c) => c.id).join(","), "rent", "the locked option was still on the table");
+  // ...and the card is still answerable, so the year is not lost.
+  eq(engine.allEventsResolved(spent), false, "the card vanished instead of locking");
+  const rented = engine.applyLifeChoice(spent, "rentOrBuy", rent);
+  eq(engine.allEventsResolved(rented), true, "renting did not answer the card");
+});
+
+check("P13 the ghost still replays a life that bought a house", () => {
+  // The gate above is a rule about the life that was LIVED. Applied to the
+  // counterfactual — which puts the money somewhere else and therefore arrives at
+  // the card with different cash — it made `replayRun` refuse the choice and
+  // return null, taking the report's comparison and the daily share grid with it.
+  let tested = 0;
+  for (let seed = 300; seed < 460 && tested < 10; seed++) {
+    let s = engine.initRun("story", BG_IDS[seed % BG_IDS.length], "A", seed);
+    const rand = rng.mulberry32(seed);
+    while (s.status === "playing") {
+      for (const id of [...s.pendingEvents]) {
+        const ev = engine.LIFE_EVENTS.find((e) => e.id === id);
+        if (!ev) continue;
+        // Always buy when the house is on the table — that is the case under test.
+        const pick = id === "rentOrBuy"
+          ? ev.choices.find((c) => c.id === "buy")
+          : ev.choices[Math.floor(rand() * ev.choices.length)] ?? ev.choices[0];
+        s = engine.applyLifeChoice(s, id, pick);
+      }
+      if (rand() < 0.6) s = engine.trade(s, "index", Math.round(rand() * 6000));
+      s = engine.advanceYear(s);
+    }
+    if (s.life.housing !== "owned") continue;
+    tested++;
+    const t = replay.ticketFor(s);
+    if (!t) throw new Error(`seed ${seed}: no ticket`);
+    if (!replay.replayRun(t)) throw new Error(`seed ${seed}: verification replay refused a bought house`);
+    if (!replay.replayRun(t, { allocate: replay.indexEverything })) {
+      throw new Error(`seed ${seed}: the ghost refused a house the player bought`);
+    }
+  }
+  if (tested < 6) throw new Error(`only ${tested} runs bought a house — the check proved little`);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

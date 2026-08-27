@@ -19,6 +19,7 @@ import {
 import { eventTeachesAny } from "./eventConcepts";
 import { clamp } from "./format";
 import {
+  availableChoices,
   eligibleEvents,
   getEvent,
   LIFE_EVENTS,
@@ -45,8 +46,16 @@ import { mulberry32, strHash } from "./rng";
  *          draw falls back to the weights it always used, and replay/ghost/verify
  *          return null. Same reasoning `sharedEvents` already makes below. Bumping
  *          would have invalidated every live save to buy nothing.
+ *   6 → 7: four rule fixes that move the draw and the arithmetic, so unlike the
+ *          line above this one HAD to bump. `studentLoans` now requires a balance
+ *          to attack (17.7% of its draws were dealt against $0 owed, and each one
+ *          burned $8,000 for nothing), a card's cash-for-debt legs are clamped to
+ *          what is actually owed, "Buy the house" is re-checked at the moment it
+ *          is taken rather than when it was dealt, and `equityVsCash` gained the
+ *          losing branch its own lesson claimed it had. `scripts/qa/golden-draws.json`
+ *          was regenerated with `scripts/qa/regen-golden-draws.mjs` to match.
  */
-export const RUN_VERSION = 6;
+export const RUN_VERSION = 7;
 
 export type Life = {
   health: number;
@@ -270,7 +279,8 @@ export function netWorth(s: RunState): number {
   return liquidNetWorth(s) + homeEquity(s);
 }
 
-function eventContext(s: RunState): EventContext {
+/** The slice of a run an event's preconditions are allowed to see. */
+export function eventContext(s: RunState): EventContext {
   return {
     age: s.age,
     year: s.year,
@@ -489,8 +499,23 @@ export function payDebt(s: RunState, dollars: number): RunState {
   return record({ ...s, cash: s.cash - amt, debt: s.debt - amt }, ["d", dollars]);
 }
 
+/**
+ * Can the year turn?
+ *
+ * `!getEvent(id)` IS THE GUARD, not a tidy-up. `pendingEvents` is restored from a
+ * save and replayed from a journal, so it can name a card THIS BUILD DOES NOT HAVE
+ * — an event renamed or retired since the run was written. `YearLoop` renders from
+ * the same lookup, so no card appears for it; without this clause the id could
+ * never be answered and "Advance the year" stayed disabled for the rest of that
+ * life, with nothing on screen to click. The multiplayer auto-resolver already
+ * skipped unknown ids for exactly this reason (`lib/mp/autoResolve.ts`) — the solo
+ * path was the half that still hung.
+ *
+ * Skipping is safe because `advanceYear` clears `pendingEvents` wholesale: an
+ * unknown card is not silently answered, it simply does not happen.
+ */
 export function allEventsResolved(s: RunState): boolean {
-  return s.pendingEvents.every((id) => s.yearChoices[id]);
+  return s.pendingEvents.every((id) => Boolean(s.yearChoices[id]) || !getEvent(id));
 }
 
 function rollOutcome(s: RunState, eventId: string, choice: LifeChoice): number {
@@ -517,12 +542,41 @@ export function chosenOutcome(s: RunState, eventId: string): { choice: LifeChoic
   return { choice, outcome };
 }
 
-export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice): RunState {
+export function applyLifeChoice(
+  s: RunState,
+  eventId: string,
+  choice: LifeChoice,
+  /**
+   * Set only by the GHOST — `replayRun` with an `allocate`, the counterfactual that
+   * re-lives a run with the money put somewhere else.
+   *
+   * Whether the player could afford the house is a fact about the life that was
+   * actually lived, and the ghost's whole discipline is that exactly one variable
+   * moves. Re-asking the question against the ghost's own balance would let it
+   * decline a purchase the player made — a second changed variable, and the gap on
+   * the report would stop isolating anything. Worse in practice: `replayRun` treats
+   * a refused choice as a desync and returns null, so the ghost, the report's
+   * comparison and the daily share grid all vanished for any life that bought a
+   * house.
+   *
+   * A VERIFICATION replay does not set this and must not: it re-simulates the same
+   * trades in the same order, so it reaches the gate with the same cash and has to
+   * agree.
+   */
+  opts: { counterfactual?: boolean } = {},
+): RunState {
   // Same contract as `advanceYear`: nothing may move money through a closed
   // ledger. `advanceYear` clears `yearChoices`, so the guard below cannot catch a
   // choice replayed against an already-ended run.
   if (s.status !== "playing") return s;
   if (s.yearChoices[eventId]) return s;
+  // A choice can carry its own precondition, and a year is not an instant: the
+  // house is affordable when the card is DEALT and may not be when it is TAKEN.
+  // The card UI locks the button and the auto-resolver never picks it, so nothing
+  // in this build reaches here with a closed choice — which is exactly why the
+  // engine checks too. See `LifeChoice.requires`.
+  const ev = getEvent(eventId);
+  if (!opts.counterfactual && ev && !availableChoices(ev, eventContext(s)).some((c) => c.id === choice.id)) return s;
   const idx = rollOutcome(s, eventId, choice);
   const o = choice.outcomes[idx];
   const e = o.effect;
@@ -562,10 +616,24 @@ export function applyLifeChoice(s: RunState, eventId: string, choice: LifeChoice
     mortgage = HOME_PRICE - HOME_DOWN_PAYMENT;
   }
 
+  // A REPAYMENT CANNOT PAY MORE THAN IS OWED. When an effect moves cash out and
+  // the balance down together, those are the same dollars: `studentLoans` spends
+  // $8,000 to retire $8,000. The debt leg was floored at zero and the cash leg was
+  // not, so against a $2,000 balance the player paid $8,000 for $2,000 of relief —
+  // and against no balance at all, $8,000 for nothing. `payDebt` has always
+  // clamped the button this way; this is the same rule for the card.
+  //
+  // The paired portion is the SMALLER of the two legs, so an effect that only
+  // forgives debt (no cash leg) or only spends cash (no debt leg) is untouched,
+  // and one that hands over cash while adding debt — a loan — is not a repayment
+  // at all and skips this.
+  const asked = Math.min(-(e.cash ?? 0), -(e.debt ?? 0));
+  const unpayable = asked > 0 ? asked - Math.min(asked, Math.max(0, s.debt)) : 0;
+
   return record({
     ...s,
-    cash: s.cash + (e.cash ?? 0),
-    debt: Math.max(0, s.debt + (e.debt ?? 0)),
+    cash: s.cash + (e.cash ?? 0) + unpayable,
+    debt: Math.max(0, s.debt + (e.debt ?? 0) + unpayable),
     homeValue,
     mortgage,
     salary,

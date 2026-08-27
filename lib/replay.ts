@@ -138,7 +138,9 @@ export function replayRun(t: ReplayTicket, opts: ReplayOpts = {}): RunState | nu
         const choice = getEvent(act[1])?.choices.find((c) => c.id === act[2]);
         if (!choice) return null; // the content changed under the journal
         const before = s;
-        s = applyLifeChoice(s, act[1], choice);
+        // `counterfactual` only for the ghost — see `applyLifeChoice`. A verification
+        // replay leaves it off so the engine's own gates still have to agree.
+        s = applyLifeChoice(s, act[1], choice, { counterfactual: Boolean(opts.allocate) });
         if (s === before) return null; // the engine refused it
         // The roll has to land where it landed. `rollOutcome` is salted by
         // (seed, year, eventId, choiceId) and reads nothing else, so on the same

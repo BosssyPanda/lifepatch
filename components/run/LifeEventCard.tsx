@@ -10,8 +10,8 @@ import { stingForTone } from "@/lib/audioMap";
 import { conceptsForText } from "@/lib/concepts";
 import { KID_COST } from "@/lib/economy";
 import { currency } from "@/lib/format";
-import type { LifeChoice, LifeEffect, LifeEvent } from "@/lib/lifeEvents";
-import { netWorth, type RunState } from "@/lib/runEngine";
+import { availableChoices, type LifeChoice, type LifeEffect, type LifeEvent } from "@/lib/lifeEvents";
+import { eventContext, netWorth, type RunState } from "@/lib/runEngine";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { DUR, EASE } from "@/src/motion/tokens";
 import { ConsequenceBeat } from "./ConsequenceBeat";
@@ -58,6 +58,18 @@ export function LifeEventCard({
   const [chosenId, idxStr] = chosen ? chosen.split("|") : [undefined, undefined];
   const answered = Boolean(chosenId);
   const chosenChoice = event.choices.find((c) => c.id === chosenId);
+  /**
+   * Which options are still on the table, asked fresh on every render.
+   *
+   * A card is dealt at the top of a year and answered at some point during it,
+   * and the player can spend the money in between — so "Buy the house" has to
+   * stop being clickable the moment the down payment is gone, not merely fail
+   * when clicked. `null` means "no run state to ask", which is only the
+   * storybook/preview path; nothing is locked there.
+   */
+  const openIds = runState
+    ? new Set(availableChoices(event, eventContext(runState)).map((c) => c.id))
+    : null;
   const outcome = chosenChoice?.outcomes[Number(idxStr)] ?? chosenChoice?.outcomes[0];
 
   // A flagship consequence beat plays for tagged events (Phase 2), but only on a
@@ -120,12 +132,19 @@ export function LifeEventCard({
         {event.choices.map((c) => {
           const isChosen = c.id === chosenId;
           const dim = answered && !isChosen;
+          // `aria-disabled` rather than `disabled`, deliberately: the button carries
+          // the REASON it is locked, and a `disabled` button is skipped by the tab
+          // order, so the one player who most needs that sentence read to them is
+          // the one who cannot reach it.
+          const locked = !answered && openIds !== null && !openIds.has(c.id);
           return (
             <li key={c.id}>
               <button
                 type="button"
                 disabled={answered}
+                aria-disabled={locked || undefined}
                 onClick={() => {
+                  if (locked) return;
                   audio.sfx("paper");
                   // captured BEFORE the engine mutates — see nwBefore
                   if (runState) nwBefore.current = netWorth(runState);
@@ -137,16 +156,35 @@ export function LifeEventCard({
                    active square. It marks WHICH you picked, never whether that was
                    the right pick; the outcome rail below carries the verdict. */
                 className={`group flex w-full items-start gap-2.5 border px-3.5 py-2.5 text-left transition-all ${
-                  isChosen ? "border-accent bg-accent/10" : dim ? "border-ink/10 opacity-45" : "border-hairline-strong hover:border-ink hover:bg-ink/[0.04]"
-                } ${answered ? "cursor-default" : "cursor-pointer"}`}
+                  // Wash stays INK; only the marks are coloured. DESIGN.md § "Where the
+                  // accent is actually spent", item 4: "a 2px inset outline plus the
+                  // check badge. The wash under a selected card stays ink." Every other
+                  // selectable surface obeys it (ModeSelect:86, Setup:129,
+                  // LobbyScreen:250, CashflowSetup:166 all use bg-ink/15). An orange
+                  // keyline plus an orange fill plus an orange badge, next to the
+                  // orange SectionMark folio, and three of them in a bad year, is well
+                  // past the stated ~1-2% ceiling.
+                  isChosen
+                    ? "border-accent bg-ink/10"
+                    : dim
+                      ? "border-ink/10 opacity-45"
+                      : locked
+                        ? "border-ink/10"
+                        : "border-hairline-strong hover:border-ink hover:bg-ink/[0.04]"
+                } ${answered || locked ? "cursor-default" : "cursor-pointer"}`}
               >
                 {/* paper knockout on the accent fill — ink on accent is 2.74:1 */}
-                <span data-radius="round" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center border ${isChosen ? "border-accent bg-accent text-bg" : "border-ink/40 text-transparent"}`}>
-                  <CheckIcon size={12} />
+                <span data-radius="round" className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center border ${isChosen ? "border-accent bg-accent text-bg" : locked ? "border-ink/25 text-secondary" : "border-ink/40 text-transparent"}`}>
+                  {locked ? <LockIcon size={11} /> : <CheckIcon size={12} />}
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="font-mono text-sm font-semibold uppercase tracking-wide text-ink">{c.label}</span>
-                  <span className="mt-0.5 block font-body text-sm leading-snug text-ink/60">{c.blurb}</span>
+                  <span className={`font-mono text-sm font-semibold uppercase tracking-wide ${locked ? "text-secondary" : "text-ink"}`}>{c.label}</span>
+                  {/* The locked note REPLACES the blurb rather than joining it: two
+                      sentences under a greyed option is noise, and the one that
+                      matters is why it is greyed. */}
+                  <span className={`mt-0.5 block font-body text-sm leading-snug ${locked ? "text-secondary" : "text-ink/60"}`}>
+                    {locked ? (c.locked ?? "Not available right now.") : c.blurb}
+                  </span>
                 </span>
               </button>
             </li>
