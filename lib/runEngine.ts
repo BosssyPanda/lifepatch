@@ -351,8 +351,15 @@ function drawEvents(s: RunState): string[] {
     // weight is multiplied by one and the draw is byte-identical to before — which
     // `scripts/qa/golden-draws.json` pins over 120 runs.
     const weighted = mine.flatMap((e) => Array(weightFor(e, s)).fill(e.id));
+    // Never ask for more DISTINCT cards than the pool can supply. Asking for two
+    // out of a one-card hand took the card on the first iteration and then spent
+    // 59 more draws discarding it. `rng` is local to this function, so consuming
+    // fewer of it is invisible to everything else, and the common case
+    // (`mine.length >= want`) is unchanged — which is what keeps
+    // `scripts/qa/golden-draws.json` and every recorded run valid.
+    const target = Math.min(want, mine.length);
     let guard = 0;
-    while (picks.length < want && guard < 60) {
+    while (picks.length < target && guard < 60) {
       guard++;
       const id = weighted[Math.floor(rng() * weighted.length)];
       if (!picks.includes(id)) picks.push(id);

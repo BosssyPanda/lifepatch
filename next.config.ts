@@ -9,7 +9,14 @@ const SECURITY_HEADERS = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-  { key: "Content-Security-Policy", value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'" },
+  // `form-action` and `frame-src` are added on the same reasoning as the rest:
+  // neither interacts with hydration, so neither costs a nonce pipeline.
+  // `form-action 'self'` blocks an injected form from posting off-origin, and the
+  // app embeds nothing, so `frame-src 'none'` is simply true.
+  {
+    key: "Content-Security-Policy",
+    value: "frame-ancestors 'none'; frame-src 'none'; form-action 'self'; object-src 'none'; base-uri 'self'",
+  },
 ];
 
 const nextConfig: NextConfig = {

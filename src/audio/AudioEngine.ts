@@ -893,7 +893,13 @@ export class AudioEngine {
       const prev = this.currentAmb;
       prev.out.gain.cancelScheduledValues(now);
       prev.out.gain.linearRampTo(0, 0.7, now);
-      setTimeout(() => { try { prev.dispose(); } catch {} }, 900);
+      // Tracked, so `dispose()` can cancel it — the same contract every one-shot
+      // voice in this file already keeps. A bare `setTimeout` here was invisible to
+      // `pendingDisposals`, and nulling `currentAmb` first put the outgoing graph
+      // out of reach of the teardown's own `this.currentAmb?.dispose()`, so a full
+      // oscillator/filter/loop chain outlived an engine that claimed to be torn
+      // down — once per ambience change, for a whole session.
+      this.disposeLater(prev, 0.9);
       this.currentAmb = null;
     }
     if (!id) return;

@@ -52,21 +52,49 @@ function useAuthState(): AuthApi {
   useEffect(() => {
     let active = true;
     if (isCloud && supabase) {
-      supabase.auth.getSession().then(async ({ data }) => {
-        if (!active) return;
-        const u = data.session?.user;
-        // The magic link lands on a fresh page load, so this is where a cloud
-        // sign-in gets the guest's run carried across (no-op after the first time).
-        if (u) await adoptGuestSaves(localPlayerId(), u.id);
-        if (!active) return;
-        // A real session always wins over a remembered guest; otherwise the guest
-        // is restored, so "Play as guest" survives a reload the same way a sign-in does.
-        setUser(u ? { id: u.id, email: u.email ?? "" } : storedGuest());
-        setLoading(false);
-      });
+      supabase.auth
+        .getSession()
+        .then(async ({ data }) => {
+          if (!active) return;
+          const u = data.session?.user;
+          // The magic link lands on a fresh page load, so this is where a cloud
+          // sign-in gets the guest's run carried across (no-op after the first time).
+          // Wrapped on its own: carrying the runs across must never cost the player
+          // their session. A failed adoption is a lost migration, not a lost sign-in,
+          // and it must not fall through to the guest fallback below.
+          if (u) {
+            try {
+              await adoptGuestSaves(localPlayerId(), u.id);
+            } catch {}
+          }
+          if (!active) return;
+          // A real session always wins over a remembered guest; otherwise the guest
+          // is restored, so "Play as guest" survives a reload the same way a sign-in does.
+          setUser(u ? { id: u.id, email: u.email ?? "" } : storedGuest());
+        })
+        .catch(() => {
+          // The network is not the gate. A session we could not REACH is not a
+          // session that refused us — an offline start, a DNS blip or a Supabase
+          // outage used to leave `loading` true forever, which hid the sign-in form
+          // AND the guest button for the life of the page. Guest play touches no
+          // network at all, so a player who was entirely unaffected was locked out
+          // of the game. Fall back to any remembered guest and let them in.
+          if (active) setUser(storedGuest());
+        })
+        .finally(() => {
+          // The ONLY place `loading` is cleared on the cloud path. It runs on both
+          // outcomes by construction — that is the whole point of it being here.
+          if (active) setLoading(false);
+        });
       const { data: sub } = supabase.auth.onAuthStateChange(async (_e, session) => {
+        // Async listener: nothing awaits it, so an unhandled rejection here would be
+        // silent. Same rule as above — adoption failing never costs you the session.
         const u = session?.user;
-        if (u) await adoptGuestSaves(localPlayerId(), u.id);
+        if (u) {
+          try {
+            await adoptGuestSaves(localPlayerId(), u.id);
+          } catch {}
+        }
         setUser(u ? { id: u.id, email: u.email ?? "" } : storedGuest());
       });
       return () => {
