@@ -656,16 +656,47 @@ check("P10 a debt card is never dealt to a player who owes nothing", () => {
   }
   if (seen < 50) throw new Error(`only ${seen} draws of studentLoans — the check proved little`);
 
-  // The clamp, stated directly: pay the whole balance off after the deal, then
-  // attack it. Nothing may leave the account.
   const card = engine.LIFE_EVENTS.find((e) => e.id === "studentLoans");
   const attack = card.choices.find((c) => c.id === "attack");
-  for (const owed of [0, 1, 2000, 7999, 8000, 25000]) {
-    const base = { ...engine.initRun("story", "student", "A", 5), debt: owed, cash: 40000, pendingEvents: ["studentLoans"] };
-    const after = engine.applyLifeChoice(base, "studentLoans", attack);
+  const minimum = card.choices.find((c) => c.id === "minimum");
+  const at = (owed) => ({
+    ...engine.initRun("story", "student", "A", 5),
+    debt: owed,
+    cash: 40000,
+    pendingEvents: ["studentLoans"],
+  });
+
+  // Clear the balance with the debt button AFTER the card is dealt, and the option
+  // locks rather than spending $8,000 on nothing. Same mechanism as the house.
+  for (const owed of [0, 1, 2000, 7999]) {
+    const s = at(owed);
+    eq(engine.applyLifeChoice(s, "studentLoans", attack), s, `owed ${owed}: the attack was allowed`);
+    deepEq(
+      lifeEvents.availableChoices(card, engine.eventContext(s)).map((c) => c.id),
+      ["minimum"],
+      `owed ${owed}: the locked option was still on the table`,
+    );
+    // ...and the card is still answerable, so the year is not lost.
+    eq(engine.allEventsResolved(engine.applyLifeChoice(s, "studentLoans", minimum)), true, `owed ${owed}: the year hung`);
+  }
+  // With the balance there, it pays in full and the receipt is exact — which is the
+  // whole reason the gate is `>= 8000` and not `> 0`.
+  for (const owed of [8000, 25000]) {
+    const s = at(owed);
+    const after = engine.applyLifeChoice(s, "studentLoans", attack);
+    eq(owed - after.debt, 8000, `owed ${owed}: balance cleared`);
+    eq(s.cash - after.cash, 8000, `owed ${owed}: cash spent`);
+  }
+
+  // THE ENGINE CLAMP is now reachable only by the ghost, which is exempt from the
+  // gate above and arrives with a balance of its own. Without it a counterfactual
+  // would pay full price for relief it could not use.
+  for (const owed of [0, 2000, 8000, 25000]) {
+    const s = at(owed);
+    const after = engine.applyLifeChoice(s, "studentLoans", attack, { counterfactual: true });
     const cleared = owed - after.debt;
-    eq(cleared, Math.min(owed, 8000), `owed ${owed}: balance cleared`);
-    eq(base.cash - after.cash, cleared, `owed ${owed}: cash spent equals balance cleared`);
+    eq(cleared, Math.min(owed, 8000), `ghost owed ${owed}: balance cleared`);
+    eq(s.cash - after.cash, cleared, `ghost owed ${owed}: cash spent equals balance cleared`);
   }
 });
 

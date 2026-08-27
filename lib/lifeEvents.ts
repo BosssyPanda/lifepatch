@@ -76,6 +76,10 @@ export function recent(flags: Record<string, number>, key: string, year: number,
 }
 const employed = (c: EventContext) => c.salary > 0;
 
+/** What "Attack the debt" pays, and therefore the balance `studentLoans` needs. One
+ *  name, so the gate and the effect cannot drift apart. */
+const DEBT_ATTACK = 8000;
+
 export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
   {
     id: "promotion",
@@ -504,14 +508,24 @@ export const LIFE_EVENTS: (LifeEvent & { choices: LifeChoice[] })[] = [
     prompt: "Your student loans sit there compounding. You could throw everything at them or just pay the minimum.",
     minAge: 22,
     weight: 1,
-    // `c.debt > 0` is the load-bearing clause. Without it this was dealt to players
-    // who owe nothing — "Attack the debt" then spent $8,000 of cash against a $0
-    // balance, because `applyLifeChoice` floored the debt leg at zero and left the
-    // cash leg alone. It fired on ~15% of draws. The engine now clamps the pair as
-    // well (see `applyLifeChoice`), so a partial balance costs only what it clears.
-    requires: (c) => c.salary > 0 && c.life.health > 0 && c.debt > 0,
+    // THE BALANCE HAS TO BE THERE, AND IT HAS TO BE BIG ENOUGH TO ATTACK.
+    //
+    // Without this clause the card was dealt to players who owe nothing: 17.7% of
+    // its draws over 2,000 measured runs, where "Attack the debt" spent $8,000 of
+    // cash against a $0 balance because `applyLifeChoice` floored the debt leg at
+    // zero and left the cash leg alone. A further 8.4% were dealt against a partial
+    // balance and overpaid the difference.
+    //
+    // `>= DEBT_ATTACK` rather than `> 0` so the receipt cannot lie either. The
+    // engine clamps a repayment to what is owed, and the reveal's chips print the
+    // outcome's RAW effect — so a card dealt against $2,000 would have shown
+    // "−$8,000 · −$8,000 debt" over a $2,000 movement. Requiring the full amount
+    // means the numbers on the card are always the numbers that moved.
+    requires: (c) => c.salary > 0 && c.life.health > 0 && c.debt >= DEBT_ATTACK,
     choices: [
-      { id: "attack", label: "Attack the debt", blurb: "Kill it fast.", outcomes: [{ weight: 100, effect: { cash: -8000, debt: -8000, happiness: -3 }, tone: "good", consequence: "Lean months, but the balance drops hard. Future-you gets a raise called 'no payment.'", lesson: "Paying off debt is a guaranteed return equal to its interest rate. Often unbeatable." }] },
+      // ...and re-checked when it is TAKEN, for the same reason the house is: the
+      // player can clear the balance with the debt button after the card is dealt.
+      { id: "attack", label: "Attack the debt", blurb: "Kill it fast.", requires: (c) => c.debt >= DEBT_ATTACK, locked: "The balance is already under what this would pay.", outcomes: [{ weight: 100, effect: { cash: -DEBT_ATTACK, debt: -DEBT_ATTACK, happiness: -3 }, tone: "good", consequence: "Lean months, but the balance drops hard. Future-you gets a raise called 'no payment.'", lesson: "Paying off debt is a guaranteed return equal to its interest rate. Often unbeatable." }] },
       { id: "minimum", label: "Pay the minimum, invest more", blurb: "Bet on the market.", outcomes: [{ weight: 100, effect: { happiness: 1 }, tone: "neutral", consequence: "You keep the cash liquid and invest instead. Works if your returns beat the loan rate.", lesson: "Low-rate debt can coexist with investing. High-rate debt should always die first." }] },
     ],
   },
