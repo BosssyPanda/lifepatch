@@ -125,6 +125,9 @@ const dailyShare = R("dailyShare");
 const eventConcepts = R("eventConcepts");
 const economy = R("economy");
 const lifeEvents = R("lifeEvents");
+const cashflow = R("cashflow/engine");
+const dreams = R("cashflow/dreams");
+const professions = R("cashflow/professions");
 const { BACKGROUNDS } = R("backgrounds");
 
 /** Assets a player could actually have bought that year (crypto is gated to 2011+). */
@@ -743,6 +746,58 @@ check("P13 the ghost still replays a life that bought a house", () => {
     }
   }
   if (tested < 6) throw new Error(`only ${tested} runs bought a house — the check proved little`);
+});
+
+// ── Rat Race scoring ────────────────────────────────────────────────────────
+check("P14 winning the Rat Race is not a demotion", () => {
+  const dream = dreams.DREAMS.find((d) => d.id === "dinner"); // the cheapest, $400,000
+  const prof = professions.PROFESSIONS[0].id;
+  const base = cashflow.initCashflow(prof, dream.id, "A", 7);
+  // Standing on the DREAM square with the price plus a little.
+  const holding = { ...base, track: "fast", position: 0, status: "playing", cash: dream.cost + 25000 };
+
+  const declined = buildResult.cashflowScore(holding);
+  const won = buildResult.cashflowScore(cashflow.buyDream(holding));
+  eq(cashflow.buyDream(holding).status, "won", "buying the dream did not win");
+  eq(won, declined, "the win condition moved the score");
+  if (won < 0) throw new Error(`a winner scored ${won}`);
+
+  // Every dream, not just the cheap one — the credit has to track what was bought.
+  for (const d of dreams.DREAMS) {
+    const h = { ...cashflow.initCashflow(prof, d.id, "A", 7), track: "fast", position: 0, cash: d.cost };
+    eq(
+      buildResult.cashflowScore(cashflow.buyDream(h)),
+      buildResult.cashflowScore(h),
+      `${d.id} ($${d.cost}): buying it moved the score`,
+    );
+  }
+});
+
+check("P14b a Fast Track deal is scored on its merits, not its price", () => {
+  const prof = professions.PROFESSIONS[0].id;
+  const holding = {
+    ...cashflow.initCashflow(prof, "dinner", "A", 7),
+    track: "fast",
+    position: 0,
+    cash: 600000,
+  };
+  const before = buildResult.cashflowScore(holding);
+  // A year of the cash flow bought, minus the price. Same yardstick `payday` gets.
+  // The last pair pays back exactly its price in a year, so it is score-neutral
+  // by construction — the yardstick stated as an example.
+  for (const [price, monthly, sign] of [[200000, 20000, 1], [200000, 5000, -1], [120000, 10000, 0]]) {
+    const deal = { id: "d", title: "t", blurb: "b", price, cashFlow: monthly };
+    const after = buildResult.cashflowScore(cashflow.buyFastTrackDeal(holding, deal));
+    eq(after - before, 12 * monthly - price, `$${price} for $${monthly}/mo: wrong delta`);
+    if (Math.sign(after - before) !== sign) {
+      throw new Error(`$${price} for $${monthly}/mo scored ${after - before}, expected sign ${sign}`);
+    }
+  }
+  // And the row carries what it takes to recompute the number.
+  const bought = cashflow.buyFastTrackDeal(holding, { id: "d", title: "t", blurb: "b", price: 200000, cashFlow: 20000 });
+  const m = buildResult.resultFromCashflow(bought).metrics;
+  eq(m.scoreVersion, buildResult.CASHFLOW_SCORE_VERSION, "the row lost its score version");
+  eq(m.fastTrackCashflow, 20000, "the row lost the Fast Track cash flow");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -40,10 +40,25 @@ const MODE_TABS: { id: GameMode; label: string }[] = [
   { id: "cashflow", label: "Rat Race" },
 ];
 
+/**
+ * NO "FRIENDS" TAB UNTIL THERE IS A WAY TO ADD ONE.
+ *
+ * The scope itself is real and works: `topResults` filters by `friendIds`,
+ * `listFriendIds` reads the edges, and the RLS behind them is the tightened
+ * version. What does not exist is any way for a player to get an edge. Nothing
+ * renders the friend code — `PublicProfile` does not even carry it any more —
+ * and `addByCode`, `accept` and `listIncoming` have no callers outside their own
+ * module. So the tab could only ever be empty, under a message that told the
+ * player to "share your friend code to race together" and pointed at a code no
+ * screen in the game shows them. An empty board reads as "nobody plays this";
+ * an absent tab reads as "not yet", which is the truth.
+ *
+ * Restoring it is this one line. Leave the scope, the query and the empty-state
+ * copy where they are — they are the half that works.
+ */
 const SCOPE_TABS: { id: LeaderboardScope; label: string }[] = [
   { id: "all", label: "All-time" },
   { id: "week", label: "This week" },
-  { id: "friends", label: "Friends" },
 ];
 
 /**

@@ -8,6 +8,7 @@ import {
   payday as cashflowPayday,
   totalExpenses,
 } from "../cashflow/selectors";
+import { getDream } from "../cashflow/dreams";
 import type { CashflowState } from "../cashflow/types";
 import { ensureProfile } from "./profiles";
 import { alreadySubmitted, markSubmitted, submitResult } from "./results";
@@ -61,23 +62,48 @@ export function resultFromRun(run: RunState): NewResult {
 }
 
 /**
- * Rat Race scoring, v2. Ranking by passive income alone was blind to debt and
- * expenses, so maximum leverage was the optimal ranked strategy — the exact
- * opposite of what the mode teaches. The score is now a balance-sheet measure
- * plus a year of realized cash flow:
+ * Rat Race scoring, v3.
  *
- *     score = netWorth + 12 × payday
+ *     score = netWorth + dream (if bought) + 12 × (payday + fastTrackCashflow)
  *
- * Net worth counts every dollar borrowed against you; `payday` (income − ALL
- * expenses, bank interest included) counts the cost of carrying that debt. You
- * still climb by buying cash-flowing assets — you just can't climb by drowning.
+ * V2 GOT THE RAT RACE RIGHT AND FORGOT THE SECOND HALF OF THE GAME. Ranking by
+ * passive income alone was blind to debt and expenses, so maximum leverage was
+ * the optimal ranked strategy — the opposite of what the mode teaches. Net worth
+ * counts every dollar borrowed against you and `payday` (income − ALL expenses,
+ * bank interest included) counts the cost of carrying it, so you climb by buying
+ * cash-flowing assets and cannot climb by drowning. That part stands.
  *
- * v1 rows are not comparable to v2 rows, so the version rides in `metrics`.
+ * But both halves read the RAT RACE balance sheet only, and the Fast Track is
+ * scored with the same two numbers:
+ *
+ *   · A Fast Track deal takes its price out of `cash` and adds its cash flow to
+ *     `fastTrackCashflow` — a field with no asset line and no expense line, which
+ *     neither `netWorth` nor `payday` has ever read. So every deal up there was a
+ *     straight subtraction of its own price. Measured: $200,000 for +$20,000/mo
+ *     scored −$200,000, and the $240,000 a year it bought counted as zero.
+ *
+ *   · BUYING THE DREAM IS THE WIN CONDITION, and it cost between $400,000 and
+ *     $750,000 of score. Standing on the square with $425,000: decline and score
+ *     388,000; buy it, win the game, and score −12,000. The mode's own ending
+ *     was its single largest ranked penalty.
+ *
+ * So the Fast Track's cash flow is counted on the same yardstick payday already
+ * gets — a year of it — and the dream is credited at cost. Crediting it is
+ * deliberate and is not "counting money you spent": the alternative is a
+ * leaderboard where winning is a demotion. It scales with the dream the player
+ * chose because a $750,000 dream took $750,000 to reach, which is exactly the
+ * work being ranked. A deal is still judged on its merits — $200,000 for
+ * $20,000/mo now scores +$40,000, and $200,000 for $5,000/mo scores −$140,000.
+ *
+ * v1, v2 and v3 rows are not comparable, so the version rides in `metrics`.
  */
-export const CASHFLOW_SCORE_VERSION = 2;
+export const CASHFLOW_SCORE_VERSION = 3;
 
 export function cashflowScore(s: CashflowState): number {
-  return Math.round(cashflowNetWorth(s) + 12 * cashflowPayday(s));
+  const dream = s.dreamPurchased ? getDream(s.dreamId).cost : 0;
+  return Math.round(
+    cashflowNetWorth(s) + dream + 12 * (cashflowPayday(s) + s.fastTrackCashflow),
+  );
 }
 
 export function resultFromCashflow(s: CashflowState): NewResult {
@@ -102,6 +128,11 @@ export function resultFromCashflow(s: CashflowState): NewResult {
       turns: s.turn,
       escaped: escaped ? 1 : 0,
       lost: s.status === "lost" ? 1 : 0,
+      // The second half of the game, so a row can be read back and the score
+      // recomputed. Both are zero/absent for a run that never left the Rat Race.
+      fastTrackCashflow: s.fastTrackCashflow,
+      ...(s.dreamPurchased ? { dream: getDream(s.dreamId).cost } : {}),
+      won: s.status === "won" ? 1 : 0,
     },
   };
 }

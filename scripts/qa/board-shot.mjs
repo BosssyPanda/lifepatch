@@ -26,8 +26,28 @@ const BACKGROUNDS = ["student", "trade", "hustler"];
 // now that `results_verdict_known` pins the set, a fixture off that list is a
 // fixture testing nothing. Story/Infinite rows get life-sim verdicts; the Rat Race
 // rows below get its three. See lib/verdict.ts.
-const VERDICTS = ["Rich Enough", "Comfortable", "Getting By", "Underwater"];
 const CASHFLOW_VERDICTS = ["Escaped the Rat Race", "Still Racing", "Buried in Debt"];
+
+/**
+ * The verdict a life-sim score would ACTUALLY have earned — `deriveVerdict`'s
+ * thresholds, restated (the shot runs against the served build, not the module).
+ *
+ * The fixture used to hand out verdicts round-robin, independent of the number
+ * next to them, which put "$715,989 · UNDERWATER" on the board — a row the engine
+ * cannot produce, since `underwater` is the branch for a net worth at or below
+ * zero. Same defect as the invented verdict string this file already lost: a
+ * screenshot of impossible data checks the layout and nothing else.
+ *
+ * `happy` stands in for the happiness ≥ 60 test, which separates a small positive
+ * net worth into "Rich Enough" and "Getting By"; the fixture has no happiness
+ * field, so it is passed per row to keep both branches on the board.
+ */
+function verdictFor(netWorth, happy) {
+  if (netWorth >= 1_000_000) return "Financially Free";
+  if (netWorth >= 250_000) return "Comfortable";
+  if (netWorth > 0) return happy ? "Rich Enough" : "Getting By";
+  return "Underwater";
+}
 
 const TODAY = daily.todaysDaily()?.date ?? null;
 
@@ -40,14 +60,14 @@ function rows() {
       id: `local-d${i}`,
       userId: `player-${i}`,
       mode: "story",
-      score: 480_000 - i * 37_000,
-      verdict: VERDICTS[i % VERDICTS.length],
+      score: 1_120_000 - i * 380_000,
+      verdict: verdictFor(1_120_000 - i * 380_000, i % 2 === 0),
       metrics: {
-        netWorth: 480_000 - i * 37_000,
+        netWorth: 1_120_000 - i * 380_000,
         age: 43,
         seed: 99_000 + i,
         backgroundId: BACKGROUNDS[0],
-        engine: 6,
+        engine: 7,
         verified: 1,
         daily: TODAY,
       },
@@ -61,16 +81,16 @@ function rows() {
       id: `local-${i}`,
       userId: `player-${i}`,
       mode: "story",
-      score: 900_000 - i * 61_337,
-      verdict: VERDICTS[i % VERDICTS.length],
+      score: 1_240_000 - i * 111_337,
+      verdict: verdictFor(1_240_000 - i * 111_337, i % 3 === 0),
       metrics: legacy
-        ? { netWorth: 900_000 - i * 61_337, age: 43 }
+        ? { netWorth: 1_240_000 - i * 111_337, age: 43 }
         : {
-            netWorth: 900_000 - i * 61_337,
+            netWorth: 1_240_000 - i * 111_337,
             age: 43,
             seed: 1000 + i,
             backgroundId: BACKGROUNDS[i % BACKGROUNDS.length],
-            engine: 6,
+            engine: 7,
             verified: 1,
           },
       createdAt: new Date(Date.UTC(2026, 6, 1 + i)).toISOString(),

@@ -33,6 +33,7 @@ const ENTRIES = [
   "lib/replay.ts",
   "lib/daily.ts",
   "lib/dailyShare.ts",
+  "lib/cashflow/engine.ts",
   "lib/cloud/buildResult.ts",
   "lib/mp/autoResolve.ts",
   "lib/mp/protocol.ts",
