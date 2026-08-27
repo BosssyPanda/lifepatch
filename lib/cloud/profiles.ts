@@ -187,11 +187,38 @@ export async function getProfiles(userIds: string[]): Promise<Record<string, Pub
   const out: Record<string, PublicProfile> = {};
   if (unique.length === 0) return out;
   if (isCloud && supabase) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("profiles_public")
       .select("id,username,avatar_seed,created_at")
       .in("id", unique);
-    for (const row of data ?? []) {
+    if (!error) {
+      for (const row of data ?? []) {
+        const p = fromPublicRow(row);
+        out[p.id] = p;
+      }
+      return out;
+    }
+    /**
+     * The view does not exist yet.
+     *
+     * `profiles_public` is created by migration 01 and read by this build, so the
+     * two have to meet — and a deploy that lands first would otherwise draw a
+     * leaderboard of blank names with nothing anywhere the player could see saying
+     * why, because the error was being discarded. Ordering a code deploy against a
+     * hand-run migration is a coordination problem; not needing the ordering is
+     * better than getting it right.
+     *
+     * The fallback names the four public columns rather than `select("*")`, so it
+     * cannot reproduce the friend-code leak the view exists to close, whichever
+     * order the two actually land in. Once migration 02 lands, `profiles` narrows
+     * to the reader's own row — but by then the view exists, the branch above
+     * returns, and this one is unreachable.
+     */
+    const { data: base } = await supabase
+      .from("profiles")
+      .select("id,username,avatar_seed,created_at")
+      .in("id", unique);
+    for (const row of base ?? []) {
       const p = fromPublicRow(row);
       out[p.id] = p;
     }
