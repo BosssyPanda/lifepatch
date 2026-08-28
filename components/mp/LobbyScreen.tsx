@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useId, useRef, useState } from "react";
 import { CheckIcon } from "@/components/icons";
+import { MatchConnection } from "@/components/mp/MatchConnection";
 import { Avatar } from "@/components/social/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { NeonButton } from "@/components/ui/LedgerButton";
@@ -54,6 +55,9 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
   const { sfx } = useAudio();
   const { reduced } = useMotionCtx();
   const [copied, setCopied] = useState(false);
+  /** The clipboard refused (no API, no permission, insecure origin). */
+  const [copyFailed, setCopyFailed] = useState(false);
+  const codeRef = useRef<HTMLParagraphElement | null>(null);
   const startedRef = useRef(false);
   const hintId = useId();
 
@@ -123,12 +127,26 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
 
   async function copyCode() {
     try {
+      setCopyFailed(false);
       await navigator.clipboard.writeText(roomCode);
       setCopied(true);
       sfx("uitick");
     } catch {
-      // No clipboard permission (or no API): the code is selectable text right there.
+      // No clipboard permission, no API, or an insecure origin. Saying nothing left
+      // the button looking broken — the one control whose whole job is getting the
+      // code to another person. Select it instead, so the next keystroke copies it.
       setCopied(false);
+      setCopyFailed(true);
+      const el = codeRef.current;
+      if (el) {
+        try {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel?.removeAllRanges();
+          sel?.addRange(range);
+        } catch {}
+      }
     }
   }
 
@@ -156,6 +174,7 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
           {/* `textIndent` cancels the trailing letter-space so wide tracking stays
               optically centred instead of sitting a third of a character left. */}
           <p
+            ref={codeRef}
             className="num mt-2 text-4xl leading-none text-ink sm:text-5xl"
             style={{ letterSpacing: "0.32em", textIndent: "0.32em" }}
           >
@@ -176,6 +195,12 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
               "Copy the code"
             )}
           </button>
+          {copyFailed && (
+            <p role="status" className="voice mt-2 text-xs leading-snug text-ink-dim">
+              This browser won&rsquo;t let the page copy for you &mdash; the code is selected, so
+              copy it yourself.
+            </p>
+          )}
         </div>
       </motion.div>
       <p className="voice mx-auto mt-3 max-w-sm text-center text-sm text-ink/60">
@@ -329,6 +354,10 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
         </p>
       )}
 
+      {/* A lobby can lose the wire just as a running match can, and it looks
+          identical to a room nobody is joining. */}
+      <div className="mt-5"><MatchConnection /></div>
+
       {match.error && (
         <p role="alert" className="mt-5 font-body text-[0.82rem] leading-snug text-loss">
           <span aria-hidden>▲ </span>
@@ -345,7 +374,14 @@ export function LobbyScreen({ onStartRun, onLeave }: { onStartRun: () => void; o
         >
           ← Leave the room
         </NeonButton>
-        {hosting ? (
+        {match.startedWithoutMe ? (
+          // The refusal is already printed above; what must NOT sit under it is a
+          // live spinner for a host who has started. Nothing is coming.
+          <p role="alert" className="voice max-w-xs text-xs leading-snug text-ink-dim">
+            That match is under way without you. Leave the room and open a new one — a
+            match can only be joined before it starts.
+          </p>
+        ) : hosting ? (
           <HostStart away={away} here={here} ready={ready} hintId={hintId} onStart={() => match.startMatch()} />
         ) : hostGone ? (
           // A spinner here would be a lie: nobody inherits the Start button.

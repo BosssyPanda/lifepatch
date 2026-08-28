@@ -119,6 +119,7 @@ export function report() {
 const engine = R("runEngine");
 const replay = R("replay");
 const protocol = R("mp/protocol");
+const auto = R("mp/autoResolve");
 const buildResult = R("cloud/buildResult");
 const format = R("format");
 const daily = R("daily");
@@ -944,6 +945,50 @@ check("P17 buying at a published floor is a bet, not an arbitrage", () => {
         const p = s.stockPrices[d.symbol];
         if (!(p > 0)) throw new Error(`seed ${seed} tick ${t}: ${d.symbol} quoted ${p}`);
       }
+    }
+  }
+});
+
+// ── P18. The auto-player never invents a debt out of a solvent year ──────────
+// `autoAllocate`'s own comment promises exactly this: "an auto-player that
+// invested into an overdraft would be handing an absent person a debt to come
+// back to". It used to hold back `annualExpenses` alone, which counts neither the
+// mortgage payment nor the debt minimum that `advanceYear` also takes out of cash.
+// Measured as a counterfactual — the same year run with and without the
+// allocation — so a debt a life event caused is never blamed on the ghost.
+check("P18 auto-play never creates debt the year would not have created anyway", () => {
+  let years = 0;
+  for (let seed = 900; seed < 1100; seed++) {
+    let s = engine.initRun("story", BG_IDS[seed % BG_IDS.length], "G", seed, true);
+    for (let n = 0; n < 60 && s.status === "playing"; n++) {
+      const resolved = auto.resolveAllPending(s);
+      const withAlloc = auto.autoAllocate(resolved);
+      const a = engine.advanceYear(withAlloc);
+      const b = engine.advanceYear(resolved);
+      if (a.debt > b.debt) {
+        throw new Error(
+          `seed ${seed} year ${engine.yearIndex(s)}: allocating added $${a.debt - b.debt} of debt`,
+        );
+      }
+      years++;
+      s = a;
+    }
+  }
+  if (years < 2000) throw new Error(`only ${years} ghost-years exercised`);
+});
+
+// ── P19. A seat nobody ever reported for rebuilds to ONE life ────────────────
+// The acting host builds an absent, never-reported player's run from the room's
+// seed (`ghostPlay`), and that player's own client builds it from the identical
+// arguments on rejoin (`joinRoom`). If those two ever disagree, the room spends a
+// match ranking a life the player is not handed when they come back.
+check("P19 the room's rebuild of an unreported seat is the life its owner resumes", () => {
+  for (let seed = 300; seed < 340; seed++) {
+    const bg = BG_IDS[seed % BG_IDS.length];
+    for (const target of [1, 4, 11, 22]) {
+      const host = auto.fastForward(engine.initRun("story", bg, "Seat", seed, true), target);
+      const owner = auto.fastForward(engine.initRun("story", bg, "Seat", seed, true), target);
+      deepEq(host, owner, `seed ${seed} → year ${target}`);
     }
   }
 });

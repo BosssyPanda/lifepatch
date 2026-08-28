@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo } from "react";
+import { MatchConnection } from "@/components/mp/MatchConnection";
 import { MatchRail } from "@/components/mp/MatchRail";
 import { YearTimer } from "@/components/mp/YearTimer";
 import { Reveal } from "@/components/ui/Reveal";
@@ -12,7 +13,6 @@ import { ambienceForTag } from "@/lib/audioMap";
 import { LIFE_EVENTS } from "@/lib/lifeEvents";
 import { macroEvent } from "@/lib/markets";
 import { MODES } from "@/lib/modes";
-import { autoChoiceFor } from "@/lib/mp/autoResolve";
 import { canRetire, netWorth, yearIndex } from "@/lib/runEngine";
 import { HudRail } from "@/components/ui/HudRail";
 import { AdvanceBar } from "./AdvanceBar";
@@ -37,7 +37,7 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   // null for a solo run — everything below that reads it is additive.
   const match = useMatchCtx();
   const s = run.run;
-  const { choose, advance, stillPlaying } = run;
+  const { autoAdvance, stillPlaying } = run;
 
   const debt = s?.debt ?? 0;
   const health = s?.life.health ?? 100;
@@ -96,19 +96,16 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
   useEffect(() => {
     if (!match || !s || s.status !== "playing" || !stillPlaying()) return;
     if (match.roomYearIndex <= yearIndex(s)) return;
-    for (const id of s.pendingEvents) {
-      if (s.yearChoices[id]) continue;
-      const auto = autoChoiceFor(s, id);
-      // An event this build no longer knows can't be answered; `advanceYear`
-      // clears the pending list anyway, so the year still turns.
-      if (auto) choose(id, auto);
-    }
     // The same page turn the solo bar plays on "Advance the year". In a match the
     // bar only locks in, so without this the room's loudest shared beat — the year
     // actually turning — would be silent.
     sfx("page");
-    advance();
-  }, [match, s, choose, advance, sfx, stillPlaying]);
+    // One call, and deliberately the room's own resolver rather than a loop that
+    // answers each card against the state as it was before the year began — see
+    // `autoAdvance`. An event this build no longer knows still can't be answered;
+    // `advanceYear` clears the pending list anyway, so the year still turns.
+    autoAdvance();
+  }, [match, s, autoAdvance, sfx, stillPlaying]);
 
   if (!s) return null;
 
@@ -125,6 +122,9 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
       {match && (
         <div className="border-b border-hairline bg-bg">
           <div className="mx-auto max-w-5xl space-y-3 px-3 py-3 sm:px-5">
+            {/* Above the catch-up line on purpose: "the room is out of reach" is
+                the fact that explains every other odd thing on this screen. */}
+            <MatchConnection />
             {/* A rejoin lands the player in a later year holding a net worth they
                 never chose. The room played those years for them, deterministically
                 — but unsaid, that reads as the game having thrown their decisions

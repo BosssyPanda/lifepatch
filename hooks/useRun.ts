@@ -19,6 +19,7 @@ import { weakSpotIds } from "@/lib/weakSpots";
 import { saveRun } from "@/lib/saves";
 import type { AssetId } from "@/lib/markets";
 import type { LifeChoice } from "@/lib/lifeEvents";
+import { resolveAllPending } from "@/lib/mp/autoResolve";
 
 export type Phase = "intro" | "mode" | "auth" | "setup" | "run" | "recap" | "report" | "lobby" | "podium";
 
@@ -96,33 +97,51 @@ export function useRun(userId: string | null) {
     [userId],
   );
 
-  // local mutation (no save) — used for trades within a year
+  /**
+   * Local mutation (no save) — trades within a year, and answering a card.
+   *
+   * Reads and writes `liveRef` rather than threading a `setRun` updater, and that
+   * is load-bearing rather than a style choice: several callers apply more than
+   * one mutation in a single tick (the match year-timeout answers every open card
+   * and then turns the year), and a chain of queued updaters is only correct if
+   * every link reads the previous link's output. `liveRef` is written
+   * synchronously here, so it does.
+   */
   const mutate = useCallback((fn: (s: RunState) => RunState) => {
-    setRun((prev) => {
-      if (!prev) return prev;
-      const next = fn(prev);
-      liveRef.current = next;
-      return next;
-    });
+    const prev = liveRef.current;
+    if (!prev) return;
+    const next = fn(prev);
+    liveRef.current = next;
+    setRun(next);
   }, []);
 
-  // mutation that also persists + may end the run
+  /**
+   * Mutation that also persists and may end the run.
+   *
+   * The state change and the effects of it are deliberately NOT inside a `setRun`
+   * updater. React is free to call an updater more than once for a single update —
+   * StrictMode does it on purpose, and a render-phase restart does it in
+   * production — so a save and a phase change sitting in there ran twice for one
+   * decision: `persist` fired a duplicate write, and `setPhase` was a state update
+   * queued from inside another component's render. Computing the next state first
+   * and acting on it afterwards makes each decision happen exactly once, which is
+   * what "commit" was always supposed to mean.
+   */
   const commit = useCallback(
     (fn: (s: RunState) => RunState) => {
-      setRun((prev) => {
-        if (!prev) return prev;
-        const next = fn(prev);
-        // The engine refuses some mutations outright — aging a life that has already
-        // ended is the one that matters here — and hands the state back untouched.
-        // Nothing was decided, so nothing is announced and nothing is written.
-        if (next === prev) return prev;
-        liveRef.current = next;
-        // A match run goes to the room's podium first — the standings are the point,
-        // and the player's own cinematic recap is one tap away from there.
-        if (next.status === "ended") setPhase(matchCodeRef.current ? "podium" : "recap");
-        void persist(next);
-        return next;
-      });
+      const prev = liveRef.current;
+      if (!prev) return;
+      const next = fn(prev);
+      // The engine refuses some mutations outright — aging a life that has already
+      // ended is the one that matters here — and hands the state back untouched.
+      // Nothing was decided, so nothing is announced and nothing is written.
+      if (next === prev) return;
+      liveRef.current = next;
+      setRun(next);
+      // A match run goes to the room's podium first — the standings are the point,
+      // and the player's own cinematic recap is one tap away from there.
+      if (next.status === "ended") setPhase(matchCodeRef.current ? "podium" : "recap");
+      void persist(next);
     },
     [persist],
   );
@@ -195,6 +214,24 @@ export function useRun(userId: string | null) {
       [mutate],
     ),
     advance: useCallback(() => commit((s) => advanceYear(s)), [commit]),
+
+    /**
+     * The room's year ran out on a player who is still sitting here.
+     *
+     * Byte-for-byte the same answer the room itself would give: `resolveAllPending`
+     * scores each open card against the state left by the previous one, and until
+     * now the run screen scored every card of the year against the state as it was
+     * BEFORE any of them were answered. With two cards open those are different
+     * decisions — and worse than different, since `availableChoices` is a function
+     * of the run, a choice that was on the table at the start of the year can be
+     * closed by the first answer, and `applyLifeChoice` then refuses it and leaves
+     * the card unanswered.
+     *
+     * `autoAllocate` is deliberately not part of this. That one moves money, and
+     * this player is present — they simply ran out of clock. Nobody's money moves
+     * without them unless they are genuinely gone (see lib/mp/autoResolve).
+     */
+    autoAdvance: useCallback(() => commit((s) => advanceYear(resolveAllPending(s))), [commit]),
 
     /** Is the LIVE life still open? A stale copy of this hook still answers honestly:
      *  the ref behind it is shared by every render (see `liveRef`). */

@@ -108,6 +108,40 @@ export function loadMatch(roomCode: string, playerId: string): MatchRecord | nul
   }
 }
 
+/**
+ * What engine version this device's stored run for `(room, player)` was written
+ * by, or null when there is no record of ours here at all.
+ *
+ * `loadMatch` deliberately cannot answer this: it runs the record through
+ * `parseRunState`, which refuses anything whose `version` isn't the running
+ * `RUN_VERSION` and returns the same `null` it returns for "nothing stored". The
+ * rejoin path read that single null as "this player has no life here" and rebuilt
+ * one from the seed — so shipping a deploy while a match was live silently
+ * deleted every returning player's real run and handed them an auto-played
+ * stranger's instead, under the ordinary catch-up notice. Telling the two nulls
+ * apart is the whole fix: a run from another build is refused out loud and left
+ * on disk, exactly where a reload can still reach it.
+ *
+ * Reads the raw record and nothing else — it must keep working for versions this
+ * build has never heard of, which is the entire point.
+ */
+export function storedRunVersion(roomCode: string, playerId: string): number | null {
+  const store = storage();
+  if (!store || !isRoomCode(roomCode) || !playerId) return null;
+  try {
+    const parsed: unknown = JSON.parse(store.getItem(keyFor(roomCode)) ?? "null");
+    if (typeof parsed !== "object" || parsed === null) return null;
+    const rec = parsed as { playerId?: unknown; state?: unknown };
+    if (rec.playerId !== playerId) return null;
+    const state = rec.state;
+    if (typeof state !== "object" || state === null) return null;
+    const v = (state as { version?: unknown }).version;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function saveMatch(roomCode: string, playerId: string, config: MatchConfig, state: RunState): void {
   const store = storage();
   if (!store || !isRoomCode(roomCode) || !playerId) return;

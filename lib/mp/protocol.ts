@@ -28,9 +28,20 @@ export const YEAR_SECONDS_OPTIONS: YearSeconds[] = [30, 45, 60, 90];
 /** One broadcast event carries every message; `t` discriminates. */
 export const MP_EVENT = "mp";
 
-/** Channel topic. Versioned so a protocol bump can never land in a live room. */
+/**
+ * Channel topic. Versioned so a protocol bump can never land in a live room.
+ *
+ * The version is `MP_PROTOCOL` itself, not a literal. Hardcoded, the guarantee in
+ * that first sentence was never actually implemented: two builds speaking
+ * different protocols still met on the same topic, where every one of each
+ * other's messages failed the `v !== MP_PROTOCOL` check in the parsers below. The
+ * room did not refuse them — it could not see them. Each side watched the other
+ * go silent, ghost-played them, and told a player who had typed the code
+ * correctly that no room with it existed. Splitting the topic makes a bump behave
+ * like what it is: two separate rooms, each internally coherent.
+ */
 export function channelName(roomCode: string): string {
-  return `lp-match-v1-${roomCode}`;
+  return `lp-match-v${MP_PROTOCOL}-${roomCode}`;
 }
 
 /**
@@ -66,6 +77,17 @@ export type PresencePayload = {
   name: string;
   avatarSeed: string;
   joinedAt: number;
+  /**
+   * The engine build this member is running (`RUN_VERSION`).
+   *
+   * Two builds in one room cannot share a life: `parseRunState` refuses a
+   * snapshot whose version isn't ours, so a deploy landing mid-match leaves every
+   * client silently unable to hear anyone else's run while the standings, the
+   * ghost-play and the podium all carry on as if nothing were wrong. Advertising
+   * it is what lets the room SAY so instead. Additive and optional, so a client
+   * from before this field is treated exactly as it was.
+   */
+  runVersion?: number;
   status?: PeerStatus;
   config?: MatchConfig;
 };
@@ -298,6 +320,17 @@ export function parseRunState(raw: unknown): RunState | null {
     endYear = ey;
   }
   if (raw.status !== "playing" && raw.status !== "ended") return null;
+  /**
+   * A life cannot predate its own start, and cannot be four thousand years long.
+   *
+   * `year` and `startYear` were each clamped to [0, 4000] but never against each
+   * other, and the room ranks a run by `yearIndex` — `year - startYear + 1`. So
+   * `{ startYear: 0, year: 4000 }` parsed cleanly and scored 4001, which beat every
+   * real snapshot's freshness test and displaced the victim's cached life for good.
+   * That cache is what ghost-play fast-forwards and what a rejoiner is handed, so
+   * the forged run became the life they came back to.
+   */
+  if (year < startYear || year - startYear + 1 > MAX_YEAR_INDEX) return null;
 
   const holdings = {} as Record<AssetId, number>;
   const rawHoldings = isObj(raw.holdings) ? raw.holdings : {};
@@ -397,6 +430,8 @@ export function parsePresence(raw: unknown): PresencePayload | null {
   const out: PresencePayload = { v: MP_PROTOCOL, ...info };
   const session = sessionToken(raw.sessionId);
   if (session) out.sessionId = session;
+  const runVersion = int(raw.runVersion, 0, 1e6);
+  if (runVersion !== null) out.runVersion = runVersion;
   const status = parsePeerStatus(raw.status);
   // A member may only speak for itself — a presence row claiming someone else's
   // status is the cheap way to fake a leaderboard, so it is dropped.
