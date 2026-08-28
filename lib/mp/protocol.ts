@@ -105,10 +105,33 @@ export type StatusMsg = { t: "status"; v: number; status: PeerStatus };
  * the room follows one tab and the returning player is handed the other tab's
  * life. Stamped ONLY on a snapshot of our own life; the acting host relaying an
  * absent player's cached life speaks for somebody else and carries none.
+ *
+ * `selfYear` is the last year index this life was advanced by the PLAYER rather
+ * than by auto-play, and it travels with the life: a ghost fast-forward moves
+ * `state` and leaves `selfYear` where it was, so the number survives every relay
+ * between the player leaving and the player coming back. It exists because the
+ * catch-up notice names a range, a range needs a floor, and a rejoin served by
+ * the room's cache is handed a life already fast-forwarded to the room's year —
+ * there is nothing left in `state` to subtract. Also optional, also additive: a
+ * client on an older build sends none, and a rejoin without one says nothing
+ * rather than naming years it cannot stand behind.
  */
-export type SnapshotMsg = { t: "snapshot"; v: number; playerId: string; state: RunState; sessionId?: string };
+export type SnapshotMsg = {
+  t: "snapshot";
+  v: number;
+  playerId: string;
+  state: RunState;
+  sessionId?: string;
+  selfYear?: number;
+};
 export type SnapshotRequestMsg = { t: "snapshotRequest"; v: number; playerId: string };
-export type SnapshotReplyMsg = { t: "snapshotReply"; v: number; playerId: string; state: RunState };
+export type SnapshotReplyMsg = {
+  t: "snapshotReply";
+  v: number;
+  playerId: string;
+  state: RunState;
+  selfYear?: number;
+};
 
 export type MpMessage =
   | ConfigMsg
@@ -474,12 +497,18 @@ export function parseMessage(raw: unknown): MpMessage | null {
       const out: SnapshotMsg = { t: "snapshot", v: MP_PROTOCOL, playerId: id, state };
       const session = sessionToken(raw.sessionId);
       if (session) out.sessionId = session;
+      const self = int(raw.selfYear, 1, MAX_YEAR_INDEX);
+      if (self !== null) out.selfYear = self;
       return out;
     }
     case "snapshotReply": {
       const id = playerId(raw.playerId);
       const state = parseRunState(raw.state);
-      return id && state ? { t: "snapshotReply", v: MP_PROTOCOL, playerId: id, state } : null;
+      if (!id || !state) return null;
+      const out: SnapshotReplyMsg = { t: "snapshotReply", v: MP_PROTOCOL, playerId: id, state };
+      const self = int(raw.selfYear, 1, MAX_YEAR_INDEX);
+      if (self !== null) out.selfYear = self;
+      return out;
     }
     case "snapshotRequest": {
       const id = playerId(raw.playerId);

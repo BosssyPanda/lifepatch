@@ -306,11 +306,16 @@ Two clients drive a whole room: create, join, start, one closes its tab
 mid-match, the room ghost-plays its life for two year boundaries, and it comes
 back through the one-tap rejoin. It asserts the sentences a player would say —
 the seat is marked, both rows stay in step, the way back is offered, both
-clients end up showing the same standings, and the room stops calling the
-returned player away — and it fails on any console error. The catch-up line is
-checked only when this device's own record served the rejoin; see the last
-limitation in §6 for why. Roughly three minutes: a match cannot be hurried past
-its own clock.
+clients end up showing the same standings, the returned player is told which
+years were auto-played, and the room stops calling them away — and it fails on
+any console error. Roughly four minutes: a match cannot be hurried past its own
+clock.
+
+The guest deliberately plays one year before its tab is closed. That is what
+puts a real self-reported life in the room's cache, so the rejoin is served by
+the cache rather than by the seed rebuild — the path where the catch-up floor
+has to survive the wire (§6). Drop inside year one instead and the run still
+passes, over the seed rebuild, and says so.
 
 `QA_MP_LOCAL=1` puts both clients in one browser context, because
 `BroadcastChannel` does not cross contexts, and pins each one's
@@ -402,21 +407,22 @@ Open two tabs on the app. In both: Story → Setup → enter distinct names.
   policies, that places an absent player around 4.0 of 6 rather than the 5.3 of
   6 a never-investing ghost scored. Being away should cost something, not the
   game.
-- **The catch-up line needs this device's own record.** "Years 3–5 were played
-  for you while you were away" names a range, and the floor of that range is the
-  year this device last stored for the player. Source 2, the room's snapshot,
-  arrives already fast-forwarded to the room's year, so there is no range left
-  to name and the line does not appear — the figures are right, the explanation
-  is missing. (Sources 1 and 3 both have a floor: this device's stored year, and
-  year one respectively, so both name the range.) In practice source 1 is the
-  normal case (same device, localStorage intact) and the line appears; it is
-  absent for a rejoin from a device that has never held this match (a signed-in
-  player switching machines, cleared storage, private browsing) and for both
-  tabs under `NEXT_PUBLIC_MP_LOCAL=1`, where one localStorage holds one record
-  per room and `loadMatch` correctly refuses the other tab's. Saying it without
-  the range would mean asserting the room auto-played years it may not have —
-  the snapshot carries no provenance — so it says nothing rather than something
-  it cannot check.
+- **The catch-up floor travels beside the life, not inside it.** "Years 3–5 were
+  played for you while you were away" names a range, and the floor of that range
+  is the last year the player advanced *themselves*. Two of the three rejoin
+  sources carry it in the life they hand over: this device's own record stops at
+  the year it last wrote, and a seed rebuild starts at year one, unplayed. The
+  room's cache does not — it hands back a life already fast-forwarded to the
+  room's year, so subtracting its own year says nothing was auto-played when in
+  fact all of it was, and the line stayed silent for exactly the player who
+  needed it most: one coming back on a machine that has never held this match.
+  So the floor rides along as `selfYear` on `SnapshotMsg`/`SnapshotReplyMsg`. It
+  is written by the player's own report, left untouched by every ghost
+  fast-forward, and passed through every relay, which is what makes it still true
+  several hand-offs later. Optional and additive: a client on an older build
+  sends none, the field is absent, and the notice says nothing rather than naming
+  years it cannot stand behind — the behaviour this replaced, now the floor
+  rather than the norm.
 - **The `start` broadcast is at-most-once.** A guest mid-handshake when it goes
   out learns of the start from presence and is told "The host started the match
   without you" if the roster excludes them.

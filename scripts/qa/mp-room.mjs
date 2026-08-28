@@ -27,6 +27,8 @@ const LOCAL = process.env.QA_MP_LOCAL === "1";
 const SHOTS = path.join(process.env.QA_SHOT_DIR ?? "/tmp/lifepatch-qa", "mp");
 /** Two 30s years plus the slack a real boundary needs. */
 const ABSENCE_MS = Number(process.env.QA_MP_ABSENCE_MS ?? 75_000);
+/** Story runs 1990–2010 inclusive (`lib/modes.ts`), so year indices run 1..21. */
+const LAST_YEAR = 21;
 
 mkdirSync(SHOTS, { recursive: true });
 
@@ -94,10 +96,11 @@ class Client {
   /**
    * This device's stored record for a room: whose life it holds, and what year.
    *
-   * The rejoin has three sources (own disk, the room's snapshot, a seed rebuild)
-   * and they do not all produce the same screen — only the first can name the
-   * years that were played, because only it knows when the player left. Reading
-   * the record is how this script tells them apart instead of guessing.
+   * Which of the three rejoin sources served a run — own disk, the room's cache,
+   * a seed rebuild — is not visible on screen, and the difference decides what the
+   * screen should say. Reading the record is how this script tells them apart
+   * instead of guessing. It is only an answer when read BEFORE the rejoin: the
+   * rejoin writes this key itself.
    */
   async stored(code) {
     return this.page.evaluate((room) => {
@@ -256,6 +259,25 @@ try {
 
   // ── the drop ──────────────────────────────────────────────────────────────
   console.log("\nDROP — the guest's tab closes hard, mid-match");
+  /**
+   * The guest plays one year for real before the tab goes.
+   *
+   * Without it they never report an advance, the room has no life of theirs to
+   * cache, and the rejoin is served by the seed rebuild — whose floor is the
+   * constant 1. That path is worth covering but it proves nothing about the one
+   * that broke: a floor that has to survive the player's own report, the host's
+   * ghost fast-forward, and the hand-back (`SnapshotMsg.selfYear`). Waiting for
+   * their row to turn a year is what puts a real number into the room's cache.
+   */
+  const playedOne = await until(async () => {
+    // No leading \b: the rail renders the marker hard against the name
+    // ("PLAYERYOU"), so there is no word boundary in front of it to anchor to.
+    const mine = (await B.rail()).find((r) => /you\b/i.test(r));
+    const y = Number(mine?.match(/\bY(\d+)\b/)?.[1]);
+    return Number.isFinite(y) && y > 1 ? y : null; // Y1 is where everyone starts
+  }, 45_000, 500);
+  if (playedOne) ok(`the guest played year ${playedOne - 1} themselves before dropping`);
+  else console.log("    note: the guest dropped inside year 1, so the room rebuilds their seat from the seed");
   await B.page.close();
   console.log(`  waiting out two year boundaries (${Math.round(ABSENCE_MS / 1000)}s)…`);
   await new Promise((r) => setTimeout(r, ABSENCE_MS));
@@ -285,18 +307,34 @@ try {
   } else ok(`the setup screen offered "Rejoin ${code}"`);
 
   /**
+   * Read BEFORE the click, because this is the record that will SERVE the rejoin.
+   *
+   * Sampling it afterwards proves nothing: a successful rejoin's own `saveMatch`
+   * stamps this key with the returning player's id, so the read always came back
+   * "ours" whatever had actually served it — which is how a run that fell through
+   * to the room's cache was reported as one that used its own disk.
+   */
+  const rec = await B.stored(code);
+  const ownRecord = !!rec && rec.holder === rec.mine;
+  console.log(`    the record that will serve it: ${JSON.stringify(rec)} (this player's own: ${ownRecord})`);
+
+  /**
    * Armed BEFORE the click, because the question is "was it ever shown", not "is
    * it on screen now". The line belongs to the year the player came back into and
    * `applyTick` clears it at the next boundary, so any sample taken afterwards
    * races a 30-second year and reports a working notice as missing.
    */
   const noticeSeen = B.page
-    .waitForFunction(() => /played for you while you were away/i.test(document.body.innerText), null, {
-      polling: 100,
-      timeout: 40000,
-    })
-    .then(() => true)
-    .catch(() => false);
+    .waitForFunction(
+      () =>
+        /years?\s+\d+(?:\u2013\d+)?\s+w(?:as|ere)\s+played for you while you were away/i.exec(
+          document.body.innerText,
+        )?.[0] ?? false,
+      null,
+      { polling: 100, timeout: 40000 },
+    )
+    .then((h) => h.jsonValue())
+    .catch(() => null);
   if (!(await B.click(`rejoin ${code}`, 6000))) fail("rejoin", "the rejoin button did not fire");
   /**
    * Captured at the FIRST frame of the run screen, not read afterwards.
@@ -316,32 +354,41 @@ try {
   await B.snap("06-rejoined");
 
   /**
-   * The catch-up line, and the one thing that decides whether its absence is a bug.
+   * The catch-up line — unconditional, because all three rejoin sources can now
+   * name the range.
    *
-   * It names a RANGE, and a range needs a floor: the year this device last saw the
-   * player at. That floor comes from this device's own stored record. When the
-   * record belongs to somebody else the rejoin falls through to the room's
-   * snapshot, which arrives already fast-forwarded to the room's year — there is
-   * no range left to name, and the line does not appear. (A seed rebuild, the
-   * third source, does have a floor — year one — so it still names the range.)
-   *
-   * Under `QA_MP_LOCAL=1` that is EVERY rejoin, and not a defect in the room: both
-   * clients are tabs of one browser, `lifepatch.mp.<ROOM>` is keyed by room alone,
-   * and `loadMatch` refuses a record stamped with another player's id (which is
-   * the protection working — resuming it would hand this player the other tab's
-   * ledger). On separate devices the record is the player's own and the line
-   * appears. So the check is scoped to the source that can produce it.
+   * It names a RANGE, and a range needs a floor: the last year the player played
+   * themselves. This device's own record and a seed rebuild both carry one in the
+   * life they hand over. The room's cache does not — it is already fast-forwarded
+   * to the room's year — so the floor travels beside it as `SnapshotMsg.selfYear`.
+   * Under `QA_MP_LOCAL=1` the local record is usually the OTHER tab's (one
+   * `lifepatch.mp.<ROOM>` key, two players, and `loadMatch` correctly refuses a
+   * record it doesn't own), so this run exercises exactly the cache path that used
+   * to leave a returning player with no explanation for their net worth.
    */
-  const rec = await B.stored(code);
-  const ownRecord = !!rec && rec.holder === rec.mine;
-  console.log(`    stored record: ${JSON.stringify(rec)} (ours: ${ownRecord})`);
-  if (await noticeSeen) {
-    ok("the catch-up notice says which years the room played for them");
-  } else if (back && ownRecord) {
-    fail("rejoin", "no catch-up notice — the player is not told why their net worth moved");
+  const notice = await noticeSeen;
+  if (notice) {
+    /**
+     * Not just "a line appeared". A range is a claim about this player's life, so
+     * it has to be one that could have happened: it starts at a real year, it does
+     * not run backwards, it stays inside the story, and its floor is not LATER
+     * than the year the room had already reached without them — a player cannot
+     * have played a year they were absent for. Deliberately no tight upper bound:
+     * the room keeps turning years between the rail read and the rejoin, and a
+     * bound that raced the clock would fail a correct notice.
+     */
+    // Both wordings: "Year 3 was played…" for a single year, "Years 1–2 were
+    // played…" (en dash, as rendered) for a range.
+    const [, lo, hi] = /years?\s+(\d+)(?:\u2013(\d+))?\s+w(?:as|ere)\s+played/i.exec(notice) ?? [];
+    const from = Number(lo);
+    const to = Number(hi ?? lo);
+    const away = Number(years[0]); // the room's year while they were gone
+    const sane = Number.isFinite(from) && from >= 1 && to >= from && to <= LAST_YEAR && from <= away;
+    if (!sane) {
+      fail("rejoin", `the catch-up notice names a range that never happened: "${notice}" (room was at Y${away})`);
+    } else ok(`the catch-up notice names the years the room played: "${notice}"`);
   } else if (back) {
-    console.log("    note: rejoined from the room's snapshot, which arrives already");
-    console.log("          caught up, so there is no range to name. See above.");
+    fail("rejoin", "no catch-up notice — the player is not told why their net worth moved");
   }
   if (back && /No room with that code|isn.t running any more|already started/i.test(back)) {
     fail("rejoin", "a live room turned a seated player away");

@@ -448,7 +448,18 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   /** Latest known run per player — the ghost-play cache, kept by every client so a
    *  host migration doesn't lose the absent players' lives. */
   const snapshotsRef = useRef<Map<string, RunState>>(new Map());
-  const snapshotWaiterRef = useRef<((s: RunState) => void) | null>(null);
+  /**
+   * Per player, the last year index their life was advanced by THEM rather than by
+   * auto-play — the floor the catch-up notice needs (see `SnapshotMsg.selfYear`).
+   *
+   * Kept beside the cache rather than inside it because it moves on a different
+   * beat: `snapshotsRef` is rewritten every ghost boundary and this is not. Ghost
+   * fast-forward deliberately leaves it alone; only the player's own report, an
+   * inbound snapshot, and the seed rebuild (which starts at year one, unplayed)
+   * write it.
+   */
+  const selfYearsRef = useRef<Map<string, number>>(new Map());
+  const snapshotWaiterRef = useRef<((s: RunState, selfYear: number | null) => void) | null>(null);
   /**
    * Absent players we've asked the room for, and the room year we last asked at.
    *
@@ -822,10 +833,13 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         if (!cfg || !seat) continue;
         const fresh = fastForward(initRun("story", cfg.backgroundId, seat.name, cfg.seed, true), toYearIndex);
         snapshotsRef.current.set(peer.playerId, fresh);
+        // Their own player never advanced a year of it, so the whole thing was
+        // auto-played and the floor is where the story starts.
+        selfYearsRef.current.set(peer.playerId, 1);
         const st = statusOf(fresh, peer.playerId, true);
         applyPeerStatus(st);
         send({ t: "status", v: MP_PROTOCOL, status: st });
-        send({ t: "snapshot", v: MP_PROTOCOL, playerId: peer.playerId, state: fresh });
+        send({ t: "snapshot", v: MP_PROTOCOL, playerId: peer.playerId, state: fresh, selfYear: 1 });
       }
     },
     [applyPeerStatus, send],
@@ -1086,6 +1100,16 @@ export function MatchProvider({ children }: { children: ReactNode }) {
           const held = snapshotsRef.current.get(msg.playerId);
           if (held && yearIndex(held) > yearIndex(msg.state)) return;
           snapshotsRef.current.set(msg.playerId, msg.state);
+          /**
+           * The floor moves with the life, never independently, or the two drift
+           * and the notice names a range from one life against a year from another.
+           *
+           * A sender on an older build carries no `selfYear`. Falling back to the
+           * state's own year is right for a self-report and too HIGH for a relayed
+           * ghost — which understates the range rather than inventing years, the
+           * only direction that is safe to be wrong in.
+           */
+          selfYearsRef.current.set(msg.playerId, msg.selfYear ?? yearIndex(msg.state));
           return;
         }
         case "snapshotRequest": {
@@ -1101,13 +1125,17 @@ export function MatchProvider({ children }: { children: ReactNode }) {
           if (!isRosterMember(msg.playerId)) return;
           const snap = snapshotsRef.current.get(msg.playerId);
           if (!snap) return;
-          send({ t: "snapshotReply", v: MP_PROTOCOL, playerId: msg.playerId, state: snap });
+          // The cached life is fast-forwarded; the floor is not. Handing back the
+          // life without it is what left a returning player staring at a net worth
+          // they never chose with nothing said about it.
+          const floor = selfYearsRef.current.get(msg.playerId);
+          send({ t: "snapshotReply", v: MP_PROTOCOL, playerId: msg.playerId, state: snap, selfYear: floor });
           // Asked for on behalf of somebody who is still away? Then the asker is an
           // acting host that inherited an empty ghost-play cache — put it on the
           // wire as a plain snapshot too, which every client caches.
           const row = peersRef.current[msg.playerId];
           if (row && !row.connected) {
-            send({ t: "snapshot", v: MP_PROTOCOL, playerId: msg.playerId, state: snap });
+            send({ t: "snapshot", v: MP_PROTOCOL, playerId: msg.playerId, state: snap, selfYear: floor });
           }
           return;
         }
@@ -1118,7 +1146,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
           const waiter = snapshotWaiterRef.current;
           if (!waiter) return;
           snapshotWaiterRef.current = null;
-          waiter(msg.state);
+          waiter(msg.state, msg.selfYear ?? null);
           return;
         }
       }
@@ -1144,7 +1172,10 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     if (held.state && cfg) saveMatch(cfg.roomCode, id, cfg, held.state);
     send({ t: "status", v: MP_PROTOCOL, status: held.status });
     if (held.state) {
-      send({ t: "snapshot", v: MP_PROTOCOL, playerId: id, state: held.state, sessionId: sessionRef.current });
+      send({
+        t: "snapshot", v: MP_PROTOCOL, playerId: id, state: held.state,
+        sessionId: sessionRef.current, selfYear: yearIndex(held.state),
+      });
     }
     publish();
   }, [publish, send]);
@@ -1357,6 +1388,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     transportRef.current = null;
     roomRef.current = null;
     snapshotsRef.current.clear();
+    selfYearsRef.current.clear();
     snapshotAskedRef.current.clear();
     sessionOwnersRef.current.clear();
     openElsewhereRef.current = false;
@@ -1508,11 +1540,19 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  /** Ask the acting host for our own last snapshot. Rejoin's second-best source. */
-  const requestSnapshot = useCallback(async (): Promise<RunState | null> => {
-    let got: RunState | null = null;
-    snapshotWaiterRef.current = (s) => {
-      got = s;
+  /**
+   * Ask the acting host for our own last snapshot. Rejoin's second-best source.
+   *
+   * Answers with the floor as well as the life. The life comes back already
+   * fast-forwarded to the room's year — that is what the room has been showing —
+   * so the year the player themselves last played is not recoverable from it and
+   * has to travel separately (see `SnapshotMsg.selfYear`). Null when the answering
+   * client is on a build that does not send it.
+   */
+  const requestSnapshot = useCallback(async (): Promise<{ state: RunState; selfYear: number | null } | null> => {
+    let got: { state: RunState; selfYear: number | null } | null = null;
+    snapshotWaiterRef.current = (s, selfYear) => {
+      got = { state: s, selfYear };
     };
     send({ t: "snapshotRequest", v: MP_PROTOCOL, playerId: selfIdRef.current });
     const out = await waitFor(() => got, SNAPSHOT_WAIT_MS);
@@ -1575,13 +1615,17 @@ export function MatchProvider({ children }: { children: ReactNode }) {
             myStateRef.current = held.state;
             myStatusRef.current = statusOf(held.state, selfIdRef.current, false, sessionRef.current);
             setResumeState(held.state);
+            // Nothing was fast-forwarded here — this is the life exactly as this
+            // device left it — so there is no range, and the year it stopped at is
+            // the floor for whoever has to hand it back later.
             setResumeCatchup(null);
+            selfYearsRef.current.set(selfIdRef.current, yearIndex(held.state));
             rememberRoom(code);
             applyPeerStatus(myStatusRef.current);
             send({ t: "status", v: MP_PROTOCOL, status: myStatusRef.current });
             send({
               t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current,
-              state: held.state, sessionId: sessionRef.current,
+              state: held.state, sessionId: sessionRef.current, selfYear: yearIndex(held.state),
             });
             publish();
             return "rejoined";
@@ -1701,7 +1745,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         // lost packet is the difference between a player's real run and a
         // fabricated one.
         const turned = Math.max(roomYearRef.current, peerYearIndex()) > 1;
-        let remote: RunState | null = null;
+        let remote: { state: RunState; selfYear: number | null } | null = null;
         if (!local && turned) {
           remote = await requestSnapshot();
           if (!remote) remote = await requestSnapshot();
@@ -1716,20 +1760,46 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         // room's one running order; rebuilt without the flag, this life quietly
         // starts drawing from a private pool — the exact desync the shared deck
         // exists to prevent, and it is silent (see lib/mp/protocol.ts).
-        const base = local ?? remote ?? initRun("story", cfg.backgroundId, seat.name, cfg.seed, true);
-        const from = yearIndex(base);
+        const base = local ?? remote?.state ?? initRun("story", cfg.backgroundId, seat.name, cfg.seed, true);
         const caught = fastForward(base, target);
+        /**
+         * The floor of the catch-up range: the last year this player played
+         * themselves.
+         *
+         * Which source served the rejoin decides where it comes from, and only one
+         * of the three can read it off `base`:
+         *
+         *  - This device's own record stops at the year it last wrote, so its own
+         *    year IS the floor.
+         *  - The room's cache does not. It hands back a life already fast-forwarded
+         *    to the room's year, so `yearIndex(base) === target` and subtracting
+         *    them says nothing was auto-played, when in fact all of it was. That is
+         *    what `selfYear` carries across (`SnapshotMsg`), and it is null only
+         *    when the client that answered is on a build that predates it — in
+         *    which case the notice stays silent rather than naming a range it
+         *    cannot stand behind.
+         *  - A seed rebuild starts at year one, unplayed, so its own year is the
+         *    floor again.
+         */
+        const from = local ? yearIndex(local) : remote ? remote.selfYear : yearIndex(base);
         myStateRef.current = caught;
         myStatusRef.current = statusOf(caught, selfIdRef.current, false, sessionRef.current);
         setResumeState(caught);
         // Years the room played for them. Coming back to a later year and a net
         // worth you never chose, with nothing said about it, reads as lost work.
-        setResumeCatchup(yearIndex(caught) > from ? { from, to: yearIndex(caught) } : null);
+        setResumeCatchup(from !== null && yearIndex(caught) > from ? { from, to: yearIndex(caught) } : null);
         saveMatch(cfg.roomCode, selfIdRef.current, cfg, caught);
         rememberRoom(cfg.roomCode);
         applyPeerStatus(myStatusRef.current);
         send({ t: "status", v: MP_PROTOCOL, status: myStatusRef.current });
-        send({ t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current, state: caught, sessionId: sessionRef.current });
+        // Not `yearIndex(caught)`: the years just fast-forwarded were auto-played,
+        // not played by this player. Claiming them would erase the floor for the
+        // NEXT client that has to hand this life back.
+        send({
+          t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current, state: caught,
+          sessionId: sessionRef.current, ...(from !== null ? { selfYear: from } : {}),
+        });
+        selfYearsRef.current.set(selfIdRef.current, from ?? yearIndex(caught));
         publish();
         return "rejoined";
       } catch (e) {
@@ -1823,6 +1893,10 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       myStatusRef.current = st;
       applyPeerStatus(st);
       snapshotsRef.current.set(id, state);
+      // This advance was the player's, so it is the new floor for their catch-up
+      // notice if they leave and come back through somebody else's cache.
+      const selfYear = yearIndex(state);
+      selfYearsRef.current.set(id, selfYear);
       /**
        * Everything above is LOCAL: this tab keeps playing, keeps its own cache and
        * keeps showing the player their own figures. The writes below are the ones
@@ -1857,7 +1931,7 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         deferredRef.current = null; // superseded by the live write below
         if (cfg) saveMatch(cfg.roomCode, id, cfg, state);
         send({ t: "status", v: MP_PROTOCOL, status: st });
-        send({ t: "snapshot", v: MP_PROTOCOL, playerId: id, state, sessionId: sessionRef.current });
+        send({ t: "snapshot", v: MP_PROTOCOL, playerId: id, state, sessionId: sessionRef.current, selfYear });
       }
       publish();
     },
