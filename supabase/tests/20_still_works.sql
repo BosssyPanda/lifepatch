@@ -160,4 +160,51 @@ begin
 exception when others then raise notice 'FAIL: refused — %', sqlerrm;
 end $$;
 reset role;
+
+\echo ''
+\echo '--- G. ensureProfile still mints a row, and a real save still writes --'
+-- The write-surface migration takes UPDATE off `profiles` at table level and hands
+-- back one column. Two things must survive that: the INSERT that mints all three
+-- columns, and the size bound on `saves` admitting an honest run.
+select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false) \gset
+set role authenticated;
+do $$
+begin
+  -- The row already exists, so a unique_violation is the PASS: privilege is checked
+  -- before constraints, so reaching the unique index proves INSERT still carries
+  -- friend_code and avatar_seed.
+  insert into public.profiles (id, username, avatar_seed, friend_code)
+  values (auth.uid(), 'clever-heron-606', 'dddddddd', 'ZZZ999');
+  raise notice 'FAIL: a duplicate profile insert should not have succeeded';
+exception
+  when unique_violation then
+    raise notice 'PASS: ensureProfile can still INSERT all three columns';
+  when insufficient_privilege then
+    raise notice 'FAIL: INSERT on profiles was revoked along with UPDATE';
+end $$;
+
+do $$
+begin
+  begin
+    update public.profiles set avatar_seed = 'eeeeeeee' where id = auth.uid();
+    raise notice 'FAIL: avatar_seed is still updatable';
+  exception when insufficient_privilege then
+    raise notice 'PASS: avatar_seed is not updatable';
+  end;
+end $$;
+
+do $$
+declare st jsonb;
+begin
+  -- A 21-year story state with a journal line per year, padded well past anything
+  -- the engine writes.
+  select jsonb_build_object('version', 7, 'seed', 998877665, 'years', jsonb_agg(
+           jsonb_build_object('i', g, 'cash', g * 1000, 'debt', g * 250,
+                              'note', 'A year of paying it down and hoping it held.')))
+    into st from generate_series(1, 21) g;
+  insert into public.saves (user_id, mode, state) values (auth.uid(), 'story', st);
+  raise notice 'PASS: a full 21-year cloud save still writes (% bytes)', pg_column_size(st);
+exception when others then raise notice 'FAIL: honest save refused — %', sqlerrm;
+end $$;
+reset role;
 \echo ''

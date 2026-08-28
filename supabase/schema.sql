@@ -2,15 +2,24 @@
 --
 -- This is the FRESH-INSTALL file: it describes the schema as it should be on a
 -- new project. If you already ran an older copy of it against a live database,
--- do NOT re-run this one — apply supabase/migrations/2026-08-27_0{1,2,3}_*.sql
--- in order instead. They reach the same end state without touching your data,
--- and 02 has a deploy-ordering requirement this file does not.
+-- do NOT re-run this one — apply the files in supabase/migrations/ in order
+-- instead. They reach the same end state without touching your data, and 02 has
+-- a deploy-ordering requirement this file does not. (03 is the one exception: it
+-- rotates live friend codes, so it is opt-in and its own header says when.)
 
 create table if not exists public.saves (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
   mode text not null check (mode in ('story', 'infinite')),
   state jsonb not null,
+  -- The one client-written column with no shape to constrain, so bound its size
+  -- instead. `results` carries three CHECKs on the way in; this table is written
+  -- by the same browser, through the same endpoint, under a policy that says
+  -- whose row it is and nothing whatsoever about what is in it. A 21-year story
+  -- state with its journal is a few KB, so 256 KiB is generous against a real run
+  -- by three orders of magnitude and still refuses a save slot used as unmetered
+  -- storage — which `loadRun` would then pull straight back into memory.
+  constraint saves_state_small check (pg_column_size(state) <= 262144),
   updated_at timestamptz not null default now(),
   unique (user_id, mode)
 );
@@ -74,6 +83,24 @@ create policy "profiles - update own" on public.profiles
 -- "read own" matches nothing). This makes it a grant-level fact instead, so a
 -- future policy edit cannot quietly re-open the table.
 revoke select on public.profiles from anon;
+
+-- WHICH ROW is a policy question; WHICH COLUMNS is a grant question, and the
+-- policy above only ever answered the first. `friend_code` is the sole capability
+-- guarding addByCode, and letting a player PATCH their own to a value they picked
+-- defeats the CSPRNG that mints it. `avatar_seed` goes with it for a structural
+-- reason rather than a security one: both are written exactly once, by
+-- `ensureProfile`'s INSERT, and no code path updates either afterwards.
+--
+-- It has to be this way round. A column-level REVOKE cannot carve an exception
+-- out of a table-level grant: Supabase's default privileges hand `authenticated`
+-- table-wide UPDATE, and `revoke update (friend_code) ...` against that raises a
+-- warning and changes nothing at all. So the table grant goes and exactly one
+-- column comes back. INSERT is untouched, so `ensureProfile` still mints all
+-- three; `username` stays updatable because `updateUsername` is a real feature
+-- and the only column any code path updates.
+revoke update on public.profiles from authenticated;
+revoke update on public.profiles from anon;
+grant update (username) on public.profiles to authenticated;
 
 -- The public projection. `security_invoker = off` is deliberate and load-bearing:
 -- the view runs as its owner, so it sees past the row-level policy above and can

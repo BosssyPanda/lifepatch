@@ -109,18 +109,40 @@ function Leader({ label, value, size }: { label: string; value: string; size: nu
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // `fetchRow` has its own try/catch because this route must never 500 — an
+  // unfurl that errors shows a broken card in every chat client that renders it.
+  // The two font reads sitting beside it did not, so a transient failure reading a
+  // bundled .ttf threw the whole route; and because `Promise.all` rejects fast, it
+  // discarded a row lookup that may already have succeeded. Rare, since these are
+  // static assets — and rare is the entire case the fallback card exists for.
   const [anton, plex, row] = await Promise.all([
     fetch(new URL("../_fonts/Anton-Regular.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
     fetch(new URL("../_fonts/IBMPlexMono-Regular.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
     fetchRow(id),
-  ]);
+  ]).catch(() => [null, null, null] as const);
+
+  // Without a typeface there is no card to draw at all — not even the wordmark
+  // fallback, which is set in both of these. The static wordmark image is the one
+  // thing left that always renders, so hand the scraper that instead of a 500.
+  if (!anton || !plex) {
+    return new Response(null, { status: 302, headers: { location: "/opengraph-image" } });
+  }
 
   const fonts = [
     { name: "Anton", data: anton, style: "normal" as const, weight: 400 as const },
     { name: "PlexMono", data: plex, style: "normal" as const, weight: 400 as const },
   ];
-  // A real row never changes, so it can be cached forever.
-  const headers = { "cache-control": "public, immutable, no-transform, max-age=31536000" };
+  /**
+   * A real row never CHANGES — but it can cease to exist. `results` carries a
+   * delete policy, so a player can remove a run whose card is already pinned at
+   * every CDN and scraper under `immutable, max-age=31536000`: the `/r/{id}` page
+   * revalidates hourly and starts 404ing while the unfurl keeps showing the
+   * statement for a year. A shared link's traffic arrives in a burst, so a day at
+   * the edge keeps essentially all of the benefit and lets a deletion take effect.
+   */
+  const headers = {
+    "cache-control": "public, no-transform, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
+  };
   // The fallback must not be: a link shared in the window between the share URL being
   // minted and its row landing would otherwise pin the WRONG card at every CDN and
   // scraper for a year. A short TTL lets the real statement replace it.

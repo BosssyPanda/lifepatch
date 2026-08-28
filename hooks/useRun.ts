@@ -43,6 +43,16 @@ export function useRun(userId: string | null) {
   const [mode, setMode] = useState<ModeId | null>(null);
   const [run, setRun] = useState<RunState | null>(null);
   const [saving, setSaving] = useState(false);
+  /**
+   * The last cloud write did not land.
+   *
+   * `saveRun` throws now instead of resolving over a Supabase `{ error }`, so this
+   * is the first time the app has been ABLE to know. It is a sticky warning rather
+   * than a modal: the run is still perfectly playable and still in memory, and
+   * every subsequent year retries the write — what the player needs is to know
+   * that closing the tab right now would cost them the run.
+   */
+  const [saveFailed, setSaveFailed] = useState(false);
   /** The room this run belongs to, or null for a solo run. */
   const matchCodeRef = useRef<string | null>(null);
   /**
@@ -90,6 +100,12 @@ export function useRun(userId: string | null) {
       setSaving(true);
       try {
         await saveRun(userId, r.mode, r);
+        setSaveFailed(false);
+      } catch {
+        // Never rethrown: `commit` calls this as `void persist(next)`, so a
+        // rejection escaping here is an unhandled promise rejection rather than
+        // anything the player is told. The flag is how it gets told.
+        setSaveFailed(true);
       } finally {
         setSaving(false);
       }
@@ -151,6 +167,7 @@ export function useRun(userId: string | null) {
     mode,
     run,
     saving,
+    saveFailed,
     setPhase,
 
     goMode: useCallback(() => setPhase("mode"), []),

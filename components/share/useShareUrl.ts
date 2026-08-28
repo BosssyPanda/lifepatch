@@ -43,8 +43,14 @@ export function useShareUrlFor(mode: string, score: number, seed?: number): stri
   useEffect(() => {
     if (!isCloud || !supabase || !playerId) return;
     let cancelled = false;
+    // The retry has to be cancellable, not just its callback. `cancelled` is only
+    // read after the await, and the timer that schedules the next attempt was
+    // never cleared — so leaving the report mid-poll fired the remaining attempts
+    // anyway, several seconds of queries on behalf of a component that is gone.
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const lookup = async (attempt: number): Promise<void> => {
+      if (cancelled) return;
       let q = supabase!
         .from("results")
         .select("id")
@@ -60,12 +66,13 @@ export function useShareUrlFor(mode: string, score: number, seed?: number): stri
         setUrl(`${origin}/r/${id}`);
         return;
       }
-      if (attempt < ATTEMPTS) setTimeout(() => void lookup(attempt + 1), RETRY_MS);
+      if (attempt < ATTEMPTS) timer = setTimeout(() => void lookup(attempt + 1), RETRY_MS);
     };
 
     void lookup(1);
     return () => {
       cancelled = true;
+      if (timer !== null) clearTimeout(timer);
     };
   }, [playerId, mode, score, seed, origin]);
 

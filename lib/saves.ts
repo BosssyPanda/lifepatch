@@ -42,14 +42,27 @@ function cloudSavesFor(userId: string): boolean {
   return Boolean(isCloud && supabase && !isGuestId(userId));
 }
 
+/**
+ * Persist a run. THROWS when the cloud write fails.
+ *
+ * supabase-js does not reject on a failed request — it resolves with `{ error }`.
+ * Discarding that meant an RLS refusal, an expired session, a network failure and
+ * a quota rejection all looked exactly like success: `persist` cleared `saving`
+ * and the player was shown a saved run that did not exist. The asymmetry is what
+ * marks it as an oversight rather than a policy — `submitResult` checks and throws,
+ * and `getProfiles` has a whole documented fallback built on reading `error`.
+ * Saves were the one write path that looked away, and they are the one whose
+ * failure costs a player their run.
+ */
 export async function saveRun(userId: string, mode: ModeId, state: RunState): Promise<void> {
   if (cloudSavesFor(userId)) {
-    await supabase!
+    const { error } = await supabase!
       .from("saves")
       .upsert(
         { user_id: userId, mode, state, updated_at: new Date().toISOString() },
         { onConflict: "user_id,mode" },
       );
+    if (error) throw new Error(error.message);
     return;
   }
   try {
@@ -60,14 +73,18 @@ export async function saveRun(userId: string, mode: ModeId, state: RunState): Pr
   } catch {}
 }
 
+/** Reads a run back. Throws for the same reason `saveRun` does: "we could not
+ *  reach your save" and "you have no save" must not arrive as the same answer —
+ *  the gate offers "Begin a new life" over the second one. */
 export async function loadRun(userId: string, mode: ModeId): Promise<RunState | null> {
   if (cloudSavesFor(userId)) {
-    const { data } = await supabase!
+    const { data, error } = await supabase!
       .from("saves")
       .select("state")
       .eq("user_id", userId)
       .eq("mode", mode)
       .maybeSingle();
+    if (error) throw new Error(error.message);
     return (data?.state as RunState) ?? null;
   }
   try {

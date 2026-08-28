@@ -168,6 +168,17 @@ export function Leaderboard({
   const background = showBackgrounds ? backgroundPick : ALL_BACKGROUNDS;
 
   const profileId = profile?.id ?? null;
+  /**
+   * The day, but only where the query actually uses it.
+   *
+   * `today` resolves after mount (see above), and it sat in the fetch effect's
+   * dependency list — so on `/leaderboard`, where the board is open at mount, the
+   * first fetch ran with `today === null` and an identical second fetch ran the
+   * instant the date landed. Two full pagination walks per page view, for a value
+   * every scope but "daily" ignores. Narrowed to the usage: non-daily scopes never
+   * see it change, and the daily tab does not exist until `today` does (`showDaily`).
+   */
+  const dailyKey = scope === "daily" ? today : null;
 
   useEffect(() => {
     if (!open) return;
@@ -182,7 +193,7 @@ export function Leaderboard({
           scope,
           friendIds,
           backgroundId: background === ALL_BACKGROUNDS ? undefined : background,
-          daily: today ?? undefined,
+          daily: dailyKey ?? undefined,
         });
         const profs = await getProfiles(top.map((r) => r.userId));
         if (!active) return;
@@ -204,7 +215,7 @@ export function Leaderboard({
     return () => {
       active = false;
     };
-  }, [open, mode, scope, background, today, profileId, sfx, retry]);
+  }, [open, mode, scope, background, dailyKey, profileId, sfx, retry]);
 
   const metric = scoreMetric(mode);
   // Each tab strip namespaces its own tab ids (see LedgerTabs' `idPrefix`). The MODE

@@ -855,7 +855,16 @@ export function advanceYear(s: RunState): RunState {
     lastDelta: portfolioDelta,
     interestPaid: Math.round(s.interestPaid + interest),
   };
-  const record: YearRecord = {
+  /**
+   * Named `yearRecord`, not `record`, because `record()` — the journal helper at
+   * the top of this file — is in scope for the whole of `advanceYear`. A `const`
+   * of the same name shadowed it from the function's FIRST line via the temporal
+   * dead zone, so the next journal write added anywhere above here would not have
+   * been a compile error: it would have been `ReferenceError: Cannot access
+   * 'record' before initialization`, thrown at runtime, inside the engine every
+   * recorded run replays through.
+   */
+  const yearRecord: YearRecord = {
     yearIndex: yearIndex(s),
     year: s.year,
     age: s.age,
@@ -893,7 +902,7 @@ export function advanceYear(s: RunState): RunState {
   const next: RunState = {
     ...settled,
     insolventStreak,
-    history: [...s.history, record],
+    history: [...s.history, yearRecord],
     marketLog: [...s.marketLog, { year: s.year, returns: rets }],
     status,
     endReason,

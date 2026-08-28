@@ -114,10 +114,13 @@ function FlashValue({ value, children, delta = false }: { value: number; childre
 export function YearHud({
   run,
   saving,
+  saveFailed,
   onOpenAlmanac,
 }: {
   run: RunState;
   saving: boolean;
+  /** The last cloud write failed — see `useRun.saveFailed`. */
+  saveFailed: boolean;
   onOpenAlmanac: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -164,11 +167,17 @@ export function YearHud({
             pulse on an unguarded `repeat: Infinity`. The word already says which state it is
             in, so the animation was carrying nothing the text wasn't — it is gone, and the
             colour is the token meant for faint-but-legible. */}
+        {/* "Saved" was printed whether or not the write landed, because nothing
+            below this ever found out. It can tell the difference now, and the
+            failed state is the one worth interrupting for: the run is fine and
+            still retrying, but closing the tab would end it. */}
         <span
-          className="hidden shrink-0 eyebrow text-tertiary md:inline"
+          className={`shrink-0 eyebrow md:inline ${saveFailed ? "text-loss" : "hidden text-tertiary"}`}
           style={{ fontSize: "0.56rem" }}
+          role={saveFailed ? "status" : undefined}
+          title={saveFailed ? "We couldn't reach your save. The run is safe here until you close the tab." : undefined}
         >
-          {saving ? "Saving…" : "Saved"}
+          {saveFailed ? "Not saved" : saving ? "Saving…" : "Saved"}
         </span>
         <button
           type="button"

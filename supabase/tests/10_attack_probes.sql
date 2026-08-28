@@ -1,4 +1,4 @@
--- Probes the three holes. Run against old schema (expect VULNERABLE) and again
+-- Probes the holes. Run against the old schema (expect VULNERABLE) and again
 -- after the migrations (expect CLOSED). Identical file both times.
 
 \set VICTIM   '''11111111-1111-1111-1111-111111111111'''
@@ -123,6 +123,55 @@ begin
     raise notice 'VULNERABLE: RTL-override username accepted';
   exception when check_violation then
     raise notice 'CLOSED: username charset CHECK refused it';
+  end;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- 7. a player choosing their own friend code -----------------------'
+-- `friend_code` is what schema.sql calls "the sole capability guarding addByCode",
+-- and migration 02 exists because it was once enumerable. Minting it from a CSPRNG
+-- is pointless if the holder can PATCH it to something they picked — the row policy
+-- asserts only `auth.uid() = id`, which is the right answer to WHICH ROW and no
+-- answer at all to WHICH COLUMNS.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+declare c text;
+begin
+  begin
+    update public.profiles set friend_code = 'AAAAAA' where id = auth.uid();
+    select friend_code into c from public.profiles where id = auth.uid();
+    if c = 'AAAAAA' then
+      raise notice 'VULNERABLE: a player set their own friend_code to a value they picked';
+      update public.profiles set friend_code = 'XYZ789' where id = auth.uid();
+    else
+      raise notice 'CLOSED: friend_code unchanged (%)', c;
+    end if;
+  exception when insufficient_privilege then
+    raise notice 'CLOSED: no UPDATE privilege on profiles.friend_code';
+  end;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- 8. an unbounded cloud save (unmetered storage) -------------------'
+-- The size is measured on the in-memory datum, which is what a CHECK sees, rather
+-- than on the stored row — TOAST would compress a repetitive payload and report a
+-- number the constraint never evaluates.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+declare big jsonb; n int;
+begin
+  select jsonb_build_object('junk', jsonb_agg(g)) into big from generate_series(1, 200000) g;
+  n := pg_column_size(big);
+  begin
+    insert into public.saves (user_id, mode, state)
+    values ('22222222-2222-2222-2222-222222222222', 'story', big);
+    raise notice 'VULNERABLE: a %-byte save was accepted', n;
+  exception when check_violation then
+    raise notice 'CLOSED: saves CHECK refused a %-byte state', n;
   end;
 end $$;
 reset role;

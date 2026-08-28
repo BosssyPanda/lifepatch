@@ -60,6 +60,26 @@ function fromRow(row: Record<string, unknown>): ResultRow {
 }
 
 /**
+ * A row from the board's projected `select`.
+ *
+ * PostgREST returns a `metrics->>key` projection as a top-level STRING column
+ * named `verified` / `backgroundId`, not as a nested `metrics` object — so the
+ * board's `r.metrics.verified === 1` would read `undefined` off a projected row
+ * and quietly stop drawing the verified mark on every row that has earned it.
+ * Rebuilt into the shape every reader already expects.
+ */
+function fromProjectedRow(row: Record<string, unknown>): ResultRow {
+  const out = fromRow(row);
+  const verified = Number(row.verified);
+  const backgroundId = row.backgroundId;
+  out.metrics = {
+    ...(Number.isFinite(verified) ? { verified } : {}),
+    ...(typeof backgroundId === "string" ? { backgroundId } : {}),
+  };
+  return out;
+}
+
+/**
  * Is this a row a board can rank?
  *
  * `score` is `numeric` and client-written, and PostgREST takes anything that column
@@ -153,7 +173,15 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
     const page = (from: number, to: number) => {
       let q = supabase!
         .from("results")
-        .select("*")
+        // The five scalars the board draws, plus the two `metrics` keys it reads —
+        // never `*`. The pagination below can walk six pages of `limit * 5`, and
+        // every row under `*` carries its whole `metrics` blob: a 100-point history
+        // array, the seed, the background, the engine build. `results_metrics_small`
+        // is what caps that at 8 KiB, so ~750 rows at up to 8 KiB each was the
+        // ceiling for rendering twenty-five names. Projected, a page is a few
+        // hundred bytes. `getResult` and `myBest` genuinely want the whole row and
+        // keep `select("*")`.
+        .select("id,user_id,mode,score,verdict,created_at,metrics->>verified,metrics->>backgroundId")
         .eq("mode", mode)
         .order("score", { ascending: false });
       if (scope === "week") q = q.gte("created_at", weekAgoIso());
@@ -193,7 +221,7 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
     for (let p = 0; p < MAX_PAGES; p++) {
       const { data } = await page(p * PAGE, (p + 1) * PAGE - 1);
       const rows = data ?? [];
-      for (const row of rows.map(fromRow)) {
+      for (const row of rows.map(fromProjectedRow)) {
         collected.push(row);
         if (rankable(row)) players.add(row.userId);
       }

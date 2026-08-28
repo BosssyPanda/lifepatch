@@ -15,7 +15,7 @@
 // schema, seed rows, and then three passes:
 //
 //   BEFORE   supabase/tests/10_attack_probes.sql   — every probe must report VULNERABLE
-//   MIGRATE  supabase/migrations/2026-08-27_0{1,2}
+//   MIGRATE  supabase/migrations/  (every structural one, in order)
 //   AFTER    supabase/tests/10_attack_probes.sql   — every probe must report CLOSED
 //   WORKS    supabase/tests/20_still_works.sql     — every check must report PASS
 //
@@ -44,6 +44,9 @@ const MIGRATIONS = [
   "supabase/migrations/2026-08-27_01_security_additive.sql",
   "supabase/migrations/2026-08-27_01b_score_bounds.sql",
   "supabase/migrations/2026-08-27_02_profiles_lockdown.sql",
+  // 03 is deliberately absent: it rotates live friend codes, which is a data
+  // decision an operator makes once, not a structural change the gate can assert.
+  "supabase/migrations/2026-08-28_04_write_surface.sql",
 ];
 
 const SEED = `
@@ -177,7 +180,7 @@ function main() {
   if (before.length === 0) fail.push("no probes ran in the BEFORE pass");
   for (const v of before) say(v.tag === "VULNERABLE", `${v.tag}: ${v.msg}`);
 
-  psql(["-c", "delete from public.friends; delete from public.results;"]);
+  psql(["-c", "delete from public.friends; delete from public.results; delete from public.saves;"]);
   console.log("\nMIGRATE");
   for (const m of MIGRATIONS) {
     const out = psql(["-v", "ON_ERROR_STOP=1", "-f", join(ROOT, m)]);
@@ -199,7 +202,7 @@ function main() {
   if (after.length !== before.length) fail.push("AFTER ran a different number of probes than BEFORE");
   for (const v of after) say(v.tag === "CLOSED", `${v.tag}: ${v.msg}`);
 
-  psql(["-c", "delete from public.friends; delete from public.results;"]);
+  psql(["-c", "delete from public.friends; delete from public.results; delete from public.saves;"]);
   console.log("\nSTILL WORKS — the app's own reads and writes");
   const pos = verdicts(psql(["-f", join(ROOT, "supabase/tests/20_still_works.sql")]), ["PASS", "FAIL"]);
   if (pos.length === 0) fail.push("no checks ran in the STILL WORKS pass");

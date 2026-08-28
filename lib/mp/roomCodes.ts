@@ -6,7 +6,19 @@
 export const ROOM_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const ROOM_CODE_LENGTH = 6;
 
-function randomIndex(bound: number): number {
+/**
+ * A uniform index below `bound`, from the platform CSPRNG where there is one.
+ *
+ * Exported because it guards more than room codes now: `lib/cloud/generate.ts`
+ * mints friend codes, which the schema calls "the sole capability guarding
+ * addByCode", and was drawing them from `Math.random()` — V8's xorshift128+,
+ * whose internal state is recoverable from a handful of consecutive outputs. Two
+ * of those neighbouring outputs (the username and the avatar seed) are published
+ * on `profiles_public` for every player on the leaderboard. The weaker generator
+ * was sitting on the more sensitive value while this one guarded a throwaway
+ * lobby; there is no reason for two.
+ */
+export function randomIndex(bound: number): number {
   const c = typeof crypto !== "undefined" ? crypto : undefined;
   if (c?.getRandomValues) {
     const buf = new Uint32Array(1);

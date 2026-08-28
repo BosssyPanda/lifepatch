@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { isGuestId, localPlayerId } from "@/lib/cloud/identity";
 import { mergeLocalMastery } from "@/lib/cloud/mastery";
 import { adoptGuestSaves } from "@/lib/saves";
-import { isCloud, supabase } from "@/lib/supabase";
+import { cloudMisconfigured, isCloud, supabase } from "@/lib/supabase";
 
 export type AuthUser = { id: string; email: string };
 
@@ -149,6 +149,16 @@ function useAuthState(): AuthApi {
       if (error) throw error;
       setLinkSent(true);
       return;
+    }
+    // The dev fallback is a DEVELOPMENT convenience and must never stand in for
+    // sign-in on a deployed site. Without this a production build that shipped
+    // without the Supabase keys accepted any address as an account — see
+    // `cloudMisconfigured`. Guest play is unaffected: it never comes through here.
+    if (cloudMisconfigured) {
+      throw new Error(
+        "Sign-in isn't available on this deployment. You can still play as a guest — " +
+          "your progress stays on this device.",
+      );
     }
     const u = { id: `dev-${clean}`, email: clean };
     try {
