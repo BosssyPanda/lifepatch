@@ -1,0 +1,91 @@
+-- ===========================================================================
+-- LifePatch — the username gate. THIS ONE HAS A DEPLOY ORDER.
+--
+--   DEPLOY THE `profile` EDGE FUNCTION FIRST. Verify a rename and a fresh
+--   signup against it. THEN run this file.
+--
+--     supabase functions deploy profile --project-ref <ref>
+--     # sign up as a new account, rename yourself, confirm both work
+--     # only then: apply this migration
+--
+-- Running it early does not break existing players — reading, playing, saving and
+-- posting results are all untouched — but it does take away the only way a NEW
+-- account can get a profile row, and renaming stops working for everyone. Running
+-- it late is free. So: late, not early.
+--
+-- Migration 04 is the sibling of this one and had no such requirement, which is
+-- why they are separate files. 04 revoked UPDATE on columns nothing ever updates;
+-- this one revokes the two the app genuinely uses, and hands them to a server.
+-- ===========================================================================
+
+
+-- ---------------------------------------------------------------------------
+-- The hole.
+--
+-- Username screening ran in the browser and nowhere else. `lib/cloud/profanity.ts`
+-- was a careful piece of work — case folding, leetspeak, separator stripping, an
+-- ALLOW list so "Scunthorpe" survives, and a QA gate over all of it — and it was
+-- irrelevant to anyone who did not run it. `profiles` is written straight to
+-- PostgREST under a policy that asserts `auth.uid() = id` and says nothing about
+-- the value, so a single PATCH put any string on the public leaderboard. The
+-- INSERT at signup was the easier route still: pick your own row's contents once,
+-- at creation, and never call the rename path at all.
+--
+-- Migration 01 added `profiles_username_charset`, and that half genuinely holds at
+-- the database: no zero-width joiners, no RTL overrides, no Cyrillic homoglyphs —
+-- the tools for impersonating another player, which are the ones a word list
+-- cannot address anyway. The word list is the half that was client-side only.
+--
+-- WHY NOT A SQL COPY OF THE WORD LIST, which is the obvious fix and the wrong one.
+-- Two implementations of the same normalisation drift. The moment they disagree,
+-- the server refuses a name the browser has just told the player is fine, and the
+-- player is stuck with a rejection nothing on screen explains. The `ALLOW` list is
+-- the sharp end of that: a translation that missed it would reject "Scunthorpe"
+-- and "titan-grape", which is precisely the bug `scripts/qa/username-filter.mjs`
+-- was written to catch in the first draft of the original file.
+--
+-- So there is ONE implementation, at supabase/functions/_shared/username.ts, and
+-- the browser and the `profile` Edge Function both import it. This migration is
+-- what makes the function the only way in.
+-- ---------------------------------------------------------------------------
+
+
+-- ---------------------------------------------------------------------------
+-- 1. Take the direct write away.
+--
+-- Migration 04 already replaced the table-level UPDATE grant with `update
+-- (username)` — a column-level REVOKE cannot carve an exception out of a
+-- table-level grant, so 04 had to revoke the table grant and re-grant. That leaves
+-- exactly one column to remove here, and it is the one this file is about.
+--
+-- INSERT goes wholesale. `ensureProfile` was the only caller and it now goes
+-- through the function, which also mints the friend code — a value migration 04 §2
+-- established a client must never choose for itself, and which the INSERT path
+-- would otherwise still let it choose at signup.
+--
+-- `anon` is named for completeness. The row policy already refuses it (an
+-- anonymous request has no `auth.uid()`, so `auth.uid() = id` matches nothing), so
+-- these two statements remove a grant that was never doing any work.
+--
+-- The Edge Function writes with the service role, which bypasses both RLS and
+-- these grants. That is the point: it is the one caller that has run the filter.
+-- ---------------------------------------------------------------------------
+revoke update (username) on public.profiles from authenticated;
+revoke insert on public.profiles from authenticated;
+revoke insert on public.profiles from anon;
+
+
+-- ---------------------------------------------------------------------------
+-- 2. What is deliberately NOT here.
+--
+-- No DELETE change: `profiles` has no delete policy, so nobody could delete a row
+-- before this file and nobody can after it.
+--
+-- No policy edits. The three policies from schema.sql stay exactly as they are.
+-- They answer WHICH ROW, correctly, and always did; the whole of this finding is
+-- that nothing answered WHICH VALUE. Removing a policy that is right would only
+-- make the next reader wonder what it was hiding.
+--
+-- No `security definer` RPC as a second door. One writer, one filter, one place to
+-- look when a name gets through.
+-- ---------------------------------------------------------------------------

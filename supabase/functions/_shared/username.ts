@@ -1,9 +1,28 @@
 /**
- * Username screening.
+ * Username screening. THE only copy — read the location note before moving it.
  *
  * Usernames render publicly on the leaderboard, and `updateUsername` enforced a
  * length and nothing else — the file's own comment said "profanity screening lands
  * in Phase 2", and the board it feeds is public now.
+ *
+ * WHY IT LIVES UNDER supabase/functions. This was `lib/cloud/profanity.ts`, and
+ * being only there was the hole: the browser was the only thing that ran it, and
+ * the browser is not where the write happens. One PATCH straight at PostgREST
+ * skipped the whole file. The fix is a server that runs the same rules — and the
+ * cure for THAT is worse than the disease if "the same rules" means a second
+ * implementation, because two copies drift and a server that disagrees with the
+ * client rejects a name the player was just told was fine.
+ *
+ * So there is one implementation and both sides import it. `_shared` is the
+ * documented place an Edge Function may import from, and this file is plain
+ * TypeScript with no imports and no runtime of its own, which is what lets Deno
+ * and the Next bundler both read it unmodified. Consequences worth knowing:
+ *   - Deno needs the `.ts` extension, the bundler does not. Both spellings appear
+ *     in the tree and both are correct for their importer.
+ *   - Each function's own `index.ts` is excluded from tsconfig and eslint, being
+ *     Deno code. THIS file is not, and must stay free of Deno globals.
+ *   - `scripts/qa/username-filter.mjs` is the gate over the lists. It runs against
+ *     this file, so it covers the server rule now and not just the client one.
  *
  * TWO DEFENCES, DELIBERATELY DIFFERENT IN KIND.
  *

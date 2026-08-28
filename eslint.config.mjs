@@ -29,6 +29,8 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Deno, not app code — see the note in tsconfig.json. `_shared/` is linted.
+      "supabase/functions/*/index.ts",
     ],
   },
   ...compat.extends("next/core-web-vitals"),

@@ -19,10 +19,15 @@
 //
 // Both lists started non-empty. `cunt` inside Scunthorpe and `rape` inside grape
 // were live false positives, and `a55hole` walked straight through, until this ran.
-import { checkUsername } from "../../lib/cloud/profanity.ts";
+//
+// It now covers the SERVER rule and not just the client one: the module below moved
+// to supabase/functions/_shared so the `profile` Edge Function could import the same
+// copy, and this gate runs against that copy.
+import { checkUsername } from "../../supabase/functions/_shared/username.ts";
 
-// Mirrors lib/cloud/generate.ts. Duplicated on purpose: if that file's lists change,
-// this gate should fail loudly rather than quietly follow them somewhere unusable.
+// Mirrors supabase/functions/_shared/generate.ts. Duplicated on purpose: if that
+// file's lists change, this gate should fail loudly rather than quietly follow them
+// somewhere unusable.
 const ADJECTIVES = [
   "brave", "calm", "clever", "bright", "swift", "bold", "kind", "lucky",
   "sunny", "steady", "wise", "keen", "quiet", "nimble", "frosty", "amber",

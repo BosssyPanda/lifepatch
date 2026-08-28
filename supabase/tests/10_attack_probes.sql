@@ -121,8 +121,14 @@ begin
        set username = 'brave' || chr(8237) || 'otter'   -- RTL override
      where id = '22222222-2222-2222-2222-222222222222';
     raise notice 'VULNERABLE: RTL-override username accepted';
-  exception when check_violation then
-    raise notice 'CLOSED: username charset CHECK refused it';
+  exception
+    -- Both are closed, and which one fires depends on how far the migrations have
+    -- got. The charset CHECK (migration 01) refuses the VALUE; migration 05 takes
+    -- the column's UPDATE grant away entirely, and a privilege check runs first.
+    when check_violation then
+      raise notice 'CLOSED: username charset CHECK refused it';
+    when insufficient_privilege then
+      raise notice 'CLOSED: no UPDATE privilege on profiles.username';
   end;
 end $$;
 reset role;
@@ -172,6 +178,54 @@ begin
     raise notice 'VULNERABLE: a %-byte save was accepted', n;
   exception when check_violation then
     raise notice 'CLOSED: saves CHECK refused a %-byte state', n;
+  end;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- 9. a name the word list refuses, written anyway ------------------'
+-- The charset CHECK holds at the database and always did; the WORD LIST ran in the
+-- browser and nowhere else, so it applied to everyone except the person who did not
+-- run it. `lifepatch-staff` is the cheap case and the one that matters: it is
+-- perfectly legal ASCII, so migration 01's charset constraint has no opinion on it,
+-- and it claims an authority the game grants nobody, on a public leaderboard.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+declare n text;
+begin
+  begin
+    update public.profiles set username = 'lifepatch-staff' where id = auth.uid();
+    select username into n from public.profiles where id = auth.uid();
+    if n = 'lifepatch-staff' then
+      raise notice 'VULNERABLE: an impersonation name the filter refuses was written';
+      update public.profiles set username = 'sly-raven-202' where id = auth.uid();
+    else
+      raise notice 'CLOSED: username unchanged (%)', n;
+    end if;
+  exception when insufficient_privilege then
+    raise notice 'CLOSED: renaming goes through the profile function, not PostgREST';
+  end;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- 10. the same bypass at signup, plus a chosen friend code ---------'
+-- The easier route of the two, and the one migration 04 could not reach: pick the
+-- row's contents once, at creation, and never call the rename path at all. The
+-- friend code rides along — 04 revoked UPDATE on it, but INSERT was still the
+-- client's, so a player could still choose the capability that guards addByCode.
+-- User 4 exists in auth.users with no profile, which is what a fresh signup is.
+select set_config('request.jwt.claim.sub', '44444444-4444-4444-4444-444444444444', false);
+set role authenticated;
+do $$
+begin
+  begin
+    insert into public.profiles (id, username, avatar_seed, friend_code)
+    values (auth.uid(), 'lifepatch-admin', 'dddddddd', 'AAAAAA');
+    raise notice 'VULNERABLE: a new account named itself, and chose its own friend code';
+  exception when insufficient_privilege then
+    raise notice 'CLOSED: creating a profile goes through the profile function';
   end;
 end $$;
 reset role;

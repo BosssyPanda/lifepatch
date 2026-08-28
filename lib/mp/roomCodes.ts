@@ -3,35 +3,15 @@
  * alphabet drops every glyph pair people mishear or mistype: no 0/O, no 1/I/L.
  */
 
+// `randomIndex` used to live here, and both files want the same CSPRNG draw — a
+// room code and a friend code are the same problem at different stakes. It is
+// defined over there rather than here because the `profile` Edge Function imports
+// that file and Deno can only follow relative paths inside `supabase/functions`.
+// The arrow has to point this way; it cannot point the other.
+import { randomIndex } from "@/supabase/functions/_shared/generate";
+
 export const ROOM_CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 export const ROOM_CODE_LENGTH = 6;
-
-/**
- * A uniform index below `bound`, from the platform CSPRNG where there is one.
- *
- * Exported because it guards more than room codes now: `lib/cloud/generate.ts`
- * mints friend codes, which the schema calls "the sole capability guarding
- * addByCode", and was drawing them from `Math.random()` — V8's xorshift128+,
- * whose internal state is recoverable from a handful of consecutive outputs. Two
- * of those neighbouring outputs (the username and the avatar seed) are published
- * on `profiles_public` for every player on the leaderboard. The weaker generator
- * was sitting on the more sensitive value while this one guarded a throwaway
- * lobby; there is no reason for two.
- */
-export function randomIndex(bound: number): number {
-  const c = typeof crypto !== "undefined" ? crypto : undefined;
-  if (c?.getRandomValues) {
-    const buf = new Uint32Array(1);
-    // Reject the tail of the range so the modulo stays uniform.
-    const limit = Math.floor(0xffffffff / bound) * bound;
-    for (let i = 0; i < 16; i++) {
-      c.getRandomValues(buf);
-      if (buf[0] < limit) return buf[0] % bound;
-    }
-    return buf[0] % bound;
-  }
-  return Math.floor(Math.random() * bound);
-}
 
 export function makeRoomCode(): string {
   let code = "";

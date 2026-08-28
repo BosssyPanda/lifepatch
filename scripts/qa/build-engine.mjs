@@ -39,6 +39,15 @@ const ENTRIES = [
   "lib/mp/protocol.ts",
 ];
 
+/** `walk`, but an absent directory is not an error — nothing may have compiled into it. */
+function walkIfPresent(dir) {
+  try {
+    return walk(dir);
+  } catch {
+    return [];
+  }
+}
+
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
     const p = path.join(dir, name);
@@ -94,7 +103,12 @@ export function buildEngine({ extra = [] } = {}) {
   } catch {}
 
   // `require("@/lib/x")` → the real relative path from this file's directory.
-  for (const file of walk(path.join(OUT, "lib"))) {
+  //
+  // Both trees, not just `lib`: `lib/cloud/profiles.ts` and `lib/mp/roomCodes.ts`
+  // import the username filter and the identity generator, which live under
+  // `supabase/functions/_shared` so the `profile` Edge Function can import the same
+  // copy. Not `walk(OUT)` — the node_modules symlink above is under there.
+  for (const file of [...walk(path.join(OUT, "lib")), ...walkIfPresent(path.join(OUT, "supabase"))]) {
     const src = readFileSync(file, "utf8");
     const fixed = src.replace(/require\("@\/([^"]+)"\)/g, (_m, spec) => {
       let rel = path.relative(path.dirname(file), path.join(OUT, spec)).split(path.sep).join("/");
@@ -146,7 +160,13 @@ function newest(dir, ext) {
 
 export function engineDir() {
   if (resolved) return resolved;
-  const src = newest(path.join(ROOT, "lib"), ".ts");
+  // `_shared` is engine source too now — `lib/cloud/buildResult.ts` reaches it
+  // through `profiles.ts`. Leaving it out of the staleness check would be exactly
+  // the failure the note above describes: a gate reporting on code that moved.
+  const src = Math.max(
+    newest(path.join(ROOT, "lib"), ".ts"),
+    newest(path.join(ROOT, "supabase/functions/_shared"), ".ts"),
+  );
   const out = newest(path.join(OUT, "lib"), ".js");
   if (src === Infinity || out === Infinity || out === 0 || src > out) buildEngine();
   resolved = OUT;

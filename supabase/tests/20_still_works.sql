@@ -147,40 +147,47 @@ end $$;
 
 \echo ''
 \echo '--- F. a legitimate username change ----------------------------------'
+-- As the `profile` Edge Function performs it: the service role, after the shared
+-- filter has passed the name. Migration 05 is what makes this the only writer, so
+-- the check that matters here is that the DATABASE still accepts an honest name —
+-- the charset constraint has to admit everything `checkUsername` admits, or the
+-- two disagree and the player is refused a name they were just told was fine.
+reset role;
+set role service_role;
 do $$
 begin
-  update public.profiles set username = 'clever-heron-404' where id = auth.uid();
+  update public.profiles set username = 'clever-heron-404'
+   where id = '11111111-1111-1111-1111-111111111111';
   raise notice 'PASS: normal username accepted';
 exception when others then raise notice 'FAIL: normal username refused — %', sqlerrm;
 end $$;
 do $$
 begin
-  update public.profiles set username = 'a_b-c 1' where id = auth.uid();
+  update public.profiles set username = 'a_b-c 1'
+   where id = '11111111-1111-1111-1111-111111111111';
   raise notice 'PASS: underscore/hyphen/space username accepted';
 exception when others then raise notice 'FAIL: refused — %', sqlerrm;
 end $$;
 reset role;
 
 \echo ''
-\echo '--- G. ensureProfile still mints a row, and a real save still writes --'
--- The write-surface migration takes UPDATE off `profiles` at table level and hands
--- back one column. Two things must survive that: the INSERT that mints all three
--- columns, and the size bound on `saves` admitting an honest run.
+\echo '--- G. profile creation, and a real save --------------------------------'
+-- The narrowed write surface has to leave the app able to do its job. Creating a
+-- profile is the `profile` Edge Function's now — it runs the shared filter and
+-- mints the friend code — so the browser being refused is the PASS here, and the
+-- service role succeeding is the other half. `saves` still has to admit an honest
+-- run under migration 04's size bound.
 select set_config('request.jwt.claim.sub', '11111111-1111-1111-1111-111111111111', false) \gset
 set role authenticated;
 do $$
 begin
-  -- The row already exists, so a unique_violation is the PASS: privilege is checked
-  -- before constraints, so reaching the unique index proves INSERT still carries
-  -- friend_code and avatar_seed.
-  insert into public.profiles (id, username, avatar_seed, friend_code)
-  values (auth.uid(), 'clever-heron-606', 'dddddddd', 'ZZZ999');
-  raise notice 'FAIL: a duplicate profile insert should not have succeeded';
-exception
-  when unique_violation then
-    raise notice 'PASS: ensureProfile can still INSERT all three columns';
-  when insufficient_privilege then
-    raise notice 'FAIL: INSERT on profiles was revoked along with UPDATE';
+  begin
+    insert into public.profiles (id, username, avatar_seed, friend_code)
+    values ('44444444-4444-4444-4444-444444444444', 'clever-heron-606', 'dddddddd', 'ZZZ999');
+    raise notice 'FAIL: the browser can still create a profile directly';
+  exception when insufficient_privilege then
+    raise notice 'PASS: profile creation is the function''s, not the browser''s';
+  end;
 end $$;
 
 do $$
@@ -205,6 +212,21 @@ begin
   insert into public.saves (user_id, mode, state) values (auth.uid(), 'story', st);
   raise notice 'PASS: a full 21-year cloud save still writes (% bytes)', pg_column_size(st);
 exception when others then raise notice 'FAIL: honest save refused — %', sqlerrm;
+end $$;
+reset role;
+
+-- And the path that replaced it: user 4 is an account with no profile, i.e. a fresh
+-- signup, and this is exactly what `ensure` does with the service role once the
+-- generated name has passed the shared filter.
+set role service_role;
+do $$
+declare c text;
+begin
+  insert into public.profiles (id, username, avatar_seed, friend_code)
+  values ('44444444-4444-4444-4444-444444444444', 'clever-heron-606', 'dddddddd', 'ZZZ999')
+  returning friend_code into c;
+  raise notice 'PASS: the profile function still mints a new profile (code %)', c;
+exception when others then raise notice 'FAIL: the function cannot create a profile — %', sqlerrm;
 end $$;
 reset role;
 \echo ''

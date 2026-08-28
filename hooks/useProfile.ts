@@ -53,6 +53,15 @@ export function useProfile() {
         setProfile(p);
         setStreak(s);
         setMastery(m);
+      } catch {
+        // `try/finally` with no `catch` sent every failure here out as an unhandled
+        // rejection — a `void`-ed promise has nobody left to tell. It was reachable
+        // before (a guest id going down the cloud branch threw on the fifth retry)
+        // and it is reachable now for a different reason: profile creation is an
+        // Edge Function call, which can 401 or be down. Nothing on this screen
+        // depends on a profile existing, so the honest state is the one it already
+        // has for a player who has never had one.
+        if (active) setProfile(null);
       } finally {
         if (active) setLoading(false);
       }

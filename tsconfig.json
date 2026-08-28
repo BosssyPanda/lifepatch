@@ -19,5 +19,9 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "out"]
+  // `supabase/functions/_shared/*` IS app code — the browser imports it, and that
+  // is the point of it living there. Each function's own `index.ts` is not: it is
+  // Deno, with `Deno.serve`, `npm:` specifiers and `.ts` import extensions, none of
+  // which this compiler is configured for and none of which ship in the bundle.
+  "exclude": ["node_modules", "out", "supabase/functions/*/index.ts"]
 }

@@ -192,7 +192,8 @@ alter table public.results
 -- The charset below is the real defence: it refuses zero-width joiners, RTL
 -- overrides, combining marks and Unicode homoglyphs — the things used to
 -- impersonate another player or to smuggle a second line of text into a row.
--- Word-level screening is a client-side blocklist (lib/cloud/profanity.ts);
+-- Word-level screening is a shared blocklist (it has since moved to
+-- supabase/functions/_shared/username.ts, and migration 05 put a server behind it);
 -- this is the part that has to hold at the database.
 --
 -- ⚠ THIS SECTION CAN RENAME EXISTING PLAYERS. Read on before running.

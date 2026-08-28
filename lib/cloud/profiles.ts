@@ -1,13 +1,26 @@
 import { isCloud, supabase } from "../supabase";
-import { generateAvatarSeed, generateFriendCode, generateUsername } from "./generate";
-import { checkUsername } from "./profanity";
+import { isGuestId } from "./identity";
+// `@/supabase/...` is the repository directory, not `lib/supabase.ts` above. Both
+// files live under the Edge Function's `_shared` directory because the `profile`
+// function imports them and Deno can only follow relative paths inside
+// `supabase/functions`; their own headers carry the full reasoning.
+import { generateAvatarSeed, generateFriendCode, generateUsername } from "@/supabase/functions/_shared/generate";
+import { checkUsername } from "@/supabase/functions/_shared/username";
 import type { Profile, PublicProfile } from "./types";
 
 /**
  * Public player identity. Cloud → `profiles` table; dev → namespaced localStorage.
- * Mirrors the hybrid switch in lib/saves.ts. Friend code + avatar seed are
- * generated here; username screening lives in ./profanity, which the database
- * backs with a matching charset CHECK.
+ * Mirrors the hybrid switch in lib/saves.ts.
+ *
+ * WHO WRITES THIS TABLE. Not this file, in the cloud — the `profile` Edge Function
+ * does. Username screening used to run only here, in the browser, which is not
+ * where the write happens: `profiles` was written straight to PostgREST under a
+ * policy asserting `auth.uid() = id` and nothing about the value, so a PATCH (or,
+ * more easily, the INSERT at signup) put any string on the public leaderboard. The
+ * function runs the same `checkUsername` this file does — literally the same
+ * module, not a second copy — and mints the friend code, which a client must never
+ * choose for itself. `2026-08-28_05_username_gate.sql` is what takes the direct
+ * write away; see `fromFunction` for what happens before it is applied.
  *
  * WHAT IS AND IS NOT READABLE. `profiles` is now select-own-row-only, so
  * `getProfile` / `ensureProfile` / `updateUsername` — all of which operate on the
@@ -52,9 +65,60 @@ function fromPublicRow(row: Record<string, unknown>): PublicProfile {
   };
 }
 
+/**
+ * Is this player's profile a cloud row, or a device-local one?
+ *
+ * The same predicate `lib/saves.ts` uses, and it was missing here. `useProfile`
+ * resolves its id with `resolveProgressId`, which hands a GUEST a `device-…` id on
+ * purpose — mastery has to keep working without an account. That id then went
+ * straight into `.eq("id", …)` and `.insert({ id: … })` against a `uuid` column,
+ * so on any cloud deployment every guest spent five failed round trips per mount
+ * and `ensureProfile` finished by throwing into an IIFE that had no catch. Guests
+ * belong on the local branch, and now that the cloud branch calls an Edge Function
+ * that requires a signed-in JWT, sending them down it would be worse than wrong.
+ */
+function cloudProfileFor(userId: string): boolean {
+  return Boolean(isCloud && supabase && !isGuestId(userId));
+}
+
+/**
+ * The `profile` Edge Function, which is the only writer of this table.
+ *
+ * Returns the row on success, and THROWS the function's own sentence on a refusal
+ * — the player must see the same words whether the browser caught the name or the
+ * server did, which is the property a second implementation would have destroyed.
+ *
+ * Returns null in exactly one case: the function could not be reached at all (not
+ * deployed on this project, or the request never landed). The caller then takes
+ * the direct write, which still works until `2026-08-28_05_username_gate.sql` is
+ * applied and cannot work after. That is deliberate, and it is the same reasoning
+ * `getProfiles` states below: ordering a code deploy against a hand-run migration
+ * is a coordination problem, and not needing the ordering beats getting it right.
+ * It is also not a hole — an attacker was never going to route through this file
+ * anyway; the grant is the thing that stops them, and 05 is the grant.
+ */
+async function fromFunction(body: Record<string, unknown>): Promise<Profile | null> {
+  const { data, error, response } = await supabase!.functions.invoke("profile", { body });
+  if (!error) {
+    const row = (data as { profile?: Record<string, unknown> } | null)?.profile;
+    return row ? fromRow(row) : null;
+  }
+  // No response at all ⇒ never reached the function. 404 ⇒ not deployed here yet.
+  const status = response?.status ?? 0;
+  if (status === 0 || status === 404) return null;
+  let message = "Could not save that. Try again in a moment.";
+  try {
+    // Not `body` — that is this function's own parameter, and shadowing it here
+    // would be the same trap `advanceYear` had with `record`.
+    const payload = (await response!.json()) as { error?: unknown };
+    if (typeof payload.error === "string" && payload.error) message = payload.error;
+  } catch {}
+  throw new Error(message);
+}
+
 export async function getProfile(userId: string): Promise<Profile | null> {
-  if (isCloud && supabase) {
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+  if (cloudProfileFor(userId)) {
+    const { data } = await supabase!.from("profiles").select("*").eq("id", userId).maybeSingle();
     return data ? fromRow(data) : null;
   }
   try {
@@ -70,7 +134,10 @@ export async function ensureProfile(userId: string): Promise<Profile> {
   const existing = await getProfile(userId);
   if (existing) return existing;
 
-  if (isCloud && supabase) {
+  if (cloudProfileFor(userId)) {
+    const made = await fromFunction({ action: "ensure" });
+    if (made) return made;
+    // The function is not deployed on this project yet. See `fromFunction`.
     // Retry to dodge username/friend_code unique-constraint collisions.
     for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
       const candidate = {
@@ -79,7 +146,7 @@ export async function ensureProfile(userId: string): Promise<Profile> {
         avatar_seed: generateAvatarSeed(),
         friend_code: generateFriendCode(),
       };
-      const { data, error } = await supabase.from("profiles").insert(candidate).select("*").single();
+      const { data, error } = await supabase!.from("profiles").insert(candidate).select("*").single();
       if (!error && data) return fromRow(data);
       // A concurrent insert may have won — re-read before retrying.
       const reread = await getProfile(userId);
@@ -102,7 +169,7 @@ export async function ensureProfile(userId: string): Promise<Profile> {
 }
 
 /** Username bounds — also enforced by CHECK constraints in supabase/schema.sql. */
-export { USERNAME_MIN, USERNAME_MAX } from "./profanity";
+export { USERNAME_MIN, USERNAME_MAX } from "@/supabase/functions/_shared/username";
 
 /**
  * Rename the player.
@@ -110,13 +177,21 @@ export { USERNAME_MIN, USERNAME_MAX } from "./profanity";
  * Throws with a message meant for the player, rather than truncating. The old code
  * did `slice(0, USERNAME_MAX)`, which silently renamed them to something they had
  * not typed; "that name is too long" is a better answer than a different name.
+ *
+ * The check below is not made redundant by the one in the Edge Function. It is the
+ * same module, so the two cannot disagree, and running it here answers the player
+ * without a round trip — the server copy exists because the browser is skippable,
+ * not because this one is wrong.
  */
 export async function updateUsername(userId: string, username: string): Promise<Profile> {
   const checked = checkUsername(username);
   if (!checked.ok) throw new Error(checked.message);
   const clean = checked.value;
-  if (isCloud && supabase) {
-    const { data, error } = await supabase
+  if (cloudProfileFor(userId)) {
+    const renamed = await fromFunction({ action: "rename", username: clean });
+    if (renamed) return renamed;
+    // The function is not deployed on this project yet. See `fromFunction`.
+    const { data, error } = await supabase!
       .from("profiles")
       .update({ username: clean })
       .eq("id", userId)

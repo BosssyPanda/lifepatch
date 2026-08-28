@@ -98,13 +98,19 @@ alter table public.saves validate constraint saves_state_small;
 -- ---------------------------------------------------------------------------
 -- What is deliberately NOT here: a SQL mirror of the username word list.
 --
--- `lib/cloud/profanity.ts` folds case, leetspeak, separators and repeated
--- letters before matching, and carries an ALLOW list without which it rejects
--- "Scunthorpe" and "titan-grape" (the QA gate exists because the first draft
--- did exactly that). A hand-translated second copy of that algorithm would
--- diverge from the first one, and a server check that disagrees with the client
--- is worse than no server check: it rejects names the player was just told were
--- fine. The charset CHECK — `profiles_username_charset`, added in migration 01
--- — remains the load-bearing server-side rule, and closing the word-list gap
--- properly means one implementation behind an Edge Function, not two.
+-- The filter folds case, leetspeak, separators and repeated letters before
+-- matching, and carries an ALLOW list without which it rejects "Scunthorpe" and
+-- "titan-grape" (the QA gate exists because the first draft did exactly that). A
+-- hand-translated second copy of that algorithm would diverge from the first one,
+-- and a server check that disagrees with the client is worse than no server
+-- check: it rejects names the player was just told were fine. The charset CHECK —
+-- `profiles_username_charset`, added in migration 01 — remains the load-bearing
+-- server-side rule here, and closing the word-list gap properly means one
+-- implementation behind an Edge Function, not two.
+--
+-- SINCE DONE, in `2026-08-28_05_username_gate.sql`. The one implementation is at
+-- supabase/functions/_shared/username.ts and both the browser and the `profile`
+-- function import it. That migration takes away the `update (username)` grant this
+-- file just made, and the INSERT with it, so read them as one change in two parts:
+-- this one is safe to run whenever, and 05 requires the function to be live first.
 -- ---------------------------------------------------------------------------

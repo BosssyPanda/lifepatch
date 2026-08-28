@@ -47,13 +47,19 @@ const MIGRATIONS = [
   // 03 is deliberately absent: it rotates live friend codes, which is a data
   // decision an operator makes once, not a structural change the gate can assert.
   "supabase/migrations/2026-08-28_04_write_surface.sql",
+  "supabase/migrations/2026-08-28_05_username_gate.sql",
 ];
 
 const SEED = `
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111','victim@example.com'),
   ('22222222-2222-2222-2222-222222222222','attacker@example.com'),
-  ('33333333-3333-3333-3333-333333333333','bystander@example.com');
+  ('33333333-3333-3333-3333-333333333333','bystander@example.com'),
+  -- An account with NO profile row: a fresh signup, which is the state the
+  -- username bypass was easiest from. Deliberately absent from public.profiles,
+  -- so the three-row counts elsewhere still read three. (No backticks in here:
+  -- SEED is a template literal.)
+  ('44444444-4444-4444-4444-444444444444','newcomer@example.com');
 insert into public.profiles (id, username, avatar_seed, friend_code) values
   ('11111111-1111-1111-1111-111111111111','brave-otter-101','aaaaaaaa','ABC234'),
   ('22222222-2222-2222-2222-222222222222','sly-raven-202','bbbbbbbb','XYZ789'),
@@ -180,7 +186,13 @@ function main() {
   if (before.length === 0) fail.push("no probes ran in the BEFORE pass");
   for (const v of before) say(v.tag === "VULNERABLE", `${v.tag}: ${v.msg}`);
 
-  psql(["-c", "delete from public.friends; delete from public.results; delete from public.saves;"]);
+  psql([
+    "-c",
+    // The newcomer's row only exists if a probe just created one, which is the
+    // BEFORE pass reporting the hole open. It must not survive into the next.
+    "delete from public.friends; delete from public.results; delete from public.saves;" +
+      " delete from public.profiles where id = '44444444-4444-4444-4444-444444444444';",
+  ]);
   console.log("\nMIGRATE");
   for (const m of MIGRATIONS) {
     const out = psql(["-v", "ON_ERROR_STOP=1", "-f", join(ROOT, m)]);
@@ -202,7 +214,13 @@ function main() {
   if (after.length !== before.length) fail.push("AFTER ran a different number of probes than BEFORE");
   for (const v of after) say(v.tag === "CLOSED", `${v.tag}: ${v.msg}`);
 
-  psql(["-c", "delete from public.friends; delete from public.results; delete from public.saves;"]);
+  psql([
+    "-c",
+    // The newcomer's row only exists if a probe just created one, which is the
+    // BEFORE pass reporting the hole open. It must not survive into the next.
+    "delete from public.friends; delete from public.results; delete from public.saves;" +
+      " delete from public.profiles where id = '44444444-4444-4444-4444-444444444444';",
+  ]);
   console.log("\nSTILL WORKS — the app's own reads and writes");
   const pos = verdicts(psql(["-f", join(ROOT, "supabase/tests/20_still_works.sql")]), ["PASS", "FAIL"]);
   if (pos.length === 0) fail.push("no checks ran in the STILL WORKS pass");

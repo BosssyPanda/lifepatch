@@ -3,9 +3,15 @@
 -- This is the FRESH-INSTALL file: it describes the schema as it should be on a
 -- new project. If you already ran an older copy of it against a live database,
 -- do NOT re-run this one — apply the files in supabase/migrations/ in order
--- instead. They reach the same end state without touching your data, and 02 has
--- a deploy-ordering requirement this file does not. (03 is the one exception: it
--- rotates live friend codes, so it is opt-in and its own header says when.)
+-- instead. They reach the same end state without touching your data, and 02 and 05
+-- each have a deploy-ordering requirement this file does not. (03 is the one
+-- exception: it rotates live friend codes, so it is opt-in and its header says when.)
+--
+-- EITHER WAY, DEPLOY THE `profile` EDGE FUNCTION. Nothing but the service role may
+-- write `profiles` in the schema below, so `supabase/functions/profile` is what
+-- creates and renames players. Without it a fresh signup gets no profile row.
+--
+--   supabase functions deploy profile --project-ref <ref>
 
 create table if not exists public.saves (
   id uuid primary key default gen_random_uuid(),
@@ -51,8 +57,9 @@ create table if not exists public.profiles (
   -- The charset is the real defence on a name that renders publicly: it refuses
   -- zero-width joiners, RTL overrides, combining marks and Unicode homoglyphs —
   -- the tools for impersonating another player on the leaderboard. Word-level
-  -- screening is a client-side blocklist (lib/cloud/profanity.ts); this is the
-  -- half that has to hold at the database.
+  -- screening is the shared word list at supabase/functions/_shared/username.ts,
+  -- which the `profile` Edge Function runs server-side; this is the half that has
+  -- to hold at the database whatever the caller did or did not run.
   constraint profiles_username_charset
     check (username ~ '^[A-Za-z0-9][A-Za-z0-9 _-]{1,22}[A-Za-z0-9]$'),
   avatar_seed text not null,
@@ -100,7 +107,26 @@ revoke select on public.profiles from anon;
 -- and the only column any code path updates.
 revoke update on public.profiles from authenticated;
 revoke update on public.profiles from anon;
-grant update (username) on public.profiles to authenticated;
+
+-- And `username` goes the same way, which leaves nothing writable here at all.
+--
+-- Screening ran in the browser and nowhere else, so it applied to everyone except
+-- the person who did not run it: one PATCH, or more easily one INSERT at signup,
+-- put any string on the public leaderboard. The charset CHECK above holds at the
+-- database and always did — it refuses the homoglyphs and RTL overrides a word list
+-- cannot address anyway — but the word list itself had no server-side half.
+--
+-- It does now, and it is the SAME half: supabase/functions/_shared/username.ts is
+-- one module that the browser and the `profile` Edge Function both import. A SQL
+-- translation of it would have been a second implementation, and two copies of that
+-- normalisation drift until the server starts refusing names the browser has just
+-- accepted.
+--
+-- The three policies above are untouched and still correct. They answer WHICH ROW;
+-- this answers WHICH VALUE, which no policy could. The Edge Function writes with the
+-- service role and so passes both.
+revoke insert on public.profiles from authenticated;
+revoke insert on public.profiles from anon;
 
 -- The public projection. `security_invoker = off` is deliberate and load-bearing:
 -- the view runs as its owner, so it sees past the row-level policy above and can
