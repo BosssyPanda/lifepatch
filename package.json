@@ -15,6 +15,7 @@
     "audio:preview": "node scripts/audio/render-previews.mjs",
     "qa:audio": "node scripts/qa/audio-integration.mjs",
     "qa:engine": "node scripts/qa/build-engine.mjs && node scripts/qa/engine-props.mjs",
+    "qa:mp": "node scripts/qa/mp-room.mjs",
     "qa:rls": "node scripts/qa/rls-migration.mjs",
     "qa:username": "node scripts/qa/username-filter.mjs"
   },

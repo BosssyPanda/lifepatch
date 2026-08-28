@@ -292,7 +292,37 @@ untouched — there, one device is one seat.
 
 ---
 
-## 5. Manual test plan (two tabs, one machine)
+## 5. Testing
+
+### Scripted (`npm run qa:mp`)
+
+```
+NEXT_PUBLIC_MP_LOCAL=1 npm run dev
+QA_MP_LOCAL=1 npm run qa:mp        # the same-device transport
+npm run qa:mp                      # the cloud transport, with keys in .env.local
+```
+
+Two clients drive a whole room: create, join, start, one closes its tab
+mid-match, the room ghost-plays its life for two year boundaries, and it comes
+back through the one-tap rejoin. It asserts the sentences a player would say —
+the seat is marked, both rows stay in step, the way back is offered, both
+clients end up showing the same standings, and the room stops calling the
+returned player away — and it fails on any console error. The catch-up line is
+checked only when this device's own record served the rejoin; see the last
+limitation in §6 for why. Roughly three minutes: a match cannot be hurried past
+its own clock.
+
+`QA_MP_LOCAL=1` puts both clients in one browser context, because
+`BroadcastChannel` does not cross contexts, and pins each one's
+`lifepatch.mp.tab` so a reopened tab is still the same player — which is what
+the device id does in production. Without it the two are separate contexts on
+Supabase Realtime, which is closer to two people but needs a websocket the
+runner can actually open (a sandbox that refuses the upgrade fails at "no room
+code reached the lobby"). Either way the room logic under test is the same
+file; only the pipe changes. The script skips with exit 0 when the build has no
+transport at all.
+
+### Manual (two tabs, one machine)
 
 ```
 NEXT_PUBLIC_MP_LOCAL=1 npm run dev
@@ -350,12 +380,43 @@ Open two tabs on the app. In both: Story → Setup → enter distinct names.
   own net worth. This is a game between friends.
 - **8-player cap**, 2 to start. Enforced at the door, in presence, and in every
   status merge.
-- **Ghost-play needs a snapshot.** A player who disconnects before their first
-  advance has no cached snapshot; their row simply stops moving until they
-  rejoin (which then rebuilds from the seed).
-- **Auto-play is deliberately myopic.** The neutral choice minimizes worst-case
-  immediate cash damage only; it does not weigh salary, health or happiness,
-  and it never trades or pays debt. Absent players drift, they don't compete.
+- **A row can pause when nobody holds the life.** Ghost-play fast-forwards a
+  cached snapshot, and a client that inherited the clock after a player left
+  starts with an empty cache, so that row stops moving until somebody answers
+  the `snapshotRequest` (re-asked every 3 year boundaries, because a broadcast
+  is unacked). It reads "Away" while it is stopped, never "Auto" — the ghost
+  mark says a figure *came from* auto-play, not that auto-play is still
+  happening. The one case with no life to ask for — a seat rostered by a player
+  who closed the tab before their first advance — is not left stopped: the
+  acting host builds it from the room's seed, which is the identical `initRun`
+  that player's own rejoin would fall back to, so the row the room shows and
+  the life they come back to are the same one.
+- **Auto-play is a default, not a strategy.** The neutral choice minimises
+  worst-case immediate damage, folding a salary change in at six years' weight
+  because salary is the only permanent number on the sheet; it still ignores
+  health and happiness, and it never sells or pays down debt beyond the
+  minimum. Ghosts *do* invest: `autoAllocate` keeps back the coming year's
+  outflows and puts four fifths of what is left into the index — fenced into
+  `fastForward`, so it never runs for a player who is present and merely let
+  the clock expire. Measured over 800 seeds against five plausible human
+  policies, that places an absent player around 4.0 of 6 rather than the 5.3 of
+  6 a never-investing ghost scored. Being away should cost something, not the
+  game.
+- **The catch-up line needs this device's own record.** "Years 3–5 were played
+  for you while you were away" names a range, and the floor of that range is the
+  year this device last stored for the player. Source 2, the room's snapshot,
+  arrives already fast-forwarded to the room's year, so there is no range left
+  to name and the line does not appear — the figures are right, the explanation
+  is missing. (Sources 1 and 3 both have a floor: this device's stored year, and
+  year one respectively, so both name the range.) In practice source 1 is the
+  normal case (same device, localStorage intact) and the line appears; it is
+  absent for a rejoin from a device that has never held this match (a signed-in
+  player switching machines, cleared storage, private browsing) and for both
+  tabs under `NEXT_PUBLIC_MP_LOCAL=1`, where one localStorage holds one record
+  per room and `loadMatch` correctly refuses the other tab's. Saying it without
+  the range would mean asserting the room auto-played years it may not have —
+  the snapshot carries no provenance — so it says nothing rather than something
+  it cannot check.
 - **The `start` broadcast is at-most-once.** A guest mid-handshake when it goes
   out learns of the start from presence and is told "The host started the match
   without you" if the roster excludes them.
