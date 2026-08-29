@@ -27,6 +27,9 @@ next-env.d.ts
 # vercel
 .vercel
 
+# supabase cli scratch (created by any `npx supabase ...` run in this repo)
+/supabase/.temp/
+
 # python audio tooling venv
 /.venv-audio/
 
