@@ -1,4 +1,5 @@
 import { isCloud, supabase } from "../supabase";
+import { isGuestId } from "./identity";
 import type { Streak } from "./types";
 
 /**
@@ -48,6 +49,27 @@ function readLocal(userId: string): Streak {
 }
 
 /**
+ * A guest's streak lives on the device, and this guard is what sends it there.
+ *
+ * `mastery.ts` and `profiles.ts` have had it since they were written; this file and
+ * `results.ts` branched on `isCloud && supabase` alone, which is a different
+ * question — "is there a cloud" rather than "does THIS player have a row in it".
+ * A guest id is `device-<random>` (see `identity.ts`), not a uuid, so every call
+ * below went to PostgREST and came back refused.
+ *
+ * The cost was not the wasted request. Both branches here are real: the cloud one,
+ * and a `localStorage` one underneath it that a guest is supposed to get. Taking the
+ * cloud branch and failing meant the local write was never reached — so on any build
+ * with Supabase configured, which is production, a guest's streak was not saved
+ * anywhere at all. It read as nothing every day, no matter how many days they played.
+ * `qa:mp` found it: four refused `/rest/v1/streaks?user_id=eq.device-...` per client,
+ * on a run where nobody had signed in.
+ */
+function cloudStreakFor(userId: string): boolean {
+  return Boolean(isCloud && supabase && !isGuestId(userId));
+}
+
+/**
  * Read the streak, or throw.
  *
  * supabase-js resolves rather than rejects on a failed request, so a discarded
@@ -63,7 +85,7 @@ function readLocal(userId: string): Streak {
  * computing a write from.
  */
 async function readStreak(userId: string): Promise<Streak> {
-  if (isCloud && supabase) {
+  if (supabase && cloudStreakFor(userId)) {
     const { data, error } = await supabase
       .from("streaks")
       .select("*")
@@ -115,7 +137,7 @@ export async function bumpStreak(userId: string): Promise<Streak> {
   const next = nextStreak(prev, todayStr());
   if (next === prev) return prev;
 
-  if (isCloud && supabase) {
+  if (supabase && cloudStreakFor(userId)) {
     const { error } = await supabase.from("streaks").upsert(
       {
         user_id: userId,

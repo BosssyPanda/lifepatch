@@ -1,4 +1,5 @@
 import { isCloud, supabase } from "../supabase";
+import { isGuestId } from "./identity";
 import type { GameMode, NewResult, ResultRow } from "./types";
 import { safeVerdict } from "../verdict";
 
@@ -127,9 +128,27 @@ function bestPerUser(rows: ResultRow[]): ResultRow[] {
   return Array.from(best.values()).sort((a, b) => b.score - a.score);
 }
 
+/**
+ * A guest's runs live on the device. Same guard, same reason, as `streaks.ts`.
+ *
+ * `isCloud && supabase` asks whether a cloud EXISTS; the question these two
+ * per-player functions need answered is whether THIS player has a row in it. A guest
+ * id is `device-<random>`, not a uuid, so the insert below was refused every time —
+ * and because the local branch underneath is the one a guest is meant to take, a
+ * refusal meant the run was written nowhere. A guest finished a run and the game
+ * kept no record of it.
+ *
+ * NOT applied to `topResults` or `getResult`: those read the public board and a
+ * shared statement by id. They take no player, they are supposed to reach the cloud
+ * for everyone, and guarding them would blank the leaderboard for guests.
+ */
+function cloudResultsFor(userId: string): boolean {
+  return Boolean(isCloud && supabase && !isGuestId(userId));
+}
+
 export async function submitResult(userId: string, result: NewResult): Promise<ResultRow> {
   const metrics = result.metrics ?? {};
-  if (isCloud && supabase) {
+  if (supabase && cloudResultsFor(userId)) {
     const { data, error } = await supabase
       .from("results")
       .insert({
@@ -246,7 +265,7 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
 }
 
 export async function myBest(userId: string, mode: GameMode): Promise<ResultRow | null> {
-  if (isCloud && supabase) {
+  if (supabase && cloudResultsFor(userId)) {
     const { data } = await supabase
       .from("results")
       .select("*")

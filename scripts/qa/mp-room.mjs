@@ -78,7 +78,14 @@ class Client {
     this.page.on("console", (m) => {
       if (m.type() !== "error") return;
       const t = m.text();
-      if (!IGNORED.some((re) => re.test(t))) this.errors.push(t.slice(0, 300));
+      if (IGNORED.some((re) => re.test(t))) return;
+      // The URL, not just the sentence. "Failed to load resource:
+      // net::ERR_CONNECTION_RESET" names nothing, and a run that reports eight of
+      // them tells you only that eight things went wrong somewhere — which is a
+      // diagnostic that costs an hour every time it fires. The console message
+      // carries its location separately from its text; both belong in the report.
+      const where = m.location()?.url;
+      this.errors.push((where ? `${t}  ← ${where}` : t).slice(0, 300));
     });
     this.page.on("pageerror", (e) => this.errors.push("PAGEERROR: " + String(e.message ?? e).slice(0, 300)));
     await this.page.goto(BASE, { waitUntil: "domcontentloaded" });
