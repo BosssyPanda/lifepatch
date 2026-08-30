@@ -18,9 +18,17 @@
 //   MIGRATE  supabase/migrations/  (every structural one, in order)
 //   AFTER    supabase/tests/10_attack_probes.sql   — every probe must report CLOSED
 //   WORKS    supabase/tests/20_still_works.sql     — every check must report PASS
+//   FRESH    supabase/schema.sql on an empty database, then the probes again
 //
 // The BEFORE pass is the part that makes this a test rather than a demo: a probe that
 // cannot show the hole open cannot prove the fix closed it.
+//
+// The FRESH pass exists because there are two ways into this schema and only one of
+// them was ever tested. README sends a new project to `supabase/schema.sql`; an
+// existing one applies `supabase/migrations/` in order. The two files are kept in
+// step BY HAND, so the failure mode is a fix that lands in one and not the other —
+// silently, for exactly as long as nobody creates a new project. Running the same
+// probes against a database built only from schema.sql is what makes that drift loud.
 //
 // Requires a local PostgreSQL (any modern version; developed against 16) on PATH.
 // Skips with exit 0 when there is none, so this never becomes the reason CI is red on
@@ -48,6 +56,8 @@ const MIGRATIONS = [
   // decision an operator makes once, not a structural change the gate can assert.
   "supabase/migrations/2026-08-28_04_write_surface.sql",
   "supabase/migrations/2026-08-28_05_username_gate.sql",
+  "supabase/migrations/2026-08-30_06_result_integrity.sql",
+  "supabase/migrations/2026-08-30_07_rename_rate_limit.sql",
 ];
 
 const SEED = `
@@ -226,13 +236,38 @@ function main() {
   if (pos.length === 0) fail.push("no checks ran in the STILL WORKS pass");
   for (const v of pos) say(v.tag === "PASS", `${v.tag}: ${v.msg}`);
 
+  // The other way in. A second database, built from schema.sql and nothing else,
+  // then the identical probe file. Every probe must be CLOSED here too — otherwise a
+  // fix reached the migration and not the fresh-install file, and the next person to
+  // create a project gets the schema this gate is supposed to have retired.
+  console.log("\nFRESH INSTALL — schema.sql alone must reach the same place");
+  const FRESH = `${DB}_fresh`;
+  psql(["-c", `drop database if exists ${FRESH}`], { db: "postgres" });
+  psql(["-c", `create database ${FRESH}`], { db: "postgres" });
+  for (const f of ["supabase/tests/00_supabase_harness.sql", "supabase/schema.sql"]) {
+    const out = psql(["-v", "ON_ERROR_STOP=1", "-f", join(ROOT, f)], { db: FRESH });
+    say(!/^ERROR/m.test(out), `applied ${f}`);
+  }
+  psql([], { db: FRESH, input: SEED });
+  const fresh = verdicts(
+    psql(["-f", join(ROOT, "supabase/tests/10_attack_probes.sql")], { db: FRESH }),
+    ["VULNERABLE", "CLOSED", "SKIP"],
+  );
+  if (fresh.length !== before.length) {
+    fail.push(`FRESH ran ${fresh.length} probe(s), BEFORE ran ${before.length}`);
+  }
+  for (const v of fresh) say(v.tag === "CLOSED", `${v.tag}: ${v.msg}`);
+
   console.log("");
   if (fail.length) {
     console.error(`RLS gate FAILED — ${fail.length} check(s):`);
     for (const f of fail) console.error(`  • ${f}`);
     return 1;
   }
-  console.log(`RLS gate passed — ${before.length} probe(s) closed, ${pos.length} behaviour(s) intact.`);
+  console.log(
+    `RLS gate passed — ${before.length} probe(s) closed after migrating and again on a ` +
+      `fresh schema.sql, ${pos.length} behaviour(s) intact.`,
+  );
   return 0;
 }
 

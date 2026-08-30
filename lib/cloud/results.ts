@@ -303,3 +303,26 @@ export function markSubmitted(runKey: string): void {
     localStorage.setItem(SUBMITTED_KEY, JSON.stringify([...set]));
   } catch {}
 }
+
+/**
+ * Take the mark back. The other half of `markSubmitted`, and the reason writing it
+ * early is safe.
+ *
+ * The mark goes down BEFORE the network call, because a synchronous write is the
+ * only thing that stops two re-fires inside one mount from posting twice. But it is
+ * DURABLE — it outlives the tab — so on its own that optimism spends the run: an
+ * offline moment, an expired session, an RLS refusal or a 500 from the Edge
+ * Function and the run is retired for good on that device. No leaderboard row, no
+ * share URL, no streak, and nothing on screen that says so. The player finished a
+ * 21-year story run and the record of it is a key in localStorage saying they
+ * already posted it.
+ *
+ * So the guard stays in-flight-only unless the write actually lands.
+ */
+export function unmarkSubmitted(runKey: string): void {
+  try {
+    const set = readSubmitted();
+    if (!set.delete(runKey)) return;
+    localStorage.setItem(SUBMITTED_KEY, JSON.stringify([...set]));
+  } catch {}
+}

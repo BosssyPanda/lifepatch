@@ -63,6 +63,25 @@ export default async function OgImage() {
         { name: "Anton", data: anton, style: "normal" as const, weight: 400 as const },
         { name: "IBMPlexMono", data: mono, style: "normal" as const, weight: 400 as const },
       ],
+      /**
+       * This card has no inputs — it is the same 1200x630 render on every request,
+       * and it only changes when a deploy changes it. It was still being rendered
+       * per request: `runtime = "edge"` disables static generation for the route
+       * (the build says so out loud), and Next's default for a dynamic route is
+       * `max-age=0, must-revalidate`, which no CDN will hold.
+       *
+       * That matters more since app/api/og/[id] started redirecting its
+       * unknown-run fallback here instead of drawing its own copy. The redirect is
+       * what takes a stream of random UUIDs off the per-request render path, and it
+       * only does that if the ONE url they all land on is cacheable. Uncached, the
+       * redirect would move the render rather than remove it.
+       *
+       * A week at the edge, an hour in browsers. Vercel invalidates its CDN on
+       * deploy, so a long `s-maxage` cannot outlive the design it is caching.
+       */
+      headers: {
+        "cache-control": "public, no-transform, max-age=3600, s-maxage=604800, stale-while-revalidate=604800",
+      },
     },
   );
 }

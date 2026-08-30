@@ -230,3 +230,133 @@ begin
 end $$;
 reset role;
 \echo ''
+\echo '--- 11. a result row that names its own timestamp --------------------'
+-- `topResults` narrows the weekly board with `gte("created_at", weekAgoIso())`.
+-- A row dated in the year 3000 is inside every week that will ever be computed,
+-- so it takes first place on *This week* and no honest run can age it out. The
+-- probe asserts the row is INSIDE the weekly window, not merely that it inserted:
+-- a forged timestamp the board would not have shown is not the bug.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+declare n int;
+begin
+  begin
+    insert into public.results (user_id, mode, score, verdict, metrics, created_at)
+    values ('22222222-2222-2222-2222-222222222222', 'story', 1, 'Comfortable', '{}',
+            timestamptz '3000-01-01 00:00:00+00');
+    select count(*) into n from public.results
+     where mode = 'story' and created_at >= now() - interval '7 days';
+    raise notice 'VULNERABLE: a year-3000 row is on the weekly board (% row(s))', n;
+  exception when insufficient_privilege then
+    raise notice 'CLOSED: no INSERT privilege on results.created_at';
+  end;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- 12. a player choosing their own /r/{id} slug ----------------------'
+-- `id` is the address the player statement is served from on this origin.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+begin
+  begin
+    insert into public.results (id, user_id, mode, score, verdict, metrics)
+    values ('dddddddd-dddd-dddd-dddd-dddddddddddd',
+            '22222222-2222-2222-2222-222222222222', 'story', 1, 'Comfortable', '{}');
+    raise notice 'VULNERABLE: a player chose their own result id (share slug)';
+  exception
+    when insufficient_privilege then raise notice 'CLOSED: no INSERT privilege on results.id';
+    when unique_violation then raise notice 'SKIP: that id is already taken';
+  end;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- 13. a streak nobody bounded, on a public table --------------------'
+-- `streaks` is public-read by design so friends can see each other's streaks, and
+-- `current`/`longest` are plain `int` under an update-own policy with no column
+-- rule. Self-seeding rather than seeded, because the runner's between-pass cleanup
+-- does not touch this table and the AFTER pass has to find the same starting state
+-- the BEFORE pass did.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+declare n int;
+begin
+  insert into public.streaks (user_id, current, longest, last_played_on)
+  values ('22222222-2222-2222-2222-222222222222', 1, 1, current_date)
+  on conflict (user_id) do nothing;
+  begin
+    update public.streaks set current = 2147483647, longest = 2147483647
+     where user_id = '22222222-2222-2222-2222-222222222222';
+    select current into n from public.streaks
+     where user_id = '22222222-2222-2222-2222-222222222222';
+    if n = 2147483647 then
+      raise notice 'VULNERABLE: a public streak of % was accepted', n;
+    else
+      raise notice 'CLOSED: streak unchanged (%)', n;
+    end if;
+  exception when check_violation then
+    raise notice 'CLOSED: streaks CHECK refused 2147483647';
+  end;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- 14. mastery past the game own ceiling ----------------------------'
+-- MAX_MASTERY_LEVEL is 5 (lib/cloud/mastery.ts) and lived only in the client.
+-- Read-own-only, so the blast radius is the forger's own Money Brain — bounded
+-- because the bound is free. `update` rather than a second `insert`, so the AFTER
+-- pass measures the CHECK instead of the primary key.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+declare n int;
+begin
+  insert into public.mastery (user_id, concept_id, level)
+  values ('22222222-2222-2222-2222-222222222222', 'probe-compound-interest', 0)
+  on conflict (user_id, concept_id) do nothing;
+  begin
+    update public.mastery set level = 999
+     where user_id = '22222222-2222-2222-2222-222222222222'
+       and concept_id = 'probe-compound-interest';
+    select level into n from public.mastery
+     where user_id = '22222222-2222-2222-2222-222222222222'
+       and concept_id = 'probe-compound-interest';
+    if n = 999 then
+      raise notice 'VULNERABLE: mastery level % accepted (game maximum is 5)', n;
+    else
+      raise notice 'CLOSED: mastery level unchanged (%)', n;
+    end if;
+  exception when check_violation then
+    raise notice 'CLOSED: mastery CHECK refused level 999';
+  end;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- 15. unbounded result rows for one player -------------------------'
+-- `saves` is capped by `unique (user_id, mode)`; `results` is capped per row and
+-- not at all per player. 600 rows is over the 500 cap, so the count afterwards is
+-- the whole assertion: unpruned it stays 600, pruned it settles at the cap.
+select set_config('request.jwt.claim.sub', '22222222-2222-2222-2222-222222222222', false);
+set role authenticated;
+do $$
+declare n int;
+begin
+  for i in 1..600 loop
+    insert into public.results (user_id, mode, score, verdict, metrics)
+    values ('22222222-2222-2222-2222-222222222222', 'infinite', i, 'Comfortable', '{}');
+  end loop;
+  select count(*) into n from public.results
+   where user_id = '22222222-2222-2222-2222-222222222222' and mode = 'infinite';
+  if n > 500 then
+    raise notice 'VULNERABLE: one player holds % result rows in one mode', n;
+  else
+    raise notice 'CLOSED: result rows capped at % for one player and mode', n;
+  end if;
+end $$;
+reset role;
+\echo ''

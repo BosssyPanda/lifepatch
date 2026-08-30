@@ -40,7 +40,16 @@ async function fetchRow(id: string): Promise<Row | null> {
   try {
     const res = await fetch(
       `${base}/rest/v1/results?id=eq.${id}&select=id,mode,score,verdict,metrics`,
-      { headers: { apikey: anon, authorization: `Bearer ${anon}` } },
+      {
+        headers: { apikey: anon, authorization: `Bearer ${anon}` },
+        // An unfurl is a scraper waiting on a socket, and this call had no ceiling:
+        // a slow or wedged Supabase held an edge invocation open until the platform's
+        // own limit and billed the whole of it. 2.5s is well past a healthy round
+        // trip and well short of any scraper's patience. The abort lands in the
+        // `catch` below, which is already the "render the generic card" path — a
+        // timeout and a missing row want the same answer.
+        signal: AbortSignal.timeout(2500),
+      },
     );
     if (!res.ok) return null;
     const rows = (await res.json()) as Row[];
@@ -121,11 +130,45 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     fetchRow(id),
   ]).catch(() => [null, null, null] as const);
 
-  // Without a typeface there is no card to draw at all — not even the wordmark
-  // fallback, which is set in both of these. The static wordmark image is the one
-  // thing left that always renders, so hand the scraper that instead of a 500.
+  // Without a typeface there is no card to draw at all. The static wordmark image
+  // is the one thing left that always renders, so hand the scraper that instead of
+  // a 500.
+  //
+  // THIS CHECK MUST COME FIRST, and the reason is not obvious: the `.catch` above
+  // is shared, so a font read that throws nulls `row` too. Ordering the row branch
+  // ahead of this one makes this branch unreachable and gives a transient font
+  // fault the row branch's `s-maxage=60` — pinning a platform hiccup at the edge for
+  // a minute, which is exactly what the comment below says must not happen. No
+  // cache-control here on purpose: this is a fault, not a fact about this id.
   if (!anton || !plex) {
     return new Response(null, { status: 302, headers: { location: "/opengraph-image" } });
+  }
+
+  /**
+   * Unknown or missing run → the static wordmark card, by REDIRECT rather than by
+   * rendering one.
+   *
+   * A known id is cheap after its first hit — `s-maxage=86400` below. An unknown one
+   * never was: the short TTL here is deliberate and correct (a link shared in the
+   * window between the share URL being minted and its row landing must not pin the
+   * WRONG card at every CDN and scraper for a year), but the consequence is that a
+   * stream of random UUIDs never hits cache, and each one cost a Supabase round trip
+   * plus a full 1200x630 Satori render billed to this origin.
+   *
+   * The 302 keeps the 60-second semantics exactly and takes the render off the
+   * abusable path — the same move the missing-font branch above makes, for a
+   * different reason. It only pays off because `/opengraph-image` is cacheable:
+   * every unknown id lands on that ONE url, so the render happens once at the edge
+   * rather than once per id. See the headers set there.
+   */
+  if (!row) {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: "/opengraph-image",
+        "cache-control": "public, no-transform, max-age=0, s-maxage=60",
+      },
+    });
   }
 
   const fonts = [
@@ -143,37 +186,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const headers = {
     "cache-control": "public, no-transform, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
   };
-  // The fallback must not be: a link shared in the window between the share URL being
-  // minted and its row landing would otherwise pin the WRONG card at every CDN and
-  // scraper for a year. A short TTL lets the real statement replace it.
-  const fallbackHeaders = { "cache-control": "public, no-transform, max-age=0, s-maxage=60" };
-
-  // Unknown/missing run → generic wordmark card (never an error image).
-  if (!row) {
-    return new ImageResponse(
-      (
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            backgroundColor: BG,
-            gap: 24,
-          }}
-        >
-          <span style={{ fontFamily: "Anton", fontSize: 130, color: INK, letterSpacing: 2 }}>LIFEPATCH</span>
-          <span style={{ fontFamily: "PlexMono", fontSize: 30, color: SECONDARY, letterSpacing: 8 }}>
-            SURVIVE THE INTERNET ECONOMY
-          </span>
-        </div>
-      ),
-      { width: 1200, height: 630, fonts, headers: fallbackHeaders },
-    );
-  }
-
   // The unfurl card is the widest-travelling surface this string reaches — up to
   // 118px of display type on an image served from this origin. Guarded exactly as
   // the page's <h1> is; see `safeVerdict`.

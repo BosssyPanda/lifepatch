@@ -3,8 +3,9 @@
 -- This is the FRESH-INSTALL file: it describes the schema as it should be on a
 -- new project. If you already ran an older copy of it against a live database,
 -- do NOT re-run this one — apply the files in supabase/migrations/ in order
--- instead. They reach the same end state without touching your data, and 02 and 05
--- each have a deploy-ordering requirement this file does not. (03 is the one
+-- instead. They reach the same end state without touching your data, and 02, 05
+-- and 07 each have a deploy-ordering requirement this file does not — 05 wants the
+-- `profile` function live first, 07 wants to land before it is redeployed. (03 is the one
 -- exception: it rotates live friend codes, so it is opt-in and its header says when.)
 --
 -- EITHER WAY, DEPLOY THE `profile` EDGE FUNCTION. Nothing but the service role may
@@ -64,7 +65,20 @@ create table if not exists public.profiles (
     check (username ~ '^[A-Za-z0-9][A-Za-z0-9 _-]{1,22}[A-Za-z0-9]$'),
   avatar_seed text not null,
   friend_code text not null unique,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Where the `profile` function's rename limiter keeps score. `rename` answers 409
+  -- for "taken" and 400 for "the filter refuses that", and two distinguishable
+  -- answers plus unlimited attempts is an oracle for who exists. The answers stay
+  -- honest — a player who picks a taken name has to be told it is taken — and the
+  -- ATTEMPTS are bounded instead, at five an hour.
+  --
+  -- In the database rather than in the function because an Edge Function is
+  -- stateless and horizontally scaled: an in-memory counter enforces "five per hour
+  -- per isolate you happen to land on", which is not a limit. Written only by the
+  -- service role, like `username` itself; `read own` keeps both off every other
+  -- player's screen and `profiles_public` projects neither.
+  rename_window_start timestamptz,
+  rename_attempts int not null default 0
 );
 
 alter table public.profiles enable row level security;
@@ -217,12 +231,119 @@ create policy "results - insert own" on public.results
 create policy "results - delete own" on public.results
   for delete using (auth.uid() = user_id);
 
+-- WHICH ROW is a policy question; WHICH COLUMNS is a grant question, and the
+-- policy above only ever answered the first. Supabase's default privileges hand
+-- `authenticated` table-wide INSERT, so a player posting straight at PostgREST
+-- names `created_at` and `id` as freely as they name their score: a timestamp in
+-- the year 3000 is inside every week `topResults` will ever compute, taking
+-- permanent first place on the weekly board, and `id` is the /r/{id} slug their
+-- "statement" is served from on this origin. The five columns below are exactly
+-- the five `submitResult` writes.
+--
+-- IT HAS TO BE DONE THIS WAY ROUND — see the note on `profiles` above; a
+-- column-level REVOKE cannot carve an exception out of a table-level grant.
+--
+-- UPDATE goes for a different reason: `results` has no UPDATE policy, so RLS
+-- already refuses every update and the grant has never done anything. It is
+-- removed so it stays that way after the next policy is written by someone
+-- reading the policies rather than the grants.
+revoke insert on public.results from authenticated;
+revoke insert on public.results from anon;
+revoke update on public.results from authenticated;
+revoke update on public.results from anon;
+grant insert (user_id, mode, score, verdict, metrics) on public.results to authenticated;
+
+-- A ceiling on how many rows one player can leave behind.
+--
+-- `saves` is bounded by `unique (user_id, mode)` and by `saves_state_small`.
+-- `results` is bounded per row (8 KiB) and not at all per player: one account can
+-- insert indefinitely and nothing prunes. Pruning rather than refusing, because a
+-- refusal past the cap falls first on the player who plays the most and falls by
+-- silently declining to record a run they finished honestly.
+--
+-- Oldest first: a shared /r/{id} link takes its traffic in a burst right after the
+-- run, so the oldest rows are the ones whose links are already spent. The best
+-- RANKABLE row is spared whatever its age — a board that ranks each player by
+-- their single best run must not be allowed to forget it. `score < 1e15` is the
+-- test that excludes NaN, which sorts above every real number in Postgres and
+-- would otherwise be nominated as the row to protect forever.
+--
+-- SECURITY DEFINER because the cap is a schema invariant, not a user action:
+-- under `security invoker` the prune would need the inserting role's own DELETE
+-- privilege, so revoking DELETE on `results` from `authenticated` would start
+-- failing inserts instead. Both keys come from NEW, and NEW.user_id is already
+-- pinned to `auth.uid()` by the insert policy, so it cannot be pointed elsewhere.
+create or replace function public.results_cap_per_player()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  cap constant int := 500;
+  surplus int;
+  keep_id uuid;
+begin
+  select count(*) - cap + 1 into surplus
+    from public.results r
+   where r.user_id = new.user_id and r.mode = new.mode;
+
+  if surplus is null or surplus <= 0 then
+    return new;
+  end if;
+
+  select r.id into keep_id
+    from public.results r
+   where r.user_id = new.user_id and r.mode = new.mode
+     and r.score > -1e15 and r.score < 1e15
+   order by r.score desc, r.created_at asc, r.id asc
+   limit 1;
+
+  delete from public.results d
+   where d.id in (
+     select r.id
+       from public.results r
+      where r.user_id = new.user_id and r.mode = new.mode
+        and (keep_id is null or r.id <> keep_id)
+      -- `id` as a second key so the choice is total: `created_at` alone ties for
+      -- rows written in the same millisecond and would leave the planner to pick.
+      order by r.created_at asc, r.id asc
+      limit surplus
+   );
+
+  return new;
+end;
+$$;
+
+revoke all on function public.results_cap_per_player() from public;
+revoke all on function public.results_cap_per_player() from anon;
+revoke all on function public.results_cap_per_player() from authenticated;
+
+drop trigger if exists results_cap_per_player on public.results;
+create trigger results_cap_per_player
+  before insert on public.results
+  for each row execute function public.results_cap_per_player();
+
 -- Daily streak per player (loss-aversion habit loop).
 create table if not exists public.streaks (
   user_id uuid primary key references auth.users (id) on delete cascade,
   current int not null default 0,
   longest int not null default 0,
-  last_played_on date
+  last_played_on date,
+  -- `results.score` is bounded because `numeric` is not; these two are bounded
+  -- because `int` is not and because this table is PUBLICLY READABLE by design so
+  -- friends can see each other's streaks. Under an update-own policy with no
+  -- column rule, one PATCH puts 2,147,483,647 in `StreakChip` and beside that
+  -- player's leaderboard row. Nothing ranks on a streak, so this is cosmetic
+  -- rather than competitive — which is why it is a CHECK and not a redesign.
+  -- 100,000 days is 273 years. `longest >= current` is the invariant
+  -- `nextStreak` (lib/cloud/streaks.ts) has always maintained and which nothing
+  -- outside that function was ever required to respect.
+  constraint streaks_sane check (
+    current between 0 and 100000
+    and longest between 0 and 100000
+    and longest >= current
+  )
 );
 
 alter table public.streaks enable row level security;
@@ -297,7 +418,12 @@ create policy "friends - delete own" on public.friends
 create table if not exists public.mastery (
   user_id uuid not null references auth.users (id) on delete cascade,
   concept_id text not null check (char_length(concept_id) <= 64),
-  level int not null default 0,
+  -- The same gap `streaks` had, with a smaller blast radius: this table is
+  -- read-own-only, so a forged level is visible to the forger and nobody else.
+  -- Bounded anyway because the bound is free and the number is already written
+  -- down — MAX_MASTERY_LEVEL in lib/cloud/mastery.ts.
+  -- CHANGING MAX_MASTERY_LEVEL NOW NEEDS A MIGRATION alongside the code change.
+  level int not null default 0 constraint mastery_level_sane check (level between 0 and 5),
   updated_at timestamptz not null default now(),
   primary key (user_id, concept_id)
 );

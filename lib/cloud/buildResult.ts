@@ -11,7 +11,7 @@ import {
 import { getDream } from "../cashflow/dreams";
 import type { CashflowState } from "../cashflow/types";
 import { ensureProfile } from "./profiles";
-import { alreadySubmitted, markSubmitted, submitResult } from "./results";
+import { alreadySubmitted, markSubmitted, submitResult, unmarkSubmitted } from "./results";
 import { bumpStreak } from "./streaks";
 import type { GameMode, NewResult } from "./types";
 
@@ -140,19 +140,46 @@ export function resultFromCashflow(s: CashflowState): NewResult {
 /**
  * Post a finished run exactly once and bump the daily streak. `runKey` must be
  * stable+unique per run (e.g. the run seed). Durable across reloads, so this is
- * the single submit path for every mode — no per-mount ref needed. Best-effort:
- * if the player id is unresolved (anon in cloud) nothing posts.
+ * the single submit path for every mode — no per-mount ref needed.
+ *
+ * Resolves to whether this run is recorded in the cloud. `false` for an anonymous
+ * player (nothing to post to) and for a post that failed; `true` for one that
+ * landed, now or on an earlier visit.
+ *
+ * THE TWO HALVES ARE NOT THE SAME COMMITMENT, and the ordering below is the whole
+ * point of the function:
+ *
+ *   · The RESULT is what the dedupe key protects. Its mark is written first so a
+ *     re-fire inside one mount cannot post twice, and taken back if the write does
+ *     not land — otherwise one refusal retires a finished run permanently on that
+ *     device. See `unmarkSubmitted`.
+ *
+ *   · The STREAK is not. Once the result row exists, the run IS posted, and
+ *     rolling the mark back over a failed streak bump would re-post the result on
+ *     the next visit — a duplicate row bought to retry a counter. A streak that
+ *     misses a day is the smaller loss, so `bumpStreak` throwing (which it now
+ *     does, rather than reporting success on a refusal) is caught here and stops
+ *     at the streak.
  */
 export async function submitRunOnce(
   runKey: string,
   playerId: string | null,
   result: NewResult,
-): Promise<void> {
-  if (!playerId || alreadySubmitted(runKey)) return;
+): Promise<boolean> {
+  if (!playerId) return false;
+  if (alreadySubmitted(runKey)) return true;
+
   markSubmitted(runKey); // optimistic: synchronous, so re-fires within a mount no-op
   try {
     await ensureProfile(playerId);
     await submitResult(playerId, result);
+  } catch {
+    unmarkSubmitted(runKey);
+    return false;
+  }
+
+  try {
     await bumpStreak(playerId);
   } catch {}
+  return true;
 }

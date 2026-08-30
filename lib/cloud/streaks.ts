@@ -47,12 +47,41 @@ function readLocal(userId: string): Streak {
   }
 }
 
-export async function getStreak(userId: string): Promise<Streak> {
+/**
+ * Read the streak, or throw.
+ *
+ * supabase-js resolves rather than rejects on a failed request, so a discarded
+ * `error` here does not read as zero — it reads as "this player has never played",
+ * which is a different and much more expensive sentence. `bumpStreak` computes the
+ * next value FROM this one: a read that fails during an expired session returns
+ * EMPTY, `nextStreak` turns EMPTY into day one, and the upsert writes a 1 over a
+ * streak of thirty. The failed WRITE the review flagged loses a day; this loses the
+ * streak, and it is the same discarded `error` behind both.
+ *
+ * So the write path takes the strict read and `getStreak` keeps the lenient one —
+ * a number nobody could fetch is worth showing as nothing, and is not worth
+ * computing a write from.
+ */
+async function readStreak(userId: string): Promise<Streak> {
   if (isCloud && supabase) {
-    const { data } = await supabase.from("streaks").select("*").eq("user_id", userId).maybeSingle();
+    const { data, error } = await supabase
+      .from("streaks")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
     return data ? fromRow(data) : EMPTY;
   }
   return readLocal(userId);
+}
+
+/** Display read. Nothing is written from this, so an unreachable row shows as none. */
+export async function getStreak(userId: string): Promise<Streak> {
+  try {
+    return await readStreak(userId);
+  } catch {
+    return EMPTY;
+  }
 }
 
 /** Pure: compute the streak after a play on `today`. Same day = no change. */
@@ -67,14 +96,27 @@ export function nextStreak(prev: Streak, today: string): Streak {
   };
 }
 
-/** Record a play today and return the updated streak. */
+/**
+ * Record a play today and return the updated streak. THROWS when the cloud write
+ * fails, and when the read it is computed from fails.
+ *
+ * The house rule `lib/saves.ts` states: supabase-js does not reject on a failed
+ * request, it resolves with `{ error }`, and discarding that makes an RLS refusal,
+ * an expired session and a network failure all look exactly like success. This
+ * function returned the COMPUTED next streak either way, so the chip animated to
+ * six days against a database still holding five and the next read put it back.
+ *
+ * `submitRunOnce` is the only caller and catches this deliberately: by the time the
+ * streak is bumped the result row already exists, and a missed day is a smaller
+ * loss than the duplicate result row a retry would post.
+ */
 export async function bumpStreak(userId: string): Promise<Streak> {
-  const prev = await getStreak(userId);
+  const prev = await readStreak(userId);
   const next = nextStreak(prev, todayStr());
   if (next === prev) return prev;
 
   if (isCloud && supabase) {
-    await supabase.from("streaks").upsert(
+    const { error } = await supabase.from("streaks").upsert(
       {
         user_id: userId,
         current: next.current,
@@ -83,6 +125,7 @@ export async function bumpStreak(userId: string): Promise<Streak> {
       },
       { onConflict: "user_id" },
     );
+    if (error) throw new Error(error.message);
     return next;
   }
   try {

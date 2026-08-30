@@ -230,3 +230,74 @@ exception when others then raise notice 'FAIL: the function cannot create a prof
 end $$;
 reset role;
 \echo ''
+\echo '--- H. the results cap prunes, and never the run being ranked ---------'
+-- The board shows each player's single best run, so a cap that can delete that row
+-- would quietly demote them — which is a worse outcome than the storage it saves.
+-- The oldest row here is deliberately also the best one: it is first in line for an
+-- oldest-first prune and must survive all of it.
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false) \gset
+set role authenticated;
+do $$
+declare n int; best numeric; kept uuid; probe uuid;
+begin
+  insert into public.results (user_id, mode, score, verdict, metrics)
+  values ('33333333-3333-3333-3333-333333333333', 'story', 999999, 'Financially Free', '{}')
+  returning id into probe;
+
+  for i in 1..504 loop
+    insert into public.results (user_id, mode, score, verdict, metrics)
+    values ('33333333-3333-3333-3333-333333333333', 'story', i, 'Getting By', '{}');
+  end loop;
+
+  select count(*) into n from public.results
+   where user_id = '33333333-3333-3333-3333-333333333333' and mode = 'story';
+  if n = 500 then
+    raise notice 'PASS: 505 runs pruned down to the % cap', n;
+  else
+    raise notice 'FAIL: cap left % rows, expected 500', n;
+  end if;
+
+  select max(score) into best from public.results
+   where user_id = '33333333-3333-3333-3333-333333333333' and mode = 'story';
+  select id into kept from public.results where id = probe;
+  if kept is not null and best = 999999 then
+    raise notice 'PASS: the oldest row is still the best run on the board (%)', best;
+  else
+    raise notice 'FAIL: the prune took the best run — board best is now %', best;
+  end if;
+end $$;
+reset role;
+
+\echo ''
+\echo '--- I. an honest streak and an honest mastery level still write -------'
+-- The two CHECKs added alongside the cap. `nextStreak` produces `longest >= current`
+-- and never more than one day at a time; MAX_MASTERY_LEVEL is 5 and the constraint
+-- has to accept the top of the ladder, not stop one short of it.
+select set_config('request.jwt.claim.sub', '33333333-3333-3333-3333-333333333333', false) \gset
+set role authenticated;
+do $$
+declare c int; l int;
+begin
+  insert into public.streaks (user_id, current, longest, last_played_on)
+  values ('33333333-3333-3333-3333-333333333333', 12, 40, current_date)
+  on conflict (user_id) do update set current = excluded.current, longest = excluded.longest;
+  select current into c from public.streaks
+   where user_id = '33333333-3333-3333-3333-333333333333';
+  raise notice 'PASS: an honest streak of % days still writes', c;
+exception when others then raise notice 'FAIL: honest streak refused — %', sqlerrm;
+end $$;
+
+do $$
+declare l int;
+begin
+  insert into public.mastery (user_id, concept_id, level)
+  values ('33333333-3333-3333-3333-333333333333', 'compound-interest', 5)
+  on conflict (user_id, concept_id) do update set level = excluded.level;
+  select level into l from public.mastery
+   where user_id = '33333333-3333-3333-3333-333333333333'
+     and concept_id = 'compound-interest';
+  raise notice 'PASS: a fully mastered concept (level %) still writes', l;
+exception when others then raise notice 'FAIL: MAX_MASTERY_LEVEL refused — %', sqlerrm;
+end $$;
+reset role;
+\echo ''

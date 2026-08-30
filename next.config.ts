@@ -35,6 +35,24 @@ function connectSrc(): string | null {
 const SECURITY_HEADERS = [
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
+  // The host serves this app over HTTPS and redirects http:// to it — but a
+  // redirect is a round trip the network gets to answer first, and the FIRST
+  // request of a session is the one that carries the Supabase session out of
+  // localStorage. This tells the browser not to make that request at all.
+  //
+  // Two years is the value the preload list requires and the one every scanner
+  // expects. `includeSubDomains` because nothing is served off a subdomain that
+  // is not also HTTPS, and a subdomain that stays downgradeable is a cookie-
+  // setting position on the same site.
+  //
+  // NO `preload`, DELIBERATELY. The token does nothing on its own — it is an
+  // opt-in that only takes effect once the domain is submitted at
+  // hstspreload.org — and what it would signal is a commitment that is very slow
+  // to reverse: removal takes months of browser releases, and until then every
+  // current and future subdomain must serve valid HTTPS or become unreachable.
+  // That is a decision for whoever owns the domain to make on purpose, not a
+  // side effect of a security pass. Everything the header actually buys is above.
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
   // `form-action` and `frame-src` are added on the same reasoning as the rest:

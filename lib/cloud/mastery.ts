@@ -70,22 +70,65 @@ function cloudMasteryFor(userId: string): boolean {
   return Boolean(isCloud && supabase && !isGuestId(userId));
 }
 
-export async function getMastery(userId: string): Promise<MasteryRow[]> {
+/**
+ * Read this player's rows, or throw.
+ *
+ * The same asymmetry `lib/saves.ts` documents: supabase-js resolves with `{ error }`
+ * rather than rejecting, so a discarded error here does not read as "could not
+ * fetch" — it reads as "this player has mastered nothing". `recordConcepts` computes
+ * the next level FROM this, as `prevLevel + 1`, so one failed read turns a level-4
+ * concept into a level-1 upsert and the progress is gone. A wrong read is worse than
+ * a failed write, because a wrong read becomes a confident write.
+ */
+async function readMastery(userId: string): Promise<MasteryRow[]> {
   if (supabase && cloudMasteryFor(userId)) {
-    const { data } = await supabase.from("mastery").select("*").eq("user_id", userId);
+    const { data, error } = await supabase.from("mastery").select("*").eq("user_id", userId);
+    if (error) throw new Error(error.message);
     return (data ?? []).map(fromRow);
   }
   return readLocal(userId);
 }
 
+/** Display read. Nothing is written from this, so an unreachable map shows as empty. */
+export async function getMastery(userId: string): Promise<MasteryRow[]> {
+  try {
+    return await readMastery(userId);
+  } catch {
+    return [];
+  }
+}
+
 export type MasteryGain = { conceptId: string; level: number; prevLevel: number; isFirst: boolean };
 
-/** Raise mastery for each concept by one level (capped). Returns new levels. */
-export async function recordConcepts(userId: string, conceptIds: string[]): Promise<MasteryGain[]> {
-  const unique = Array.from(new Set(conceptIds)).filter(Boolean);
-  if (unique.length === 0) return [];
+/**
+ * What `recordConcepts` learned, and whether the database agrees.
+ *
+ * `saved` is the half that was missing. The write reported success on an RLS
+ * refusal, an expired session or a network failure and then handed back the
+ * COMPUTED levels, so the Money Brain played its level-up flourish and marked a
+ * concept mastered while the database held neither — and the next read silently
+ * put it back. `gains` is still returned when `saved` is false: it is what the run
+ * earned, which is worth showing; it is only the ceremony that has to wait for a
+ * server that actually took it.
+ */
+export type MasteryResult = { gains: MasteryGain[]; saved: boolean };
 
-  const current = await getMastery(userId);
+/** Raise mastery for each concept by one level (capped). Returns new levels. */
+export async function recordConcepts(
+  userId: string,
+  conceptIds: string[],
+): Promise<MasteryResult> {
+  const unique = Array.from(new Set(conceptIds)).filter(Boolean);
+  if (unique.length === 0) return { gains: [], saved: true };
+
+  let current: MasteryRow[];
+  try {
+    current = await readMastery(userId);
+  } catch {
+    // Nothing is written from a read that failed — see `readMastery`. No gains are
+    // claimed either: without the previous levels there is no honest one to claim.
+    return { gains: [], saved: false };
+  }
   const byId = new Map(current.map((r) => [r.conceptId, r]));
   const now = new Date().toISOString();
   const gains: MasteryGain[] = [];
@@ -100,7 +143,7 @@ export async function recordConcepts(userId: string, conceptIds: string[]): Prom
   }
 
   if (supabase && cloudMasteryFor(userId)) {
-    await supabase.from("mastery").upsert(
+    const { error } = await supabase.from("mastery").upsert(
       updatedRows.map((r) => ({
         user_id: userId,
         concept_id: r.conceptId,
@@ -109,11 +152,11 @@ export async function recordConcepts(userId: string, conceptIds: string[]): Prom
       })),
       { onConflict: "user_id,concept_id" },
     );
-    return gains;
+    return { gains, saved: !error };
   }
 
   const merged = new Map(byId);
   for (const r of updatedRows) merged.set(r.conceptId, r);
   writeLocal(userId, Array.from(merged.values()));
-  return gains;
+  return { gains, saved: true };
 }

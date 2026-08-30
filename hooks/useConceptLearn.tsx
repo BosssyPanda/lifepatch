@@ -79,11 +79,17 @@ export function ConceptLearnProvider({ children }: { children: ReactNode }) {
         const id = resolveProgressId(user?.id ?? null);
         if (id) {
           void recordConcepts(id, ids)
-            .then((gains) => {
+            .then(({ gains, saved }) => {
               // only concepts whose level actually rose (drop cap re-hits)
               const rose = gains.filter((g) => g.level > g.prevLevel);
               if (rose.length === 0) return;
               setRunGains((r) => Array.from(new Set([...r, ...rose.map((g) => g.conceptId)])));
+              // The flourish is a claim about the record, not about the run: it says
+              // this level is yours now. `saved` is false on an RLS refusal, an
+              // expired session or a network failure, and the next read will show
+              // the old level — so the run's gains still light up the map, and the
+              // ceremony waits for a server that took the write.
+              if (!saved) return;
               // newly mastered is the bigger moment; otherwise a level-up flourish
               accent(rose.some((g) => g.isFirst) ? "mastered" : "levelup");
             })
