@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isCloud, supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import { channelName, MP_EVENT, presenceKey } from "./protocol";
 
 /**
@@ -115,9 +115,26 @@ const RECOVER_MS = 10000;
  * are two connections rather than one flickering row (the UI dedupes by
  * `playerId`).
  */
-export function createSupabaseTransport(): MatchTransport | null {
-  if (!isCloud || !supabase) return null;
-  const client = supabase;
+export function createSupabaseTransport(injected?: SupabaseClient | null): MatchTransport | null {
+  /**
+   * `injected` exists so this file can be tested, and it is worth saying why that
+   * needed a parameter at all. Everything here reacts to supabase-js CALLING BACK —
+   * a status arriving after a teardown is the whole subject of the guard in
+   * `open` — and none of that is reachable through the public surface without a
+   * live websocket. `npm run qa:mp` needs one, which means the reconnect path was
+   * only ever exercised where `wss://` works, and a re-entrancy bug lived in it for
+   * as long as it did precisely because nothing could reach it.
+   *
+   * `scripts/qa/mp-transport.mjs` passes a stub that answers `channel` and
+   * `removeChannel` with the real library's ordering and no socket. The app never
+   * passes anything, so production takes the same `supabase` it always did.
+   */
+  const resolved = injected ?? supabase;
+  if (!resolved) return null;
+  // Annotated rather than inferred: the guard above narrows `resolved`, but the
+  // callbacks below are closures and TypeScript will not carry a narrowing into
+  // one. Same shape the `isCloud` check used to have, for the same reason.
+  const client: SupabaseClient = resolved;
   const tabNonce = nonce();
   const messages = emitter<unknown>();
   const presences = emitter<unknown[]>();
@@ -189,7 +206,41 @@ export function createSupabaseTransport(): MatchTransport | null {
       });
       channel = ch;
       ch.subscribe((status, err) => {
-        if (myGen !== gen) return;
+        /**
+         * A channel we have already thrown away does not get to steer the room.
+         *
+         * `removeChannel` calls `unsubscribe`, and supabase-js answers a close by
+         * invoking THIS callback with `CLOSED` — see `RealtimeChannel`'s
+         * `_onClose(() => callback?.("CLOSED"))`. So every `discard` below arrives
+         * back here looking exactly like a live socket dropping, and the generation
+         * counter cannot tell them apart: `leave` bumps it, but `reopen` does not,
+         * because a reconnect is the SAME join still in progress.
+         *
+         * Identity is what separates them, and every discard site nulls `channel`
+         * before awaiting the removal, so `channel !== ch` means "we let this one
+         * go" and nothing else.
+         *
+         * WITHOUT THIS GUARD ONE TRANSIENT ERROR NEVER STOPPED. `reopen`'s own
+         * `discard` re-entered here as `CLOSED`, which called `reopen` again and
+         * armed a second retry; the first retry then built a healthy channel and
+         * cleared `attempts`, and the second woke up and discarded that healthy
+         * channel — which re-entered here again. The room dropped and recovered
+         * about once a second for as long as the tab was open: peers flickering to
+         * "away", broadcasts landing on a channel already being torn down, and
+         * `attempts` reset on every cycle so the backoff never got a chance to grow
+         * out of it.
+         */
+        if (myGen !== gen || channel !== ch) {
+          // Nothing is going to settle this one — `join` and `reopen` both await
+          // `open`, and an awaiter of a channel nobody owns any more would wait for
+          // the life of the tab. Their `myGen` checks turn this into the no-op it
+          // should be; a stale channel losing a race to a newer one retries.
+          if (!settled) {
+            settled = true;
+            reject(err ?? new Error("Realtime channel discarded before it went live"));
+          }
+          return;
+        }
         if (status === "SUBSCRIBED") {
           attempts = 0;
           if (watchdog !== null) clearTimeout(watchdog);

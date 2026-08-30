@@ -1205,7 +1205,32 @@ export function MatchProvider({ children }: { children: ReactNode }) {
     const state = myStateRef.current;
     send({ t: "status", v: MP_PROTOCOL, status: st });
     if (state) {
-      send({ t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current, state, sessionId: sessionRef.current });
+      /**
+       * `selfYear` travels with this one too, and leaving it off was not the
+       * harmless omission it looked like.
+       *
+       * A receiver falls back to `yearIndex(msg.state)` when the field is absent
+       * (see the `snapshot` handler), and those are the same number only for a
+       * player who has been here the whole match. On a REJOINED client they are
+       * not: `joinRoom` hands back a life already fast-forwarded to the room's
+       * year, while the player themselves stopped years earlier — which is the
+       * entire distinction this field exists to carry.
+       *
+       * So a reconnect quietly told the room the player had played up to wherever
+       * their life had been ghosted to, raising their catch-up floor to the ceiling
+       * and shrinking the "here's what you missed" notice by exactly the years they
+       * missed. A dropped socket is already the likeliest moment for this to
+       * matter, and this was the one send that got it wrong.
+       *
+       * The ref is the authority — ghost fast-forward deliberately does not touch
+       * it — and the fallback is the receiver's own, so nothing changes for a client
+       * that never rejoined.
+       */
+      const selfYear = selfYearsRef.current.get(selfIdRef.current) ?? yearIndex(state);
+      send({
+        t: "snapshot", v: MP_PROTOCOL, playerId: selfIdRef.current, state,
+        sessionId: sessionRef.current, selfYear,
+      });
     }
   }, [publish, send]);
 

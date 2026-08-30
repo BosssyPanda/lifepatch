@@ -37,6 +37,11 @@ const ENTRIES = [
   "lib/cloud/buildResult.ts",
   "lib/mp/autoResolve.ts",
   "lib/mp/protocol.ts",
+  // The room's pipe. No React and no DOM (its BroadcastChannel stand-in touches a
+  // global Node has had for years), so it belongs here — and `mp-transport.mjs`
+  // drives its reconnect path against a stub client, which is the only way that
+  // path is reachable without a websocket.
+  "lib/mp/transport.ts",
 ];
 
 /** `walk`, but an absent directory is not an error — nothing may have compiled into it. */

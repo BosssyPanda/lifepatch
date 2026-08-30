@@ -44,6 +44,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { checkUsername } from "../_shared/username.ts";
 import { generateAvatarSeed, generateFriendCode, generateUsername } from "../_shared/generate.ts";
+import { decideRenameAttempt } from "../_shared/renameLimit.ts";
 
 /**
  * Both key regimes.
@@ -123,10 +124,6 @@ const COLUMNS = "id,username,avatar_seed,friend_code,created_at";
 
 /** Retry budget for a unique-constraint collision on a generated name or code. */
 const MAX_CREATE_ATTEMPTS = 5;
-
-/** Rename attempts allowed per account per window. See `spendRenameAttempt`. */
-const RENAME_LIMIT = 5;
-const RENAME_WINDOW_MS = 60 * 60 * 1000;
 
 Deno.serve(async (req: Request): Promise<Response> => {
   const cors = corsFor(req);
@@ -237,26 +234,17 @@ async function spendRenameAttempt(
     .select("rename_window_start,rename_attempts")
     .eq("id", userId)
     .maybeSingle();
-  // No row is not this function's 404 to give — `rename` below already has one.
-  if (error || !data) return { ok: true };
 
-  const now = Date.now();
-  const startedAt = data.rename_window_start ? Date.parse(data.rename_window_start) : NaN;
-  const fresh = !Number.isFinite(startedAt) || now - startedAt >= RENAME_WINDOW_MS;
-  const spent = fresh ? 0 : Number(data.rename_attempts ?? 0);
-
-  if (spent >= RENAME_LIMIT) {
-    return { ok: false, retryAfter: Math.max(1, Math.ceil((startedAt + RENAME_WINDOW_MS - now) / 1000)) };
+  // Read, decide, write — and the deciding is not here. `decideRenameAttempt` is a
+  // pure function of the row and the clock precisely so it can be tested without a
+  // user, a JWT or a round trip; see `../_shared/renameLimit.ts` and
+  // `scripts/qa/rename-limit.mjs`. A read that failed is passed as `null`, which
+  // that function answers by failing open, for the reasons stated there.
+  const decision = decideRenameAttempt(error ? null : data, Date.now());
+  if (!decision.ok) return decision;
+  if (decision.write) {
+    await admin.from("profiles").update(decision.write).eq("id", userId);
   }
-
-  await admin
-    .from("profiles")
-    .update({
-      rename_window_start: fresh ? new Date(now).toISOString() : data.rename_window_start,
-      rename_attempts: spent + 1,
-    })
-    .eq("id", userId);
-
   return { ok: true };
 }
 
