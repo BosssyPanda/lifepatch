@@ -1,5 +1,5 @@
 import type { ResultRow } from "./cloud/types";
-import { finiteNumber, finiteSeries } from "./metrics";
+import { finiteNumber, wholeSeries } from "./metrics";
 import type { ModeId } from "./modes";
 import type { RunState } from "./runEngine";
 import { BACKGROUNDS } from "./backgrounds";
@@ -94,19 +94,9 @@ export function challengeableWorld(row: ResultRow): ChallengeableWorld | null {
   if (m?.shared !== 0) return null;
   if (m?.daily !== undefined) return null;
 
-  /**
-   * A series we had to CUT is one we cannot describe honestly, so it is dropped
-   * exactly as a malformed one is — the money comparison below still stands on
-   * `score`, which is their whole run.
-   *
-   * Reading only the front of it and charting that would report where OUR limit
-   * stopped as where their run ended, which is the same false claim
-   * `ghostOutlastsRun` exists to prevent on the report's rival line. The cap also
-   * protects `writeChallenge`: an unbounded series from a row predating the column
-   * constraint overflows the storage budget, and that failure is swallowed.
-   */
-  const read = finiteSeries(m?.history);
-  const history = read && !read.capped ? read.series : [];
+  // `wholeSeries` refuses a series it had to cut — see `lib/metrics.ts`. The money
+  // comparison still stands on `score`, which is their whole run.
+  const history = wholeSeries(m?.history) ?? [];
   const startYear = m?.startYear;
 
   return {

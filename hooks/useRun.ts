@@ -253,9 +253,21 @@ export function useRun(userId: string | null) {
 
     resume: useCallback((r: RunState, opts?: RunOpts) => {
       matchCodeRef.current = opts?.matchCode ?? null;
-      // Nothing resumable is ever a challenge: a challenge owns no save slot, so
-      // whatever came back from one is a run that does.
+      /**
+       * Nothing resumable is ever a challenge: a challenge owns no save slot, so
+       * whatever came back from one is a run that does.
+       *
+       * The stored RECORD goes with the flag, and that is not tidiness. It
+       * outlives the run that wrote it, and `challengeFor` matches any run
+       * standing on the same seed, background and mode — so a challenge abandoned
+       * to the title screen would re-attach to the saved run resumed after it,
+       * print the player against themselves, and re-key `submitRunOnce` with the
+       * attempt nonce. That misses the mark the first submission left and posts a
+       * SECOND leaderboard row for one run. Wherever the fence drops, the record
+       * drops with it.
+       */
       challengeRef.current = false;
+      clearChallenge();
       setMode(r.mode);
       // Second line of defence: AuthGate already filters incompatible saves out
       // before offering "Continue", but a version mismatch must never reach the
@@ -319,7 +331,10 @@ export function useRun(userId: string | null) {
 
     reset: useCallback(() => {
       matchCodeRef.current = null;
+      // See `resume`: the record must not outlive the fence, or it re-attaches to
+      // the next run that happens to stand on the same world.
       challengeRef.current = false;
+      clearChallenge();
       liveRef.current = null;
       setRun(null);
       setMode(null);
@@ -327,7 +342,9 @@ export function useRun(userId: string | null) {
     }, []),
     toTitle: useCallback(() => {
       matchCodeRef.current = null;
+      // See `resume`.
       challengeRef.current = false;
+      clearChallenge();
       liveRef.current = null;
       setRun(null);
       setMode(null);

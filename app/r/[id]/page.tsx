@@ -5,7 +5,7 @@ import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { getResult } from "@/lib/cloud/results";
 import { challengeableWorld } from "@/lib/challenge";
-import { finiteNumber, finiteSeries } from "@/lib/metrics";
+import { finiteNumber, money, percent, plain, wholeSeries } from "@/lib/metrics";
 import { challengeUrl } from "@/lib/deepLink";
 import { isCloud } from "@/lib/supabase";
 import type { ResultRow } from "@/lib/cloud/types";
@@ -85,16 +85,6 @@ function provenanceRows(row: ResultRow): { label: string; value: string }[] {
   return out;
 }
 
-/**
- * Every one of these reads a field some other player's browser wrote, and the
- * generous coercions they used to use printed nonsense rather than nothing:
- * `Number(null)` is a confident $0, and `String(v ?? "—")` renders an
- * object-valued field as "[object Object]" on a public, cached page. An absent or
- * unreadable field claims nothing, which is the correct thing for it to claim.
- */
-const money = (v: unknown) => (finiteNumber(v) ? currency(v) : "—");
-const plain = (v: unknown) => (finiteNumber(v) ? String(v) : "—");
-
 const MODE_LABEL: Record<string, string> = {
   story: "Story run",
   infinite: "Infinite run",
@@ -118,7 +108,7 @@ function statRows(row: ResultRow): { label: string; value: string }[] {
   return [
     scoreRow,
     { label: "Final age", value: plain(m.age) },
-    { label: "Happiness", value: finiteNumber(m.happiness) ? `${m.happiness}%` : "—" },
+    { label: "Happiness", value: percent(m.happiness) },
   ];
 }
 
@@ -217,14 +207,14 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
    * year after the hole is drawn one place early, on a public, cached page. See
    * `lib/metrics.ts`; a series that cannot be trusted is not drawn at all.
    */
-  const read = finiteSeries(row.metrics?.history);
+  // `wholeSeries`, which refuses a series it had to cut: the chart's label names
+  // where the line "ends", and the end of a truncated series is our limit rather
+  // than the run's. The score above it is unaffected.
+  const series = wholeSeries(row.metrics?.history);
   const startYear = row.metrics?.startYear;
-  // `!read.capped` for the same reason the challenge gate drops a cut series: the
-  // chart's own label names where the line "ends", and the end of a series we
-  // truncated is our limit rather than the run's. The score above it is unaffected.
   const chartPoints =
-    read && !read.capped && read.series.length > 1 && finiteNumber(startYear)
-      ? read.series.map((v, i) => ({ year: startYear + i, netWorth: v }))
+    series && series.length > 1 && finiteNumber(startYear)
+      ? series.map((v, i) => ({ year: startYear + i, netWorth: v }))
       : null;
   const provenance = provenanceRows(row);
 

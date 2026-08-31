@@ -252,13 +252,19 @@ function AppShellInner() {
        * report would also print them against themselves. Nothing is written unless
        * this effect is about to start the run the record describes.
        *
-       * `writeChallenge` can still fail — a private window, a full quota — and the
-       * run starts anyway. The link promised this world and it delivers it; what
-       * is lost is the comparison at the end, which is the smaller half. Refusing
-       * to start would make the link a no-op with nothing on screen to explain it,
-       * because `consumeInvite` has already taken the parameter out of the URL.
+       * A failed write refuses the start, and that is the lesser of two bad
+       * outcomes rather than a good one.
+       *
+       * Starting anyway looks kinder — the link promised this world and could
+       * still deliver it — but the run would be fenced out of `lib/saves.ts` by
+       * `challenge: true` while `challengeFor` found nothing at the report, so
+       * `submitRunOnce` would key on `${r.mode}-${r.seed}` with no attempt nonce.
+       * For anyone answering their own link, or replaying a world this device has
+       * already posted, that key is already marked submitted: the run is neither
+       * saved nor posted, and a whole life goes nowhere. A link that declines to
+       * start is a visible disappointment; that is a silent one.
        */
-      writeChallenge({
+      const kept = writeChallenge({
         resultId: row.id,
         // Per ATTEMPT, not per world. `submitRunOnce` dedupes on a key built from
         // the run's seed, and a challenge borrows someone else's seed by design —
@@ -274,6 +280,7 @@ function AppShellInner() {
         startYear: world.startYear,
         coached: world.coached,
       });
+      if (!kept) return;
 
       /**
        * NOT made a guest first, deliberately — this used to call `continueAsGuest`.

@@ -1,3 +1,5 @@
+import { currency } from "./format";
+
 /**
  * Reading `results.metrics`, which is written by clients and trusted by nobody.
  *
@@ -62,3 +64,50 @@ export function finiteSeries(
   if (!v.every(finiteNumber)) return null;
   return { series: v.slice(0, cap) as number[], capped: v.length > cap };
 }
+
+/**
+ * A row whose series we can describe honestly, or null.
+ *
+ * `finiteSeries` reports a cap; this refuses one. Every caller so far wants the
+ * same thing for the same reason and was stating it in an eight-line comment of
+ * its own: a series we had to CUT cannot be labelled, because the end of it is
+ * our limit rather than the run's, and both the chart's "ending at" and the
+ * report's rival line would say otherwise. Made structural here so the third
+ * caller cannot quietly write `?? []` and reintroduce the false endpoint.
+ */
+export function wholeSeries(v: unknown, cap: number = MAX_SERIES): number[] | null {
+  const read = finiteSeries(v, cap);
+  return read && !read.capped ? read.series : null;
+}
+
+/**
+ * A numeric COLUMN from PostgREST, which may arrive as a number or as a string.
+ *
+ * Distinct from `finiteNumber` on purpose. That one reads a field inside the
+ * `metrics` json, where a string is a malformed value. This reads a real column —
+ * `score` — which PostgREST is entitled to serialise either way, and which
+ * `lib/cloud/results.ts` has always coerced for exactly that reason. The OG route
+ * fetches over raw REST rather than through that mapper, and judging `score` more
+ * strictly there than the statement page does is how the two public renderings of
+ * one row came to disagree about whether it exists at all.
+ */
+export function finiteColumn(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * The two renderings of a metrics field, shared by the two public surfaces.
+ *
+ * `/r/[id]` and `/api/og/[id]` draw the SAME row, and they had drifted: the page
+ * printed "Net worth —" where the image printed a confident "$0". Defining these
+ * once is what makes that divergence unrepresentable — a copy in each file plus a
+ * regex gate policing the copies is the arrangement that produced the bug.
+ */
+export const money = (v: unknown): string => (finiteNumber(v) ? currency(v) : "—");
+export const plain = (v: unknown): string => (finiteNumber(v) ? String(v) : "—");
+export const percent = (v: unknown): string => (finiteNumber(v) ? `${v}%` : "—");
