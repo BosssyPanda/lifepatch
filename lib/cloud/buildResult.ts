@@ -142,9 +142,15 @@ export function resultFromCashflow(s: CashflowState): NewResult {
  * stable+unique per run (e.g. the run seed). Durable across reloads, so this is
  * the single submit path for every mode — no per-mount ref needed.
  *
- * Resolves to whether this run is recorded in the cloud. `false` for an anonymous
- * player (nothing to post to) and for a post that failed; `true` for one that
- * landed, now or on an earlier visit.
+ * Resolves to whether this run is RECORDED — in the cloud for a signed-in player,
+ * on the device for a guest, whose id `submitResult`/`bumpStreak` route to their
+ * localStorage branch. `false` only for a post that failed, and for a null id.
+ *
+ * Callers must resolve that id with `resolveProgressId`, not `resolvePlayerId`:
+ * the latter withholds a guest's device id in a cloud build, and the `if (!playerId)`
+ * below then returns before either branch — cloud or local — is reached. That is
+ * the shape of the bug this function's own guards were written to fix, one layer up.
+ * `scripts/qa/cloud-guards.mjs` asserts the call sites.
  *
  * THE TWO HALVES ARE NOT THE SAME COMMITMENT, and the ordering below is the whole
  * point of the function:

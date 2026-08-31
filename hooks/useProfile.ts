@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "./useAuth";
-import { resolvePlayerId, resolveProgressId } from "@/lib/cloud/identity";
+import { resolveProgressId } from "@/lib/cloud/identity";
 import { ensureProfile, updateUsername } from "@/lib/cloud/profiles";
 import { getStreak } from "@/lib/cloud/streaks";
 import { getMastery } from "@/lib/cloud/mastery";

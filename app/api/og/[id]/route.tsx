@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { cachedFonts } from "../_fonts/cache";
 import { PALETTE } from "@/lib/palette";
 import { currency } from "@/lib/format";
 import { CASHFLOW_VERDICTS, safeVerdict, VERDICTS } from "@/lib/verdict";
@@ -24,6 +25,12 @@ const GAIN = PALETTE.gain;
 const LOSS = PALETTE.loss;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Immutable build assets — read once per isolate. See `_fonts/cache.ts`. */
+const loadFonts = cachedFonts([
+  new URL("../_fonts/Anton-Regular.ttf", import.meta.url),
+  new URL("../_fonts/IBMPlexMono-Regular.ttf", import.meta.url),
+]);
 
 type Row = {
   id: string;
@@ -124,22 +131,22 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // bundled .ttf threw the whole route; and because `Promise.all` rejects fast, it
   // discarded a row lookup that may already have succeeded. Rare, since these are
   // static assets — and rare is the entire case the fallback card exists for.
-  const [anton, plex, row] = await Promise.all([
-    fetch(new URL("../_fonts/Anton-Regular.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
-    fetch(new URL("../_fonts/IBMPlexMono-Regular.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
-    fetchRow(id),
-  ]).catch(() => [null, null, null] as const);
+  //
+  // Each half now carries its own catch, because the reads no longer fail together:
+  // the fonts are cached for the life of the isolate, so after the first request
+  // they are not a read at all. A font fault no longer discards a good row.
+  const [ttf, row] = await Promise.all([loadFonts().catch(() => null), fetchRow(id)]);
+  const [anton, plex] = ttf ?? [null, null];
 
   // Without a typeface there is no card to draw at all. The static wordmark image
   // is the one thing left that always renders, so hand the scraper that instead of
   // a 500.
   //
-  // THIS CHECK MUST COME FIRST, and the reason is not obvious: the `.catch` above
-  // is shared, so a font read that throws nulls `row` too. Ordering the row branch
-  // ahead of this one makes this branch unreachable and gives a transient font
-  // fault the row branch's `s-maxage=60` — pinning a platform hiccup at the edge for
-  // a minute, which is exactly what the comment below says must not happen. No
-  // cache-control here on purpose: this is a fault, not a fact about this id.
+  // THIS CHECK MUST STILL COME FIRST, for the surviving half of the original
+  // reason: a font fault answered by the row branch below would be handed that
+  // branch's `s-maxage=60`, pinning a platform hiccup at the edge for a minute —
+  // exactly what the comment down there says must not happen. No cache-control
+  // here on purpose: this is a fault, not a fact about this id.
   if (!anton || !plex) {
     return new Response(null, { status: 302, headers: { location: "/opengraph-image" } });
   }

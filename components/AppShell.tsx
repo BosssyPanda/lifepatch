@@ -16,7 +16,7 @@ import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
 import type { DailyPuzzle } from "@/lib/daily";
 import { lastPlayerName } from "@/lib/mp/matchStore";
-import { resolvePlayerId } from "@/lib/cloud/identity";
+import { resolveProgressId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
 import { yearIndex, type RunState } from "@/lib/runEngine";
@@ -154,7 +154,16 @@ function AppShellInner() {
   useEffect(() => {
     if ((phase !== "report" && phase !== "podium") || !run.run || run.run.status !== "ended") return;
     const r = run.run;
-    const id = resolvePlayerId(auth.user?.id ?? null);
+    // `resolveProgressId`, not `resolvePlayerId` — the WRITE has to name the player
+    // the same way the READ does, and the streak chip reads under this one
+    // (`useProfile`). `resolvePlayerId` withholds a guest's device id in a cloud
+    // build, which is the right answer for a share link that needs a cloud row and
+    // the wrong one here: `submitRunOnce` short-circuits on the null, so the three
+    // guest guards below it (`cloudResultsFor`, `cloudStreakFor`, `cloudProfileFor`)
+    // never got to route a guest to localStorage. A guest finished a run and BOTH
+    // branches were skipped. A signed-in player is unaffected: this returns their
+    // auth id and the guards send it to the cloud exactly as before.
+    const id = resolveProgressId(auth.user?.id ?? null);
     void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r));
   }, [phase, run.run, auth.user]);
 

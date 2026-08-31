@@ -10,6 +10,7 @@ import { NeonButton } from "@/components/ui/LedgerButton";
 import { SoundCell } from "@/components/ui/SoundCell";
 import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
+import { PersonalBestRow } from "@/components/social/PersonalBestRow";
 import { useAudio } from "@/hooks/useAudio";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
@@ -327,6 +328,11 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
           {ledger.map((r, i) => (
             <LedgerRow key={r.label} label={r.label} value={r.value} tone={r.tone} strong={i === 0} />
           ))}
+          {/* The record this statement was measured against — the same `nw` the
+              submit ranks, so the comparison is the board's, not a second one.
+              Renders nothing until it is known, and nothing if it could not be
+              read. */}
+          <PersonalBestRow mode={run.mode} score={nw} />
         </motion.section>
 
         {/* annotated net-worth line — biggest one-year moves + the macro events crossed */}
