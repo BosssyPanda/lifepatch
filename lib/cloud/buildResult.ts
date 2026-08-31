@@ -73,6 +73,17 @@ export function resultFromRun(run: RunState): NewResult {
        * means unknown. `components/screens/LifeReport.tsx` says which.
        */
       coached: run.weakSpots?.length ? 1 : 0,
+      /**
+       * This run was dealt from a ROOM's shared running order, not from its own
+       * pool — `drawEvents` takes an entirely different branch for it
+       * (`s.sharedEvents`). A match posts as `mode: "story"` carrying a seed and a
+       * background like any other run, so without this marker its statement looks
+       * exactly like a challengeable solo world and is not one: a challenger
+       * starting from that seed takes the solo branch and lives somewhere else.
+       * Only written when true — the absent case is the overwhelming majority and
+       * means the ordinary branch.
+       */
+      ...(run.sharedEvents ? { shared: 1 } : {}),
     },
   };
 }

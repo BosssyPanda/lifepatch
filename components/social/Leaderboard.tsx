@@ -109,6 +109,7 @@ export function Leaderboard({
   /** Rendered in the page masthead's right cell — e.g. a link back to the ledger. */
   pageAction,
   onOpenFriends,
+  refreshSignal = 0,
 }: {
   open: boolean;
   onClose: () => void;
@@ -128,6 +129,17 @@ export function Leaderboard({
    * `components/ui/LedgerDialog.tsx`).
    */
   onOpenFriends?: () => void;
+  /**
+   * Bump to re-read the board.
+   *
+   * The fetch effect keys on `open` among other things, so the dialog host gets
+   * invalidation for free: it closes the board to open the sheet and reopening
+   * toggles `open`. The `/leaderboard` route has no such toggle — `open` is a
+   * hardcoded `true` there — so accepting a request in the sheet left the Friends
+   * tab still showing "No friends added yet" over a friendship that now existed,
+   * until a full page reload.
+   */
+  refreshSignal?: number;
 }) {
   const { profile } = useProfile();
   const { sfx } = useAudio();
@@ -223,7 +235,7 @@ export function Leaderboard({
     return () => {
       active = false;
     };
-  }, [open, mode, scope, background, dailyKey, profileId, sfx, retry]);
+  }, [open, mode, scope, background, dailyKey, profileId, sfx, retry, refreshSignal]);
 
   const metric = scoreMetric(mode);
   // Each tab strip namespaces its own tab ids (see LedgerTabs' `idPrefix`). The MODE

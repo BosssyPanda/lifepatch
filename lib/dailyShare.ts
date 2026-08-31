@@ -105,14 +105,18 @@ export function gridGlyph(cell: GridCell): string {
  * rectangle, black up-pointing triangle" twenty-one times, which is not the
  * information. The shape of the result is: how many years you were ahead, level and
  * behind — so that is what the row is labelled with.
+ *
+ * `opponent` names who the cells are measured against. It defaults to the index,
+ * which is what the daily's own grid compares to; a seed challenge passes the
+ * rival's name so the same sentence serves both and neither can drift.
  */
-export function gridSummary(cells: GridCell[]): string {
+export function gridSummary(cells: GridCell[], opponent = "the index"): string {
   const n = { ahead: 0, level: 0, behind: 0 };
   for (const c of cells) n[c]++;
   const parts: string[] = [];
-  if (n.ahead) parts.push(`${n.ahead} ahead of the index`);
-  if (n.level) parts.push(`${n.level} level with it`);
-  if (n.behind) parts.push(`${n.behind} behind it`);
+  if (n.ahead) parts.push(`${n.ahead} ahead of ${opponent}`);
+  if (n.level) parts.push(`${n.level} level with ${opponent}`);
+  if (n.behind) parts.push(`${n.behind} behind ${opponent}`);
   const years = `${cells.length} year${cells.length === 1 ? "" : "s"}`;
   return parts.length ? `${years}: ${parts.join(", ")}.` : `${years}.`;
 }

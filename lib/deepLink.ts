@@ -1,7 +1,12 @@
-"use client";
-
 /**
  * The link the player arrived on.
+ *
+ * No `"use client"` directive, deliberately. `consumeInvite` is browser-only and
+ * guards for it, but the two URL builders below are pure string functions and one
+ * of them is called by `app/r/[id]/page.tsx`, which is a SERVER component —
+ * marking this module client-only would make that import a client reference and
+ * the call a build error. Every client consumer imports it perfectly well without
+ * the directive.
  *
  * Nothing else in this app reads the URL. `components/AppShell.tsx` is a pure
  * in-memory phase machine and every screen it shows is reached by a tap, which is
@@ -114,7 +119,15 @@ export function friendInviteUrl(origin: string, code: string): string {
   return `${origin}/?friend=${encodeURIComponent(code)}`;
 }
 
-/** The link that offers a statement's world as a challenge. */
-export function challengeUrl(origin: string, resultId: string): string {
-  return `${origin}/?vs=${encodeURIComponent(resultId)}`;
+/**
+ * The link that offers a statement's world as a challenge.
+ *
+ * Relative, unlike `friendInviteUrl`: the only place that mints one is the
+ * statement page, which is a SERVER component with no `window.location.origin` to
+ * read and no need for one — the link points at the same deployment it is served
+ * from. It exists as a function anyway so the parameter name lives beside the
+ * reader that consumes it and the two cannot drift.
+ */
+export function challengeUrl(resultId: string): string {
+  return `/?vs=${encodeURIComponent(resultId)}`;
 }

@@ -32,8 +32,18 @@ import type { RunState } from "./runEngine";
 const KEY = "lifepatch.challenge";
 
 export type Challenge = {
-  /** The row this came from, so the report can point back at the statement. */
+  /** The row this came from — the identity of the world being answered. */
   resultId: string;
+  /**
+   * This ATTEMPT at it, minted fresh every time a challenge link is opened.
+   *
+   * `submitRunOnce` dedupes durably on a key built from the run's seed, which is
+   * unique per run only while seeds are random per run. A challenge borrows the
+   * rival's seed by design, so answering your own statement — or simply taking a
+   * second run at someone else's — would hash to a key already marked submitted
+   * and post nothing. This is what makes the key per-run again.
+   */
+  attempt: string;
   /** The three things that fix a world. All must match for a comparison to mean anything. */
   seed: number;
   backgroundId: string;
@@ -42,7 +52,6 @@ export type Challenge = {
   /** Who to name in the report. */
   name: string;
   score: number;
-  verdict: string;
 
   /** Their per-year net worth, and the calendar year the series opens on. */
   history: number[];
@@ -54,9 +63,13 @@ export type Challenge = {
    * A solo run biases its card draw toward the concepts that player keeps getting
    * wrong (`WEAK_SPOT_WEIGHT` in `lib/runEngine.ts`), and that bias is per-player.
    * A challenge run is dealt WITHOUT it — the same posture the daily and a match
-   * take, for the same reason: everyone's world has to be identical. So the two
-   * lives share their markets and their opening exactly, and share their cards
-   * exactly when the original was not coached either.
+   * take, for the same reason: everyone's world has to be identical.
+   *
+   * That buys identical markets, an identical opening and one shared deck. It does
+   * NOT buy an identical hand, and nothing here should claim it does: `drawEvents`
+   * builds each year from `eligibleEvents(eventContext(s))`, so what a year can
+   * deal you is a function of the life you have built by then. Two players drift
+   * apart as their decisions do, which is the contest rather than a defect in it.
    *
    * `1` coached, `0` provably not, `null` for a row written before the flag
    * existed — where the honest answer is that we do not know. The report says
@@ -96,6 +109,7 @@ export function readChallenge(): Challenge | null {
       typeof c.backgroundId !== "string" ||
       typeof c.mode !== "string" ||
       typeof c.name !== "string" ||
+      typeof c.attempt !== "string" ||
       typeof c.score !== "number" ||
       !Array.isArray(c.history) ||
       typeof c.startYear !== "number"

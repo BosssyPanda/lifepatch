@@ -169,12 +169,23 @@ export function AnnotatedLifeChart({
   points,
   ghost,
   ghostLabel = "every spare dollar in the index",
+  ghostKind = "counterfactual",
   className = "",
 }: {
   points: LifePoint[];
   /** A counterfactual line drawn under the run's own. Derived in `lib/replay`. */
   ghost?: LifePoint[];
   ghostLabel?: string;
+  /**
+   * What the dashed line IS, for the screen-reader description.
+   *
+   * `counterfactual` (the default) is the index ghost: the same life with the
+   * money moved differently, which is what the sighted legend implies too. A seed
+   * challenge passes `rival`, because that line is a DIFFERENT PLAYER'S life on
+   * the same world — describing it as "the same life was worth with maria_k"
+   * is both broken English and a false statement about whose life it is.
+   */
+  ghostKind?: "counterfactual" | "rival";
   className?: string;
 }) {
   const { reduced } = useMotionCtx();
@@ -382,7 +393,11 @@ export function AnnotatedLifeChart({
         aria-label={`Net worth by year, ${first.year} to ${last.year}, ending at ${final.label}.${
           rise ? ` Biggest one-year rise ${rise.p.year}, ${currency(rise.delta)}.` : ""
         }${fall ? ` Biggest one-year fall ${fall.p.year}, ${currency(Math.abs(fall.delta))}.` : ""}${
-          ghostFinal !== null ? ` A dashed second line shows what the same life was worth with ${ghostLabel}, ending at ${currency(ghostFinal)}.` : ""
+          ghostFinal !== null
+            ? ghostKind === "rival"
+              ? ` A dashed second line shows ${ghostLabel}'s run on the same world, ending at ${currency(ghostFinal)}.`
+              : ` A dashed second line shows what the same life was worth with ${ghostLabel}, ending at ${currency(ghostFinal)}.`
+            : ""
         } Marked years are real market events the run lived through.`}
       >
         {/* frame + zero baseline */}

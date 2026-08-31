@@ -277,8 +277,13 @@ export const GRID_LEVEL_BAND = 0.02;
  * reads `level`, not red — so a grid posted publicly cannot tell anyone still
  * playing today's puzzle which years to brace for. It carries no calendar years
  * either, which the house rule on spoilers requires.
+ *
+ * Takes `{ points }` rather than a whole `GhostLine` because that is all it reads,
+ * and the second line is not always a ghost: a seed challenge grades the player
+ * against another PLAYER's series by this same banded rule. A `GhostLine` still
+ * satisfies it, so every existing caller is unchanged.
  */
-export function indexGrid(run: RunState, ghost: GhostLine): GridCell[] {
+export function indexGrid(run: RunState, ghost: { points: LifePoint[] }): GridCell[] {
   const out: GridCell[] = [];
   for (let i = 0; i < run.history.length; i++) {
     const mine = run.history[i].netWorth;

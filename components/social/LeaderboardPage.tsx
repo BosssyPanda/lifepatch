@@ -40,6 +40,9 @@ export function LeaderboardPage() {
    */
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsMounted, setFriendsMounted] = useState(false);
+  /** Closing the sheet may have added a friend, and this board is never toggled
+   *  shut — so it is told to re-read rather than left showing a stale empty tab. */
+  const [refreshSignal, setRefreshSignal] = useState(0);
 
   return (
     <AuthProvider>
@@ -48,6 +51,7 @@ export function LeaderboardPage() {
       chrome="page"
       // Never called in page chrome — the masthead link is the way out.
       onClose={() => {}}
+      refreshSignal={refreshSignal}
       onOpenFriends={() => {
         setFriendsMounted(true);
         setFriendsOpen(true);
@@ -65,7 +69,15 @@ export function LeaderboardPage() {
         </Link>
       }
     />
-    {friendsMounted && <FriendsSheet open={friendsOpen} onClose={() => setFriendsOpen(false)} />}
+    {friendsMounted && (
+      <FriendsSheet
+        open={friendsOpen}
+        onClose={() => {
+          setFriendsOpen(false);
+          setRefreshSignal((n) => n + 1);
+        }}
+      />
+    )}
     </AuthProvider>
   );
 }

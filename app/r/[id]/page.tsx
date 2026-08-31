@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { getResult } from "@/lib/cloud/results";
+import { challengeUrl } from "@/lib/deepLink";
 import { isCloud } from "@/lib/supabase";
 import type { ResultRow } from "@/lib/cloud/types";
 import { currency } from "@/lib/format";
@@ -218,6 +219,18 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
    * background — and rows written before the seed was recorded have no world to
    * hand over either. Where any of it is missing the button simply does not
    * appear; there is no version of it that could work.
+   *
+   * Two further rows carry a seed and still must not be offered:
+   *
+   *   • A ROOM's run (`shared`). It was dealt from the table's shared running
+   *     order rather than its own pool, so a challenger starting from that seed
+   *     takes the solo branch of `drawEvents` and lives somewhere else entirely.
+   *
+   *   • A DAILY (`daily`). The daily's whole premise is one world, one attempt,
+   *     everybody equal — and a daily run is dealt unbiased, exactly as a
+   *     challenge is. Offering it here would hand anyone a private rehearsal of
+   *     today's puzzle: play the seed as a challenge, learn every card and every
+   *     crash, then file the real attempt knowing all of it.
    */
   const challengeSeed = Number(row.metrics?.seed);
   const challengeBackground = row.metrics?.backgroundId;
@@ -225,7 +238,9 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
     row.mode !== "cashflow" &&
     Number.isFinite(challengeSeed) &&
     typeof challengeBackground === "string" &&
-    BACKGROUNDS.some((b) => b.id === challengeBackground);
+    BACKGROUNDS.some((b) => b.id === challengeBackground) &&
+    row.metrics?.shared !== 1 &&
+    row.metrics?.daily === undefined;
 
   return (
     <main className={PAGE}>
@@ -302,7 +317,7 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
           <div className="mt-5 flex flex-wrap items-center gap-3">
             {canChallenge ? (
               <>
-                <Link href={`/?vs=${row.id}`} className={CTA_PRIMARY}>[ PLAY THIS WORLD → ]</Link>
+                <Link href={challengeUrl(row.id)} className={CTA_PRIMARY}>[ PLAY THIS WORLD → ]</Link>
                 <Link href="/" className={CTA}>[ A WORLD OF MY OWN ]</Link>
               </>
             ) : (

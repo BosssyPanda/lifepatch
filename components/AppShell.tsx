@@ -16,7 +16,7 @@ import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import type { DailyPuzzle } from "@/lib/daily";
-import { writeChallenge } from "@/lib/challenge";
+import { challengeFor, writeChallenge } from "@/lib/challenge";
 import { consumeInvite } from "@/lib/deepLink";
 import { lastPlayerName } from "@/lib/mp/matchStore";
 import { resolvePlayerId } from "@/lib/cloud/identity";
@@ -158,59 +158,119 @@ function AppShellInner() {
      * their own, which is exactly where the link used to send them. There is
      * nothing to announce: nothing was lost.
      */
-    let active = true;
+    /**
+     * Deliberately NOT cancelled on cleanup.
+     *
+     * StrictMode double-invokes this effect, and `consumeInvite` answers at most
+     * once per load — so an `active = false` in the cleanup would kill the only
+     * run that has the invite, and the second pass would find nothing left to do.
+     * The parameter is already stripped by then, so a refresh could not retry
+     * either: the whole feature would be dead in `next dev` and alive in
+     * production, which is the worst way for it to be broken. `AppShell` is the
+     * root of the tree and does not unmount in practice; the guard that matters
+     * is the one below, on what the player is doing NOW.
+     */
     void (async () => {
+      let row;
       try {
-        const row = await getResult(invite.resultId);
-        if (!active || !row || row.mode === "cashflow") return;
-
-        const seed = Number(row.metrics?.seed);
-        const backgroundId = row.metrics?.backgroundId;
-        const startYear = Number(row.metrics?.startYear);
-        const rawHistory = row.metrics?.history;
-        if (
-          !Number.isFinite(seed) ||
-          typeof backgroundId !== "string" ||
-          !BACKGROUNDS.some((b) => b.id === backgroundId)
-        ) {
-          return;
-        }
-
-        // A name for the report to print. A board row is public, so this is the
-        // public view of them and nothing more.
-        const profs = await getProfiles([row.userId]);
-        if (!active) return;
-
-        const history = Array.isArray(rawHistory)
-          ? rawHistory.map(Number).filter(Number.isFinite)
-          : [];
-
-        writeChallenge({
-          resultId: row.id,
-          seed,
-          backgroundId,
-          mode: row.mode,
-          name: profs[row.userId]?.username ?? "anonymous",
-          score: row.score,
-          verdict: row.verdict,
-          history,
-          startYear: Number.isFinite(startYear) ? startYear : 0,
-          // Three states, and the row tells us which: `1` their deal was tilted,
-          // `0` provably even, absent means the row predates the flag and the
-          // honest answer is that nobody knows.
-          coached: row.metrics?.coached === undefined ? null : Number(row.metrics.coached) === 1 ? 1 : 0,
-        });
-
-        run.start(row.mode, backgroundId, playerName(lastPlayerName()), { seed, challenge: true });
+        row = await getResult(invite.resultId);
       } catch {
         // Offline, or a row that is gone. The title screen is a fine place to be.
+        return;
       }
+      if (!row || row.mode === "cashflow") return;
+
+      const seed = Number(row.metrics?.seed);
+      const backgroundId = row.metrics?.backgroundId;
+      const startYear = Number(row.metrics?.startYear);
+      const rawHistory = row.metrics?.history;
+      if (
+        !Number.isFinite(seed) ||
+        typeof backgroundId !== "string" ||
+        !BACKGROUNDS.some((b) => b.id === backgroundId) ||
+        // A room's run is dealt from the table's shared running order, not from
+        // its own pool. Its seed opens a different world on the solo branch.
+        row.metrics?.shared === 1 ||
+        // A daily statement is not a practice range. Offering today's puzzle as a
+        // challenge would let anyone rehearse the exact world — same seed, same
+        // background, and the daily is dealt unbiased too — then play it for the
+        // board already knowing every card and every crash.
+        row.metrics?.daily !== undefined
+      ) {
+        return;
+      }
+
+      /**
+       * The player did not sit still while two round trips ran.
+       *
+       * `run.start` replaces the live run, the mode and the phase, so landing it
+       * on someone who has since begun a life of their own would delete the run
+       * they chose in favour of one they have stopped waiting for.
+       * `stillPlaying` reads `liveRef`, so it is the live answer and not a stale
+       * closure over the render this effect was created in.
+       */
+      if (run.stillPlaying()) return;
+
+      /**
+       * A history with a hole in it is not a shorter history.
+       *
+       * `metrics` is client-written jsonb, so an element can be null or a string.
+       * Filtering those out would COMPACT the series and silently slide every
+       * later year one place left — and the grid compares by position, so every
+       * cell after the hole would grade the player against the wrong year. A
+       * series that cannot be trusted is dropped whole; the money still stands.
+       */
+      const history =
+        Array.isArray(rawHistory) && rawHistory.every((v) => Number.isFinite(Number(v)))
+          ? rawHistory.map(Number)
+          : [];
+
+      // A name for the report to print, and nothing more — a board row is public,
+      // so this is the public view of them. Its own try/catch because a missing
+      // display name must not cost the player the world they asked for: the two
+      // things a world actually needs are already validated and in hand.
+      let name = "anonymous";
+      try {
+        name = (await getProfiles([row.userId]))[row.userId]?.username ?? "anonymous";
+      } catch {}
+
+      writeChallenge({
+        resultId: row.id,
+        // Per ATTEMPT, not per world. `submitRunOnce` dedupes on a key built from
+        // the run's seed, and a challenge borrows someone else's seed by design —
+        // so answering your own link, or taking a second run at one, would hash to
+        // a key already marked submitted and post nothing at all.
+        attempt: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        seed,
+        backgroundId,
+        mode: row.mode,
+        name,
+        score: row.score,
+        history,
+        startYear: Number.isFinite(startYear) ? startYear : 0,
+        // Three states, and the row tells us which: `1` their deal was tilted,
+        // `0` provably even, absent means the row predates the flag and the
+        // honest answer is that nobody knows.
+        coached: row.metrics?.coached === undefined ? null : Number(row.metrics.coached) === 1 ? 1 : 0,
+      });
+
+      /**
+       * Become a guest before the life starts.
+       *
+       * Every other route into a run passes the auth gate, so `user` is either an
+       * account or the device guest by the time anything is played. A link skips
+       * that gate, which left this one run being played by `user === null` — a
+       * state nothing downstream is written for: `guest` reads false, so the
+       * friends sheet would offer a dead code, and the progress id changes under
+       * the run the moment they do sign in. This is the same door the gate
+       * offers, opened on their behalf, and `signIn` still works afterwards.
+       */
+      if (!auth.user) auth.continueAsGuest();
+
+      run.start(row.mode, backgroundId, playerName(lastPlayerName()), { seed, challenge: true });
     })();
-    return () => {
-      active = false;
-    };
     // Once, on the first mount: `consumeInvite` answers at most once per load and
-    // `run.start` is a stable callback whose identity is not worth re-running this for.
+    // everything this closes over is either stable or read live.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -270,7 +330,16 @@ function AppShellInner() {
     if ((phase !== "report" && phase !== "podium") || !run.run || run.run.status !== "ended") return;
     const r = run.run;
     const id = resolvePlayerId(auth.user?.id ?? null);
-    void submitRunOnce(`${r.mode}-${r.seed}`, id, resultFromRun(r));
+    // The seed alone identifies a run only while seeds are random per run. A
+    // challenge borrows one on purpose, so answering your own link — or taking a
+    // second run at somebody else's — would collide with the key the first run
+    // already marked submitted, and the better result would be dropped in silence.
+    const answering = challengeFor(r);
+    void submitRunOnce(
+      answering ? `${r.mode}-${r.seed}-${answering.attempt}` : `${r.mode}-${r.seed}`,
+      id,
+      resultFromRun(r),
+    );
   }, [phase, run.run, auth.user]);
 
   // ── the room ──────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import { useAudio } from "@/hooks/useAudio";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { accept, addByCode, listIncoming } from "@/lib/cloud/friends";
+import { isGuestId } from "@/lib/cloud/identity";
 import { getProfiles } from "@/lib/cloud/profiles";
 import type { PublicProfile } from "@/lib/cloud/types";
 import { friendInviteUrl } from "@/lib/deepLink";
@@ -62,7 +63,7 @@ export function FriendsSheet({
   prefillCode?: string | null;
 }) {
   const { profile, loading: profileLoading } = useProfile();
-  const { guest, isCloud } = useAuth();
+  const { user, isCloud } = useAuth();
   const { sfx } = useAudio();
   const { reduced } = useMotionCtx();
 
@@ -91,8 +92,16 @@ export function FriendsSheet({
    * gate is on the CLOUD, not on the feature — with no Supabase configured the
    * whole friends layer runs against localStorage and works end to end, which is
    * how the dev build is meant to behave.
+   *
+   * The test is for an ACCOUNT, not for `useAuth`'s `guest`. `guest` is
+   * `isGuestId(user?.id)`, which is false when `user` is null — and null is
+   * exactly the state of someone who arrived from a shared statement, opened
+   * /leaderboard and never passed the auth gate at all. Gating on `guest` let
+   * that visitor straight through to a locally-minted code, which is the case
+   * this comment calls the worst outcome available.
    */
-  const blocked = isCloud && guest;
+  const account = Boolean(user && !isGuestId(user.id));
+  const blocked = isCloud && !account;
   const playerId = profile?.id ?? null;
   const code = profile?.friendCode ?? null;
 

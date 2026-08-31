@@ -22,7 +22,7 @@ import { macroEvent } from "@/lib/markets";
 import { DEBT_RATE, TAKE_HOME } from "@/lib/economy";
 import { dailyShare, GRID_ROW, gridGlyph, gridSummary } from "@/lib/dailyShare";
 import { challengeFor, type Challenge } from "@/lib/challenge";
-import { ghostFor, indexGrid, GHOST_BUFFER_MONTHS, type GridCell } from "@/lib/replay";
+import { ghostFor, indexGrid, GHOST_BUFFER_MONTHS } from "@/lib/replay";
 import { annualExpenses, homeEquity, netWorth, operatingCashFlow, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { eventTeachesAny } from "@/lib/eventConcepts";
@@ -539,13 +539,8 @@ function ChallengeResult({ run, challenge, nw }: { run: RunState; challenge: Cha
     if (firstYear === undefined || challenge.startYear !== firstYear) return null;
     const points = challenge.history.map((netWorth, i) => ({ year: challenge.startYear + i, netWorth }));
     if (points.length < 2) return null;
-    return {
-      points,
-      final: points[points.length - 1].netWorth,
-      gap: nw - points[points.length - 1].netWorth,
-      truncated: points.length < run.history.length,
-    };
-  }, [run, challenge, nw]);
+    return { points };
+  }, [run, challenge]);
 
   // The same banded rule the daily grid uses, against a person instead of the
   // index — a year inside 2% reads `level` rather than picking a side.
@@ -577,12 +572,13 @@ function ChallengeResult({ run, challenge, nw }: { run: RunState; challenge: Cha
             points={run.history.map((h) => ({ year: h.year, netWorth: h.netWorth }))}
             ghost={rival.points}
             ghostLabel={challenge.name}
+            ghostKind="rival"
           />
         </div>
       )}
 
       {cells.length > 0 && (
-        <figure role="img" aria-label={rivalSummary(cells, challenge.name)} className="m-0 mt-4">
+        <figure role="img" aria-label={gridSummary(cells, challenge.name)} className="m-0 mt-4">
           <div
             className="grid w-max gap-x-2.5 gap-y-1.5"
             style={{ gridTemplateColumns: `repeat(${GRID_ROW}, 1.1rem)` }}
@@ -598,35 +594,36 @@ function ChallengeResult({ run, challenge, nw }: { run: RunState; challenge: Cha
 
       <p className="voice mt-3 text-[0.92rem] text-secondary">
         {cells.length > 0 && `▲ ahead of ${challenge.name} that year · ▬ level · ▼ behind. `}
-        Same markets, same opening. {dealNote(challenge)}
+        {dealNote(challenge)}
       </p>
     </motion.div>
   );
 }
 
-/** The rival grid said out loud. `gridSummary` names the index, which is the wrong
- *  opponent here — the shape of the sentence is the same. */
-function rivalSummary(cells: GridCell[], name: string): string {
-  const n = { ahead: 0, level: 0, behind: 0 };
-  for (const c of cells) n[c]++;
-  const parts: string[] = [];
-  if (n.ahead) parts.push(`${n.ahead} ahead of ${name}`);
-  if (n.level) parts.push(`${n.level} level with them`);
-  if (n.behind) parts.push(`${n.behind} behind`);
-  const years = `${cells.length} year${cells.length === 1 ? "" : "s"}`;
-  return parts.length ? `${years}: ${parts.join(", ")}.` : `${years}.`;
-}
-
-/** What the row can honestly say about whether the two of you were dealt the same
- *  cards. Three states, because `coached` has three. */
+/**
+ * What the two of you actually shared — and the two ways the deal can still differ.
+ *
+ * The first is unavoidable and is the game working correctly: `drawEvents` builds
+ * each year's hand from `eligibleEvents(eventContext(s))`, which reads cash, debt
+ * and salary. A card about a rent rise cannot be dealt to an owner. So the DECK
+ * and the stream are shared, and which of it can reach you is a function of the
+ * life you have built — two players drift apart exactly as their decisions do.
+ * That is the comparison, not a flaw in it, but it is not "the same cards", and
+ * saying so would be a claim the engine does not make.
+ *
+ * The second is the weak-spot bias, which is per-player and IS suppressed here.
+ * `coached` has three states, so this sentence has three endings.
+ */
 function dealNote(challenge: Challenge): string {
-  if (challenge.coached === 0) {
-    return "Neither deal was tilted, so you were dealt the same cards in the same order.";
-  }
+  const shared =
+    "Same markets, same opening, same deck — though which cards a year can deal you depends on the life you have built by then.";
   if (challenge.coached === 1) {
-    return `Your deal was even; ${challenge.name}'s leaned toward the concepts they keep getting wrong, so a few of their cards differed.`;
+    return `${shared} ${challenge.name}'s deal also leaned toward the concepts they keep getting wrong; yours did not.`;
   }
-  return "Their run predates the record of whether its deal was tilted, so the cards may not have matched exactly.";
+  if (challenge.coached === null) {
+    return `${shared} Their run predates the record of whether their deal was also tilted toward their own weak spots.`;
+  }
+  return `${shared} Neither deal was tilted toward anyone's weak spots.`;
 }
 
 /**

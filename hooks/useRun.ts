@@ -13,7 +13,7 @@ import {
   trade,
   type RunState,
 } from "@/lib/runEngine";
-import { challengeFor } from "@/lib/challenge";
+import { clearChallenge } from "@/lib/challenge";
 import { resolveProgressId } from "@/lib/cloud/identity";
 import { writeDaily } from "@/lib/dailySave";
 import { weakSpotIds } from "@/lib/weakSpots";
@@ -68,6 +68,18 @@ export function useRun(userId: string | null) {
   /** The room this run belongs to, or null for a solo run. */
   const matchCodeRef = useRef<string | null>(null);
   /**
+   * This run is answering a shared-seed challenge, and therefore owns no save slot.
+   *
+   * A ref, exactly like `matchCodeRef`, and NOT a read of the stored challenge
+   * record: `writeChallenge` swallows a storage failure (a private window, a full
+   * quota), and a fence that asks localStorage would then quietly answer "not a
+   * challenge" and let the run evict the player's own Story life. A fence may fail
+   * closed; it must never fail open. Every entry point below sets it — `start`,
+   * `resume`, `reset` and `toTitle` — so it cannot go stale across runs, which is
+   * the failure the `daily` fence avoids by reading the run instead.
+   */
+  const challengeRef = useRef(false);
+  /**
    * The live run, readable from a closure that is holding a STALE copy of it.
    *
    * A screen on its way out keeps the props of its last render for the length of
@@ -119,16 +131,10 @@ export function useRun(userId: string | null) {
        * match run is fenced out of this store for the same reason and is not
        * saved anywhere else either.
        *
-       * The fence matches the RUN against the stored challenge rather than
-       * reading a ref, for the reason the daily fence gives directly above: a ref
-       * goes stale silently, and it would do so in the direction that destroys a
-       * save. `challengeFor` requires seed, background AND mode to agree, so it
-       * cannot fire on an unrelated life.
-       *
        * The cost is stated plainly: a challenge does not survive a reload. The
        * link that started it does, and it is the one the player was sent.
        */
-      if (challengeFor(r)) return;
+      if (challengeRef.current) return;
       if (!userId) return;
       setSaving(true);
       try {
@@ -215,6 +221,11 @@ export function useRun(userId: string | null) {
     start: useCallback(
       (m: ModeId, backgroundId: string, name: string, opts?: RunOpts) => {
         matchCodeRef.current = opts?.matchCode ?? null;
+        challengeRef.current = opts?.challenge === true;
+        // A life of your own ends the last challenge: the record would otherwise
+        // sit in storage for good, and `challengeFor` would keep answering for a
+        // rematch on that world long after the player moved on.
+        if (!opts?.challenge) clearChallenge();
         // The concepts this player keeps getting wrong, SNAPSHOT at the start of the
         // run. Read here rather than at each call site so no future entry point can
         // forget it, and snapshot rather than read live so `drawEvents` stays a pure
@@ -242,6 +253,9 @@ export function useRun(userId: string | null) {
 
     resume: useCallback((r: RunState, opts?: RunOpts) => {
       matchCodeRef.current = opts?.matchCode ?? null;
+      // Nothing resumable is ever a challenge: a challenge owns no save slot, so
+      // whatever came back from one is a run that does.
+      challengeRef.current = false;
       setMode(r.mode);
       // Second line of defence: AuthGate already filters incompatible saves out
       // before offering "Continue", but a version mismatch must never reach the
@@ -294,6 +308,7 @@ export function useRun(userId: string | null) {
 
     reset: useCallback(() => {
       matchCodeRef.current = null;
+      challengeRef.current = false;
       liveRef.current = null;
       setRun(null);
       setMode(null);
@@ -301,6 +316,7 @@ export function useRun(userId: string | null) {
     }, []),
     toTitle: useCallback(() => {
       matchCodeRef.current = null;
+      challengeRef.current = false;
       liveRef.current = null;
       setRun(null);
       setMode(null);
