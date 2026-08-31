@@ -19,7 +19,7 @@ import type { DailyPuzzle } from "@/lib/daily";
 import { challengeFor, writeChallenge } from "@/lib/challenge";
 import { consumeInvite } from "@/lib/deepLink";
 import { lastPlayerName } from "@/lib/mp/matchStore";
-import { resolvePlayerId } from "@/lib/cloud/identity";
+import { resolveProgressId } from "@/lib/cloud/identity";
 import { getProfiles } from "@/lib/cloud/profiles";
 import { getResult } from "@/lib/cloud/results";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
@@ -329,7 +329,16 @@ function AppShellInner() {
   useEffect(() => {
     if ((phase !== "report" && phase !== "podium") || !run.run || run.run.status !== "ended") return;
     const r = run.run;
-    const id = resolvePlayerId(auth.user?.id ?? null);
+    // `resolveProgressId`, not `resolvePlayerId` — the WRITE has to name the player
+    // the same way the READ does, and the streak chip reads under this one
+    // (`useProfile`). `resolvePlayerId` withholds a guest's device id in a cloud
+    // build, which is the right answer for a share link that needs a cloud row and
+    // the wrong one here: `submitRunOnce` short-circuits on the null, so the three
+    // guest guards below it (`cloudResultsFor`, `cloudStreakFor`, `cloudProfileFor`)
+    // never got to route a guest to localStorage. A guest finished a run and BOTH
+    // branches were skipped. A signed-in player is unaffected: this returns their
+    // auth id and the guards send it to the cloud exactly as before.
+    const id = resolveProgressId(auth.user?.id ?? null);
     // The seed alone identifies a run only while seeds are random per run. A
     // challenge borrows one on purpose, so answering your own link — or taking a
     // second run at somebody else's — would collide with the key the first run

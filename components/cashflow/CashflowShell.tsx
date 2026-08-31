@@ -11,7 +11,7 @@ import { CashflowSetup } from "@/components/cashflow/setup/CashflowSetup";
 import { enterFastTrack } from "@/lib/cashflow/engine";
 import { hasCashflowSave } from "@/lib/cashflow/persist";
 import { useAuth } from "@/hooks/useAuth";
-import { resolvePlayerId } from "@/lib/cloud/identity";
+import { resolveProgressId } from "@/lib/cloud/identity";
 import { resultFromCashflow, submitRunOnce } from "@/lib/cloud/buildResult";
 
 import { useMotionCtx } from "@/src/motion/MotionProvider";
@@ -107,7 +107,9 @@ export function CashflowShell({
   // resolved against the signed-in user so cloud submission works for them too.
   useEffect(() => {
     if (view !== "report" || !s) return;
-    const id = resolvePlayerId(auth.user?.id ?? null);
+    // `resolveProgressId` for the same reason AppShell uses it: this is a per-player
+    // WRITE, and it must resolve its id the way the matching read does. See there.
+    const id = resolveProgressId(auth.user?.id ?? null);
     void submitRunOnce(`cf-${s.seed}`, id, resultFromCashflow(s));
   }, [view, s, auth.user]);
 

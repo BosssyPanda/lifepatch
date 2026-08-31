@@ -36,10 +36,19 @@ export function isGuestId(id: string | null | undefined): boolean {
 }
 
 /**
- * The id to attribute results/streaks to.
+ * The id of a player the CLOUD can have a row for, or null.
  * - Signed-in → the auth user id (works in cloud + dev).
  * - Guest / anonymous → a device id in dev; null in cloud, where RLS requires a
  *   real auth user, so callers should prompt sign-in instead of writing.
+ *
+ * NOT the resolver for recording a finished run. Every per-player module in
+ * `lib/cloud/*` already gates on `isGuestId` and has a localStorage branch behind
+ * that gate, so they want the device id and route it themselves; handed a null they
+ * take NEITHER branch and the run is written nowhere. Use `resolveProgressId` for
+ * anything with a local fallback — results, streaks, mastery, profiles — and this
+ * only where a cloud row is genuinely required and its absence is a real answer.
+ * `components/share/useShareUrl.ts` is that caller: a guest has no `/r/{id}` to
+ * link to, and the plain origin is the honest URL for them.
  */
 export function resolvePlayerId(authUserId: string | null): string | null {
   if (authUserId && !isGuestId(authUserId)) return authUserId;

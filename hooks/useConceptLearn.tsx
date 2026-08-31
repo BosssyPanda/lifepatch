@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { ConceptToast } from "@/components/learn/ConceptToast";
 import { useAudio } from "@/hooks/useAudio";
 import { useAuth } from "@/hooks/useAuth";
-import { resolvePlayerId, resolveProgressId } from "@/lib/cloud/identity";
+import { resolveProgressId } from "@/lib/cloud/identity";
 import { recordConcepts } from "@/lib/cloud/mastery";
 import { markSeen } from "@/lib/cloud/seen";
 import { recordAttempt } from "@/lib/weakSpots";

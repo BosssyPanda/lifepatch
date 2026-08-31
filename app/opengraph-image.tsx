@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { cachedFonts } from "./api/og/_fonts/cache";
 import { PALETTE } from "@/lib/palette";
 
 export const runtime = "edge";
@@ -19,11 +20,18 @@ const SECONDARY = PALETTE.secondary;
 const TERTIARY = PALETTE.tertiary;
 const HAIRLINE = PALETTE.hairline;
 
+/**
+ * Read once per isolate, not once per unfurl. This card is the redirect target for
+ * every unknown /r/{id}, so it takes the traffic that route sheds — the two reads
+ * it was repeating are the ones most worth not repeating.
+ */
+const loadFonts = cachedFonts([
+  new URL("./api/og/_fonts/Anton-Regular.ttf", import.meta.url),
+  new URL("./api/og/_fonts/IBMPlexMono-Regular.ttf", import.meta.url),
+]);
+
 export default async function OgImage() {
-  const [anton, mono] = await Promise.all([
-    fetch(new URL("./api/og/_fonts/Anton-Regular.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
-    fetch(new URL("./api/og/_fonts/IBMPlexMono-Regular.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
-  ]);
+  const [anton, mono] = await loadFonts();
 
   return new ImageResponse(
     (

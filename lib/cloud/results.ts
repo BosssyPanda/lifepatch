@@ -11,6 +11,23 @@ import { safeVerdict } from "../verdict";
 
 const LIST_KEY = "lifepatch.results";
 const DEFAULT_LIMIT = 25;
+
+/**
+ * The device-side mirror of the `results_cap_per_player` trigger, per (player, mode).
+ *
+ * The cloud list has been bounded since the result-integrity migration; the local
+ * one grew forever, one row per finished run, in the same 5MB origin budget that
+ * holds the player's actual SAVE. `pruneDailies` exists because that budget is
+ * contended (`lib/dailySave.ts`), and this is the same argument for the other
+ * unbounded store — sharpened by the fact that a guest in a cloud build now writes
+ * here on every run, where before the id never arrived and nothing accumulated.
+ *
+ * Same number as the trigger, same exception: the player's BEST rankable row for a
+ * mode is spared whatever its age, because a board that ranks each player by their
+ * best run must not be the thing that forgets it. Everything else goes oldest-first
+ * — the list is stored newest-first, so that is the tail.
+ */
+const LOCAL_CAP = 500;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
@@ -107,10 +124,54 @@ function readLocal(): ResultRow[] {
   }
 }
 
+/**
+ * Trim to `cap` rows per (player, mode), newest first, sparing each group's best
+ * rankable row. `rankable` is the same test the board applies, and for the same
+ * reason the trigger spells out: a NaN score sorts above every real number, so
+ * "highest score" alone would nominate a garbage row as the one protected forever.
+ *
+ * A spared row that has aged out of its group's newest `cap` leaves that group at
+ * `cap + 1`. That is the whole overshoot, it is stable across later writes, and it
+ * is the price of the exception being unconditional.
+ */
+function capLocal(rows: ResultRow[], cap: number = LOCAL_CAP): ResultRow[] {
+  const group = (r: ResultRow) => `${r.userId}\u0000${r.mode}`;
+  const best = new Map<string, ResultRow>();
+  for (const r of rows) {
+    if (!rankable(r)) continue;
+    const k = group(r);
+    const prev = best.get(k);
+    if (!prev || r.score > prev.score) best.set(k, r);
+  }
+  const seen = new Map<string, number>();
+  return rows.filter((r) => {
+    const k = group(r);
+    const n = seen.get(k) ?? 0;
+    if (n >= cap && best.get(k) !== r) return false;
+    seen.set(k, n + 1);
+    return true;
+  });
+}
+
+/**
+ * Write the list, and treat a full origin as something to answer rather than
+ * swallow.
+ *
+ * `catch {}` alone meant that once the budget filled, recording just stopped: the
+ * finished run in `rows[0]` was discarded, no leaderboard row, no share link, and
+ * nothing on screen saying so. The list is newest-first, so halving it drops the
+ * oldest history and keeps the run that was being written. One retry only — a
+ * second failure is the rest of the origin being full, which is not this store's
+ * to fix, and the caller's local row is still returned either way.
+ */
 function writeLocal(rows: ResultRow[]): void {
   try {
     localStorage.setItem(LIST_KEY, JSON.stringify(rows));
-  } catch {}
+  } catch {
+    try {
+      localStorage.setItem(LIST_KEY, JSON.stringify(capLocal(rows, Math.ceil(rows.length / 2))));
+    } catch {}
+  }
 }
 
 function weekAgoIso(): string {
@@ -172,7 +233,7 @@ export async function submitResult(userId: string, result: NewResult): Promise<R
     metrics,
     createdAt: new Date().toISOString(),
   };
-  writeLocal([row, ...readLocal()]);
+  writeLocal(capLocal([row, ...readLocal()]));
   return row;
 }
 
@@ -303,6 +364,19 @@ export async function getResult(id: string): Promise<ResultRow | null> {
 // the set of submitted run keys so the guard survives reloads.
 const SUBMITTED_KEY = "lifepatch.submittedRuns";
 
+/**
+ * And a ceiling on it, for the same reason `LOCAL_CAP` has one: this set gained a
+ * key per finished run and lost none, forever, in a budget shared with the save.
+ *
+ * Far more history than the guard needs. What it protects against is a re-fire —
+ * a re-render, a resume, a reload back onto the report — all of which happen while
+ * the run is still the one on screen. A player would have to finish 500 further
+ * runs before an evicted key could let an old one re-post, and by then its report
+ * is long gone. Oldest key first: a Set iterates in insertion order, which makes
+ * the slice below a FIFO.
+ */
+const SUBMITTED_CAP = 500;
+
 function readSubmitted(): Set<string> {
   try {
     return new Set<string>(JSON.parse(localStorage.getItem(SUBMITTED_KEY) ?? "[]"));
@@ -319,7 +393,7 @@ export function markSubmitted(runKey: string): void {
   try {
     const set = readSubmitted();
     set.add(runKey);
-    localStorage.setItem(SUBMITTED_KEY, JSON.stringify([...set]));
+    localStorage.setItem(SUBMITTED_KEY, JSON.stringify([...set].slice(-SUBMITTED_CAP)));
   } catch {}
 }
 

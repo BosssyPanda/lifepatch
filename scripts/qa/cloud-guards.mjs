@@ -112,5 +112,70 @@ check("results.ts leaves the PUBLIC reads unguarded", () => {
   }
 });
 
+// ── The other layer: who the CALL SITE says the player is ────────────────────
+//
+// Everything above asserts that a function TAKING a userId consults the guest
+// guard. It cannot see whether a userId ever arrives, and the answer was no.
+//
+// `resolvePlayerId` returns null for a guest in a cloud build — correct for a
+// share link, which needs a real cloud row to point at, and fatal here:
+// `submitRunOnce` short-circuits on that null, so the guards above never run and
+// the guest's run reaches NEITHER branch. Exactly the bug they were written to
+// fix, landed one layer too low to take effect. The read path never agreed with
+// it either — `useProfile` mints a real `device-…` id through `resolveProgressId`
+// and the streak chip reads a store nothing was allowed to write.
+//
+// So the companion rule, stated as the pair it is: a per-player WRITE resolves
+// its id the same way the matching READ does.
+const PAIRS = [
+  {
+    what: "a finished life run",
+    write: "components/AppShell.tsx",
+    read: "hooks/useProfile.ts",
+  },
+  {
+    what: "a finished Rat Race run",
+    write: "components/cashflow/CashflowShell.tsx",
+    read: "hooks/useProfile.ts",
+  },
+];
+
+/** Which resolver a file actually calls (not merely imports). */
+function resolversIn(src) {
+  return new Set([...src.matchAll(/\bresolve(?:PlayerId|ProgressId)\s*\(/g)].map((m) => m[0].replace(/\s*\($/, "")));
+}
+
+for (const p of PAIRS) {
+  check(`${p.write} resolves ${p.what} the way ${p.read} reads it`, () => {
+    const write = read(p.write);
+    ok(/submitRunOnce\s*\(/.test(write), "submitRunOnce is not called here — has the submit moved?");
+    const w = resolversIn(write);
+    const r = resolversIn(read(p.read));
+    ok(w.size === 1, `expected exactly one resolver at the write site, found [${[...w]}]`);
+    ok(r.size === 1, `expected exactly one resolver at the read site, found [${[...r]}]`);
+    ok(
+      w.has("resolveProgressId"),
+      "the write site resolves with resolvePlayerId, which is null for a guest in a cloud " +
+        "build — submitRunOnce returns before the cloud OR local branch is reached",
+    );
+    ok(
+      [...w][0] === [...r][0],
+      `write resolves with ${[...w][0]} and read with ${[...r][0]} — the chip would read a ` +
+        "store nothing is allowed to write",
+    );
+  });
+}
+
+// And the deliberate exception, stated from the opposite side so a "consistency"
+// pass cannot sweep it up: a share link needs a row in the cloud to point at, and
+// a guest has none. The plain origin is the honest URL for them.
+check("useShareUrl keeps resolvePlayerId — a guest has no /r/{id} to link to", () => {
+  const w = resolversIn(read("components/share/useShareUrl.ts"));
+  ok(
+    w.has("resolvePlayerId") && !w.has("resolveProgressId"),
+    `expected resolvePlayerId only, found [${[...w]}]`,
+  );
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) process.exit(1);

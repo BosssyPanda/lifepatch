@@ -11,6 +11,7 @@ import { NeonButton } from "@/components/ui/LedgerButton";
 import { SoundCell } from "@/components/ui/SoundCell";
 import { LedgerRow, SectionLabel } from "@/components/ui/report";
 import { MoneyBrainMeter, moneyBrainPct } from "@/components/learn/MoneyBrainMeter";
+import { PersonalBestRow } from "@/components/social/PersonalBestRow";
 import { useAudio } from "@/hooks/useAudio";
 import { useConceptLearn } from "@/hooks/useConceptLearn";
 import { useProfile } from "@/hooks/useProfile";
@@ -171,6 +172,10 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
           <LedgerRow label="Deals bought" size="0.95rem" value={<AnimatedNumber value={s.dealsBought} format={(n) => String(Math.round(n))} />} />
           <LedgerRow label="Quizzes passed" size="0.95rem" value={<AnimatedNumber value={s.quizzesPassed} format={(n) => String(Math.round(n))} />} />
           <LedgerRow label="Started as" size="0.95rem" value={prof.title} />
+          {/* Against `score`, not the net worth above it: the Rat Race is ranked on
+              the balance sheet PLUS a year of cash flow, and a record has to be the
+              same figure the board keeps. `lib/scoreLabel.ts` owns the words. */}
+          <PersonalBestRow mode="cashflow" score={score} />
         </motion.section>
 
         {/* the lesson — one quiet voice line. Named, because a lose screen that

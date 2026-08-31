@@ -22,3 +22,8 @@ export function scoreLabel(mode: string): string {
 export function scoreMetric(mode: string): string {
   return mode === "cashflow" ? "net worth plus a year of cash flow" : "net worth";
 }
+
+/** The same figure, named as a player's record rather than one run's result. */
+export function bestLabel(mode: string): string {
+  return mode === "cashflow" ? "Best Rat Race score" : "Best net worth";
+}
