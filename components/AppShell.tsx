@@ -14,10 +14,14 @@ import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
+import { BACKGROUNDS } from "@/lib/backgrounds";
 import type { DailyPuzzle } from "@/lib/daily";
+import { writeChallenge } from "@/lib/challenge";
 import { consumeInvite } from "@/lib/deepLink";
 import { lastPlayerName } from "@/lib/mp/matchStore";
 import { resolvePlayerId } from "@/lib/cloud/identity";
+import { getProfiles } from "@/lib/cloud/profiles";
+import { getResult } from "@/lib/cloud/results";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
 import type { GameMode } from "@/lib/cloud/types";
 import { yearIndex, type RunState } from "@/lib/runEngine";
@@ -131,10 +135,83 @@ function AppShellInner() {
    */
   useEffect(() => {
     const invite = consumeInvite();
-    if (invite?.kind !== "friend") return;
-    setFriendsPrefill(invite.code);
-    setFriendsMounted(true);
-    setFriendsOpen(true);
+    if (!invite) return;
+    if (invite.kind === "friend") {
+      setFriendsPrefill(invite.code);
+      setFriendsMounted(true);
+      setFriendsOpen(true);
+      return;
+    }
+
+    /**
+     * `?vs=<resultId>` — play the world that statement was played on.
+     *
+     * The row carries everything a world needs (`metrics.seed` and
+     * `metrics.backgroundId`), so this reads it, records who is being answered,
+     * and opens the life. It skips the auth gate and the setup screen for the
+     * same reason the daily does: the seed and the background are already fixed,
+     * and there is nothing left on either screen to decide. The click on the
+     * statement — where the reader had the rival's number and chart in front of
+     * them — was the confirmation.
+     *
+     * Every failure below lands the player on the title screen with a world of
+     * their own, which is exactly where the link used to send them. There is
+     * nothing to announce: nothing was lost.
+     */
+    let active = true;
+    void (async () => {
+      try {
+        const row = await getResult(invite.resultId);
+        if (!active || !row || row.mode === "cashflow") return;
+
+        const seed = Number(row.metrics?.seed);
+        const backgroundId = row.metrics?.backgroundId;
+        const startYear = Number(row.metrics?.startYear);
+        const rawHistory = row.metrics?.history;
+        if (
+          !Number.isFinite(seed) ||
+          typeof backgroundId !== "string" ||
+          !BACKGROUNDS.some((b) => b.id === backgroundId)
+        ) {
+          return;
+        }
+
+        // A name for the report to print. A board row is public, so this is the
+        // public view of them and nothing more.
+        const profs = await getProfiles([row.userId]);
+        if (!active) return;
+
+        const history = Array.isArray(rawHistory)
+          ? rawHistory.map(Number).filter(Number.isFinite)
+          : [];
+
+        writeChallenge({
+          resultId: row.id,
+          seed,
+          backgroundId,
+          mode: row.mode,
+          name: profs[row.userId]?.username ?? "anonymous",
+          score: row.score,
+          verdict: row.verdict,
+          history,
+          startYear: Number.isFinite(startYear) ? startYear : 0,
+          // Three states, and the row tells us which: `1` their deal was tilted,
+          // `0` provably even, absent means the row predates the flag and the
+          // honest answer is that nobody knows.
+          coached: row.metrics?.coached === undefined ? null : Number(row.metrics.coached) === 1 ? 1 : 0,
+        });
+
+        run.start(row.mode, backgroundId, playerName(lastPlayerName()), { seed, challenge: true });
+      } catch {
+        // Offline, or a row that is gone. The title screen is a fine place to be.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // Once, on the first mount: `consumeInvite` answers at most once per load and
+    // `run.start` is a stable callback whose identity is not worth re-running this for.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { resetRun } = useConceptLearn();

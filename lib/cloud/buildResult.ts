@@ -57,6 +57,22 @@ export function resultFromRun(run: RunState): NewResult {
       // an absent flag makes no claim either way, which is the honest reading for
       // a run resumed from a save that predates the log.
       ...(ticket && verifyResult(ticket, nw) ? { verified: 1 } : {}),
+      /**
+       * Was this run's card deal tilted toward the player's weak spots?
+       *
+       * A solo run passes `weakSpots` into `initRun`, which doubles the draw
+       * weight of every card teaching a concept that player keeps missing
+       * (`WEAK_SPOT_WEIGHT`). It is a per-player bias, and it is the reason a
+       * seed alone does not reproduce a world — the daily and a match both pass
+       * `undefined` for exactly that reason, and so does a challenge run.
+       *
+       * Written as 0 or 1 rather than omitted-when-false, deliberately. `verified`
+       * can be absent because an absent proof claims nothing; this one has to
+       * distinguish THREE states, because a row written before this line existed
+       * genuinely cannot be judged. Present-and-0 means provably even; absent
+       * means unknown. `components/screens/LifeReport.tsx` says which.
+       */
+      coached: run.weakSpots?.length ? 1 : 0,
     },
   };
 }

@@ -21,7 +21,8 @@ import { currency } from "@/lib/format";
 import { macroEvent } from "@/lib/markets";
 import { DEBT_RATE, TAKE_HOME } from "@/lib/economy";
 import { dailyShare, GRID_ROW, gridGlyph, gridSummary } from "@/lib/dailyShare";
-import { ghostFor, GHOST_BUFFER_MONTHS } from "@/lib/replay";
+import { challengeFor, type Challenge } from "@/lib/challenge";
+import { ghostFor, indexGrid, GHOST_BUFFER_MONTHS, type GridCell } from "@/lib/replay";
 import { annualExpenses, homeEquity, netWorth, operatingCashFlow, type RunState } from "@/lib/runEngine";
 import { deriveVerdict } from "@/lib/verdict";
 import { eventTeachesAny } from "@/lib/eventConcepts";
@@ -234,6 +235,10 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
   // before the engine journalled, or one that came back from a room), and the
   // section simply does not render rather than printing a gap it cannot compute.
   const ghost = useMemo(() => ghostFor(run), [run]);
+  // The run you were answering, if this life was started from a `?vs=` link.
+  // Matched on seed, background AND mode, so a stored challenge can never attach
+  // itself to an unrelated life (`lib/challenge.ts`).
+  const challenge = useMemo(() => challengeFor(run), [run]);
   // A daily run also gets the grid: one cell per year, you against that ghost.
   // Null for every other run, and for a daily whose ghost could not be built.
   //
@@ -339,6 +344,9 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
             />
           </motion.div>
         )}
+
+        {/* the run this one was answering — the whole point of a challenge link */}
+        {challenge && <ChallengeResult run={run} challenge={challenge} nw={nw} />}
 
         {/* The gap. Gain/loss is the RIGHT channel here and the only place in this
             feature it appears: the difference is money, which is what those two
@@ -495,6 +503,130 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
       {shareOpen && <ShareCard data={shareData} onClose={() => setShareOpen(false)} />}
     </div>
   );
+}
+
+/**
+ * Two lives on one world.
+ *
+ * A `?vs=` link starts this run on another player's exact seed and background, and
+ * this is where that finally pays: their line under yours on one chart, the gap in
+ * money, and one cell per year saying who was ahead.
+ *
+ * ── What "the same world" is actually worth ─────────────────────────────────
+ * The markets and the opening are identical and always were: prices are a
+ * coordinate hash of `(seed, year)` and the background is copied from their row.
+ * The CARDS are the part that needs saying out loud. A solo run doubles the draw
+ * weight of every card teaching a concept that player keeps missing, and that
+ * bias is per-player — so this run is dealt without it, exactly as the daily and
+ * a match are (`hooks/useRun.ts`). Whether THEIR deal was tilted is a property of
+ * their row, and `coached` records it in three states because a row written
+ * before the flag existed genuinely cannot be judged. The note below says which
+ * of the three, and never claims more than the row supports.
+ */
+function ChallengeResult({ run, challenge, nw }: { run: RunState; challenge: Challenge; nw: number }) {
+  /**
+   * Their line, in the shape `indexGrid` and the chart already speak.
+   *
+   * Aligned by CALENDAR YEAR rather than by array index. `resultFromRun` caps the
+   * stored series at its last 100 points, so a long Infinite run posts a window
+   * that opens after its life did — and comparing that positionally would line
+   * year one up against year forty and print a confident lie. Where the two do
+   * not open on the same year there is no honest year-by-year comparison, so
+   * there is no chart and no grid; the money below still stands.
+   */
+  const rival = useMemo(() => {
+    const firstYear = run.history[0]?.year;
+    if (firstYear === undefined || challenge.startYear !== firstYear) return null;
+    const points = challenge.history.map((netWorth, i) => ({ year: challenge.startYear + i, netWorth }));
+    if (points.length < 2) return null;
+    return {
+      points,
+      final: points[points.length - 1].netWorth,
+      gap: nw - points[points.length - 1].netWorth,
+      truncated: points.length < run.history.length,
+    };
+  }, [run, challenge, nw]);
+
+  // The same banded rule the daily grid uses, against a person instead of the
+  // index — a year inside 2% reads `level` rather than picking a side.
+  const cells = useMemo(() => (rival ? indexGrid(run, rival) : []), [run, rival]);
+
+  // `challenge.score` rather than the last charted point: the series is rounded
+  // per year for storage, and the score is the figure their row actually claims.
+  const diff = nw - challenge.score;
+  const won = diff >= 0;
+
+  return (
+    <motion.div variants={item}>
+      <SectionLabel>You against {challenge.name}</SectionLabel>
+
+      {/* Gain/loss is the right channel here for the same reason the index gap uses
+          it: the difference is money. `currency` prints U+2212 for a negative, so
+          the sign carries it without the hue. */}
+      <LedgerRow label="You ended with" value={currency(nw)} strong />
+      <LedgerRow label={`${challenge.name} ended with`} value={currency(challenge.score)} />
+      <LedgerRow
+        label="The difference"
+        value={currency(diff)}
+        tone={won ? "text-gain" : "text-loss"}
+      />
+
+      {rival && (
+        <div className="mt-4">
+          <AnnotatedLifeChart
+            points={run.history.map((h) => ({ year: h.year, netWorth: h.netWorth }))}
+            ghost={rival.points}
+            ghostLabel={challenge.name}
+          />
+        </div>
+      )}
+
+      {cells.length > 0 && (
+        <figure role="img" aria-label={rivalSummary(cells, challenge.name)} className="m-0 mt-4">
+          <div
+            className="grid w-max gap-x-2.5 gap-y-1.5"
+            style={{ gridTemplateColumns: `repeat(${GRID_ROW}, 1.1rem)` }}
+          >
+            {cells.map((c, i) => (
+              <span key={i} aria-hidden className="num text-center text-[1.05rem] leading-none text-ink">
+                {gridGlyph(c)}
+              </span>
+            ))}
+          </div>
+        </figure>
+      )}
+
+      <p className="voice mt-3 text-[0.92rem] text-secondary">
+        {cells.length > 0 && `▲ ahead of ${challenge.name} that year · ▬ level · ▼ behind. `}
+        Same markets, same opening. {dealNote(challenge)}
+      </p>
+    </motion.div>
+  );
+}
+
+/** The rival grid said out loud. `gridSummary` names the index, which is the wrong
+ *  opponent here — the shape of the sentence is the same. */
+function rivalSummary(cells: GridCell[], name: string): string {
+  const n = { ahead: 0, level: 0, behind: 0 };
+  for (const c of cells) n[c]++;
+  const parts: string[] = [];
+  if (n.ahead) parts.push(`${n.ahead} ahead of ${name}`);
+  if (n.level) parts.push(`${n.level} level with them`);
+  if (n.behind) parts.push(`${n.behind} behind`);
+  const years = `${cells.length} year${cells.length === 1 ? "" : "s"}`;
+  return parts.length ? `${years}: ${parts.join(", ")}.` : `${years}.`;
+}
+
+/** What the row can honestly say about whether the two of you were dealt the same
+ *  cards. Three states, because `coached` has three. */
+function dealNote(challenge: Challenge): string {
+  if (challenge.coached === 0) {
+    return "Neither deal was tilted, so you were dealt the same cards in the same order.";
+  }
+  if (challenge.coached === 1) {
+    return `Your deal was even; ${challenge.name}'s leaned toward the concepts they keep getting wrong, so a few of their cards differed.`;
+  }
+  return "Their run predates the record of whether its deal was tilted, so the cards may not have matched exactly.";
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   trade,
   type RunState,
 } from "@/lib/runEngine";
+import { challengeFor } from "@/lib/challenge";
 import { resolveProgressId } from "@/lib/cloud/identity";
 import { writeDaily } from "@/lib/dailySave";
 import { weakSpotIds } from "@/lib/weakSpots";
@@ -36,6 +37,17 @@ export type RunOpts = {
   matchCode?: string;
   /** `YYYY-MM-DD` (UTC): this is the Daily Ledger's run for that day. */
   daily?: string;
+  /**
+   * This run is answering a shared-seed challenge (`?vs=`), so its world has to
+   * be the same world for everybody who plays it.
+   *
+   * That means the same suppression the daily and a match already get: no
+   * weak-spot bias in the deal. A solo run doubles the draw weight of cards
+   * teaching the concepts THAT player keeps missing, which is a good feature and
+   * a per-player one — leave it on and two people on one seed are dealt
+   * different hands, which is the entire premise of a challenge gone.
+   */
+  challenge?: boolean;
 };
 
 export function useRun(userId: string | null) {
@@ -96,6 +108,27 @@ export function useRun(userId: string | null) {
         writeDaily(r.daily, r);
         return;
       }
+      /**
+       * A challenge is played on someone else's world, and it must not evict the
+       * player's own life from the (userId, mode) slot to do it.
+       *
+       * It reaches the year loop without passing the auth gate — that is the
+       * point of a link — so nobody was ever offered the "you have a run in
+       * progress" choice that normally precedes overwriting a save. Writing here
+       * would mean a tapped link silently destroys a Story run mid-flight. A
+       * match run is fenced out of this store for the same reason and is not
+       * saved anywhere else either.
+       *
+       * The fence matches the RUN against the stored challenge rather than
+       * reading a ref, for the reason the daily fence gives directly above: a ref
+       * goes stale silently, and it would do so in the direction that destroys a
+       * save. `challengeFor` requires seed, background AND mode to agree, so it
+       * cannot fire on an unrelated life.
+       *
+       * The cost is stated plainly: a challenge does not survive a reload. The
+       * link that started it does, and it is the one the player was sent.
+       */
+      if (challengeFor(r)) return;
       if (!userId) return;
       setSaving(true);
       try {
@@ -189,9 +222,10 @@ export function useRun(userId: string | null) {
         // cards tomorrow, and every replay and verification would stop holding.
         //
         // Never on a match (a per-player bias desynchronises the table — the failure
-        // `drawEvents` measures at 21% of years and $71k of net worth) and never on
-        // the daily (everyone's world has to be identical).
-        const solo = opts?.matchCode == null && !opts?.daily;
+        // `drawEvents` measures at 21% of years and $71k of net worth), never on
+        // the daily, and never on a challenge (everyone's world has to be
+        // identical, and a challenge is that rule with an audience of two).
+        const solo = opts?.matchCode == null && !opts?.daily && !opts?.challenge;
         const r = initRun(m, backgroundId, name, opts?.seed, opts?.matchCode != null, {
           daily: opts?.daily,
           weakSpots: solo ? weakSpotIds(resolveProgressId(userId)) : undefined,

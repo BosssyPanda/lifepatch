@@ -120,6 +120,19 @@ const PAGE = "mx-auto flex min-h-[100svh] w-full max-w-xl flex-col px-5 py-14";
 const CTA =
   "num inline-flex items-center gap-2 border border-ink px-5 py-3 text-sm text-ink hover:bg-ink hover:text-bg";
 
+/**
+ * The accent-filled primary, for the one action this page exists to offer.
+ *
+ * This is a server component, so it cannot use `LedgerButton` (a client component
+ * carrying framer-motion) without pulling the whole motion runtime onto an
+ * otherwise static, cacheable page. Same contract, spelled out: the label is
+ * knocked out in PAPER — ink on orange measures 2.74:1 and fails — and there is
+ * exactly one of these on the screen, which is why `CTA` above is now the
+ * secondary and not a second accent.
+ */
+const CTA_PRIMARY =
+  "num inline-flex items-center gap-2 border border-accent bg-accent px-5 py-3 text-sm text-bg hover:bg-transparent hover:text-accent";
+
 function NoRecords() {
   return (
     <main className={PAGE}>
@@ -197,6 +210,23 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
       : null;
   const provenance = provenanceRows(row);
 
+  /**
+   * Can this statement be offered as a world to play?
+   *
+   * Only where the row records BOTH things that fix one. `resultFromCashflow`
+   * writes neither — the Rat Race is a board game with its own RNG and no
+   * background — and rows written before the seed was recorded have no world to
+   * hand over either. Where any of it is missing the button simply does not
+   * appear; there is no version of it that could work.
+   */
+  const challengeSeed = Number(row.metrics?.seed);
+  const challengeBackground = row.metrics?.backgroundId;
+  const canChallenge =
+    row.mode !== "cashflow" &&
+    Number.isFinite(challengeSeed) &&
+    typeof challengeBackground === "string" &&
+    BACKGROUNDS.some((b) => b.id === challengeBackground);
+
   return (
     <main className={PAGE}>
       <div className="my-auto w-full">
@@ -264,9 +294,20 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
 
         {/* CTA */}
         <div className="mt-12 border-t border-hairline pt-6">
-          <p className="voice text-[1.02rem] text-ink/85">Could you do better? The market doesn&apos;t care. Prove it anyway.</p>
+          <p className="voice text-[1.02rem] text-ink/85">
+            {canChallenge
+              ? "Same markets. Same opening. Your decisions."
+              : "Could you do better? The market doesn’t care. Prove it anyway."}
+          </p>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Link href="/" className={CTA}>[ BEGIN A RUN → ]</Link>
+            {canChallenge ? (
+              <>
+                <Link href={`/?vs=${row.id}`} className={CTA_PRIMARY}>[ PLAY THIS WORLD → ]</Link>
+                <Link href="/" className={CTA}>[ A WORLD OF MY OWN ]</Link>
+              </>
+            ) : (
+              <Link href="/" className={CTA}>[ BEGIN A RUN → ]</Link>
+            )}
             {/* a second exit, so a shared statement isn't a one-way door */}
             <Link
               href="/leaderboard"
