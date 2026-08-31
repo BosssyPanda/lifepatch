@@ -94,12 +94,19 @@ export function challengeableWorld(row: ResultRow): ChallengeableWorld | null {
   if (m?.shared !== 0) return null;
   if (m?.daily !== undefined) return null;
 
-  // Capped as well as validated: an unbounded series from a row that predates the
-  // column constraint overflows `writeChallenge`'s storage budget, and that failure
-  // is swallowed — the run would start on the right world and find no rival waiting
-  // at the report, with nothing anywhere saying why.
+  /**
+   * A series we had to CUT is one we cannot describe honestly, so it is dropped
+   * exactly as a malformed one is — the money comparison below still stands on
+   * `score`, which is their whole run.
+   *
+   * Reading only the front of it and charting that would report where OUR limit
+   * stopped as where their run ended, which is the same false claim
+   * `ghostOutlastsRun` exists to prevent on the report's rival line. The cap also
+   * protects `writeChallenge`: an unbounded series from a row predating the column
+   * constraint overflows the storage budget, and that failure is swallowed.
+   */
   const read = finiteSeries(m?.history);
-  const history = read?.series ?? [];
+  const history = read && !read.capped ? read.series : [];
   const startYear = m?.startYear;
 
   return {

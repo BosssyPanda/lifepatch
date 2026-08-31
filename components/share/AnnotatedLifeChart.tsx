@@ -384,6 +384,10 @@ export function AnnotatedLifeChart({
   if (!model) return null;
   const { pts, zeroY, d, ghostD, rise, fall, final, macro } = model;
   const ghostFinal = ghost?.length ? ghost[ghost.length - 1].netWorth : null;
+  // The ghost's OWN last year, not the run's. A rival who quit early stops years
+  // before the player does, and naming the player's final year here stated the
+  // rival's figure for a year they never played.
+  const ghostLastYear = ghost?.length ? ghost[ghost.length - 1].year : null;
   const first = pts[0];
   const last = pts[pts.length - 1];
   const up = last.netWorth >= 0;
@@ -417,7 +421,7 @@ export function AnnotatedLifeChart({
                * actual score two rows above. Claiming an ending here gave a
                * screen-reader user two authoritative answers to one question.
                */
-              ? ` A dashed second line shows ${ghostLabel}'s run on the same world, worth ${currency(ghostFinal)} by ${last.year}${
+              ? ` A dashed second line shows ${ghostLabel}'s run on the same world, worth ${currency(ghostFinal)} by ${ghostLastYear}${
                   ghostOutlastsRun ? "; their run carried on past the end of yours" : ""
                 }.`
               : ` A dashed second line shows what the same life was worth with ${ghostLabel}, ending at ${currency(ghostFinal)}.`

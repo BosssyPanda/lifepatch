@@ -3,6 +3,7 @@ import { cachedFonts } from "../_fonts/cache";
 import { PALETTE } from "@/lib/palette";
 import { currency } from "@/lib/format";
 import { CASHFLOW_VERDICTS, safeVerdict, VERDICTS } from "@/lib/verdict";
+import { finiteNumber } from "@/lib/metrics";
 
 export const runtime = "edge";
 
@@ -65,7 +66,7 @@ async function fetchRow(id: string): Promise<Row | null> {
     // client-written `numeric`, and a value that is not a finite number is not a
     // statement this origin should render at 84px. Returning null falls through to
     // the generic card below, which is the right answer for a row that is not one.
-    if (!row || !Number.isFinite(Number(row.score))) return null;
+    if (!row || !finiteNumber(row.score)) return null;
     return row;
   } catch {
     return null;
@@ -97,18 +98,28 @@ const MODE_LABEL: Record<Row["mode"], string> = {
   cashflow: "RAT RACE",
 };
 
+/**
+ * The unfurl card and `/r/[id]` are two public renderings of ONE row, so they read
+ * it by the same rule — see `lib/metrics.ts`. They disagreed: the page printed
+ * "Net worth —" for a null while this image printed a confident "$0", and an
+ * object-valued field rendered here as "[object Object]" into every chat client
+ * that unfurled the link.
+ */
+const money = (v: unknown) => (finiteNumber(v) ? currency(v) : "—");
+const plain = (v: unknown) => (finiteNumber(v) ? String(v) : "—");
+
 function statRows(row: Row): { label: string; value: string }[] {
   const m = row.metrics ?? {};
   if (row.mode === "cashflow") {
     return [
-      { label: "Net worth", value: currency(Number(m.netWorth ?? 0)) },
-      { label: "Turns", value: String(m.turns ?? "—") },
-      { label: "Monthly expenses", value: currency(Number(m.expenses ?? 0)) },
+      { label: "Net worth", value: money(m.netWorth) },
+      { label: "Turns", value: plain(m.turns) },
+      { label: "Monthly expenses", value: money(m.expenses) },
     ];
   }
   return [
-    { label: "Final age", value: String(m.age ?? "—") },
-    { label: "Happiness", value: `${m.happiness ?? "—"}%` },
+    { label: "Final age", value: plain(m.age) },
+    { label: "Happiness", value: finiteNumber(m.happiness) ? `${m.happiness}%` : "—" },
   ];
 }
 
@@ -202,7 +213,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Not "PASSIVE INCOME / MO": the Rat Race score is net worth plus a year of
   // cash flow (lib/scoreLabel.ts), and the `/mo` printed it as a wage.
   const scoreLabel = isCash ? "RAT RACE SCORE" : "FINAL NET WORTH";
-  const scoreColor = isCash ? (Number(row.metrics?.escaped) === 1 ? GAIN : SECONDARY) : row.score >= 0 ? GAIN : LOSS;
+  const scoreColor = isCash ? (row.metrics?.escaped === 1 ? GAIN : SECONDARY) : row.score >= 0 ? GAIN : LOSS;
   const score = currency(row.score);
 
   return new ImageResponse(

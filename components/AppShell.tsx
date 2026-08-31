@@ -219,35 +219,6 @@ function AppShellInner() {
       } catch {}
 
       /**
-       * The rival is recorded BEFORE the guards below, not after.
-       *
-       * The record is inert on its own — `challengeFor` hands it back only to a
-       * run standing on the same seed, background and mode, and any ordinary run
-       * started from the mode select clears it. So writing it early costs nothing
-       * and buys the one thing the guards otherwise take away: `consumeInvite`
-       * has already stripped `?vs=` from the address bar, so an effect that bails
-       * without writing has consumed the invitation and left nothing to retry.
-       * Written first, the rival is still waiting if the player reaches this
-       * world by any other route.
-       */
-      const kept = writeChallenge({
-        resultId: row.id,
-        // Per ATTEMPT, not per world. `submitRunOnce` dedupes on a key built from
-        // the run's seed, and a challenge borrows someone else's seed by design —
-        // so answering your own link, or taking a second run at one, would hash to
-        // a key already marked submitted and post nothing at all.
-        attempt: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        seed: world.seed,
-        backgroundId: world.backgroundId,
-        mode: world.mode,
-        name,
-        score: row.score,
-        history: world.history,
-        startYear: world.startYear,
-        coached: world.coached,
-      });
-
-      /**
        * The player did not sit still while those round trips ran.
        *
        * Checked HERE, after both awaits, rather than before them: a guard that
@@ -268,14 +239,41 @@ function AppShellInner() {
       if (run.hasRun()) return;
 
       /**
-       * The rival could not be stored — a private window, or a full quota.
+       * The rival is recorded only once the guards above have passed.
        *
-       * Starting anyway would put the player through a whole life on someone
-       * else's world and then show them a report with no comparison on it, which
-       * is the one outcome worse than not starting. The title screen is where
-       * every other failure in this effect lands.
+       * Ordering matters here in a way that is not obvious. Writing it earlier —
+       * to keep the invitation recoverable after a bail — leaves a record that
+       * `challengeFor` MATCHES against any run standing on the same seed,
+       * background and mode. The run the player resumed while this was loading is
+       * exactly such a run when they opened their OWN statement's link: the record
+       * would attach to a life that was already finished and already posted, and
+       * `submitRunOnce` would re-key it with the attempt nonce, miss the mark from
+       * the first submission and post a SECOND leaderboard row for one run. The
+       * report would also print them against themselves. Nothing is written unless
+       * this effect is about to start the run the record describes.
+       *
+       * `writeChallenge` can still fail — a private window, a full quota — and the
+       * run starts anyway. The link promised this world and it delivers it; what
+       * is lost is the comparison at the end, which is the smaller half. Refusing
+       * to start would make the link a no-op with nothing on screen to explain it,
+       * because `consumeInvite` has already taken the parameter out of the URL.
        */
-      if (!kept) return;
+      writeChallenge({
+        resultId: row.id,
+        // Per ATTEMPT, not per world. `submitRunOnce` dedupes on a key built from
+        // the run's seed, and a challenge borrows someone else's seed by design —
+        // so answering your own link, or taking a second run at one, would hash to
+        // a key already marked submitted and post nothing at all.
+        attempt: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        seed: world.seed,
+        backgroundId: world.backgroundId,
+        mode: world.mode,
+        name,
+        score: row.score,
+        history: world.history,
+        startYear: world.startYear,
+        coached: world.coached,
+      });
 
       /**
        * NOT made a guest first, deliberately — this used to call `continueAsGuest`.

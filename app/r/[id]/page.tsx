@@ -219,8 +219,11 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
    */
   const read = finiteSeries(row.metrics?.history);
   const startYear = row.metrics?.startYear;
+  // `!read.capped` for the same reason the challenge gate drops a cut series: the
+  // chart's own label names where the line "ends", and the end of a series we
+  // truncated is our limit rather than the run's. The score above it is unaffected.
   const chartPoints =
-    read && read.series.length > 1 && finiteNumber(startYear)
+    read && !read.capped && read.series.length > 1 && finiteNumber(startYear)
       ? read.series.map((v, i) => ({ year: startYear + i, netWorth: v }))
       : null;
   const provenance = provenanceRows(row);
