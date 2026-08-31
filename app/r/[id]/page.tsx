@@ -5,6 +5,7 @@ import { AnnotatedLifeChart } from "@/components/share/AnnotatedLifeChart";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { getResult } from "@/lib/cloud/results";
 import { challengeableWorld } from "@/lib/challenge";
+import { finiteNumber, finiteSeries } from "@/lib/metrics";
 import { challengeUrl } from "@/lib/deepLink";
 import { isCloud } from "@/lib/supabase";
 import type { ResultRow } from "@/lib/cloud/types";
@@ -191,23 +192,19 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
   const hex = verdictHex(verdict);
   const good = row.mode === "cashflow" ? Number(row.metrics?.escaped) === 1 : row.score >= 0;
 
-  // per-year net-worth series, present only on runs submitted after Phase M3.
-  //
-  // Capped HERE as well as at the writer. `resultFromRun` slices to 100 points, but
-  // that cap lives in the client and a row is not the client: a row posted straight
-  // at PostgREST with a 100,000-element history would be mapped twice and handed to
-  // `AnnotatedLifeChart` as six figures of SVG geometry, on a page that is
-  // unauthenticated and served per request. The database refuses that on the way in
-  // now (`results_metrics_history_bounded`), but rows predating the constraint are
-  // still out there, and 200 is already twice the longest honest run.
-  const MAX_SERIES = 200;
-  const rawHistory = row.metrics?.history;
-  const startYear = Number(row.metrics?.startYear);
-  const series = Array.isArray(rawHistory)
-    ? rawHistory.slice(0, MAX_SERIES).map(Number).filter(Number.isFinite)
-    : [];
+  /**
+   * The chart's series, read the way every other reader of `metrics` reads it.
+   *
+   * This used to be `.map(Number).filter(Number.isFinite)`, which is wrong in both
+   * directions at once on client-written jsonb: `null` survives as a $0 year that
+   * never happened, and a string is DROPPED — compacting the array so that every
+   * year after the hole is drawn one place early, on a public, cached page. See
+   * `lib/metrics.ts`; a series that cannot be trusted is not drawn at all.
+   */
+  const series = finiteSeries(row.metrics?.history);
+  const startYear = row.metrics?.startYear;
   const chartPoints =
-    series.length > 1 && Number.isFinite(startYear)
+    series && series.length > 1 && finiteNumber(startYear)
       ? series.map((v, i) => ({ year: startYear + i, netWorth: v }))
       : null;
   const provenance = provenanceRows(row);

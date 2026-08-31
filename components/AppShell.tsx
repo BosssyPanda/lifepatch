@@ -14,7 +14,6 @@ import { ConceptLearnProvider, useConceptLearn } from "@/hooks/useConceptLearn";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
-import { BACKGROUNDS } from "@/lib/backgrounds";
 import type { DailyPuzzle } from "@/lib/daily";
 import { challengeableWorld, challengeFor, writeChallenge } from "@/lib/challenge";
 import { consumeInvite } from "@/lib/deepLink";
@@ -143,6 +142,10 @@ function AppShellInner() {
     setFriendsOpen(false);
     if (boardBehindFriends) {
       setBoardBehindFriends(false);
+      // The board coming back is an opening like any other, and every other one
+      // in this app has a sound. Silence here read as the sheet having failed to
+      // close rather than the board having returned.
+      audio.sfx("modal");
       setSocialOpen(true);
     }
   };
@@ -225,10 +228,15 @@ function AppShellInner() {
        * select, the auth gate and setup, and begin a life of their own. `run.start`
        * replaces the live run, its mode and the phase, and a challenge run is
        * fenced out of `lib/saves.ts`, so landing it on them would delete the run
-       * they chose with nothing written anywhere. `stillPlaying` reads `liveRef`,
-       * so it is the live answer and not a stale closure over this render.
+       * they chose with nothing written anywhere.
+       *
+       * `hasRun`, not `stillPlaying`: a save resumed from a FINISHED run lands on
+       * the report with status `"ended"`, which `stillPlaying` reads as false — so
+       * the narrower guard would have let the challenge overwrite a statement the
+       * player had just asked to see. Both read `liveRef`, so this is the live
+       * answer and not a stale closure over this render.
        */
-      if (run.stillPlaying()) return;
+      if (run.hasRun()) return;
 
       writeChallenge({
         resultId: row.id,

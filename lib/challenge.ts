@@ -1,4 +1,5 @@
 import type { ResultRow } from "./cloud/types";
+import { finiteNumber, finiteSeries } from "./metrics";
 import type { ModeId } from "./modes";
 import type { RunState } from "./runEngine";
 import { BACKGROUNDS } from "./backgrounds";
@@ -38,21 +39,6 @@ import { BACKGROUNDS } from "./backgrounds";
  */
 
 const KEY = "lifepatch.challenge";
-
-/**
- * A number that is actually a number.
- *
- * `metrics` is client-written jsonb, and `Number(v)` is far too generous to read
- * it with: `Number(null)`, `Number("")`, `Number(" ")`, `Number([])` and
- * `Number(true)` are all finite, so `Number.isFinite(Number(v))` waves through
- * exactly the malformed values it reads as a guard against. A `"seed": null`
- * became seed 0 — a real, playable world with nothing to do with the statement
- * that was clicked — and a hole in a history became a year the rival was worth
- * $0, which the grid then graded the player as "ahead" for.
- */
-function finite(v: unknown): v is number {
-  return typeof v === "number" && Number.isFinite(v);
-}
 
 /** The world a statement was played on, or null if it is not one that can be handed over. */
 export type ChallengeableWorld = {
@@ -103,33 +89,31 @@ export function challengeableWorld(row: ResultRow): ChallengeableWorld | null {
   const m = row.metrics as Record<string, unknown> | undefined;
   const seed = m?.seed;
   const backgroundId = m?.backgroundId;
-  if (!finite(seed)) return null;
+  if (!finiteNumber(seed)) return null;
   if (typeof backgroundId !== "string" || !BACKGROUNDS.some((b) => b.id === backgroundId)) return null;
   if (m?.shared !== 0) return null;
   if (m?.daily !== undefined) return null;
 
-  /**
-   * A history with a hole in it is not a shorter history.
-   *
-   * Filtering the bad elements out would COMPACT the series and slide every later
-   * year one place left — and the grid compares by position, so every cell after
-   * the hole would grade the player against the wrong year. A series that cannot
-   * be trusted is dropped whole; the money still stands on its own.
-   */
-  const rawHistory = m?.history;
-  const history = Array.isArray(rawHistory) && rawHistory.every(finite) ? (rawHistory as number[]) : [];
+  // Capped as well as validated: an unbounded series from a row that predates the
+  // column constraint overflows `writeChallenge`'s storage budget, and that failure
+  // is swallowed — the run would start on the right world and find no rival waiting
+  // at the report, with nothing anywhere saying why.
+  const history = finiteSeries(m?.history) ?? [];
   const startYear = m?.startYear;
 
   return {
     seed,
     backgroundId,
     mode: row.mode,
-    startYear: finite(startYear) ? startYear : 0,
+    startYear: finiteNumber(startYear) ? startYear : 0,
     history,
     // Three states, and the row tells us which: `1` their deal was tilted, `0`
-    // provably even, absent means the row predates the flag and the honest answer
-    // is that nobody knows.
-    coached: m?.coached === undefined ? null : Number(m.coached) === 1 ? 1 : 0,
+    // provably even, and unknown for a row that predates the flag. Matched
+    // EXACTLY rather than coerced: `Number(null)` is 0, so the generous read
+    // manufactured a confident "provably even" out of a malformed field — and 0
+    // is the one of the three endings `dealNote` states as a fact. Anything that
+    // is not literally 0 or 1 is something nobody can vouch for.
+    coached: m?.coached === 1 ? 1 : m?.coached === 0 ? 0 : null,
   };
 }
 
@@ -217,7 +201,7 @@ export function readChallenge(): Challenge | null {
       // `history: ["a", null]` reaches `plot` as NaN, whose `<path d>` is
       // `MNaN,NaN L…` — an empty chart still wearing the rival's legend and grid.
       !Array.isArray(c.history) ||
-      !c.history.every((v) => typeof v === "number" && Number.isFinite(v)) ||
+      !c.history.every(finiteNumber) ||
       typeof c.startYear !== "number" ||
       // `coached` has three legal values and `dealNote` branches on all three.
       // An unvalidated one falls past `=== 1` and `=== null` to the definitive

@@ -301,6 +301,17 @@ export function useRun(userId: string | null) {
     /** Is the LIVE life still open? A stale copy of this hook still answers honestly:
      *  the ref behind it is shared by every render (see `liveRef`). */
     stillPlaying: useCallback(() => liveRef.current?.status === "playing", []),
+    /**
+     * Is there a run on screen at all — playing OR finished?
+     *
+     * `stillPlaying` answers a narrower question and is the wrong one for anything
+     * deciding whether it may REPLACE what the player is looking at. A run resumed
+     * from a finished save goes straight to the report, where its status is
+     * `"ended"`, so `stillPlaying` reads false over a screen the player explicitly
+     * asked for. `reset` and `toTitle` null this out, so the title screen answers
+     * false and nothing is blocked there.
+     */
+    hasRun: useCallback(() => liveRef.current !== null, []),
     retire: useCallback(() => commit((s) => retire(s)), [commit]),
     quit: useCallback(() => commit((s) => quitRun(s)), [commit]),
 

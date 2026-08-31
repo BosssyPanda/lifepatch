@@ -78,7 +78,7 @@ export function FriendsSheet({
   prefillCode?: string | null;
 }) {
   const { profile, loading: profileLoading } = useProfile();
-  const { user, isCloud } = useAuth();
+  const { user, isCloud, loading: authLoading } = useAuth();
   const { sfx } = useAudio();
   const { reduced } = useMotionCtx();
 
@@ -116,7 +116,17 @@ export function FriendsSheet({
    * this comment calls the worst outcome available.
    */
   const account = Boolean(user && !isGuestId(user.id));
-  const blocked = isCloud && !account;
+  /**
+   * Not decided until the session has been. `useAuthState` starts at
+   * `user === null` and resolves it in a later `getSession()` callback, and the
+   * `?friend=` deep link opens this sheet on mount — squarely inside that window.
+   * Judging it early showed a signed-in player the "friends need an account"
+   * notice, complete with the invite code and an instruction to write it down,
+   * moments before the real sheet replaced it. It is the same race that had the
+   * challenge link demoting accounts to guests; the answer is the same, which is
+   * to wait for the answer.
+   */
+  const blocked = isCloud && !authLoading && !account;
   const playerId = profile?.id ?? null;
   const code = profile?.friendCode ?? null;
 
@@ -220,7 +230,11 @@ export function FriendsSheet({
         setEntry("");
         setStatus({ tone: "ok", text: "Request sent. They'll see it the next time they open this sheet." });
         sfx("confirm");
-        onRosterChanged?.();
+        // Deliberately NOT `onRosterChanged`. This writes a PENDING edge, and
+        // `listFriendIds` counts only accepted ones — so the roster provably did
+        // not change, and telling the host it did costs a full board re-read
+        // (friend ids, up to six pages of results, a profile lookup) for the most
+        // common action in this sheet.
         return;
       }
       setStatus({

@@ -170,6 +170,7 @@ export function AnnotatedLifeChart({
   ghost,
   ghostLabel = "every spare dollar in the index",
   ghostKind = "counterfactual",
+  ghostTruncated = false,
   className = "",
 }: {
   points: LifePoint[];
@@ -186,6 +187,17 @@ export function AnnotatedLifeChart({
    * is both broken English and a false statement about whose life it is.
    */
   ghostKind?: "counterfactual" | "rival";
+  /**
+   * The ghost's series was cut short to fit this chart's x-domain, so its last
+   * plotted value is NOT where that run ended.
+   *
+   * Only a rival can be truncated — the index ghost is derived from the run it is
+   * drawn under and cannot outlast it. Without this the label announced a rival's
+   * year-8 figure as where their run "ended" while the statement two rows above
+   * printed their real year-21 total, giving a screen-reader user two different
+   * authoritative answers to the same question.
+   */
+  ghostTruncated?: boolean;
   className?: string;
 }) {
   const { reduced } = useMotionCtx();
@@ -395,7 +407,9 @@ export function AnnotatedLifeChart({
         }${fall ? ` Biggest one-year fall ${fall.p.year}, ${currency(Math.abs(fall.delta))}.` : ""}${
           ghostFinal !== null
             ? ghostKind === "rival"
-              ? ` A dashed second line shows ${ghostLabel}'s run on the same world, ending at ${currency(ghostFinal)}.`
+              ? ghostTruncated
+                ? ` A dashed second line shows ${ghostLabel}'s run on the same world, worth ${currency(ghostFinal)} by ${last.year}; their run carried on past the end of yours.`
+                : ` A dashed second line shows ${ghostLabel}'s run on the same world, ending at ${currency(ghostFinal)}.`
               : ` A dashed second line shows what the same life was worth with ${ghostLabel}, ending at ${currency(ghostFinal)}.`
             : ""
         } Marked years are real market events the run lived through.`}
