@@ -64,9 +64,16 @@ const NOUNS = [
 ] as const;
 
 // No 0/O/1/I/L — codes stay unambiguous when read aloud or typed.
-const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789".split("");
+/**
+ * The mint alphabet. Exported because the client validates against it too — the
+ * sheet's input filter and `lib/deepLink.ts`'s link pattern both have to accept
+ * exactly what this issues, and a fourth copy is a fourth thing to miss. `0`/`O`
+ * and `1`/`I` are absent on purpose: a code is read aloud and typed in by hand.
+ */
+export const FRIEND_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const CODE_CHARS = FRIEND_CODE_ALPHABET.split("");
 
-const FRIEND_CODE_LENGTH = 6;
+export const FRIEND_CODE_LENGTH = 6;
 const AVATAR_SEED_LENGTH = 8;
 
 function pick<T>(arr: readonly T[]): T {

@@ -86,7 +86,7 @@ function readLocalInvolving(userId: string): FriendEdge[] {
   return out;
 }
 
-export type AddFriendResult = { ok: boolean; reason?: "not-found" | "self" | "exists" };
+export type AddFriendResult = { ok: boolean; reason?: "not-found" | "self" | "exists" | "failed" };
 
 /** Send a friend request by code. Creates a pending outgoing edge. */
 export async function addByCode(userId: string, code: string): Promise<AddFriendResult> {
@@ -98,7 +98,11 @@ export async function addByCode(userId: string, code: string): Promise<AddFriend
     const { error } = await supabase
       .from("friends")
       .insert({ user_id: userId, friend_id: target.id, status: "pending" });
-    if (error) return { ok: false, reason: "exists" };
+    // `23505` is the unique violation, and the ONLY error that means "already
+    // added". Every error used to return `exists`, so a dropped connection, an
+    // expired token, an RLS refusal or a 500 all told the player their request
+    // was already sent — they stopped retrying, and it had never been written.
+    if (error) return { ok: false, reason: error.code === "23505" ? "exists" : "failed" };
     return { ok: true };
   }
   const edges = readLocal(userId);
@@ -177,10 +181,24 @@ export async function listFriendIds(userId: string): Promise<string[]> {
   return Array.from(ids);
 }
 
-/** Incoming pending requests (someone added me, I haven't accepted yet). */
+/**
+ * Incoming pending requests (someone added me, I haven't accepted yet).
+ *
+ * The exclusion is the whole of it. A friendship is two rows and `accept` can only
+ * ever write MINE — the `friends` write-own-side policy forbids touching theirs,
+ * and nothing flips it server-side — so the requester's
+ * `{user_id: them, friend_id: me, status: "pending"}` survives the accept and
+ * stays pending for good. Filtering on that row alone returned every friend I had
+ * ever accepted as a fresh request, again, on every open of the sheet, forever.
+ * My own accepted edge is the record that I answered, and it is already in this
+ * same result set, so this costs no extra query.
+ */
 export async function listIncoming(userId: string): Promise<string[]> {
   const edges = await listEdges(userId);
+  const answered = new Set(
+    edges.filter((e) => e.userId === userId && e.status === "accepted").map((e) => e.friendId),
+  );
   return edges
-    .filter((e) => e.friendId === userId && e.status === "pending")
+    .filter((e) => e.friendId === userId && e.status === "pending" && !answered.has(e.userId))
     .map((e) => e.userId);
 }

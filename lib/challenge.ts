@@ -1,7 +1,7 @@
-"use client";
-
+import type { ResultRow } from "./cloud/types";
 import type { ModeId } from "./modes";
 import type { RunState } from "./runEngine";
+import { BACKGROUNDS } from "./backgrounds";
 
 /**
  * The run you were challenged to beat.
@@ -29,7 +29,109 @@ import type { RunState } from "./runEngine";
  * has nothing to do with and print a comparison between two different worlds.
  */
 
+/**
+ * No `"use client"` directive, deliberately — the same reason `lib/deepLink.ts`
+ * carries none. `challengeableWorld` is a pure predicate and `app/r/[id]/page.tsx`,
+ * a SERVER component, is one of its two callers; marking this module client-only
+ * would make that import a client reference and the call a build error. The
+ * storage helpers below are browser-only and guard for it themselves.
+ */
+
 const KEY = "lifepatch.challenge";
+
+/**
+ * A number that is actually a number.
+ *
+ * `metrics` is client-written jsonb, and `Number(v)` is far too generous to read
+ * it with: `Number(null)`, `Number("")`, `Number(" ")`, `Number([])` and
+ * `Number(true)` are all finite, so `Number.isFinite(Number(v))` waves through
+ * exactly the malformed values it reads as a guard against. A `"seed": null`
+ * became seed 0 — a real, playable world with nothing to do with the statement
+ * that was clicked — and a hole in a history became a year the rival was worth
+ * $0, which the grid then graded the player as "ahead" for.
+ */
+function finite(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+/** The world a statement was played on, or null if it is not one that can be handed over. */
+export type ChallengeableWorld = {
+  seed: number;
+  backgroundId: string;
+  mode: ModeId;
+  startYear: number;
+  history: number[];
+  coached: 0 | 1 | null;
+};
+
+/**
+ * Can this statement be offered as a world to play, and what world is it?
+ *
+ * ONE owner for the rules, because there are two callers and they must never
+ * disagree: `app/r/[id]/page.tsx` decides whether to draw the button, and
+ * `components/AppShell.tsx` decides whether to honour the link it points at.
+ * They were written in the same commit and stated the same six rules twice —
+ * agreement by coincidence, and a silent failure in either direction the moment
+ * one of them changed. A row that fails here simply is not offered.
+ *
+ * The rules, and why each one is a rule:
+ *
+ *   • CASHFLOW rows record neither a seed nor a background: the Rat Race is a
+ *     board game with its own RNG and no world to hand over.
+ *   • A seed and a KNOWN background are what fix a world. Rows written before the
+ *     seed was recorded have nothing to give.
+ *   • A ROOM's run (`shared`) was dealt from the table's shared running order
+ *     rather than its own pool, so a challenger starting from that seed takes the
+ *     solo branch of `drawEvents` and lives somewhere else entirely.
+ *   • A DAILY is not a practice range. Offering today's puzzle here would hand
+ *     anyone a private rehearsal of it — same seed, same background, and the
+ *     daily is dealt unbiased too — before they file the real attempt.
+ *
+ * `shared` is required to be PRESENT, not merely unequal to 1, and that is the
+ * whole point of it. It is written on every new row as 0 or 1 (see
+ * `lib/cloud/buildResult.ts`), so absent does not mean "solo" — it means the row
+ * predates the marker and nobody can now tell which it was. Reading absent as
+ * solo would offer every room run already in the table as a challengeable world
+ * and print a confident year-by-year comparison between two different lives,
+ * which is the exact failure the marker exists to prevent. The cost is stated
+ * plainly: statements recorded before this shipped cannot be challenged, and
+ * that is the honest answer rather than a guess.
+ */
+export function challengeableWorld(row: ResultRow): ChallengeableWorld | null {
+  if (row.mode === "cashflow") return null;
+
+  const m = row.metrics as Record<string, unknown> | undefined;
+  const seed = m?.seed;
+  const backgroundId = m?.backgroundId;
+  if (!finite(seed)) return null;
+  if (typeof backgroundId !== "string" || !BACKGROUNDS.some((b) => b.id === backgroundId)) return null;
+  if (m?.shared !== 0) return null;
+  if (m?.daily !== undefined) return null;
+
+  /**
+   * A history with a hole in it is not a shorter history.
+   *
+   * Filtering the bad elements out would COMPACT the series and slide every later
+   * year one place left — and the grid compares by position, so every cell after
+   * the hole would grade the player against the wrong year. A series that cannot
+   * be trusted is dropped whole; the money still stands on its own.
+   */
+  const rawHistory = m?.history;
+  const history = Array.isArray(rawHistory) && rawHistory.every(finite) ? (rawHistory as number[]) : [];
+  const startYear = m?.startYear;
+
+  return {
+    seed,
+    backgroundId,
+    mode: row.mode,
+    startYear: finite(startYear) ? startYear : 0,
+    history,
+    // Three states, and the row tells us which: `1` their deal was tilted, `0`
+    // provably even, absent means the row predates the flag and the honest answer
+    // is that nobody knows.
+    coached: m?.coached === undefined ? null : Number(m.coached) === 1 ? 1 : 0,
+  };
+}
 
 export type Challenge = {
   /** The row this came from — the identity of the world being answered. */
@@ -111,8 +213,17 @@ export function readChallenge(): Challenge | null {
       typeof c.name !== "string" ||
       typeof c.attempt !== "string" ||
       typeof c.score !== "number" ||
+      // The ELEMENTS, not merely the array. This is player-writable storage, and
+      // `history: ["a", null]` reaches `plot` as NaN, whose `<path d>` is
+      // `MNaN,NaN L…` — an empty chart still wearing the rival's legend and grid.
       !Array.isArray(c.history) ||
-      typeof c.startYear !== "number"
+      !c.history.every((v) => typeof v === "number" && Number.isFinite(v)) ||
+      typeof c.startYear !== "number" ||
+      // `coached` has three legal values and `dealNote` branches on all three.
+      // An unvalidated one falls past `=== 1` and `=== null` to the definitive
+      // "Neither deal was tilted toward anyone's weak spots" — the single ending
+      // of the three that must never be reached by guessing.
+      !(c.coached === 0 || c.coached === 1 || c.coached === null)
     ) {
       return null;
     }

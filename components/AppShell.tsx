@@ -16,7 +16,7 @@ import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import type { DailyPuzzle } from "@/lib/daily";
-import { challengeFor, writeChallenge } from "@/lib/challenge";
+import { challengeableWorld, challengeFor, writeChallenge } from "@/lib/challenge";
 import { consumeInvite } from "@/lib/deepLink";
 import { lastPlayerName } from "@/lib/mp/matchStore";
 import { resolveProgressId } from "@/lib/cloud/identity";
@@ -118,12 +118,33 @@ function AppShellInner() {
    * animation still plays, because `useDialog`'s effects key on `open` rather
    * than on being mounted.
    */
+  /**
+   * Whether the board was the thing the sheet was opened FROM.
+   *
+   * Closing it below is required (see above) but it is not a dismissal — the
+   * player asked for the friends sheet, not for the leaderboard to go away. With
+   * nothing restoring it they were dropped back to the title or the report,
+   * having just added the friend whose row they wanted to see, with no way back
+   * but reopening the board by hand. Reopening it here also re-runs the board's
+   * fetch for free: `open` is in its effect deps, which is exactly the
+   * invalidation `LeaderboardPage` has to ask for explicitly with `refreshSignal`
+   * because its board is page chrome and never toggles.
+   */
+  const [boardBehindFriends, setBoardBehindFriends] = useState(false);
   const openFriends = (prefill?: string) => {
     audio.sfx("modal");
+    setBoardBehindFriends(socialOpen);
     setSocialOpen(false);
     setFriendsPrefill(prefill ?? null);
     setFriendsMounted(true);
     setFriendsOpen(true);
+  };
+  const closeFriends = () => {
+    setFriendsOpen(false);
+    if (boardBehindFriends) {
+      setBoardBehindFriends(false);
+      setSocialOpen(true);
+    }
   };
   /**
    * The link this page was opened with, read exactly once (`lib/deepLink.ts`).
@@ -178,52 +199,12 @@ function AppShellInner() {
         // Offline, or a row that is gone. The title screen is a fine place to be.
         return;
       }
-      if (!row || row.mode === "cashflow") return;
+      if (!row) return;
 
-      const seed = Number(row.metrics?.seed);
-      const backgroundId = row.metrics?.backgroundId;
-      const startYear = Number(row.metrics?.startYear);
-      const rawHistory = row.metrics?.history;
-      if (
-        !Number.isFinite(seed) ||
-        typeof backgroundId !== "string" ||
-        !BACKGROUNDS.some((b) => b.id === backgroundId) ||
-        // A room's run is dealt from the table's shared running order, not from
-        // its own pool. Its seed opens a different world on the solo branch.
-        row.metrics?.shared === 1 ||
-        // A daily statement is not a practice range. Offering today's puzzle as a
-        // challenge would let anyone rehearse the exact world — same seed, same
-        // background, and the daily is dealt unbiased too — then play it for the
-        // board already knowing every card and every crash.
-        row.metrics?.daily !== undefined
-      ) {
-        return;
-      }
-
-      /**
-       * The player did not sit still while two round trips ran.
-       *
-       * `run.start` replaces the live run, the mode and the phase, so landing it
-       * on someone who has since begun a life of their own would delete the run
-       * they chose in favour of one they have stopped waiting for.
-       * `stillPlaying` reads `liveRef`, so it is the live answer and not a stale
-       * closure over the render this effect was created in.
-       */
-      if (run.stillPlaying()) return;
-
-      /**
-       * A history with a hole in it is not a shorter history.
-       *
-       * `metrics` is client-written jsonb, so an element can be null or a string.
-       * Filtering those out would COMPACT the series and silently slide every
-       * later year one place left — and the grid compares by position, so every
-       * cell after the hole would grade the player against the wrong year. A
-       * series that cannot be trusted is dropped whole; the money still stands.
-       */
-      const history =
-        Array.isArray(rawHistory) && rawHistory.every((v) => Number.isFinite(Number(v)))
-          ? rawHistory.map(Number)
-          : [];
+      // The rules for what counts as a world live in `lib/challenge.ts`, so this
+      // reader and the button that produced the link cannot drift apart.
+      const world = challengeableWorld(row);
+      if (!world) return;
 
       // A name for the report to print, and nothing more — a board row is public,
       // so this is the public view of them. Its own try/catch because a missing
@@ -234,6 +215,21 @@ function AppShellInner() {
         name = (await getProfiles([row.userId]))[row.userId]?.username ?? "anonymous";
       } catch {}
 
+      /**
+       * The player did not sit still while those round trips ran.
+       *
+       * Checked HERE, immediately before the start, rather than earlier: there are
+       * two awaits above and a guard that runs before the second one only covers
+       * the first. On a slow profile lookup the player — sitting on a title screen
+       * where nothing appeared to be happening — can get all the way through mode
+       * select, the auth gate and setup, and begin a life of their own. `run.start`
+       * replaces the live run, its mode and the phase, and a challenge run is
+       * fenced out of `lib/saves.ts`, so landing it on them would delete the run
+       * they chose with nothing written anywhere. `stillPlaying` reads `liveRef`,
+       * so it is the live answer and not a stale closure over this render.
+       */
+      if (run.stillPlaying()) return;
+
       writeChallenge({
         resultId: row.id,
         // Per ATTEMPT, not per world. `submitRunOnce` dedupes on a key built from
@@ -241,33 +237,38 @@ function AppShellInner() {
         // so answering your own link, or taking a second run at one, would hash to
         // a key already marked submitted and post nothing at all.
         attempt: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-        seed,
-        backgroundId,
-        mode: row.mode,
+        seed: world.seed,
+        backgroundId: world.backgroundId,
+        mode: world.mode,
         name,
         score: row.score,
-        history,
-        startYear: Number.isFinite(startYear) ? startYear : 0,
-        // Three states, and the row tells us which: `1` their deal was tilted,
-        // `0` provably even, absent means the row predates the flag and the
-        // honest answer is that nobody knows.
-        coached: row.metrics?.coached === undefined ? null : Number(row.metrics.coached) === 1 ? 1 : 0,
+        history: world.history,
+        startYear: world.startYear,
+        coached: world.coached,
       });
 
       /**
-       * Become a guest before the life starts.
+       * NOT made a guest first, deliberately — this used to call `continueAsGuest`.
        *
-       * Every other route into a run passes the auth gate, so `user` is either an
-       * account or the device guest by the time anything is played. A link skips
-       * that gate, which left this one run being played by `user === null` — a
-       * state nothing downstream is written for: `guest` reads false, so the
-       * friends sheet would offer a dead code, and the progress id changes under
-       * the run the moment they do sign in. This is the same door the gate
-       * offers, opened on their behalf, and `signIn` still works afterwards.
+       * The effect runs once on mount with `[]` deps, so `auth` here is the
+       * MOUNT-TIME value, and on the cloud path `useAuthState` starts at
+       * `user === null` and only resolves the session in a later `getSession()`
+       * callback. `!auth.user` was therefore true for everyone, signed in or not,
+       * and the call demoted a real account to the device guest: the session was
+       * replaced, `resolveProgressId` switched to the device id, and the run the
+       * link invited them to play was written to localStorage instead of the board
+       * the rival is standing on. Nobody ever saw the answer.
+       *
+       * Nothing needs it any more. `resolveProgressId(null)` already mints the
+       * device id at the submit site, so a visitor with no account records their
+       * run exactly as a guest does, and the friends sheet's own gate tests for an
+       * account rather than for `guest`. A player who has not chosen guest play is
+       * not silently signed up for it.
        */
-      if (!auth.user) auth.continueAsGuest();
-
-      run.start(row.mode, backgroundId, playerName(lastPlayerName()), { seed, challenge: true });
+      run.start(world.mode, world.backgroundId, playerName(lastPlayerName()), {
+        seed: world.seed,
+        challenge: true,
+      });
     })();
     // Once, on the first mount: `consumeInvite` answers at most once per load and
     // everything this closes over is either stable or read live.
@@ -538,7 +539,7 @@ function AppShellInner() {
       {friendsMounted && (
         <FriendsSheet
           open={friendsOpen}
-          onClose={() => setFriendsOpen(false)}
+          onClose={closeFriends}
           prefillCode={friendsPrefill}
         />
       )}

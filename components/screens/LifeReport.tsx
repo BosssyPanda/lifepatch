@@ -543,7 +543,26 @@ function ChallengeResult({ run, challenge, nw }: { run: RunState; challenge: Cha
   const rival = useMemo(() => {
     const firstYear = run.history[0]?.year;
     if (firstYear === undefined || challenge.startYear !== firstYear) return null;
-    const points = challenge.history.map((netWorth, i) => ({ year: challenge.startYear + i, netWorth }));
+    const all = challenge.history.map((netWorth, i) => ({ year: challenge.startYear + i, netWorth }));
+    /**
+     * Trimmed to the years the player actually lived.
+     *
+     * The chart takes its x-domain from `points` alone and its y-domain from
+     * `points` AND `ghost` together (`plot` in `AnnotatedLifeChart`). The index
+     * ghost can never outlast the run it is derived from, but a rival is an
+     * independent life: quit at year eight against someone who played all
+     * twenty-one and every later rival point plots past the right edge, clipped
+     * away by the viewBox with nothing to explain it, while their much larger
+     * final figures still stretch the scale and squash the player's own line into
+     * a band at the bottom. The aria-label compounded it by announcing the
+     * rival's year-21 total as where a line ending at year 8 "ends".
+     *
+     * The money comparison below is unaffected: it uses `challenge.score`, which
+     * is their whole run, and is the honest place for a life the player did not
+     * see the end of.
+     */
+    const lastYear = run.history[run.history.length - 1].year;
+    const points = all.filter((p) => p.year <= lastYear);
     if (points.length < 2) return null;
     return { points };
   }, [run, challenge]);

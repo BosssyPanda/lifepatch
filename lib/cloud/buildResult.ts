@@ -80,10 +80,16 @@ export function resultFromRun(run: RunState): NewResult {
        * background like any other run, so without this marker its statement looks
        * exactly like a challengeable solo world and is not one: a challenger
        * starting from that seed takes the solo branch and lives somewhere else.
-       * Only written when true — the absent case is the overwhelming majority and
-       * means the ordinary branch.
+       *
+       * Written as 0 or 1 on every row rather than omitted-when-false, for the
+       * same reason `coached` above is: it has to distinguish THREE states. It
+       * first shipped alongside this comment, so a row without it predates the
+       * marker and genuinely cannot be judged — and reading that absence as
+       * "solo" would offer every room run already in the table as a challengeable
+       * world. `lib/challenge.ts` requires the 0 to be present and treats absent
+       * as unknown.
        */
-      ...(run.sharedEvents ? { shared: 1 } : {}),
+      shared: run.sharedEvents ? 1 : 0,
     },
   };
 }

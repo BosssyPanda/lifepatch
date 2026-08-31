@@ -40,8 +40,15 @@ export function LeaderboardPage() {
    */
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [friendsMounted, setFriendsMounted] = useState(false);
-  /** Closing the sheet may have added a friend, and this board is never toggled
-   *  shut — so it is told to re-read rather than left showing a stale empty tab. */
+  /**
+   * The sheet may have added a friend, and this board is never toggled shut — so
+   * it is told to re-read rather than left showing a stale empty tab.
+   *
+   * Bumped when the sheet reports a real change, not on every close. A close alone
+   * re-ran `listFriendIds`, up to six pages of `topResults` and a profile lookup,
+   * and dropped the board back into its loading state — for a player who opened
+   * the sheet only to read their own code.
+   */
   const [refreshSignal, setRefreshSignal] = useState(0);
 
   return (
@@ -72,10 +79,8 @@ export function LeaderboardPage() {
     {friendsMounted && (
       <FriendsSheet
         open={friendsOpen}
-        onClose={() => {
-          setFriendsOpen(false);
-          setRefreshSignal((n) => n + 1);
-        }}
+        onClose={() => setFriendsOpen(false)}
+        onRosterChanged={() => setRefreshSignal((n) => n + 1)}
       />
     )}
     </AuthProvider>

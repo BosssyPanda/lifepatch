@@ -13,6 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { accept, addByCode, listIncoming } from "@/lib/cloud/friends";
 import { isGuestId } from "@/lib/cloud/identity";
+import { FRIEND_CODE_ALPHABET, FRIEND_CODE_LENGTH } from "@/supabase/functions/_shared/generate";
 import { getProfiles } from "@/lib/cloud/profiles";
 import type { PublicProfile } from "@/lib/cloud/types";
 import { friendInviteUrl } from "@/lib/deepLink";
@@ -43,23 +44,37 @@ import { DUR, EASE } from "@/src/motion/tokens";
  * closes the board first (see `components/AppShell.tsx`).
  */
 
-/** Matches `FRIEND_CODE_LENGTH` in `supabase/functions/_shared/generate.ts`. */
-const CODE_LENGTH = 6;
-
-/** The mint alphabet, so a typed `0` or `I` is rejected here rather than by a
- *  round-trip that comes back "no player has that code". */
-const CODE_CHARS = /[^ABCDEFGHJKMNPQRSTUVWXYZ23456789]/g;
+/**
+ * Taken from the mint rather than restated. Both used to be re-declared here, a
+ * third and fourth copy of values `generate.ts` and `lib/deepLink.ts` already
+ * held — and the failure mode of a drifted copy is invisible: the field silently
+ * rejects a character the server really does issue, locally, so the player never
+ * even reaches the round trip whose answer would have explained it.
+ */
+const CODE_LENGTH = FRIEND_CODE_LENGTH;
+/** Anything outside the mint alphabet, stripped as it is typed. */
+const CODE_CHARS = new RegExp(`[^${FRIEND_CODE_ALPHABET}]`, "g");
 
 type Status = { tone: "ok" | "bad"; text: string } | null;
 
 export function FriendsSheet({
   open,
   onClose,
+  onRosterChanged,
   /** A code the player arrived with (`?friend=…`), pre-loaded into the field. */
   prefillCode,
 }: {
   open: boolean;
   onClose: () => void;
+  /**
+   * Called when this sheet actually changed who the player's friends are — an
+   * accept that succeeded, or a request that was really written. The host uses it
+   * to decide whether a board behind the sheet needs re-reading; bumping on every
+   * close instead re-ran `listFriendIds`, up to six pages of `topResults` and a
+   * profile lookup, and dropped the board back to "Fetching ledger", just because
+   * somebody opened the sheet to read their own code.
+   */
+  onRosterChanged?: () => void;
   prefillCode?: string | null;
 }) {
   const { profile, loading: profileLoading } = useProfile();
@@ -205,6 +220,7 @@ export function FriendsSheet({
         setEntry("");
         setStatus({ tone: "ok", text: "Request sent. They'll see it the next time they open this sheet." });
         sfx("confirm");
+        onRosterChanged?.();
         return;
       }
       setStatus({
@@ -214,10 +230,14 @@ export function FriendsSheet({
             ? "That is your own code."
             : res.reason === "exists"
               ? "You have already added them."
-              // A pending insert is refused by nothing but the primary key (see the
-              // "friends - write own side" policy), so anything else is genuinely
-              // an unknown code.
-              : "No player has that code.",
+              : res.reason === "failed"
+                // The insert reached the database and was refused by something
+                // other than the primary key — a dropped connection, an expired
+                // session, an RLS refusal. Saying "already added" here told the
+                // player there was nothing to retry when in fact nothing had been
+                // written at all.
+                ? "The request did not go through. Check your connection and try again."
+                : "No player has that code.",
       });
     } catch {
       setStatus({ tone: "bad", text: "The request did not go through. Check your connection and try again." });
@@ -237,6 +257,7 @@ export function FriendsSheet({
         setIncoming((prev) => prev.filter((p) => p.id !== them.id));
         setStatus({ tone: "ok", text: `${them.username} is on your board now.` });
         sfx("confirm");
+        onRosterChanged?.();
       } else {
         // The cloud refuses an `accepted` edge unless the reciprocal request still
         // exists, so a refusal here means it was withdrawn while this was open.
@@ -287,7 +308,7 @@ export function FriendsSheet({
 
           <div className="thin-scroll flex-1 overflow-y-auto px-5 py-5" data-lenis-prevent>
             {blocked ? (
-              <GuestNotice />
+              <GuestNotice pendingCode={prefillCode ?? null} />
             ) : profileLoading && !code ? (
               <p className="py-10 text-center">
                 <TerminalOp label="Reading your record" center />
@@ -454,8 +475,17 @@ export function FriendsSheet({
  * Saying so plainly beats every alternative: printing the local code would hand
  * out an identifier that resolves for nobody, and hiding the sheet entirely would
  * leave the friends tab pointing at a door with no handle.
+ *
+ * `pendingCode` is the one thing that must survive this screen. A `?friend=CODE`
+ * link is consumed on read — `consumeInvite` strips the parameter from the
+ * address bar — and the code is then held only in React state, which a magic-link
+ * sign-in destroys along with the rest of the page. A guest who followed an
+ * invitation and was shown this notice had their invitation deleted by the act of
+ * reading it: the URL was gone, the field that would have held the code is not
+ * rendered, and the friend who sent it never hears back. So it is printed here,
+ * where they can write it down before they go.
  */
-function GuestNotice() {
+function GuestNotice({ pendingCode }: { pendingCode: string | null }) {
   return (
     <div className="mx-auto my-6 max-w-sm border-2 border-ink/30 p-1.5 text-center">
       <div className="border border-ink/25 px-4 py-6">
@@ -467,6 +497,17 @@ function GuestNotice() {
           known to this device. Sign in with an email from the title screen and a code is minted
           for you.
         </p>
+        {pendingCode && (
+          <div className="mt-4 border-t border-ink/20 pt-4">
+            <p className="eyebrow text-tertiary" style={{ fontSize: "0.55rem" }}>
+              The code you were invited with
+            </p>
+            <p className="num mt-1.5 text-2xl tracking-[0.22em] text-ink">{pendingCode}</p>
+            <p className="voice mt-1.5 text-xs text-tertiary">
+              Keep it — signing in reloads the page and this link has already been spent.
+            </p>
+          </div>
+        )}
         <p className="voice mt-3 text-xs text-tertiary">Your runs and progress carry over.</p>
       </div>
     </div>

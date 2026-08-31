@@ -35,12 +35,16 @@
  * hand.
  */
 
+import { FRIEND_CODE_ALPHABET, FRIEND_CODE_LENGTH } from "@/supabase/functions/_shared/generate";
+
 /**
  * The alphabet `generateFriendCode` mints from, exactly — no I, L, O, 0 or 1,
  * because a code is read off one screen and typed into another
  * (`supabase/functions/_shared/generate.ts`).
  */
-const FRIEND_CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/;
+/** Built from the mint rather than restated, so this cannot come to reject a code
+ *  the server actually issues. */
+const FRIEND_CODE_RE = new RegExp(`^[${FRIEND_CODE_ALPHABET}]{${FRIEND_CODE_LENGTH}}$`);
 
 /**
  * A result id is a uuid in the cloud and `local-<ts>-<rand>` in dev
@@ -88,7 +92,6 @@ function strip(params: URLSearchParams): void {
  */
 export function consumeInvite(): Invite | null {
   if (consumed || typeof window === "undefined") return null;
-  consumed = true;
 
   let params: URLSearchParams;
   try {
@@ -99,7 +102,16 @@ export function consumeInvite(): Invite | null {
 
   const vs = params.get("vs");
   const friend = params.get("friend");
+  // Burned only once an invite is actually HERE. Setting it on the way in spent
+  // the single answer on any visit that carried no parameters — and one such
+  // visit is on the shortest path to a challenge: a reader opens `/r/abc`, taps
+  // [ A WORLD OF MY OWN ] to `/` (client navigation, so this module stays
+  // resident and `consumed` is now true), goes Back, then taps
+  // [ PLAY THIS WORLD → ]. `/?vs=abc` would return null, no run would start,
+  // and `strip` never running leaves the parameter sitting in the address bar
+  // as though it had been ignored.
   if (vs === null && friend === null) return null;
+  consumed = true;
 
   strip(params);
 
