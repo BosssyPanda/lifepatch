@@ -219,26 +219,18 @@ function AppShellInner() {
       } catch {}
 
       /**
-       * The player did not sit still while those round trips ran.
+       * The rival is recorded BEFORE the guards below, not after.
        *
-       * Checked HERE, immediately before the start, rather than earlier: there are
-       * two awaits above and a guard that runs before the second one only covers
-       * the first. On a slow profile lookup the player — sitting on a title screen
-       * where nothing appeared to be happening — can get all the way through mode
-       * select, the auth gate and setup, and begin a life of their own. `run.start`
-       * replaces the live run, its mode and the phase, and a challenge run is
-       * fenced out of `lib/saves.ts`, so landing it on them would delete the run
-       * they chose with nothing written anywhere.
-       *
-       * `hasRun`, not `stillPlaying`: a save resumed from a FINISHED run lands on
-       * the report with status `"ended"`, which `stillPlaying` reads as false — so
-       * the narrower guard would have let the challenge overwrite a statement the
-       * player had just asked to see. Both read `liveRef`, so this is the live
-       * answer and not a stale closure over this render.
+       * The record is inert on its own — `challengeFor` hands it back only to a
+       * run standing on the same seed, background and mode, and any ordinary run
+       * started from the mode select clears it. So writing it early costs nothing
+       * and buys the one thing the guards otherwise take away: `consumeInvite`
+       * has already stripped `?vs=` from the address bar, so an effect that bails
+       * without writing has consumed the invitation and left nothing to retry.
+       * Written first, the rival is still waiting if the player reaches this
+       * world by any other route.
        */
-      if (run.hasRun()) return;
-
-      writeChallenge({
+      const kept = writeChallenge({
         resultId: row.id,
         // Per ATTEMPT, not per world. `submitRunOnce` dedupes on a key built from
         // the run's seed, and a challenge borrows someone else's seed by design —
@@ -254,6 +246,36 @@ function AppShellInner() {
         startYear: world.startYear,
         coached: world.coached,
       });
+
+      /**
+       * The player did not sit still while those round trips ran.
+       *
+       * Checked HERE, after both awaits, rather than before them: a guard that
+       * runs before the second await only covers the first. On a slow profile
+       * lookup the player — sitting on a title screen
+       * where nothing appeared to be happening — can get all the way through mode
+       * select, the auth gate and setup, and begin a life of their own. `run.start`
+       * replaces the live run, its mode and the phase, and a challenge run is
+       * fenced out of `lib/saves.ts`, so landing it on them would delete the run
+       * they chose with nothing written anywhere.
+       *
+       * `hasRun`, not `stillPlaying`: a save resumed from a FINISHED run lands on
+       * the report with status `"ended"`, which `stillPlaying` reads as false — so
+       * the narrower guard would have let the challenge overwrite a statement the
+       * player had just asked to see. Both read `liveRef`, so this is the live
+       * answer and not a stale closure over this render.
+       */
+      if (run.hasRun()) return;
+
+      /**
+       * The rival could not be stored — a private window, or a full quota.
+       *
+       * Starting anyway would put the player through a whole life on someone
+       * else's world and then show them a report with no comparison on it, which
+       * is the one outcome worse than not starting. The title screen is where
+       * every other failure in this effect lands.
+       */
+      if (!kept) return;
 
       /**
        * NOT made a guest first, deliberately — this used to call `continueAsGuest`.

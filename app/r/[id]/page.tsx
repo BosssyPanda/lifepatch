@@ -76,11 +76,24 @@ function provenanceRows(row: ResultRow): { label: string; value: string }[] {
   const out: { label: string; value: string }[] = [];
   const bg = BACKGROUNDS.find((b) => b.id === m.backgroundId);
   if (bg) out.push({ label: "Started as", value: bg.name });
-  if (m.seed !== undefined) out.push({ label: "World seed", value: String(m.seed) });
-  if (m.engine !== undefined) out.push({ label: "Engine", value: `build ${m.engine}` });
+  // `finiteNumber`, not `!== undefined`: a JSON null is not undefined, so a
+  // malformed row printed "World seed  null" on a public page while the challenge
+  // gate three lines down correctly refused to offer the same row as a world.
+  if (finiteNumber(m.seed)) out.push({ label: "World seed", value: String(m.seed) });
+  if (finiteNumber(m.engine)) out.push({ label: "Engine", value: `build ${m.engine}` });
   if (m.verified === 1) out.push({ label: "Replayed", value: "re-simulated to this score" });
   return out;
 }
+
+/**
+ * Every one of these reads a field some other player's browser wrote, and the
+ * generous coercions they used to use printed nonsense rather than nothing:
+ * `Number(null)` is a confident $0, and `String(v ?? "—")` renders an
+ * object-valued field as "[object Object]" on a public, cached page. An absent or
+ * unreadable field claims nothing, which is the correct thing for it to claim.
+ */
+const money = (v: unknown) => (finiteNumber(v) ? currency(v) : "—");
+const plain = (v: unknown) => (finiteNumber(v) ? String(v) : "—");
 
 const MODE_LABEL: Record<string, string> = {
   story: "Story run",
@@ -96,16 +109,16 @@ function statRows(row: ResultRow): { label: string; value: string }[] {
     // paydays, and printing the pieces is what stops the total reading as a wage.
     return [
       scoreRow,
-      { label: "Net worth", value: currency(Number(m.netWorth ?? 0)) },
-      { label: "Cash flow / mo", value: currency(Number(m.payday ?? 0)) },
-      { label: "Turns", value: String(m.turns ?? "—") },
-      { label: "Monthly expenses", value: currency(Number(m.expenses ?? 0)) },
+      { label: "Net worth", value: money(m.netWorth) },
+      { label: "Cash flow / mo", value: money(m.payday) },
+      { label: "Turns", value: plain(m.turns) },
+      { label: "Monthly expenses", value: money(m.expenses) },
     ];
   }
   return [
     scoreRow,
-    { label: "Final age", value: String(m.age ?? "—") },
-    { label: "Happiness", value: `${m.happiness ?? "—"}%` },
+    { label: "Final age", value: plain(m.age) },
+    { label: "Happiness", value: finiteNumber(m.happiness) ? `${m.happiness}%` : "—" },
   ];
 }
 
@@ -190,7 +203,10 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
 
   const verdict = safeVerdict(row.verdict);
   const hex = verdictHex(verdict);
-  const good = row.mode === "cashflow" ? Number(row.metrics?.escaped) === 1 : row.score >= 0;
+  // Matched strictly rather than coerced, like every other read of this blob:
+  // `escaped` is written as a literal 0 or 1, and `Number("")` being 0 is not a
+  // distinction worth leaving to chance on the one line that decides the verdict.
+  const good = row.mode === "cashflow" ? row.metrics?.escaped === 1 : row.score >= 0;
 
   /**
    * The chart's series, read the way every other reader of `metrics` reads it.
@@ -201,11 +217,11 @@ export default async function RunStatementPage({ params }: { params: Promise<{ i
    * year after the hole is drawn one place early, on a public, cached page. See
    * `lib/metrics.ts`; a series that cannot be trusted is not drawn at all.
    */
-  const series = finiteSeries(row.metrics?.history);
+  const read = finiteSeries(row.metrics?.history);
   const startYear = row.metrics?.startYear;
   const chartPoints =
-    series && series.length > 1 && finiteNumber(startYear)
-      ? series.map((v, i) => ({ year: startYear + i, netWorth: v }))
+    read && read.series.length > 1 && finiteNumber(startYear)
+      ? read.series.map((v, i) => ({ year: startYear + i, netWorth: v }))
       : null;
   const provenance = provenanceRows(row);
 

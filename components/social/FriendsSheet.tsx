@@ -117,16 +117,28 @@ export function FriendsSheet({
    */
   const account = Boolean(user && !isGuestId(user.id));
   /**
-   * Not decided until the session has been. `useAuthState` starts at
-   * `user === null` and resolves it in a later `getSession()` callback, and the
-   * `?friend=` deep link opens this sheet on mount — squarely inside that window.
-   * Judging it early showed a signed-in player the "friends need an account"
-   * notice, complete with the invite code and an instruction to write it down,
-   * moments before the real sheet replaced it. It is the same race that had the
-   * challenge link demoting accounts to guests; the answer is the same, which is
-   * to wait for the answer.
+   * Has the session actually answered yet?
+   *
+   * `useAuthState` starts at `user === null` and resolves in a later
+   * `getSession()` callback, and the `?friend=` deep link opens this sheet on
+   * mount — squarely inside that window. There are THREE states here, not two,
+   * and collapsing them either way is a real failure:
+   *
+   *   • Treating "not yet known" as blocked showed a signed-in player the
+   *     "friends need an account" notice, told them to write down their invite
+   *     code, and then replaced it with the real sheet a moment later.
+   *   • Treating it as NOT blocked is worse, and was the first attempt at fixing
+   *     that: a guest saw the full sheet keyed on their device id — a
+   *     locally-minted code this file calls the worst outcome available, a live
+   *     "copy invite link" for a code that resolves for nobody, and a prefilled
+   *     Add field whose one tap is refused by RLS and reported as a network
+   *     problem.
+   *
+   * So the third state is rendered as itself: the same "reading your record"
+   * branch the profile lookup already uses. Waiting is cheap and honest.
    */
-  const blocked = isCloud && !authLoading && !account;
+  const authPending = isCloud && authLoading;
+  const blocked = isCloud && !authPending && !account;
   const playerId = profile?.id ?? null;
   const code = profile?.friendCode ?? null;
 
@@ -140,7 +152,7 @@ export function FriendsSheet({
   // Requests waiting on this player. Ids first, then one lookup for the names —
   // `listIncoming` answers in user ids and a row with no name is not a person.
   const loadIncoming = useCallback(async () => {
-    if (!playerId || blocked) return;
+    if (!playerId || blocked || authPending) return;
     setLoadingIncoming(true);
     try {
       const ids = await listIncoming(playerId);
@@ -157,7 +169,7 @@ export function FriendsSheet({
     } finally {
       setLoadingIncoming(false);
     }
-  }, [playerId, blocked]);
+  }, [playerId, blocked, authPending]);
 
   useEffect(() => {
     if (!open) return;
@@ -174,7 +186,7 @@ export function FriendsSheet({
    * (`components/share/drawShareCard.ts`) — dark modules on a paper quiet zone.
    */
   useEffect(() => {
-    if (!open || !code || blocked || typeof window === "undefined") {
+    if (!open || !code || blocked || authPending || typeof window === "undefined") {
       setQr(null);
       return;
     }
@@ -195,7 +207,7 @@ export function FriendsSheet({
     return () => {
       active = false;
     };
-  }, [open, code, blocked]);
+  }, [open, code, blocked, authPending]);
 
   // Reset the transient bits per open, so a stale "request sent" never greets the
   // next visit.
@@ -321,12 +333,14 @@ export function FriendsSheet({
           </header>
 
           <div className="thin-scroll flex-1 overflow-y-auto px-5 py-5" data-lenis-prevent>
-            {blocked ? (
-              <GuestNotice pendingCode={prefillCode ?? null} />
-            ) : profileLoading && !code ? (
+            {/* The session first — until it answers, this sheet does not know which
+                of the two screens below is the honest one to show. */}
+            {authPending || (profileLoading && !code) ? (
               <p className="py-10 text-center">
                 <TerminalOp label="Reading your record" center />
               </p>
+            ) : blocked ? (
+              <GuestNotice pendingCode={prefillCode ?? null} />
             ) : (
               <>
                 {/* ── your code ─────────────────────────────────────────── */}

@@ -44,9 +44,21 @@ export const MAX_SERIES = 200;
  * grid read it positionally, so a single hole re-dates every year after it and
  * grades the player against the wrong one. There is no honest way to draw a
  * series with a gap in it, so a series with a gap is not drawn.
+ *
+ * Validated WHOLE and capped afterwards, in that order. Capping first would let a
+ * malformed element past the end of the cap be sliced away rather than reject the
+ * row, which is a quieter rule than the one stated above and not the one intended.
+ *
+ * `capped` is returned rather than swallowed because a caller that says where a
+ * line "ends" would otherwise be reporting where OUR limit stopped as where the
+ * run did — the same false claim `ghostOutlastsRun` exists to prevent on the
+ * report's rival chart.
  */
-export function finiteSeries(v: unknown, cap: number = MAX_SERIES): number[] | null {
+export function finiteSeries(
+  v: unknown,
+  cap: number = MAX_SERIES,
+): { series: number[]; capped: boolean } | null {
   if (!Array.isArray(v)) return null;
-  const capped = v.slice(0, cap);
-  return capped.every(finiteNumber) ? (capped as number[]) : null;
+  if (!v.every(finiteNumber)) return null;
+  return { series: v.slice(0, cap) as number[], capped: v.length > cap };
 }

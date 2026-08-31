@@ -564,7 +564,7 @@ function ChallengeResult({ run, challenge, nw }: { run: RunState; challenge: Cha
     const lastYear = run.history[run.history.length - 1].year;
     const points = all.filter((p) => p.year <= lastYear);
     if (points.length < 2) return null;
-    return { points, truncated: points.length < all.length };
+    return { points, outlasts: points.length < all.length };
   }, [run, challenge]);
 
   // The same banded rule the daily grid uses, against a person instead of the
@@ -598,7 +598,7 @@ function ChallengeResult({ run, challenge, nw }: { run: RunState; challenge: Cha
             ghost={rival.points}
             ghostLabel={challenge.name}
             ghostKind="rival"
-            ghostTruncated={rival.truncated}
+            ghostOutlastsRun={rival.outlasts}
           />
         </div>
       )}

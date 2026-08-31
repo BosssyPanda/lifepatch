@@ -98,7 +98,8 @@ export function challengeableWorld(row: ResultRow): ChallengeableWorld | null {
   // column constraint overflows `writeChallenge`'s storage budget, and that failure
   // is swallowed — the run would start on the right world and find no rival waiting
   // at the report, with nothing anywhere saying why.
-  const history = finiteSeries(m?.history) ?? [];
+  const read = finiteSeries(m?.history);
+  const history = read?.series ?? [];
   const startYear = m?.startYear;
 
   return {
@@ -172,12 +173,25 @@ function storage(): Storage | null {
   }
 }
 
-export function writeChallenge(c: Challenge): void {
+/**
+ * Returns whether the rival was actually kept.
+ *
+ * It used to return void and swallow the failure, which made one specific bad
+ * outcome unreachable to the caller: a private window or a full quota throws on
+ * `setItem`, the run then starts on the rival's world anyway, and the player
+ * reaches a report with no comparison on it at all — having played a whole life
+ * against someone the game quietly forgot. The caller can now decline to start a
+ * run it cannot finish honestly.
+ */
+export function writeChallenge(c: Challenge): boolean {
   const store = storage();
-  if (!store) return;
+  if (!store) return false;
   try {
     store.setItem(KEY, JSON.stringify(c));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function readChallenge(): Challenge | null {

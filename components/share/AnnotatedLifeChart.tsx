@@ -170,7 +170,7 @@ export function AnnotatedLifeChart({
   ghost,
   ghostLabel = "every spare dollar in the index",
   ghostKind = "counterfactual",
-  ghostTruncated = false,
+  ghostOutlastsRun = false,
   className = "",
 }: {
   points: LifePoint[];
@@ -188,16 +188,17 @@ export function AnnotatedLifeChart({
    */
   ghostKind?: "counterfactual" | "rival";
   /**
-   * The ghost's series was cut short to fit this chart's x-domain, so its last
-   * plotted value is NOT where that run ended.
+   * The ghost is a rival whose run carried on PAST the end of this one, so its
+   * line was cut to fit this chart's x-domain.
    *
-   * Only a rival can be truncated — the index ghost is derived from the run it is
-   * drawn under and cannot outlast it. Without this the label announced a rival's
-   * year-8 figure as where their run "ended" while the statement two rows above
-   * printed their real year-21 total, giving a screen-reader user two different
-   * authoritative answers to the same question.
+   * Named for what it asserts rather than as `ghostTruncated`, deliberately:
+   * `GhostLine.truncated` already exists in `lib/replay.ts` and means the exact
+   * OPPOSITE — the ghost ran out of road first. Two props one word apart with
+   * inverted meanings, both consumed in `LifeReport`, is a wiring trap: passing
+   * the obvious `ghost.truncated` into it would make this label announce that a
+   * line which stopped early carried on, with no type error to catch it.
    */
-  ghostTruncated?: boolean;
+  ghostOutlastsRun?: boolean;
   className?: string;
 }) {
   const { reduced } = useMotionCtx();
@@ -407,9 +408,18 @@ export function AnnotatedLifeChart({
         }${fall ? ` Biggest one-year fall ${fall.p.year}, ${currency(Math.abs(fall.delta))}.` : ""}${
           ghostFinal !== null
             ? ghostKind === "rival"
-              ? ghostTruncated
-                ? ` A dashed second line shows ${ghostLabel}'s run on the same world, worth ${currency(ghostFinal)} by ${last.year}; their run carried on past the end of yours.`
-                : ` A dashed second line shows ${ghostLabel}'s run on the same world, ending at ${currency(ghostFinal)}.`
+              /**
+               * A rival's line is described by WHERE IT IS DRAWN TO, never as
+               * where their run "ended". Two separate things can make the last
+               * plotted point differ from their real total — this chart trimming
+               * a longer life to fit, and `retire()` ending a run without
+               * appending a final history row — and the statement prints their
+               * actual score two rows above. Claiming an ending here gave a
+               * screen-reader user two authoritative answers to one question.
+               */
+              ? ` A dashed second line shows ${ghostLabel}'s run on the same world, worth ${currency(ghostFinal)} by ${last.year}${
+                  ghostOutlastsRun ? "; their run carried on past the end of yours" : ""
+                }.`
               : ` A dashed second line shows what the same life was worth with ${ghostLabel}, ending at ${currency(ghostFinal)}.`
             : ""
         } Marked years are real market events the run lived through.`}
