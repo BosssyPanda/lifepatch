@@ -15,6 +15,7 @@ import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useMotionCtx } from "@/src/motion/MotionProvider";
 import { wipeFor } from "@/src/motion/transitions";
 import type { DailyPuzzle } from "@/lib/daily";
+import { consumeInvite } from "@/lib/deepLink";
 import { lastPlayerName } from "@/lib/mp/matchStore";
 import { resolvePlayerId } from "@/lib/cloud/identity";
 import { resultFromRun, submitRunOnce } from "@/lib/cloud/buildResult";
@@ -44,6 +45,7 @@ const MatchPodium = dynamic(() => import("@/components/mp/MatchPodium").then((m)
 const Almanac = dynamic(() => import("@/components/screens/Almanac").then((m) => m.Almanac), { ssr: false });
 const Leaderboard = dynamic(() => import("@/components/social/Leaderboard").then((m) => m.Leaderboard), { ssr: false });
 const MasteryMap = dynamic(() => import("@/components/learn/MasteryMap").then((m) => m.MasteryMap), { ssr: false });
+const FriendsSheet = dynamic(() => import("@/components/social/FriendsSheet").then((m) => m.FriendsSheet), { ssr: false });
 
 export function AppShell() {
   return (
@@ -99,6 +101,42 @@ function AppShellInner() {
   const [masteryOpen, setMasteryOpen] = useState(false);
   const [masteryMounted, setMasteryMounted] = useState(false);
   const openMasteryMap = () => { audio.sfx("modal"); setMasteryMounted(true); setMasteryOpen(true); };
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [friendsMounted, setFriendsMounted] = useState(false);
+  const [friendsPrefill, setFriendsPrefill] = useState<string | null>(null);
+  /**
+   * The friends sheet, and the board it replaces.
+   *
+   * `setSocialOpen(false)` is not tidiness. Both are `LedgerDialog`s, and
+   * `useDialog` binds its focus trap and its Escape handler to `document` in the
+   * capture phase — two open at once trap Tab against each other and both answer
+   * one Escape. Closing the board here keeps exactly one modal live; its exit
+   * animation still plays, because `useDialog`'s effects key on `open` rather
+   * than on being mounted.
+   */
+  const openFriends = (prefill?: string) => {
+    audio.sfx("modal");
+    setSocialOpen(false);
+    setFriendsPrefill(prefill ?? null);
+    setFriendsMounted(true);
+    setFriendsOpen(true);
+  };
+  /**
+   * The link this page was opened with, read exactly once (`lib/deepLink.ts`).
+   *
+   * A friend code is the one thing in this game that only travels between two
+   * people, so it is the one thing allowed to decide what opens first. No sound
+   * here on purpose: nothing was tapped, and the audio engine is gesture-gated
+   * anyway.
+   */
+  useEffect(() => {
+    const invite = consumeInvite();
+    if (invite?.kind !== "friend") return;
+    setFriendsPrefill(invite.code);
+    setFriendsMounted(true);
+    setFriendsOpen(true);
+  }, []);
+
   const { resetRun } = useConceptLearn();
 
   /**
@@ -333,8 +371,22 @@ function AppShellInner() {
       </AnimatePresence>
 
       {almanacMounted && <Almanac open={almanacOpen} onClose={() => setAlmanacOpen(false)} />}
-      {socialMounted && <Leaderboard open={socialOpen} onClose={() => setSocialOpen(false)} initialMode={socialMode} />}
+      {socialMounted && (
+        <Leaderboard
+          open={socialOpen}
+          onClose={() => setSocialOpen(false)}
+          initialMode={socialMode}
+          onOpenFriends={() => openFriends()}
+        />
+      )}
       {masteryMounted && <MasteryMap open={masteryOpen} onClose={() => setMasteryOpen(false)} />}
+      {friendsMounted && (
+        <FriendsSheet
+          open={friendsOpen}
+          onClose={() => setFriendsOpen(false)}
+          prefillCode={friendsPrefill}
+        />
+      )}
     </main>
   );
 }

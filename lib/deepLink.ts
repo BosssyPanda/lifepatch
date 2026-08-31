@@ -1,0 +1,120 @@
+"use client";
+
+/**
+ * The link the player arrived on.
+ *
+ * Nothing else in this app reads the URL. `components/AppShell.tsx` is a pure
+ * in-memory phase machine and every screen it shows is reached by a tap, which is
+ * the right shape for a game and the wrong shape for an INVITATION. A friend code
+ * and a shared statement are both things one player hands to another, and a link
+ * is the only way that hand-off actually happens — so this is the one seam where
+ * the outside world gets to say what screen opens first.
+ *
+ * (`hooks/useCashflow.ts` also reads `?seed`, but that one is dev-gated on purpose
+ * — it exists so a bug can be reproduced turn for turn, and a production build
+ * ignores it so nobody can hand a friend a "lucky" link. This module is the
+ * opposite: it only carries things a player is MEANT to pass on.)
+ *
+ * ── Read once, and take the parameter out of the address bar ────────────────
+ * Both invites start something (a run, an overlay), and neither should start it
+ * twice. Stripping the query on the first read is what makes that true through a
+ * refresh, a restored tab and a back-navigation: without it, reloading halfway
+ * through a challenge would abandon the life in progress and deal a new one from
+ * the top. It also stops the address bar from quietly advertising someone else's
+ * friend code for the rest of the session, which is the one capability the whole
+ * "added by code, never by search" posture rests on (supabase/schema.sql).
+ *
+ * The consumed flag is module-level rather than per-caller because a client-side
+ * navigation (`/leaderboard` → `/`) does not re-evaluate this module, and an
+ * invite that survived one would fire again on a screen the player reached by
+ * hand.
+ */
+
+/**
+ * The alphabet `generateFriendCode` mints from, exactly — no I, L, O, 0 or 1,
+ * because a code is read off one screen and typed into another
+ * (`supabase/functions/_shared/generate.ts`).
+ */
+const FRIEND_CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$/;
+
+/**
+ * A result id is a uuid in the cloud and `local-<ts>-<rand>` in dev
+ * (`lib/cloud/results.ts`), so this bounds the SHAPE rather than pinning either
+ * form. It is a sanity gate, not a security one — `getResult` swallows the error
+ * a malformed id would raise and answers null — but a bounded string keeps
+ * arbitrary junk out of a value that ends up in a fetch.
+ */
+const RESULT_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
+
+/** Every parameter this module owns. Stripped together, so one invite cannot
+ *  leave the other's parameter behind in the URL. */
+const PARAMS = ["friend", "vs"] as const;
+
+export type Invite =
+  /** `?friend=K7M2P9` — a friend code, from the QR or the copied link. */
+  | { kind: "friend"; code: string }
+  /** `?vs=<resultId>` — play the world that statement was played on. */
+  | { kind: "challenge"; resultId: string };
+
+let consumed = false;
+
+/** Drop our parameters and rewrite the address bar, keeping anything we do not own. */
+function strip(params: URLSearchParams): void {
+  try {
+    for (const p of PARAMS) params.delete(p);
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+    );
+  } catch {
+    // A sandboxed or file:// document can refuse replaceState. The invite is still
+    // returned — firing it once and re-firing on a manual refresh is a far smaller
+    // failure than never firing it at all.
+  }
+}
+
+/**
+ * The invite this page was opened with, or null. Answers at most once per load.
+ *
+ * `vs` wins when both are present: it is the more consequential of the two (it
+ * starts a life), and a URL carrying both was not built by anything here.
+ */
+export function consumeInvite(): Invite | null {
+  if (consumed || typeof window === "undefined") return null;
+  consumed = true;
+
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(window.location.search);
+  } catch {
+    return null;
+  }
+
+  const vs = params.get("vs");
+  const friend = params.get("friend");
+  if (vs === null && friend === null) return null;
+
+  strip(params);
+
+  if (vs !== null) {
+    const resultId = vs.trim();
+    return RESULT_ID_RE.test(resultId) ? { kind: "challenge", resultId } : null;
+  }
+  // Codes are stored and compared uppercase (`getByFriendCode` upper-cases too), so
+  // a link typed in lower case still resolves.
+  const code = (friend ?? "").trim().toUpperCase();
+  return FRIEND_CODE_RE.test(code) ? { kind: "friend", code } : null;
+}
+
+/** The link that puts a friend code into someone else's game. Used by the QR and
+ *  the copy button, so the two can never encode different things. */
+export function friendInviteUrl(origin: string, code: string): string {
+  return `${origin}/?friend=${encodeURIComponent(code)}`;
+}
+
+/** The link that offers a statement's world as a challenge. */
+export function challengeUrl(origin: string, resultId: string): string {
+  return `${origin}/?vs=${encodeURIComponent(resultId)}`;
+}

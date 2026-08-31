@@ -41,24 +41,23 @@ const MODE_TABS: { id: GameMode; label: string }[] = [
 ];
 
 /**
- * NO "FRIENDS" TAB UNTIL THERE IS A WAY TO ADD ONE.
+ * The friends tab, restored.
  *
- * The scope itself is real and works: `topResults` filters by `friendIds`,
- * `listFriendIds` reads the edges, and the RLS behind them is the tightened
- * version. What does not exist is any way for a player to get an edge. Nothing
- * renders the friend code — `PublicProfile` does not even carry it any more —
- * and `addByCode`, `accept` and `listIncoming` have no callers outside their own
- * module. So the tab could only ever be empty, under a message that told the
- * player to "share your friend code to race together" and pointed at a code no
- * screen in the game shows them. An empty board reads as "nobody plays this";
- * an absent tab reads as "not yet", which is the truth.
+ * It was removed under a comment reading "NO FRIENDS TAB UNTIL THERE IS A WAY TO
+ * ADD ONE", and that was the correct call at the time: the scope worked, the
+ * query worked and the RLS worked, but `addByCode`, `accept` and `listIncoming`
+ * had no callers and no screen rendered the player's own code — so the tab could
+ * only ever be empty, under a message pointing at a code nothing showed them.
  *
- * Restoring it is this one line. Leave the scope, the query and the empty-state
- * copy where they are — they are the half that works.
+ * `components/social/FriendsSheet.tsx` is the way to add one. The condition the
+ * old comment set has been met, so the line it asked for goes back, and the
+ * scope, the query and the empty-state copy are untouched — they were always the
+ * half that worked.
  */
 const SCOPE_TABS: { id: LeaderboardScope; label: string }[] = [
   { id: "all", label: "All-time" },
   { id: "week", label: "This week" },
+  { id: "friends", label: "Friends" },
 ];
 
 /**
@@ -109,6 +108,7 @@ export function Leaderboard({
   chrome = "dialog",
   /** Rendered in the page masthead's right cell — e.g. a link back to the ledger. */
   pageAction,
+  onOpenFriends,
 }: {
   open: boolean;
   onClose: () => void;
@@ -120,6 +120,14 @@ export function Leaderboard({
    */
   chrome?: "dialog" | "page";
   pageAction?: React.ReactNode;
+  /**
+   * Open the friends sheet. Optional: the board is also rendered by hosts that
+   * have nowhere to put a second overlay, and a visible control that does nothing
+   * is worse than no control. Where it IS passed, the host is expected to close
+   * this board first — two open `LedgerDialog`s trap Tab against each other (see
+   * `components/ui/LedgerDialog.tsx`).
+   */
+  onOpenFriends?: () => void;
 }) {
   const { profile } = useProfile();
   const { sfx } = useAudio();
@@ -276,6 +284,17 @@ export function Leaderboard({
           <span aria-hidden>{VERIFIED_MARK}</span> replayed — the run re-simulated to the
           score it claims, on the device that played it. It is a self-check, not a proof.
         </p>
+      )}
+
+      {/* The way in, on the one tab that needs it. Deliberately here rather than in
+          the empty state: a player who already has friends still needs to reach
+          their code, and they never see an empty board again. */}
+      {scope === "friends" && onOpenFriends && (
+        <div className={`${gutter} pt-3`}>
+          <LedgerButton variant="secondary" size="sm" onClick={onOpenFriends}>
+            Your code · add a friend
+          </LedgerButton>
+        </div>
       )}
     </>
   );
