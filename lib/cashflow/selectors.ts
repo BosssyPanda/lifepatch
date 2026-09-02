@@ -299,6 +299,16 @@ export function maxAffordable(cash: number, price: number): number {
   const cents = Math.round(cash * 100);
   const priceCents = Math.round(price * 100);
   if (priceCents <= 0) return 0;
+  // Both sides in whole cents, which is exact ONLY because `cash` is itself always
+  // a whole number of cents — `buyStock` quantises its settlement so this holds.
+  // It did not, once: it settled `cash - cost` in raw floats, so the cash left over
+  // carried ~1e-13 of dirt, `Math.round(cash * 100)` rounded that budget UP, and
+  // the extra share fitted only in the phantom cent. The count came back one too
+  // high, `buyStock` drove cash to −2.3e-13, and the next `applyMove`'s `clampCash`
+  // read that as a shortfall and answered with a real $1,000 loan at 10%/mo.
+  // ($1,509.64 of HRVS at $16.06 did it; a sweep found 209 such pairs in 400,000.)
+  // Rounding is right here and flooring is not: a budget of $1,509.64 must buy 94
+  // shares at $16.06, not 93. The invariant that makes it safe lives at the source.
   return Math.max(0, Math.floor(cents / priceCents));
 }
 

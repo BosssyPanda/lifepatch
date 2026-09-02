@@ -239,7 +239,17 @@ export function buyStock(s: CashflowState, deal: StockDeal, shares: number): Cas
       { uid: uid(s, "stk"), symbol: deal.symbol, name: deal.name, shares: n, costBasis: price, dividend: deal.dividend },
     ];
   }
-  return { ...s, cash: s.cash - cost, stocks, dealsBought: s.dealsBought + 1, rngCursor: s.rngCursor + 1 };
+  // Quantised, not just `s.cash - cost`. Both operands are whole cents, but their
+  // float difference is not: it lands ~1e-13 either side, and this is the only
+  // cash write in the engine that can produce a sub-cent balance at all (every
+  // other one moves whole dollars). That dirt is not cosmetic — it is read back by
+  // `maxAffordable`, which counts a budget in whole cents and rounded the dirty
+  // balance UP, handing out one share too many; the buy then drove cash negative
+  // by a fraction of a cent and the next `applyMove`'s `clampCash` converted it
+  // into a genuine $1,000 bank loan at 10%/mo. Settling to the cent here keeps the
+  // invariant `maxAffordable` depends on, and fixes it for every future reader.
+  const cash = Math.round((s.cash - cost) * 100) / 100;
+  return { ...s, cash, stocks, dealsBought: s.dealsBought + 1, rngCursor: s.rngCursor + 1 };
 }
 
 /** Sell shares at today's quote. This is the only way a capital gain is ever realized. */
