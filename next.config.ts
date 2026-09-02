@@ -3,11 +3,37 @@ import type { NextConfig } from "next";
 /**
  * Where this build is allowed to send data.
  *
- * The CSP below still declines to police script EXECUTION — that needs a nonce
- * pipeline through Next's hydration, which is real work and remains a deliberate
- * scope call. `connect-src` is the half of the problem that costs nothing: it does
- * not stop an injected script from running, but it does stop one from phoning
- * home, and exfiltration is the part of an injection that actually hurts a player.
+ * NO `script-src`, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT. Read this
+ * before adding one, because the obvious fix is not free.
+ *
+ * Policing script EXECUTION means a nonce, and a nonce has to be minted per
+ * request. That forces every route through middleware and makes all of them
+ * dynamic — which costs `/r/{id}` its ISR entirely. That route is the share card:
+ * it is fetched by every chat client that unfurls a link, it is the one page in
+ * this app designed to be hit by strangers in bulk, and `app/api/og/[id]` caches
+ * it hard on purpose. Turning it dynamic means every unfurl becomes an origin
+ * render plus a Supabase read, and the leaderboard loses its cache in the same
+ * change. The hardening is real; so is the bill.
+ *
+ * What makes deferring it defensible is that the usual way in is closed already.
+ * This app renders no user-supplied HTML — there is no rich text, no bio, no chat,
+ * no markdown, and no `dangerouslySetInnerHTML` anywhere in the tree. The only
+ * player-authored string that reaches another player's screen is the username,
+ * and that is charset-locked in three places at once: `USERNAME_RE` in
+ * `supabase/functions/_shared/username.ts`, the `profiles_username_charset` CHECK
+ * that mirrors it, and the `profile` Edge Function that is now the only writer of
+ * the column. So there is no known injection vector for `script-src` to be the
+ * second line of defence behind.
+ *
+ * `connect-src` below is the half that costs nothing and is therefore not
+ * deferred: it does not stop an injected script from running, but it does stop
+ * one from phoning home, and exfiltration is the part of an injection that
+ * actually hurts a player.
+ *
+ * REOPEN THIS the day any of those premises stops holding — the app renders
+ * user-supplied markup, a third-party script is added to the document, or a
+ * free-text field reaches another player's screen. At that point `script-src`
+ * stops being defence-in-depth behind a closed door and becomes the door.
  *
  * Derived from the same env var the client is built against rather than
  * hardcoded. Realtime needs the `wss:` origin as well as the `https:` one; Vercel
