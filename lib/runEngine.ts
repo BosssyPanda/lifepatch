@@ -953,7 +953,34 @@ export function canRetire(s: RunState): boolean {
  * Callers should treat `false` as "no save" — see `loadRunChecked` in lib/saves.
  */
 export function isCompatibleSave(s: unknown): s is RunState {
-  return Boolean(s && typeof s === "object" && (s as Partial<RunState>).version === RUN_VERSION);
+  if (!s || typeof s !== "object") return false;
+  const r = s as Partial<RunState>;
+  // The version stamp alone is not a shape check, and every consumer of this gate
+  // treats a `true` as permission to read the run as if it were whole. A record
+  // carrying the right version and nothing else therefore passed straight through
+  // and was dereferenced downstream:
+  //   - `dailySave.dailyStanding` reads `state.history.length` on the "playing"
+  //     branch, and `DailyStrip` renders on the MODE SELECT — so the throw killed
+  //     that whole screen, on every visit, with no in-app way to clear the record
+  //     ("Try again" comes back to the same dead screen).
+  //   - `AuthGate` prints `Year {yearIndex(save)} (age {save.age})`, and
+  //     `yearIndex` is `year - startYear + 1` — so the gate offered
+  //     "Continue — Year NaN (age )", and taking it hit the error boundary.
+  // So the gate checks what its callers actually dereference. It stays cheap and
+  // total: scalars must be finite numbers (which also rejects NaN), the arrays the
+  // UI indexes and lengths must really be arrays, and the record bags must be
+  // objects. Anything short of that is an unreadable save, which is exactly what
+  // the "outdated" branch beside every call site already knows how to say.
+  if (r.version !== RUN_VERSION) return false;
+  for (const k of ["startYear", "year", "age", "cash", "debt", "salary", "seed"] as const) {
+    if (!Number.isFinite(r[k] as number)) return false;
+  }
+  if (typeof r.mode !== "string" || typeof r.status !== "string") return false;
+  if (!Array.isArray(r.history) || !Array.isArray(r.marketLog)) return false;
+  if (!Array.isArray(r.usedEvents) || !Array.isArray(r.pendingEvents)) return false;
+  if (!r.life || typeof r.life !== "object") return false;
+  if (!r.holdings || typeof r.holdings !== "object") return false;
+  return true;
 }
 
 export function playHeadline(year: number, indexReturn: number): { text: string; tone: "good" | "bad" | "warning" | "neutral" } | null {

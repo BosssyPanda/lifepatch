@@ -43,7 +43,7 @@ function cloudSavesFor(userId: string): boolean {
 }
 
 /**
- * Persist a run. THROWS when the cloud write fails.
+ * Persist a run. THROWS when the write fails — cloud or local.
  *
  * supabase-js does not reject on a failed request — it resolves with `{ error }`.
  * Discarding that meant an RLS refusal, an expired session, a network failure and
@@ -65,12 +65,24 @@ export async function saveRun(userId: string, mode: ModeId, state: RunState): Pr
     if (error) throw new Error(error.message);
     return;
   }
+  // ...and THROWS when the local write fails, for exactly the reason above. The
+  // cloud half of this was fixed and the local half was not, which left the bug
+  // intact for the players most exposed to it: a guest has no second copy
+  // anywhere. `localStorage.setItem` throws on a full quota and in a private
+  // window, and swallowing that meant `persist` cleared `saving`, never set
+  // `saveFailed`, and `YearHud` printed "Saved" over a run that was written
+  // nowhere — the precise failure YearHud.tsx:170 already documents having fixed
+  // once. Both callers are ready for it: `persist` catches and raises the
+  // "Not saved" flag, and `adoptGuestSaves` marks the adoption incomplete so it
+  // is retried rather than silently marked done.
   try {
     localStorage.setItem(
       localKey(userId, mode),
       JSON.stringify({ mode, state, updatedAt: new Date().toISOString() } satisfies SaveRow),
     );
-  } catch {}
+  } catch (err) {
+    throw new Error(err instanceof Error ? err.message : "Could not write the local save.");
+  }
 }
 
 /** Reads a run back. Throws for the same reason `saveRun` does: "we could not
