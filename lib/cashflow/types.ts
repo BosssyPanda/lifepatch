@@ -253,7 +253,10 @@ export type CashflowState = {
   position: number;
   turn: number;
   skipTurns: number; // downsized
-  charityRolls: number; // turns remaining with 1-or-2 dice choice
+  /** Two-dice rolls still BANKED, not turns still running. Only a roll that
+   *  actually took the two-dice option spends one (see `consumeCharityRoll` and
+   *  `useCashflowTurn`), so the benefit keeps until it is used. */
+  charityRolls: number;
 
   fastTrackCashflow: number; // extra monthly cash flow earned on the Fast Track
   dreamPurchased: boolean;

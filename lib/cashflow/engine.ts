@@ -263,7 +263,17 @@ export function sellStock(s: CashflowState, symbol: string, shares: number): Cas
     h.shares - n <= 0
       ? s.stocks.filter((x) => x.uid !== h.uid)
       : s.stocks.map((x) => (x.uid === h.uid ? { ...x, shares: x.shares - n } : x));
-  return { ...s, cash: s.cash + Math.round(n * price), stocks };
+  // Settled in cents, because the debit already is. `Math.round` to whole dollars
+  // is half-up, so a sale at an UNCHANGED quote returned up to $0.50 more than the
+  // position cost — a slow faucet in the one mode whose leaderboard ranks on
+  // `netWorth`, and money the ledger cannot reconcile in a game whose whole premise
+  // is a reconcilable ledger. `buyStock` moved to cents to kill the phantom $1,000
+  // loan; this is the other half of the same convention, and quantising the SUM
+  // (not just the proceeds) is what actually holds the whole-cent invariant that
+  // `maxAffordable` reads back out of `cash`.
+  const proceeds = Math.round(n * price * 100) / 100;
+  const cash = Math.round((s.cash + proceeds) * 100) / 100;
+  return { ...s, cash, stocks };
 }
 
 // ── The quote board ───────────────────────────────────────────────────────────

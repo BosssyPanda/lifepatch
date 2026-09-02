@@ -65,7 +65,7 @@ export const SQUARE_COACH: Record<string, { title: string; body: string }> = {
   },
   charity: {
     title: "Charity",
-    body: "Give 10% of your income and you may roll one OR two dice for the next 3 turns — more control over where you land. Generosity with a strategic upside.",
+    body: "Give 10% of your income and your next 3 rolls may be one OR two dice — your choice, and they keep until you use them. More control over where you land. Generosity with a strategic upside.",
   },
   payday: {
     title: "Payday",

@@ -25,7 +25,7 @@ function migrateV1(raw: Partial<CashflowState> & { version: number }): CashflowS
   const startingLiabilities =
     p.liab.homeMortgage + p.liab.schoolLoan + p.liab.carLoan + p.liab.creditCard + p.liab.retail;
   const s = raw as CashflowState;
-  if (!s.liabilities || !s.expenses || !Array.isArray(s.stocks)) return null;
+  if (!isCashflowShaped(s)) return null;
   return {
     ...s,
     version: 2,
@@ -41,13 +41,51 @@ function migrateV1(raw: Partial<CashflowState> & { version: number }): CashflowS
   };
 }
 
+/**
+ * The fields every reader dereferences without checking first.
+ *
+ * `localStorage` is player-writable and the rest of this codebase says so out loud:
+ * `lib/challenge.ts`'s `readChallenge` shape-guards every field because "a
+ * half-written record must not reach the report as a row of undefineds", and
+ * `lib/dailySave.ts`'s `readDaily` gates on `isCompatibleSave`. This was the one
+ * persisted store that trusted its own bytes — a record of `{"version":2}` was
+ * handed back as a `CashflowState`, and the first selector to touch it threw:
+ * `passiveIncome` does `s.stocks.reduce(...)` on `undefined`. That is a
+ * `TypeError` mid-render, caught only by `app/error.tsx` — and because
+ * `hasCashflowSave()` runs the same loader, it landed on the MODE SELECT, before
+ * the player had chosen anything, with no in-app way back short of clearing site
+ * data.
+ *
+ * Deliberately the common floor of v1 and v2, so the migration can share it: the
+ * four fields v1 lacks (`startingNetWorth`, `lostReason`, `interestPaid`,
+ * `stockPrices`) are all backfilled below, and `quote` already answers a missing
+ * quote board with the holding's cost basis. Cheap, and the only thing between a
+ * hand-edited record and a dead screen.
+ */
+function isCashflowShaped(s: unknown): s is CashflowState {
+  if (!s || typeof s !== "object") return false;
+  const c = s as Partial<CashflowState>;
+  return (
+    typeof c.cash === "number" &&
+    Number.isFinite(c.cash) &&
+    !!c.liabilities &&
+    !!c.expenses &&
+    Array.isArray(c.stocks) &&
+    Array.isArray(c.realEstate) &&
+    Array.isArray(c.businesses)
+  );
+}
+
 export function loadCashflow(): CashflowState | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const s = JSON.parse(raw) as CashflowState;
     if (!s || typeof s.version !== "number") return null;
-    if (s.version === STATE_VERSION) return s;
+    // The version stamp is not the validation. A record carrying the CURRENT
+    // version used to be returned unread, which is the one path a hand-edited
+    // save could walk straight through.
+    if (s.version === STATE_VERSION) return isCashflowShaped(s) ? s : null;
     if (s.version === 1) return migrateV1(s);
     return null; // a save from the future — don't guess at it
   } catch {

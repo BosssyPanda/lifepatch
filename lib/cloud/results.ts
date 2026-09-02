@@ -221,7 +221,14 @@ export async function submitResult(userId: string, result: NewResult): Promise<R
       })
       .select("*")
       .single();
-    if (error || !data) throw new Error(error?.message ?? "Result submit failed");
+    // Ours, not Postgres's — see `updateUsername`. `submitResult`'s contract is
+    // that it THROWS on a failed write (a swallowed failure shows the player a
+    // saved run that does not exist), and that contract is kept; only the text
+    // stops being the database's.
+    if (error || !data) {
+      if (error) console.error("submitResult: insert failed", error);
+      throw new Error("Could not post that run. Try again in a moment.");
+    }
     return fromRow(data);
   }
   const row: ResultRow = {
@@ -249,6 +256,35 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
   if (scope === "daily" && !daily) return [];
 
   if (isCloud && supabase) {
+    /**
+     * One round trip, when the database can do the dedupe itself.
+     *
+     * `top_results` (migration 10) is `select distinct on (user_id)` — the query
+     * the walk below is emulating a page at a time because PostgREST has no
+     * `distinct on`. It returns the same projected columns in the same shape, so
+     * `fromProjectedRow` reads either path identically.
+     *
+     * OPTIONAL BY DESIGN. A project that has not applied migration 10 gets an
+     * error here and falls through to the walk, which still works — the same
+     * "no deploy ordering required" reasoning `fromFunction` uses in
+     * `lib/cloud/profiles.ts`. Nothing about this is a hard dependency.
+     *
+     * Still passed through `bestPerUser`: the SQL already dedupes and orders, so
+     * this is a no-op on a healthy response, and it is the one place the board's
+     * ranking rules live. Duplicating them here is how the two paths would drift.
+     */
+    const rpc = await supabase.rpc("top_results", {
+      p_mode: mode,
+      p_limit: limit,
+      p_since: scope === "week" ? weekAgoIso() : null,
+      p_background: background ?? null,
+      p_daily: scope === "daily" && daily ? daily : null,
+      p_users: scope === "friends" ? friendIds : null,
+    });
+    if (!rpc.error && Array.isArray(rpc.data)) {
+      return bestPerUser((rpc.data as Record<string, unknown>[]).map(fromProjectedRow)).slice(0, limit);
+    }
+
     // Rebuilt per page: a PostgREST builder is single-use once awaited.
     const page = (from: number, to: number) => {
       let q = supabase!

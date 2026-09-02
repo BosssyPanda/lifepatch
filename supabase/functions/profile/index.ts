@@ -175,7 +175,21 @@ Deno.serve(async (req: Request): Promise<Response> => {
  */
 async function ensure(admin: any, userId: string, cors: Record<string, string>): Promise<Response> {
   const existing = await admin.from("profiles").select(COLUMNS).eq("id", userId).maybeSingle();
-  if (existing.error) return json({ error: existing.error.message }, 500, cors);
+  if (existing.error) {
+    // NOT `existing.error.message`. That is the PostgREST/Postgres string verbatim —
+    // column names, relation names, RLS and constraint text — and this was the one
+    // response in this directory that published it. `lib/cloud/profiles.ts` lifts
+    // `{ error }` out of the body and throws it AS the user-facing message, so a
+    // schema or policy fault was printed to the player rather than to us. It is
+    // also the worst possible place for it: `ensure` is the get-or-create every
+    // session hits at sign-in.
+    //
+    // The detail is not discarded, it is redirected — the function's own logs are
+    // where a server fault belongs. Same shape as the rename handler below, which
+    // reads the error's CODE and answers in the app's own voice.
+    console.error("profile.ensure: profile read failed", existing.error);
+    return json({ error: "Could not load your profile. Try again in a moment." }, 500, cors);
+  }
   if (existing.data) return json({ profile: existing.data }, 200, cors);
 
   for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
@@ -221,6 +235,16 @@ async function ensure(admin: any, userId: string, cors: Record<string, string>):
  * `rename_attempts` (migration 2026-08-30_07) are the durable place, written by the
  * service role only.
  *
+ * AND SPENT IN ONE STATEMENT. Putting the counter in a table moved it out of one
+ * isolate's memory; it did not make the spend atomic. This used to read the row,
+ * decide, and write back an ABSOLUTE `spent + 1` across two round trips with
+ * nothing holding the row between them — so N requests issued together all read
+ * 0, all decided "allowed", and all wrote 1. The counter landed on 1 whatever N
+ * was, and the ceiling bounded only attempts that happened to be sequential,
+ * which is not how anyone walking a namespace issues them. `spend_rename_attempt`
+ * (migration 2026-09-02_09) does the read and the write as one UPDATE, where the
+ * row lock makes concurrent callers serialise.
+ *
  * FAILS OPEN. A limiter that cannot read its own counter must not become an outage
  * on a feature that works: the cost of letting one extra attempt through is one
  * guess, and the cost of refusing is a player who cannot rename at all.
@@ -229,17 +253,34 @@ async function spendRenameAttempt(
   admin: any,
   userId: string,
 ): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+  const spend = await admin.rpc("spend_rename_attempt", { uid: userId });
+  if (!spend.error) {
+    // `returns table (...)` arrives as an array. A row that says `allowed` — and a
+    // response with no row at all, which nothing should produce — is a pass.
+    const row = spend.data?.[0];
+    if (!row || row.allowed) return { ok: true };
+    return { ok: false, retryAfter: Number(row.retry_after) || 1 };
+  }
+
+  // NO DEPLOY ORDERING REQUIRED. The RPC is missing on a project that has not run
+  // migration 09 yet, and this function may be deployed before or after it. Rather
+  // than make `rename` depend on which order two humans do things in, fall back to
+  // the read-modify-write this replaced: racy for the length of one deploy window,
+  // which is strictly better than a rename feature that is broken for it. The
+  // same reasoning `fromFunction` uses in `lib/cloud/profiles.ts`.
+  //
+  // The deciding is not here either way. `decideRenameAttempt` is a pure function
+  // of the row and the clock precisely so it can be tested without a user, a JWT
+  // or a round trip; see `../_shared/renameLimit.ts` and
+  // `scripts/qa/rename-limit.mjs`. A read that failed is passed as `null`, which
+  // that function answers by failing open, for the reasons stated there.
+  console.error("rename limiter: spend_rename_attempt unavailable, falling back", spend.error);
   const { data, error } = await admin
     .from("profiles")
     .select("rename_window_start,rename_attempts")
     .eq("id", userId)
     .maybeSingle();
 
-  // Read, decide, write — and the deciding is not here. `decideRenameAttempt` is a
-  // pure function of the row and the clock precisely so it can be tested without a
-  // user, a JWT or a round trip; see `../_shared/renameLimit.ts` and
-  // `scripts/qa/rename-limit.mjs`. A read that failed is passed as `null`, which
-  // that function answers by failing open, for the reasons stated there.
   const decision = decideRenameAttempt(error ? null : data, Date.now());
   if (!decision.ok) return decision;
   if (decision.write) {

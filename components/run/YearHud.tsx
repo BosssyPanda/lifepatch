@@ -115,12 +115,15 @@ export function YearHud({
   run,
   saving,
   saveFailed,
+  savedThrough,
   onOpenAlmanac,
 }: {
   run: RunState;
   saving: boolean;
   /** The last cloud write failed — see `useRun.saveFailed`. */
   saveFailed: boolean;
+  /** The year this run is written THROUGH, or null if nothing has been saved. */
+  savedThrough: number | null;
   onOpenAlmanac: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -170,15 +173,29 @@ export function YearHud({
         {/* "Saved" was printed whether or not the write landed, because nothing
             below this ever found out. It can tell the difference now, and the
             failed state is the one worth interrupting for: the run is fine and
-            still retrying, but closing the tab would end it. */}
-        <span
-          className={`shrink-0 eyebrow md:inline ${saveFailed ? "text-loss" : "hidden text-tertiary"}`}
-          style={{ fontSize: "0.56rem" }}
-          role={saveFailed ? "status" : undefined}
-          title={saveFailed ? "We couldn't reach your save. The run is safe here until you close the tab." : undefined}
-        >
-          {saveFailed ? "Not saved" : saving ? "Saving…" : "Saved"}
-        </span>
+            still retrying, but closing the tab would end it.
+            AND IT NAMES THE BOUNDARY. The autosave is real but it happens when the
+            year turns — only `commit` persists, while `trade`, `payDebt` and
+            `choose` deliberately do not — so a bare "Saved" was claiming the
+            in-year choices too. `savedThrough` is the year actually written, and
+            null (a match run, a challenge, no account) prints nothing at all
+            rather than a promise this HUD cannot keep. */}
+        {(saveFailed || saving || savedThrough !== null) && (
+          <span
+            className={`shrink-0 eyebrow md:inline ${saveFailed ? "text-loss" : "hidden text-tertiary"}`}
+            style={{ fontSize: "0.56rem" }}
+            role={saveFailed ? "status" : undefined}
+            title={
+              saveFailed
+                ? "We couldn't reach your save. The run is safe here until you close the tab."
+                : savedThrough !== null
+                  ? `Saved as of the start of year ${savedThrough}. Choices made during a year are written when you advance.`
+                  : undefined
+            }
+          >
+            {saveFailed ? "Not saved" : saving ? "Saving…" : `Saved · year ${savedThrough}`}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}

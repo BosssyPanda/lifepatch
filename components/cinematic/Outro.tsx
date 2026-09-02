@@ -71,9 +71,26 @@ export function Outro({ run, onDone }: { run: RunState; onDone: () => void }) {
   // THE WIN / THE HIT — symmetric (director's pick): whichever swing is bigger.
   // Runs whose portfolio never moved (all deltas 0 — e.g. an early quit) get no
   // swing scene: "THE WIN +$0" over a broke receipt reads absurd.
-  const isWin = best && worst ? Math.abs(best.portfolioDelta) >= Math.abs(worst.portfolioDelta) : true;
+  //
+  // TWO QUESTIONS, NOT ONE, and they used to be answered by the same expression.
+  // WHICH year to show is a magnitude question; whether it is a WIN is a question
+  // about the sign — and `Math.abs` had already thrown the sign away before the
+  // second one was asked. `best >= worst` always holds, so `|best| >= |worst|`
+  // could still be true with a NEGATIVE `best`: whenever every recorded year lost
+  // ground, and in particular whenever there is exactly one record, since
+  // `retire()` and `quitRun()` push no `YearRecord` and only `advanceYear` does.
+  // A player who advanced one year into a down market and quit was handed "The
+  // Win", `+$X` on a gain-green plate, falling money and `stampGood` — for the
+  // year their portfolio lost $X. The milestone map two lines below already asked
+  // it the right way (`best.portfolioDelta > 0`), which is what makes this the
+  // omission rather than the intent.
   const swingMag = Math.max(Math.abs(best?.portfolioDelta ?? 0), Math.abs(worst?.portfolioDelta ?? 0));
-  const swing = swingMag > 0 ? (isWin ? best : worst) : undefined;
+  const bigger =
+    best && worst ? (Math.abs(best.portfolioDelta) >= Math.abs(worst.portfolioDelta) ? best : worst) : (best ?? worst);
+  const swing = swingMag > 0 ? bigger : undefined;
+  // The sign of the year actually being shown. `swing` is only set when the
+  // magnitude is non-zero, so this is never a coin-flip on 0.
+  const isWin = (swing?.portfolioDelta ?? 0) > 0;
 
   // Milestone years: best/worst swings + top-3 real macro events in lived years
   // (same selection the AnnotatedLifeChart uses).
