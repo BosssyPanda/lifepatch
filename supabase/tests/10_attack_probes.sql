@@ -360,3 +360,38 @@ begin
 end $$;
 reset role;
 \echo ''
+
+\echo ''
+\echo '--- 16. writing through the public projection ------------------------'
+-- `profiles_public` is `security_invoker = off` on purpose, so it runs as its
+-- owner and sees past the row policy. That is fine for reading and catastrophic
+-- for writing: the view is a bare projection of one table, which makes it
+-- auto-updatable, so any write privilege on it is a straight bypass of the
+-- lockdown on `profiles`. The grant in 01 was additive and never removed the
+-- INSERT/UPDATE/DELETE the view inherited from Supabase's stock
+-- `grant all on all tables in schema public`.
+--
+-- Filtered to an id that cannot exist: this probe asks whether the PRIVILEGE is
+-- there, and must never depend on — or alter — a real row.
+select set_config('request.jwt.claim.sub', '', false);
+set role anon;
+do $$
+begin
+  begin
+    update public.profiles_public
+       set username = 'probe-16'
+     where id = '00000000-0000-0000-0000-000000000000';
+    raise notice 'VULNERABLE: anon may UPDATE through profiles_public (RLS bypassed)';
+  exception when insufficient_privilege then
+    raise notice 'CLOSED: anon refused write on profiles_public (%)', sqlerrm;
+  end;
+  begin
+    delete from public.profiles_public
+     where id = '00000000-0000-0000-0000-000000000000';
+    raise notice 'VULNERABLE: anon may DELETE through profiles_public (RLS bypassed)';
+  exception when insufficient_privilege then
+    raise notice 'CLOSED: anon refused delete on profiles_public';
+  end;
+end $$;
+reset role;
+\echo ''

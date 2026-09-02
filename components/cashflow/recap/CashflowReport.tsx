@@ -18,7 +18,8 @@ import { useProfile } from "@/hooks/useProfile";
 import { conceptTitle } from "@/lib/concepts";
 import { getDream } from "@/lib/cashflow/dreams";
 import { getProfession } from "@/lib/cashflow/professions";
-import { bankLoanPayment, hasEscaped, netWorth, passiveIncome, totalExpenses } from "@/lib/cashflow/selectors";
+import { bankLoanPayment, cashflowEscaped, netWorth, passiveIncome, totalExpenses } from "@/lib/cashflow/selectors";
+import { cashflowVerdict } from "@/lib/verdict";
 import { cashflowScore } from "@/lib/cloud/buildResult";
 import { currency } from "@/lib/format";
 import type { CashflowState } from "@/lib/cashflow/types";
@@ -61,7 +62,13 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
   const nw = netWorth(s);
   const score = cashflowScore(s);
   const shareUrl = useShareUrlFor("cashflow", score);
-  const verdict = lost ? "Buried in Debt" : hasEscaped(s) ? "Escaped the Rat Race" : "Still Racing";
+  // Both of these read the LATCHED status, not the live `hasEscaped`. A run that
+  // won while carrying a Fast Track bank loan has passive income back under its
+  // expenses, so the live reading called it "Still Racing" — printed here in grey,
+  // stamped on the share card, and written to the leaderboard row — directly above
+  // a recap headed YOU WON. `cashflowVerdict` is the single owner of the string.
+  const escaped = cashflowEscaped(s);
+  const verdict = cashflowVerdict(s.status);
 
   const shareData = useMemo(
     () => ({
@@ -69,7 +76,7 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
       verdict,
       // This was hardcoded to gain-green, so a "Still Racing" or a lost run got
       // stamped in the winner's colour on its own share card.
-      verdictHex: lost ? PALETTE.loss : hasEscaped(s) ? PALETTE.gain : INK_TIER.mid,
+      verdictHex: lost ? PALETTE.loss : escaped ? PALETTE.gain : INK_TIER.mid,
       netWorth: nw,
       netWorthText: currency(nw),
       years: s.escapedOnTurn ?? s.turn,
@@ -81,7 +88,7 @@ export function CashflowReport({ s, onReplay, onExit, onMasteryMap }: { s: Cashf
       statValue: `${currency(passive)}/mo`,
       url: shareUrl,
     }),
-    [s, nw, passive, shareUrl, verdict, lost],
+    [s, nw, passive, shareUrl, verdict, lost, escaped],
   );
 
   // The verdict stamp fires ONCE per verdict. It used to depend on the whole

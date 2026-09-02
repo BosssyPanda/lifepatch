@@ -1,8 +1,8 @@
 import { ticketFor, verifyResult } from "../replay";
 import { netWorth, RUN_VERSION, type RunState } from "../runEngine";
-import { CASHFLOW_VERDICTS, deriveVerdict } from "../verdict";
+import { cashflowVerdict, deriveVerdict } from "../verdict";
 import {
-  hasEscaped,
+  cashflowEscaped,
   netWorth as cashflowNetWorth,
   passiveIncome,
   payday as cashflowPayday,
@@ -141,15 +141,14 @@ export function cashflowScore(s: CashflowState): number {
 
 export function resultFromCashflow(s: CashflowState): NewResult {
   const passive = passiveIncome(s);
-  const escaped = hasEscaped(s);
+  // The LATCHED achievement, not the live `hasEscaped` reading — a win carrying a
+  // Fast Track bank loan reads as "still racing" on the live one. See
+  // `cashflowEscaped` in lib/cashflow/selectors.ts.
+  const escaped = cashflowEscaped(s);
   return {
     mode: "cashflow",
     score: cashflowScore(s),
-    verdict: s.status === "lost"
-      ? CASHFLOW_VERDICTS.buried
-      : escaped
-        ? CASHFLOW_VERDICTS.escaped
-        : CASHFLOW_VERDICTS.racing,
+    verdict: cashflowVerdict(s.status),
     metrics: {
       scoreVersion: CASHFLOW_SCORE_VERSION,
       passiveIncome: passive,

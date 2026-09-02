@@ -46,6 +46,25 @@ export const CASHFLOW_VERDICTS = {
   buried: "Buried in Debt",
 } as const;
 
+/**
+ * The one place a finished Rat Race is turned into a verdict.
+ *
+ * Two callers need this string and must never disagree: the row written to the
+ * leaderboard (`lib/cloud/buildResult.ts`) and the recap the player reads and
+ * shares (`components/cashflow/recap/CashflowReport.tsx`). They used to state the
+ * rule separately — same shape, same literals — which is agreement by coincidence,
+ * and it held only until one of them mattered more than the other.
+ *
+ * Takes the LATCHED status, never the live `hasEscaped` reading. See
+ * `cashflowEscaped` in `lib/cashflow/selectors.ts` for why that distinction is the
+ * whole bug.
+ */
+export function cashflowVerdict(status: string): string {
+  if (status === "lost") return CASHFLOW_VERDICTS.buried;
+  if (status === "won" || status === "escaped") return CASHFLOW_VERDICTS.escaped;
+  return CASHFLOW_VERDICTS.racing;
+}
+
 /** Every verdict this build can produce. Mirrors `results_verdict_known`. */
 export const KNOWN_VERDICTS: ReadonlySet<string> = new Set<string>([
   ...Object.values(VERDICTS).map((v) => v.title),

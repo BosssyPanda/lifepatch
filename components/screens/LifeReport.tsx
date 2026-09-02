@@ -311,7 +311,15 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
           </div>
           <h1 className="display-caps mt-3 text-3xl text-ink sm:text-4xl">{run.name}</h1>
           <p className="num mt-1.5 text-[0.8rem] text-secondary">
-            {firstYear}–{lastYear} · age {run.history[0]?.age ?? run.age}–{run.age} · {run.job}
+            {/* Both ends of BOTH ranges come from the history, i.e. from years the
+                player actually lived. The high end used to read `run.age`, which the
+                engine advances past the end of the run (it builds the position the
+                player is about to be handed, and on the last year that position is
+                never handed over) — so a life that ended in 2010 at 42 printed
+                "1990–2010 · age 22–43", mapping the same final year to two different
+                ages and disagreeing with the HUD and the outro card for all 21 years
+                before it. */}
+            {firstYear}–{lastYear} · age {hist[0]?.age ?? run.age}–{hist[hist.length - 1]?.age ?? run.age} · {run.job}
           </p>
         </motion.header>
 
