@@ -502,11 +502,14 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
               ← Back to the standings
             </NeonButton>
           )}
-          {/* "Run it back" is a lie on a daily statement: today's world is spent, and
-              this button starts a fresh Story run with its own random seed. It says
-              so rather than implying a second attempt at the same puzzle. */}
+          {/* "Run it back" is a lie on a daily statement: today's world is spent, so
+              the button says what it really does rather than implying a second
+              attempt at the same puzzle. It now opens the mode select instead of
+              starting a Story run on the spot — that run lands in the Story save
+              slot, which may already hold a life the player is part-way through,
+              and the gate is where losing it is named rather than silent. */}
           <NeonButton variant="primary" size="lg" onClick={onReplay}>
-            <ReplayIcon size={18} /> {run.daily ? "Start a fresh Story run" : "Run it back"}
+            <ReplayIcon size={18} /> {run.daily ? "Start a new run" : "Run it back"}
           </NeonButton>
           <NeonButton variant="secondary" size="lg" onClick={() => setShareOpen(true)}>Share ↗</NeonButton>
           <NeonButton variant="secondary" size="md" onClick={onAlmanac}>Almanac</NeonButton>

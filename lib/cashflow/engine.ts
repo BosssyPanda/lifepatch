@@ -14,6 +14,7 @@ import { pickIndex, rngAt, rollDice as rollDiceRaw } from "./rng";
 import {
   BANK_UNIT,
   bankHeadroom,
+  canAffordDown,
   bankLoanPayment,
   hasEscaped,
   maxAffordable,
@@ -316,6 +317,12 @@ export function tickStockPrices(s: CashflowState, drift: number): CashflowState 
 }
 
 export function buyRealEstate(s: CashflowState, deal: RealEstateDeal): CashflowState {
+  // A deal you cannot cover is REFUSED, not completed at a discount. `clampCash`
+  // borrows what it can and writes off the rest, so without this the balance sheet
+  // gained the whole asset for whatever the player happened to have. The card
+  // disables its own CTA (see DealCard); this is the guard that makes it true of
+  // every caller.
+  if (!canAffordDown(s, deal.downPayment)) return s;
   const base = clampCash({ ...s, cash: s.cash - deal.downPayment });
   return {
     ...base,
@@ -338,6 +345,8 @@ export function buyRealEstate(s: CashflowState, deal: RealEstateDeal): CashflowS
 }
 
 export function buyBusiness(s: CashflowState, deal: BusinessDeal): CashflowState {
+  // Same shape, same refusal — see `buyRealEstate`.
+  if (!canAffordDown(s, deal.downPayment)) return s;
   const base = clampCash({ ...s, cash: s.cash - deal.downPayment });
   return {
     ...base,

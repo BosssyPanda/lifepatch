@@ -76,12 +76,16 @@ function StatLine({ label, value, tone }: { label: string; value: string; tone?:
 export function DealCard({
   deal,
   cash,
+  credit = 0,
   price,
   onBuy,
   onPass,
 }: {
   deal: Deal;
   cash: number;
+  /** What the bank will still lend. Cash alone is not the affordability line —
+   *  a deal is reachable on cash PLUS credit, and unreachable beyond it. */
+  credit?: number;
   /** Live quote for a stock deal. Stocks are no longer priced at their deck value
    *  forever, so the card has to ask for the same number the engine will charge. */
   price?: number;
@@ -99,6 +103,10 @@ export function DealCard({
   const cashFlow = deal.cashFlow;
   const coc = cashOnCash(cashFlow * 12, down);
   const needLoan = cash < down;
+  // Beyond cash + credit the purchase cannot be paid for at all. It used to be
+  // offered anyway, with the same enabled CTA and the same "borrow wisely" note:
+  // one click bankrupted the run on the spot and still handed over the asset.
+  const affordable = cash + Math.max(0, credit) >= down;
 
   return (
     <div className="paper p-5">
@@ -125,9 +133,17 @@ export function DealCard({
 
       <LessonBox>{deal.lesson}</LessonBox>
 
-      {needLoan && (
+      {needLoan && affordable && (
         <p className="mt-3 bg-loss/12 px-3 py-2 font-body text-[0.8rem] text-loss">
           You have {currency(cash)}. Buying means a bank loan to cover the gap — at 10%/month. Borrow wisely.
+        </p>
+      )}
+
+      {!affordable && (
+        <p className="mt-3 bg-loss/12 px-3 py-2 font-body text-[0.8rem] text-loss">
+          You have {currency(cash)} and {currency(Math.max(0, credit))} left to borrow. This deal needs{" "}
+          {currency(down)} down — {currency(down - cash - Math.max(0, credit))} more than you can raise. Pass, and
+          come back to one like it when you can cover it.
         </p>
       )}
 
@@ -135,7 +151,7 @@ export function DealCard({
         <NeonButton variant="outline" size="sm" onClick={onPass}>
           Pass
         </NeonButton>
-        <NeonButton variant="paper" size="md" onClick={() => onBuy()}>
+        <NeonButton variant="paper" size="md" disabled={!affordable} onClick={() => onBuy()}>
           Buy · {currency(down)} down
         </NeonButton>
       </div>

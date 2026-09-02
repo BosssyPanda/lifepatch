@@ -229,6 +229,20 @@ export function bankHeadroom(s: CashflowState): number {
   return Math.max(0, maxBankLoan(s) - s.liabilities.bankLoan);
 }
 
+/**
+ * Can this player actually pay this down payment?
+ *
+ * Cash plus every dollar the bank will still lend. Below that line a purchase is
+ * not "expensive", it is impossible, and completing it anyway is how a $90,000
+ * property was landing on an $800 balance sheet for $18,800: `clampCash` borrows
+ * what it can, writes the rest off, and ends the run — while the buy went ahead
+ * and added the holding regardless. The player finished bankrupt, owning the
+ * asset, with a HIGHER leaderboard score than for playing on.
+ */
+export function canAffordDown(s: CashflowState, downPayment: number): boolean {
+  return s.cash + Math.max(0, bankHeadroom(s)) >= downPayment;
+}
+
 /** Fraction of the ceiling already used, 0..1+. Warn past ~0.6. */
 export function bankLoanStress(s: CashflowState): number {
   const cap = maxBankLoan(s);

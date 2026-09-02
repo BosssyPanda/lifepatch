@@ -548,7 +548,21 @@ function AppShellInner() {
               // Both exits close the room first: a replay is a solo run, and a
               // player still holding a channel would keep broadcasting rows from
               // a life the room never started.
-              onReplay={() => { leaveRoom(); run.start(run.run!.mode, run.run!.backgroundId, run.run!.name); }}
+              onReplay={() => {
+                leaveRoom();
+                // A daily's replay does not re-run the daily — it starts a life in
+                // the STORY slot, and that slot may already hold one. Starting here
+                // wrote straight over it with no warning, while the gate one screen
+                // away labels the same choice "START A NEW RUN (OVERWRITES)". The
+                // daily is deliberately fenced out of that slot in `hooks/useRun.ts`
+                // ("letting one through here would overwrite the player's own Story
+                // life with the day's puzzle"); this path was walking around the
+                // fence by starting a fresh run instead of writing the daily. Send
+                // the player to the mode select, where continuing and overwriting
+                // are both offered and both named.
+                if (run.run!.daily) { run.goMode(); return; }
+                run.start(run.run!.mode, run.run!.backgroundId, run.run!.name);
+              }}
               onTitle={exitToTitle}
               // Only while the room is still held — and it is, because reading the
               // report doesn't leave it. If the room dies while they read, the prop
