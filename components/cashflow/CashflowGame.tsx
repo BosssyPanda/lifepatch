@@ -51,7 +51,7 @@ import {
 } from "@/lib/cashflow/engine";
 import { TUTORIAL_STEPS } from "@/lib/cashflow/lessons";
 import { getProfession } from "@/lib/cashflow/professions";
-import { quote } from "@/lib/cashflow/selectors";
+import { bankHeadroom, quote } from "@/lib/cashflow/selectors";
 import { currency } from "@/lib/format";
 import type { CashflowState, PayoffKey } from "@/lib/cashflow/types";
 
@@ -252,6 +252,25 @@ export function CashflowGame({
                 />
               </div>
             )}
+
+            {/* The Fast Track keeps CREATING bank debt — `applyFtLoss` runs through
+                `clampCash`, which borrows to cover a setback — while this panel, the
+                only caller of `repayBankLoan`, lived solely in the Rat Race branch
+                above. A loan taken up here could therefore never be repaid: its
+                10%/month payment sat in the statement as a permanent expense with no
+                control anywhere on screen to clear it. Shown on the Fast Track only
+                when there is something to repay, so the panel does not clutter a
+                debt-free board. */}
+            {isFast && s.liabilities.bankLoan > 0 && (
+              <div className="mt-3">
+                <BankPanel
+                  s={s}
+                  disabled={busy}
+                  onBorrow={(n) => { audio.sfx("coins"); commit((st) => borrow(st, n)); }}
+                  onRepay={(n) => { audio.sfx("cash"); commit((st) => repayBankLoan(st, n)); }}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -328,6 +347,7 @@ export function CashflowGame({
               <DealCard
                 deal={pending.deal}
                 cash={s.cash}
+                credit={bankHeadroom(s)}
                 price={pending.deal.kind === "stock" ? quote(s, pending.deal.symbol, pending.deal.price) : undefined}
                 onBuy={(shares) => { learn(conceptsForText(pending.deal.lesson), { applied: true }); buyDeal(pending.deal, shares); }}
                 onPass={() => { audio.sfx("page"); endTurn(s); }}

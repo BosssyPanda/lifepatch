@@ -151,6 +151,14 @@ create or replace view public.profiles_public
   select id, username, avatar_seed, created_at
   from public.profiles;
 
+-- REVOKE FIRST, and never collapse these two lines into the grant alone. A view
+-- created in `public` inherits Supabase's stock `grant all on all tables in
+-- schema public to anon, authenticated`, and a `grant` cannot narrow what is
+-- already held. Left as-is this view is auto-updatable (a bare projection of one
+-- table) AND runs as its owner, so an inherited UPDATE or DELETE is a straight
+-- bypass of the row policy on `profiles` — the exact hole the lockdown closes.
+-- See 2026-09-02_08_profiles_public_readonly.sql.
+revoke all on public.profiles_public from anon, authenticated;
 grant select on public.profiles_public to anon, authenticated;
 
 -- Code lookup as a point query: one row in, at most one row out, and never the

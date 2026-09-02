@@ -311,7 +311,15 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
           </div>
           <h1 className="display-caps mt-3 text-3xl text-ink sm:text-4xl">{run.name}</h1>
           <p className="num mt-1.5 text-[0.8rem] text-secondary">
-            {firstYear}–{lastYear} · age {run.history[0]?.age ?? run.age}–{run.age} · {run.job}
+            {/* Both ends of BOTH ranges come from the history, i.e. from years the
+                player actually lived. The high end used to read `run.age`, which the
+                engine advances past the end of the run (it builds the position the
+                player is about to be handed, and on the last year that position is
+                never handed over) — so a life that ended in 2010 at 42 printed
+                "1990–2010 · age 22–43", mapping the same final year to two different
+                ages and disagreeing with the HUD and the outro card for all 21 years
+                before it. */}
+            {firstYear}–{lastYear} · age {hist[0]?.age ?? run.age}–{hist[hist.length - 1]?.age ?? run.age} · {run.job}
           </p>
         </motion.header>
 
@@ -494,11 +502,14 @@ export function LifeReport({ run, onReplay, onTitle, onAlmanac, onMasteryMap, on
               ← Back to the standings
             </NeonButton>
           )}
-          {/* "Run it back" is a lie on a daily statement: today's world is spent, and
-              this button starts a fresh Story run with its own random seed. It says
-              so rather than implying a second attempt at the same puzzle. */}
+          {/* "Run it back" is a lie on a daily statement: today's world is spent, so
+              the button says what it really does rather than implying a second
+              attempt at the same puzzle. It now opens the mode select instead of
+              starting a Story run on the spot — that run lands in the Story save
+              slot, which may already hold a life the player is part-way through,
+              and the gate is where losing it is named rather than silent. */}
           <NeonButton variant="primary" size="lg" onClick={onReplay}>
-            <ReplayIcon size={18} /> {run.daily ? "Start a fresh Story run" : "Run it back"}
+            <ReplayIcon size={18} /> {run.daily ? "Start a new run" : "Run it back"}
           </NeonButton>
           <NeonButton variant="secondary" size="lg" onClick={() => setShareOpen(true)}>Share ↗</NeonButton>
           <NeonButton variant="secondary" size="md" onClick={onAlmanac}>Almanac</NeonButton>

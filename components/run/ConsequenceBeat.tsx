@@ -149,17 +149,25 @@ export function ConsequenceBeat({
       onClick={done ? undefined : skip}
     >
       {/* top rail — event tag + net-worth before → after (after flashes on land) */}
+      {/* The parent is `fixed inset-0`, so anything this rail pushes past the right
+          edge is not merely off-screen — there is no page scroll to reach it with.
+          The tag cell used to take its natural width and shove the figures out: on a
+          390px phone the "after" net worth rendered as "−$40,77" for −$40,770, and
+          worse on 360px. So the tag cell may now shrink (`min-w-0` + truncate) and
+          the figures may not (`shrink-0`) — the number is the point of the rail, and
+          a clipped number is a WRONG number. The label goes last, on the narrowest
+          screens, because the two figures and the arrow say what it is. */}
       <div className="flex items-stretch border-b border-hairline">
-        <div className="flex items-center gap-2.5 border-r border-hairline px-4 py-3 sm:px-6">
-          <span className="eyebrow text-ink" style={{ fontSize: "0.6rem", letterSpacing: "0.2em" }}>
+        <div className="flex min-w-0 items-center gap-2.5 border-r border-hairline px-4 py-3 sm:px-6">
+          <span className="eyebrow truncate text-ink" style={{ fontSize: "0.6rem", letterSpacing: "0.2em" }}>
             {event.tag}
           </span>
-          <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem", letterSpacing: "0.22em" }}>
+          <span className="eyebrow hidden truncate text-secondary sm:inline" style={{ fontSize: "0.55rem", letterSpacing: "0.22em" }}>
             / Consequence
           </span>
         </div>
-        <div className="ml-auto flex items-center gap-3 px-4 py-3 sm:px-6">
-          <span className="eyebrow text-secondary" style={{ fontSize: "0.55rem", letterSpacing: "0.22em" }}>
+        <div className="ml-auto flex shrink-0 items-center gap-2 px-3 py-3 sm:gap-3 sm:px-6">
+          <span className="eyebrow hidden text-secondary sm:inline" style={{ fontSize: "0.55rem", letterSpacing: "0.22em" }}>
             Net worth
           </span>
           <span className="num text-secondary" style={{ fontSize: "0.72rem" }}>

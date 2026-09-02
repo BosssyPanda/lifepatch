@@ -97,6 +97,26 @@ export function hasEscaped(s: CashflowState): boolean {
   return passiveIncome(s) >= totalExpenses(s);
 }
 
+/**
+ * What the player ACHIEVED, as opposed to where their books stand this moment.
+ *
+ * `hasEscaped` is a live reading — "is passive income covering expenses right
+ * now" — and it is the right question while the player is still in the Rat Race,
+ * because that is the bar they are trying to clear. It is the wrong question once
+ * they have cleared it. `status` latches the achievement (`engine.ts` sets
+ * "escaped" on the turn they escape and "won" on the dream purchase or the Fast
+ * Track goal); the live reading can go false again afterwards and commonly does,
+ * because a Fast Track setback forces a bank loan whose 10%/month payment pushes
+ * expenses back above passive income.
+ *
+ * The two were being used interchangeably, and a run that WON while carrying that
+ * loan was recorded, ranked and shared as "Still Racing" — the verdict for never
+ * having escaped at all.
+ */
+export function cashflowEscaped(s: Pick<CashflowState, "status">): boolean {
+  return s.status === "escaped" || s.status === "won";
+}
+
 // ── Balance sheet ──────────────────────────────────────────────────────────────
 /** The live quote for a ticker, falling back to what the holding cost. */
 export function quote(s: CashflowState, symbol: string, fallback = 0): number {
@@ -207,6 +227,20 @@ export function maxBankLoan(s: CashflowState): number {
 /** How much more the bank will lend right now. */
 export function bankHeadroom(s: CashflowState): number {
   return Math.max(0, maxBankLoan(s) - s.liabilities.bankLoan);
+}
+
+/**
+ * Can this player actually pay this down payment?
+ *
+ * Cash plus every dollar the bank will still lend. Below that line a purchase is
+ * not "expensive", it is impossible, and completing it anyway is how a $90,000
+ * property was landing on an $800 balance sheet for $18,800: `clampCash` borrows
+ * what it can, writes the rest off, and ends the run — while the buy went ahead
+ * and added the holding regardless. The player finished bankrupt, owning the
+ * asset, with a HIGHER leaderboard score than for playing on.
+ */
+export function canAffordDown(s: CashflowState, downPayment: number): boolean {
+  return s.cash + Math.max(0, bankHeadroom(s)) >= downPayment;
 }
 
 /** Fraction of the ceiling already used, 0..1+. Warn past ~0.6. */
