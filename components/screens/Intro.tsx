@@ -290,7 +290,7 @@ export function Intro({
             transition={{ duration: DUR.slow, ease: EASE }}
             className="mt-5 max-w-xl font-body text-[0.98rem] leading-relaxed text-ink-dim"
           >
-            You&apos;re running out of money fast, and every choice costs something. Nine months.
+            You&apos;re running out of money fast, and every choice costs something. A whole life.
             One verdict.
           </motion.p>
 
@@ -385,7 +385,7 @@ export function Intro({
               You still have to play.
             </h2>
             <p className="mt-5 max-w-lg font-body text-[0.95rem] leading-relaxed text-ink-dim">
-              Nine months. Rent, scams, debt traps, group-chat FOMO, and a market that hates you.
+              A whole life. Rent, scams, debt traps, group-chat FOMO, and a market that hates you.
               Your choices move real numbers.
             </p>
           </div>

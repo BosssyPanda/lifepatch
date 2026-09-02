@@ -66,16 +66,27 @@ export function readDaily(date: string): DailyRecord | null {
   }
 }
 
-export function writeDaily(date: string, state: RunState): void {
+/**
+ * @returns whether the record actually landed.
+ *
+ * It used to return `void`, so the one caller could not tell a written day from a
+ * swallowed quota failure — and it told the player "Saved" either way. Same rule
+ * the cloud path already keeps: a save that did not land must not be reported as
+ * one. The failure is still not an exception, because the day IS still playable;
+ * it just will not survive a refresh, and now that can be said out loud.
+ */
+export function writeDaily(date: string, state: RunState): boolean {
   const store = storage();
-  if (!store || !isDailyDate(date)) return;
+  if (!store || !isDailyDate(date)) return false;
   try {
     store.setItem(
       key(date),
       JSON.stringify({ date, state, updatedAt: new Date().toISOString() } satisfies DailyRecord),
     );
+    return true;
   } catch {
     // Quota. The day is still playable; it just will not survive a refresh.
+    return false;
   }
 }
 

@@ -24,6 +24,7 @@ import {
   totalIncome,
   totalLiabilities,
 } from "@/lib/cashflow/selectors";
+import { CASHFLOW_DAY_MONTHS, cashflowDayPayout, fastTrackMonthly } from "@/lib/cashflow/engine";
 import { currency } from "@/lib/format";
 import type { CashflowState, PayoffKey } from "@/lib/cashflow/types";
 
@@ -170,6 +171,26 @@ export function FinancialStatement({
   const passive = passiveIncome(s);
   const expenses = totalExpenses(s);
   const pay = payday(s);
+  /**
+   * The Fast Track pays nothing for passing anything.
+   *
+   * `payday(s)` is `salary + passive − expenses`, and this card was mounted on
+   * BOTH tracks — so up here it was wrong in both directions at once. It counted
+   * `salary`, which is never paid on the Fast Track (`applyMove` returns
+   * `paydayAmount: 0` there, and says so: "no pass-payments; cash flow only on
+   * landing a Cash Flow Day"), and it left out `fastTrackCashflow`, which is the
+   * entire second act. A player with a $9,000/mo deal was shown "+$1,650 … every
+   * payday" while the only payout the engine makes is a year of cash flow on a
+   * Cash Flow Year and nothing on every other square — and the board reinforces
+   * the misread by stamping that tile "PAYDAY".
+   *
+   * So the row reports what this track actually does: the monthly the Fast Track
+   * measures, and the lump the one square that pays hands over.
+   */
+  const isFast = s.track === "fast";
+  const ftMonthly = fastTrackMonthly(s);
+  const ftPayout = cashflowDayPayout(s);
+  const headline = isFast ? ftPayout : pay;
   const dividends = s.stocks.reduce((t, h) => t + h.dividend * h.shares, 0);
   const reCash = s.realEstate.reduce((t, h) => t + h.cashFlow, 0);
   const bizCash = s.businesses.reduce((t, h) => t + h.cashFlow, 0);
@@ -214,19 +235,25 @@ export function FinancialStatement({
 
       {/* ── PAYDAY ── the punchline: the dominant figure in the card. */}
       <motion.div
-        key={pay}
+        key={headline}
         initial={reduce ? false : { scale: 0.965, opacity: 0.85 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: DUR.base, ease: EASE }}
         className="relative mt-3 flex items-center justify-between border border-hairline bg-bg2 px-3.5 py-2.5"
       >
-        <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${pay >= 0 ? "bg-gain" : "bg-loss"}`} />
+        <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${headline >= 0 ? "bg-gain" : "bg-loss"}`} />
         <div>
-          <p className="display-caps text-[0.86rem] text-ink">Payday · Cash Flow</p>
-          <p className="text-[0.66rem] text-ink/60">Income − Expenses, every payday</p>
+          <p className="display-caps text-[0.86rem] text-ink">
+            {isFast ? "Cash Flow Year" : "Payday · Cash Flow"}
+          </p>
+          <p className="text-[0.66rem] text-ink/60">
+            {isFast
+              ? `${currency(ftMonthly)}/mo × ${CASHFLOW_DAY_MONTHS}, when you land it`
+              : "Income − Expenses, every payday"}
+          </p>
         </div>
-        <span className={`num text-2xl font-bold tabular-nums ${pay >= 0 ? "text-gain" : "text-loss"}`}>
-          <AnimatedNumber value={pay} format={(n) => (n >= 0 ? `+${currency(n)}` : currency(n))} />
+        <span className={`num text-2xl font-bold tabular-nums ${headline >= 0 ? "text-gain" : "text-loss"}`}>
+          <AnimatedNumber value={headline} format={(n) => (n >= 0 ? `+${currency(n)}` : currency(n))} />
         </span>
       </motion.div>
 

@@ -133,14 +133,26 @@ export function Setup({
                   </span>
                 </>
               )}
-              <div className="flex items-center justify-between border-b-2 border-ink pb-2">
+              {/* The check disc sits in this corner when the card is picked, and it
+                  is drawn over the header — so the header gives the badge room to
+                  move out from under it rather than losing its last letter. The
+                  same card in `components/mp/LobbyScreen.tsx` already does this;
+                  this one is where the note came from. The disc is 28px at
+                  `right-3`, and CHILL / NORMAL / BRUTAL sit flush right, so what
+                  it covered was the final letter or two and the badge's border. */}
+              <div
+                className={`relative flex items-center justify-between border-b-2 border-ink pb-2 ${active ? "pr-9" : ""}`}
+              >
                 <span className="eyebrow text-secondary">Age {b.startAge}</span>
                 <Badge tone={b.difficulty}>{b.difficulty}</Badge>
               </div>
-              <h2 className="display-caps mt-3 text-2xl text-ink">{b.name}</h2>
-              <p className="voice mt-1 text-sm text-ink/60">{b.tagline}</p>
-              <p className="mt-2.5 font-body text-[0.86rem] leading-snug text-ink/75">{b.story}</p>
-              <dl className="mt-3 space-y-1">
+              {/* `relative` on each: the `bg-ink/15` selected-wash above is
+                  `absolute inset-0 z-[1]`, so anything left un-positioned is
+                  painted OVER rather than merely tinted. */}
+              <h2 className="display-caps relative mt-3 text-2xl text-ink">{b.name}</h2>
+              <p className="voice relative mt-1 text-sm text-ink/60">{b.tagline}</p>
+              <p className="relative mt-2.5 font-body text-[0.86rem] leading-snug text-ink/75">{b.story}</p>
+              <dl className="relative mt-3 space-y-1">
                 <Row k="Cash" v={currency(b.cash)} />
                 <Row k="Debt" v={currency(b.debt)} />
                 <Row k="Salary" v={`${currency(b.salary)}/yr`} />

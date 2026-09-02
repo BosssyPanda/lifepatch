@@ -58,6 +58,14 @@ const MIGRATIONS = [
   "supabase/migrations/2026-08-28_05_username_gate.sql",
   "supabase/migrations/2026-08-30_06_result_integrity.sql",
   "supabase/migrations/2026-08-30_07_rename_rate_limit.sql",
+  // 08 was added with probe 16 and NOT registered here, so the AFTER pass never
+  // applied it and probe 16 correctly reported the projection still writable. The
+  // gate was right and the list was wrong — which is the failure mode this list
+  // will always have, so: a migration that changes STRUCTURE or PRIVILEGES belongs
+  // here the moment it is written. (03 stays out for the stated reason — it
+  // rotates live data, which is an operator's decision, not a structural claim.)
+  "supabase/migrations/2026-09-02_08_profiles_public_readonly.sql",
+  "supabase/migrations/2026-09-02_09_rename_limit_atomic.sql",
 ];
 
 const SEED = `
@@ -221,7 +229,23 @@ function main() {
     "CLOSED",
     "SKIP",
   ]);
-  if (after.length !== before.length) fail.push("AFTER ran a different number of probes than BEFORE");
+  // NOT compared against BEFORE. Probe 16 writes through `profiles_public`, a view
+  // that migration 01 CREATES — so in the pre-migration schema the statement raises
+  // `undefined_table`, which the probe's `insufficient_privilege` handler does not
+  // catch, the DO block aborts, and it emits no verdict at all. That is correct: a
+  // hole in an object that does not exist yet cannot be measured, and any future
+  // probe against a post-migration object will behave the same way. Requiring the
+  // counts to match made the gate fail for a structural reason rather than a
+  // security one, which is the kind of noise that gets a gate switched off.
+  //
+  // The drift check that actually has teeth is AFTER vs FRESH — two passes that
+  // both run against the full schema and must therefore run the SAME probes — and
+  // it is asserted below. Here the invariant is one-directional: the migration path
+  // may run MORE probes than the fossil, never fewer, so a probe that silently
+  // stops emitting is still caught.
+  if (after.length < before.length) {
+    fail.push(`AFTER ran fewer probes (${after.length}) than BEFORE (${before.length})`);
+  }
   for (const v of after) say(v.tag === "CLOSED", `${v.tag}: ${v.msg}`);
 
   psql([
@@ -253,8 +277,12 @@ function main() {
     psql(["-f", join(ROOT, "supabase/tests/10_attack_probes.sql")], { db: FRESH }),
     ["VULNERABLE", "CLOSED", "SKIP"],
   );
-  if (fresh.length !== before.length) {
-    fail.push(`FRESH ran ${fresh.length} probe(s), BEFORE ran ${before.length}`);
+  // AFTER and FRESH are the two passes that see the same schema, so they are the
+  // pair that must agree exactly. A probe that runs on one and not the other means
+  // `schema.sql` and `migrations/` have drifted apart, which is precisely what this
+  // gate exists to catch.
+  if (fresh.length !== after.length) {
+    fail.push(`FRESH ran ${fresh.length} probe(s), AFTER ran ${after.length}`);
   }
   for (const v of fresh) say(v.tag === "CLOSED", `${v.tag}: ${v.msg}`);
 

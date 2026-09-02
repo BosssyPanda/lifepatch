@@ -100,10 +100,24 @@ export function challengeableWorld(row: ResultRow): ChallengeableWorld | null {
   const startYear = m?.startYear;
 
   return {
-    seed,
+    // FLOORED, because `initRun` floors (`lib/runEngine.ts`) and it is the
+    // authority on what a seed means. `metrics` is unconstrained jsonb with no
+    // CHECK behind it, so a hand-crafted or older row can carry `12345.6`, and
+    // storing that verbatim guaranteed a miss downstream: the run starts at
+    // `12345`, and `challengeFor`'s `c.seed === run.seed` is then false forever.
+    // The rival was dropped SILENTLY, and the cost is not just a missing chart —
+    // with no challenge to key against, `AppShell` falls back to a submission key
+    // of `mode-seed` without the attempt nonce, which collides with a key already
+    // marked submitted. Its own comment names the outcome: "the run is neither
+    // saved nor posted, and a whole life goes nowhere."
+    //
+    // This is canonicalisation, not a guess. The rival's run was itself dealt at
+    // `floor(seed)`, so flooring here names the world they actually played.
+    seed: Math.floor(seed),
     backgroundId,
     mode: row.mode,
-    startYear: finiteNumber(startYear) ? startYear : 0,
+    // Same reasoning, one field over: a year is an integer everywhere it is read.
+    startYear: finiteNumber(startYear) ? Math.floor(startYear) : 0,
     history,
     // Three states, and the row tells us which: `1` their deal was tilted, `0`
     // provably even, and unknown for a row that predates the flag. Matched
@@ -202,7 +216,12 @@ export function readChallenge(): Challenge | null {
     // half-written record must not reach the report as a row of `undefined`s.
     if (
       typeof c.resultId !== "string" ||
-      typeof c.seed !== "number" ||
+      // INTEGER, not merely a number. Every other field here is guarded against
+      // the fact that this is player-writable storage; the seed was the one that
+      // was not, and a fractional one fails `challengeFor`'s equality silently
+      // rather than loudly. `challengeableWorld` floors on the way in, so an
+      // integer is exactly what a record this code wrote will contain.
+      !Number.isInteger(c.seed) ||
       typeof c.backgroundId !== "string" ||
       typeof c.mode !== "string" ||
       typeof c.name !== "string" ||

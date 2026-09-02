@@ -197,7 +197,13 @@ export async function updateUsername(userId: string, username: string): Promise<
       .eq("id", userId)
       .select("*")
       .single();
-    if (error || !data) throw new Error(error?.message ?? "Username update failed");
+    // The message is ours, not Postgres's — `error.message` here is raw PostgREST
+    // text and this value is thrown as what a caller shows. The detail goes to the
+    // console, where a developer can read it and a player is not made to.
+    if (error || !data) {
+      if (error) console.error("updateUsername: direct update failed", error);
+      throw new Error("Could not save that name. Try again in a moment.");
+    }
     return fromRow(data);
   }
   const existing = await getProfile(userId);

@@ -19,11 +19,16 @@
 // The clock is a PARAMETER, not `Date.now()`, which is what makes "fifty-nine
 // minutes in" and "an hour and a second in" ordinary assertions rather than a gate
 // that sleeps for an hour.
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   decideRenameAttempt,
   RENAME_LIMIT,
   RENAME_WINDOW_MS,
 } from "../../supabase/functions/_shared/renameLimit.ts";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 let checks = 0;
 let failures = 0;
@@ -160,6 +165,83 @@ check("a window start in the future does not reset the budget", () => {
   const row = { rename_window_start: iso(T0 + 10 * 60 * 1000), rename_attempts: RENAME_LIMIT };
   const d = decideRenameAttempt(row, T0);
   ok(!d.ok, "a future window start handed back the budget");
+});
+
+// ── The race, and the statement that closes it ──────────────────────────────
+//
+// Everything above asks `decideRenameAttempt` the questions a limiter has to get
+// right, and it answers all of them. It was still bypassable, because being right
+// was never the problem: the handler READ the row, asked this function, and WROTE
+// back an absolute `spent + 1` across two round trips with nothing holding the row
+// in between. The checks below are about the spend, not the decision.
+
+check("CONTROL — concurrent callers all read 0 and all write 1 (the bypass)", () => {
+  // Exactly what a `Promise.all` of N renames did: one row, N readers, none of
+  // them seeing another's write. This is a property of the SHAPE of a
+  // read-modify-write, so it is demonstrated rather than asserted away — a fix
+  // that made this control stop firing would mean the control had stopped
+  // measuring, which is the failure mode this repo has been bitten by before.
+  const row = { rename_window_start: null, rename_attempts: 0 };
+  const N = 200;
+  const writes = [];
+  for (let i = 0; i < N; i++) {
+    const d = decideRenameAttempt(row, T0); // the row never changes: nobody committed yet
+    ok(d.ok, `attempt ${i} was refused before any write landed`);
+    writes.push(d.write.rename_attempts);
+  }
+  // Every one of them allowed, and every one of them wrote 1.
+  eq(Math.max(...writes), 1, "the highest counter any concurrent caller would write");
+  ok(
+    N > RENAME_LIMIT,
+    "the control has to issue more than the ceiling for the bypass to mean anything",
+  );
+});
+
+check("the atomic spend is a single UPDATE, and the ceiling is in its WHERE", () => {
+  const sql = readFileSync(
+    join(HERE, "../../supabase/migrations/2026-09-02_09_rename_limit_atomic.sql"),
+    "utf8",
+  );
+  ok(/create or replace function public\.spend_rename_attempt\(uid uuid\)/.test(sql), "no RPC defined");
+  // One UPDATE — not a select-then-update wearing a function's clothes.
+  eq((sql.match(/^\s*update public\.profiles/gm) ?? []).length, 1, "UPDATE statements in the RPC");
+  // Unqualified: a SET clause names the column, not `alias.column`.
+  ok(/^\s*rename_attempts = case/m.test(sql), "the counter is not set inside the UPDATE");
+  ok(/p\.rename_attempts < limit_n/.test(sql), "the ceiling is not in the UPDATE's WHERE");
+  ok(/security definer/.test(sql) && /set search_path = public/.test(sql), "not a pinned security-definer");
+  ok(
+    /revoke all on function public\.spend_rename_attempt\(uuid\)\s+from public, anon, authenticated;/.test(sql),
+    "EXECUTE was not revoked from the client roles",
+  );
+});
+
+check("the SQL constants and the TS constants have not drifted", () => {
+  // They are duplicated on purpose — the pure function stays the fallback path, so
+  // it cannot read them out of the migration. This is the check that makes the
+  // duplication survivable rather than a bug waiting for one of them to move.
+  const sql = readFileSync(
+    join(HERE, "../../supabase/migrations/2026-09-02_09_rename_limit_atomic.sql"),
+    "utf8",
+  );
+  const limit = Number(/limit_n\s+constant int := (\d+)/.exec(sql)?.[1]);
+  eq(limit, RENAME_LIMIT, "limit_n in SQL vs RENAME_LIMIT in TS");
+  const hours = Number(/window_i constant interval := interval '(\d+) hour'/.exec(sql)?.[1]);
+  eq(hours * 60 * 60 * 1000, RENAME_WINDOW_MS, "window_i in SQL vs RENAME_WINDOW_MS in TS");
+});
+
+check("the handler calls the RPC and still keeps the pure function as its fallback", () => {
+  const fn = readFileSync(join(HERE, "../../supabase/functions/profile/index.ts"), "utf8");
+  ok(/rpc\("spend_rename_attempt", \{ uid: userId \}\)/.test(fn), "the handler does not call the RPC");
+  ok(
+    /decideRenameAttempt\(error \? null : data, Date\.now\(\)\)/.test(fn),
+    "the fallback path is gone — a project without migration 09 would lose rename entirely",
+  );
+  // The RPC's answer has to be consulted BEFORE the fallback, or the fallback is
+  // the only path that ever runs and nothing was fixed.
+  ok(
+    fn.indexOf('rpc("spend_rename_attempt"') < fn.indexOf("decideRenameAttempt("),
+    "the fallback is reached before the RPC",
+  );
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

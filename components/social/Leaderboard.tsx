@@ -10,10 +10,12 @@ import { LedgerDialog } from "@/components/ui/LedgerDialog";
 import { LedgerTabs, tabId } from "@/components/ui/LedgerTabs";
 import { TerminalOp } from "@/components/ui/TerminalOp";
 import { useAudio } from "@/hooks/useAudio";
+import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { BACKGROUNDS } from "@/lib/backgrounds";
 import { todaysDaily } from "@/lib/daily";
 import { listFriendIds } from "@/lib/cloud/friends";
+import { isGuestId } from "@/lib/cloud/identity";
 import { getProfiles } from "@/lib/cloud/profiles";
 import { topResults, type LeaderboardScope } from "@/lib/cloud/results";
 import type { GameMode, PublicProfile, ResultRow } from "@/lib/cloud/types";
@@ -142,8 +144,33 @@ export function Leaderboard({
   refreshSignal?: number;
 }) {
   const { profile } = useProfile();
+  const { user, isCloud, loading: authLoading } = useAuth();
   const { sfx } = useAudio();
   const { reduced } = useMotionCtx();
+  /**
+   * Can the person reading this board actually get ON it?
+   *
+   * The empty state used to promise everyone a placement — "Finish a run to be
+   * the first on the board" — and for a guest in a cloud build that is false.
+   * `resolvePlayerId` returns null for a `device-` id when `isCloud`, so
+   * `submitResult` takes its `writeLocal` branch and the row never reaches
+   * `results`; `docs/MULTIPLAYER.md` states the same thing from the RLS side. It
+   * is not a rare screen either: `topResults` reads the CLOUD for guests too (so
+   * they see the global board), and the daily scope is empty for everybody at
+   * 00:00 UTC — a guest opening "Today" first thing was told the board would
+   * start with them.
+   *
+   * Gated exactly the way `FriendsSheet` gates its own guest notice, and for the
+   * reasons written out there at length: on an ACCOUNT rather than on `useAuth`'s
+   * `guest` (which is false for the `user === null` visitor who arrived from a
+   * shared statement and never passed the auth gate), on `isCloud` rather than on
+   * the feature (with no Supabase the whole social layer runs on localStorage and
+   * the promise is true), and with "not answered yet" kept as its own third state
+   * rather than collapsed into either answer.
+   */
+  const account = Boolean(user && !isGuestId(user.id));
+  const authPending = isCloud && authLoading;
+  const noPlacement = isCloud && !authPending && !account;
   const [mode, setMode] = useState<GameMode>(initialMode);
   const [scopePick, setScope] = useState<LeaderboardScope>("all");
   const [backgroundPick, setBackground] = useState<string>(ALL_BACKGROUNDS);
@@ -200,8 +227,38 @@ export function Leaderboard({
    */
   const dailyKey = scope === "daily" ? today : null;
 
+  /**
+   * What each filter tuple last returned, for the life of this mount.
+   *
+   * Every tab is a fresh fetch: `mode`, `scope`, `background` and `dailyKey` are
+   * all in the dependency list, so tapping through the four scope tabs and back
+   * was four complete pagination walks for data that had not changed. The board is
+   * read-mostly and a few seconds stale is not a defect on it — but a spinner on a
+   * tab the player just looked at is.
+   *
+   * A ref rather than state: writing it must not re-render, and it is deliberately
+   * scoped to the mount so closing the sheet is still a clean read. `retry` and
+   * `refreshSignal` — the two "get me the truth now" inputs — clear it below.
+   */
+  const cache = useRef(new Map<string, { rows: ResultRow[]; profs: Record<string, PublicProfile> }>());
+  const cacheKey = `${mode}|${scope}|${background}|${dailyKey ?? ""}`;
+
+  // An explicit refresh must not be answered out of the cache — that is the one
+  // thing it is asking not to happen.
+  useEffect(() => {
+    cache.current.clear();
+  }, [retry, refreshSignal]);
+
   useEffect(() => {
     if (!open) return;
+    const hit = cache.current.get(cacheKey);
+    if (hit) {
+      setRows(hit.rows);
+      setProfiles(hit.profs);
+      setLoading(false);
+      setFailed(false);
+      return;
+    }
     let active = true;
     setLoading(true);
     setFailed(false);
@@ -217,6 +274,7 @@ export function Leaderboard({
         });
         const profs = await getProfiles(top.map((r) => r.userId));
         if (!active) return;
+        cache.current.set(cacheKey, { rows: top, profs });
         setRows(top);
         setProfiles(profs);
         // confident flourish the first time you see your own row on a board
@@ -235,7 +293,7 @@ export function Leaderboard({
     return () => {
       active = false;
     };
-  }, [open, mode, scope, background, dailyKey, profileId, sfx, retry, refreshSignal]);
+  }, [open, cacheKey, mode, scope, background, dailyKey, profileId, sfx, retry, refreshSignal]);
 
   const metric = scoreMetric(mode);
   // Each tab strip namespaces its own tab ids (see LedgerTabs' `idPrefix`). The MODE
@@ -316,7 +374,7 @@ export function Leaderboard({
   ) : failed ? (
     <FailedState reduced={reduced} onRetry={() => setRetry((n) => n + 1)} />
   ) : rows.length === 0 ? (
-    <EmptyState scope={scope} reduced={reduced} />
+    <EmptyState scope={scope} reduced={reduced} noPlacement={noPlacement} authPending={authPending} />
   ) : (
     <motion.ol
       key={`${mode}-${scope}`}
@@ -492,15 +550,37 @@ function RankBadge({ rank }: { rank: number }) {
   );
 }
 
-function EmptyState({ scope, reduced }: { scope: LeaderboardScope; reduced: boolean }) {
-  const msg =
-    scope === "friends"
-      ? "No friends added yet. Share your friend code to race together."
-      : scope === "week"
-        ? "No runs this week. Finish a run to claim the top spot."
-        : scope === "daily"
-          ? "Nobody has filed today's ledger yet. Play it and the board starts with you."
-          : "No runs yet. Finish a run to be the first on the board.";
+function EmptyState({
+  scope,
+  reduced,
+  noPlacement,
+  authPending,
+}: {
+  scope: LeaderboardScope;
+  reduced: boolean;
+  /** The reader cannot reach this board — see the gate in `Leaderboard`. */
+  noPlacement: boolean;
+  /** The session has not answered yet; promise nothing either way. */
+  authPending: boolean;
+}) {
+  // Three states, and only one of them may invite the reader to claim the top
+  // spot. A guest is told what is actually true of their runs and what would
+  // change it; a session still resolving is told the board is empty and nothing
+  // more, which is the one claim that holds whichever way it resolves.
+  const headline = noPlacement ? "NO ENTRIES YET" : "NO ENTRIES — BE THE FIRST";
+  const msg = noPlacement
+    ? scope === "friends"
+      ? "Friends need an account. A friend code has to point at somebody the server has heard of, and a guest is only known to this device."
+      : "Your runs are saved on this device, so they don't reach this board. Sign in with an email from the title screen and your finished runs post here — the ones you've already played come with you."
+    : authPending
+      ? "Nothing filed here yet."
+      : scope === "friends"
+        ? "No friends added yet. Share your friend code to race together."
+        : scope === "week"
+          ? "No runs this week. Finish a run to claim the top spot."
+          : scope === "daily"
+            ? "Nobody has filed today's ledger yet. Play it and the board starts with you."
+            : "No runs yet. Finish a run to be the first on the board.";
   return (
     <motion.div
       key={scope}
@@ -510,7 +590,7 @@ function EmptyState({ scope, reduced }: { scope: LeaderboardScope; reduced: bool
       className="mx-auto my-10 max-w-xs border-2 border-ink/30 p-1.5 text-center"
     >
       <div className="border border-ink/25 px-4 py-6">
-        <p className="font-anton text-xl leading-tight tracking-[0.06em] text-ink">NO ENTRIES — BE THE FIRST</p>
+        <p className="font-anton text-xl leading-tight tracking-[0.06em] text-ink">{headline}</p>
         <p className="mt-2 font-body text-xs text-secondary">{msg}</p>
       </div>
     </motion.div>

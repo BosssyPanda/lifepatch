@@ -141,7 +141,13 @@ export function YearLoop({ run, onOpenAlmanac }: { run: Run; onOpenAlmanac: () =
           </div>
         </div>
       )}
-      <YearHud run={s} saving={run.saving} saveFailed={run.saveFailed} onOpenAlmanac={onOpenAlmanac} />
+      <YearHud
+        run={s}
+        saving={run.saving}
+        saveFailed={run.saveFailed}
+        savedThrough={run.savedThrough}
+        onOpenAlmanac={onOpenAlmanac}
+      />
       <RunTicker run={s} />
 
       <MarketTicker run={s} />

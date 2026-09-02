@@ -742,9 +742,26 @@ export function operatingCashFlow(s: RunState): number {
  */
 export function isUnrecoverable(s: RunState): boolean {
   if (s.debt <= 0) return false;
-  // anything sellable is a way out, and so is equity in the house
+  // Anything SELLABLE is a way out. That is cash and the portfolio, and it is not
+  // the house.
   if (s.cash > 0 || portfolioValue(s) > 0) return false;
-  if (homeEquity(s) > 0) return false;
+  /*
+   * Home equity used to sit here too, on the reasoning that it was "a way out".
+   * It is not one: the home is not in `ASSET_IDS`, so `trade` cannot touch it,
+   * and there is no sell, downsize or move-out anywhere in the engine — `housing`
+   * is written once on purchase and never returns to "renting". Housing is a
+   * one-way door, so equity behind it is a number, not an option.
+   *
+   * Blocking on it meant a homeowner in a terminal spiral could never reach this
+   * ending. `insolventStreak` reset to 0 every year while the mortgage kept
+   * amortising and the property kept drifting up, so equity was not merely
+   * positive but RISING — and the warning countdown never showed either, since it
+   * keys off the same streak. The player was left pressing ADVANCE, borrowing at
+   * 7% to service a 6% mortgage, with the game refusing to say the run was over.
+   * That is the exact "screensaver" this ending was written to end.
+   *
+   * If a downsize action is ever added, this is the line to restore.
+   */
   const takeHome = Math.round(s.salary * TAKE_HOME);
   // A balance smaller than five years of take-home pay is a debt, not a spiral.
   if (s.debt < takeHome * INSOLVENCY_DEBT_MULTIPLE) return false;
@@ -823,6 +840,9 @@ export function advanceYear(s: RunState): RunState {
   // debt does to a real portfolio. Only a player with neither cash nor holdings
   // rolls the shortfall forward, and that balance keeps compounding at 7%.
   let forcedSale = 0;
+  // Declared out here so it is defined when `due === 0` — the year record below
+  // reads it unconditionally.
+  let paid = 0;
   const due = debtMinimum(debt);
   if (due > 0) {
     const fromCash = Math.min(cash, due);
@@ -835,6 +855,10 @@ export function advanceYear(s: RunState): RunState {
       after -= forcedSale;
     }
     debt -= fromCash + forcedSale;
+    // What the lender actually GOT. Strictly less than `due` whenever the player
+    // had neither the cash nor the holdings to cover the minimum — see the year
+    // record below, which used to book `due` and so reported money that never moved.
+    paid = fromCash + forcedSale;
   }
   debt = Math.round(Math.max(0, debt));
   cash = Math.round(cash);
@@ -873,7 +897,15 @@ export function advanceYear(s: RunState): RunState {
     portfolioDelta,
     // What actually left the account this year — housing and debt service included,
     // so the figure the player sees is the one they lived.
-    cashFlow: Math.round(takeHome - expenses - ms.payment - due),
+    //
+    // `paid`, NOT `due`. The lender's minimum is what was ASKED for; a broke player
+    // pays part of it or none of it and the shortfall rolls forward compounding at
+    // 7%. Booking `due` overstated the outflow by exactly the unpaid remainder, and
+    // it did so precisely in the insolvency spiral — the years where this number
+    // matters most. Worked case: no cash, no holdings, $112,000 owed, a $16,800
+    // minimum and a −$5,000 operating gap recorded −$21,800 against $5,000 of real
+    // movement.
+    cashFlow: Math.round(takeHome - expenses - ms.payment - paid),
   };
 
   const nextYear = s.year + 1;

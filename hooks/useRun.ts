@@ -11,6 +11,7 @@ import {
   quitRun,
   retire,
   trade,
+  yearIndex,
   type RunState,
 } from "@/lib/runEngine";
 import { clearChallenge } from "@/lib/challenge";
@@ -65,6 +66,23 @@ export function useRun(userId: string | null) {
    * that closing the tab right now would cost them the run.
    */
   const [saveFailed, setSaveFailed] = useState(false);
+  /**
+   * The year index this run is actually written through, or null if this hook has
+   * never written it.
+   *
+   * The HUD used to print a bare "Saved" whenever `saving` and `saveFailed` were
+   * both false, which was most of the time and was not a claim it could support.
+   * Only `commit` persists; `trade`, `payDebt` and `choose` all go through
+   * `mutate`, which deliberately writes nothing — so every trade, repayment and
+   * card answered DURING a year is unsaved while the label said otherwise. Four
+   * branches of `persist` also return before a write ever starts (match, daily
+   * quota, challenge, no user), two of them by design.
+   *
+   * The autosave itself is fine: the year boundary is a sensible place to write.
+   * What was wrong was a label that would not name it. Null means "this hook has
+   * saved nothing" and the HUD then claims nothing at all.
+   */
+  const [savedThrough, setSavedThrough] = useState<number | null>(null);
   /** The room this run belongs to, or null for a solo run. */
   const matchCodeRef = useRef<string | null>(null);
   /**
@@ -117,7 +135,16 @@ export function useRun(userId: string | null) {
       // a ref can go stale against the state it is supposed to describe, and this
       // one would do so silently, in the direction that destroys a save.
       if (r.daily) {
-        writeDaily(r.daily, r);
+        // `writeDaily` reports whether it landed. A quota failure here is the same
+        // class of event as a failed cloud write and gets the same answer: the day
+        // is still playable, it just will not survive a refresh, and the player is
+        // told rather than reassured.
+        if (writeDaily(r.daily, r)) {
+          setSavedThrough(yearIndex(r));
+          setSaveFailed(false);
+        } else {
+          setSaveFailed(true);
+        }
         return;
       }
       /**
@@ -139,6 +166,7 @@ export function useRun(userId: string | null) {
       setSaving(true);
       try {
         await saveRun(userId, r.mode, r);
+        setSavedThrough(yearIndex(r));
         setSaveFailed(false);
       } catch {
         // Never rethrown: `commit` calls this as `void persist(next)`, so a
@@ -207,6 +235,7 @@ export function useRun(userId: string | null) {
     run,
     saving,
     saveFailed,
+    savedThrough,
     setPhase,
 
     goMode: useCallback(() => setPhase("mode"), []),
@@ -279,6 +308,12 @@ export function useRun(userId: string | null) {
       }
       liveRef.current = r;
       setRun(r);
+      // It came OUT of the store, so it is written through the year it is standing
+      // in — except for a match run, whose record belongs to the room and not to
+      // this hook. Claiming a local save for one would be the same overreach the
+      // bare "Saved" was.
+      setSavedThrough(opts?.matchCode ? null : yearIndex(r));
+      setSaveFailed(false);
       // A finished match run belongs on the room's podium, not straight in the report.
       setPhase(r.status === "ended" ? (opts?.matchCode ? "podium" : "report") : "run");
     }, []),

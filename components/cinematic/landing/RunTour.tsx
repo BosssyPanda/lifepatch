@@ -24,7 +24,7 @@ const STEPS = [
   { n: "001", label: "Setup", sub: "Pick a life. Every job is a different math problem." },
   { n: "002", label: "The world moves", sub: "Real market history hits your ledger, year after year." },
   { n: "003", label: "The ledger posts", sub: "Every choice becomes a line item. The house keeps receipts." },
-  { n: "004", label: "The verdict", sub: "Nine months or forty years later — one word sums you up." },
+  { n: "004", label: "The verdict", sub: "When the ledger closes — one word sums you up." },
 ] as const;
 
 const JANITOR = PROFESSIONS[0];

@@ -60,7 +60,7 @@ export function CharityCard({ s, onDonate, onSkip }: { s: CashflowState; onDonat
         </div>
       </div>
       <p className="mt-2 font-body text-[0.88rem] text-ink/80">
-        Donate {currency(cost)} (10% of your income) and for the next 3 turns you may roll <strong>one or two</strong> dice — your choice. More control over where you land.
+        Donate {currency(cost)} (10% of your income) and your next 3 rolls may be <strong>one or two</strong> dice — your choice. They keep until you use them. More control over where you land.
       </p>
       <LessonBox>{CHARITY_STRATEGY_NOTE}</LessonBox>
       <div className="mt-4 flex items-center justify-end gap-2">

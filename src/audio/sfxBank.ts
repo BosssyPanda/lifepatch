@@ -54,6 +54,8 @@ export class SfxBank {
   private cache = new Map<string, Howl>();
   private current: { id: AmbienceId; howl: Howl } | null = null;
   private enabled = false; // set true once a file load is attempted post-unlock
+  /** Every one-shot timer this bank still owes — see `later()` and `dispose()`. */
+  private pending = new Set<ReturnType<typeof setTimeout>>();
 
   /** Mark audio unlocked (after a user gesture); ambience may now start. */
   enable(): void {
@@ -105,7 +107,7 @@ export class SfxBank {
       const prev = this.current.howl;
       try {
         prev.fade(prev.volume() as number, 0, AMB_FADE);
-        setTimeout(() => { try { prev.stop(); } catch {} }, AMB_FADE + 40);
+        this.later(() => { try { prev.stop(); } catch {} }, AMB_FADE + 40);
       } catch {}
       this.current = null;
     }
@@ -142,16 +144,43 @@ export class SfxBank {
     } catch {}
   }
 
+  /**
+   * Run `fn` after `ms`, and keep the handle so `dispose()` can cancel it.
+   *
+   * `AudioEngine.disposeLater` treats this exact pattern as a contract — every
+   * one-shot handle goes into `pendingDisposals` so teardown can cancel it — and
+   * states why: a fire-and-forget timer left the disposed nodes reachable, so the
+   * teardown did not actually finish until the last sound would have rung out.
+   * The three timers in this file were the one place beside it that did not
+   * follow the rule; each was `try`/`catch`ed, so the cost was three timers
+   * surviving a route change and poking stopped handles, but a rule the file
+   * next door states and this one ignores is a rule that decays.
+   *
+   * The handle removes itself on fire, so the set tracks only what is still owed.
+   */
+  private later(fn: () => void, ms: number): void {
+    const handle = setTimeout(() => {
+      this.pending.delete(handle);
+      try { fn(); } catch {}
+    }, ms);
+    this.pending.add(handle);
+  }
+
   /** Fade the bed out then unload everything. */
   dispose(): void {
     try {
+      // Anything still owed is owed to a graph that is going away. The ambience
+      // swap's pending `stop()` in particular is moot: the bed it was going to
+      // stop is stopped below regardless.
+      this.pending.forEach(clearTimeout);
+      this.pending.clear();
       if (this.current) {
         const h = this.current.howl;
         h.fade(h.volume() as number, 0, 300);
-        setTimeout(() => { try { h.stop(); } catch {} }, 340);
+        this.later(() => { try { h.stop(); } catch {} }, 340);
       }
       this.current = null;
-      setTimeout(() => {
+      this.later(() => {
         this.cache.forEach((h) => { try { h.unload(); } catch {} });
         this.cache.clear();
       }, 400);
