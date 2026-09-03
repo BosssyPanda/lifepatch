@@ -182,11 +182,31 @@ async function storyRun(run) {
   }
   await run.snap("08-story-auth");
 
-  // auth gate: dev builds accept any email and keep the save on-device
-  const email = page.locator("#email");
-  if (await email.count()) {
-    await email.fill("qa@lifepatch.test");
-    await run.clickAny(["continue with email", "email me a magic link"], { wait: 1800 });
+  // The auth gate. GUEST FIRST, and not for convenience.
+  //
+  // The email branch below was the only branch, and it quietly cost this journey
+  // its entire reason to exist whenever the suite ran against a real project.
+  // Submitting that form asks Supabase for a magic link, which it sends; the
+  // screen then sits on "check your email", and completing it means opening a
+  // mailbox, which no headless browser is going to do. So the journey never
+  // reached setup, and every assertion past this point — the background card,
+  // the year in the HUD, three years of advancing — reported MED and the suite
+  // still exited green, because only HIGH and console errors fail it.
+  //
+  // That is the worst shape a gate can take: with NEXT_PUBLIC_SUPABASE_* set,
+  // which is how production is configured, the story journey covered nothing
+  // and said so in a register nobody reads.
+  //
+  // "Play as guest" is what a visitor without an account actually clicks, it
+  // needs no mailbox, and it is present exactly when the gate is. The email
+  // branch stays as the fallback for a build with no cloud, where there is no
+  // guest button because there is no account for it to be the alternative to.
+  if (!(await run.clickAny(["play as guest"], { wait: 2000 }))) {
+    const email = page.locator("#email");
+    if (await email.count()) {
+      await email.fill("qa@lifepatch.test");
+      await run.clickAny(["continue with email", "email me a magic link"], { wait: 1800 });
+    }
   }
   await run.clickAny(["begin a new life", "new life", "^continue —"], { wait: 1600 });
   await run.snap("09-story-setup");
