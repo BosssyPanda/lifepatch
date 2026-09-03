@@ -335,7 +335,36 @@ export async function topResults(mode: GameMode, opts: TopOptions = {}): Promise
     const collected: ResultRow[] = [];
     const players = new Set<string>();
     for (let p = 0; p < MAX_PAGES; p++) {
-      const { data } = await page(p * PAGE, (p + 1) * PAGE - 1);
+      const { data, error } = await page(p * PAGE, (p + 1) * PAGE - 1);
+      /**
+       * A DROPPED REQUEST IS NOT AN EMPTY BOARD.
+       *
+       * This used to be `const { data } = ...`, and the error went in the bin. A
+       * failed page yields `data: null`, so `rows` was `[]`, the loop broke on
+       * `rows.length < PAGE`, and the function returned an empty array — the exact
+       * value a genuinely empty leaderboard returns. `Leaderboard` cannot tell
+       * those apart, so its `catch` never ran, `failed` stayed false, and the
+       * reader got the empty state.
+       *
+       * Which reads as a lie, and since `noPlacement` landed it reads as a
+       * specific one: a signed-out reader on a dead connection was told "Your runs
+       * are saved on this device, so they don't reach this board. Sign in with an
+       * email..." — a network outage diagnosed as an account problem, with an
+       * instruction to go and fix the wrong thing. Measured, not guessed: 71
+       * seconds of spinner and then that paragraph.
+       *
+       * Throwing is what the caller is already built for. `Leaderboard`'s `catch`
+       * sets `failed`, which renders `FailedState` and its Retry button — the
+       * honest answer, and the one the reader can act on. Same correction
+       * `getProfiles` took in `lib/cloud/profiles.ts`: read the error, do not
+       * silently return a shape that means something else.
+       *
+       * The RPC above still falls through to this walk on ITS error, because
+       * migration 10 is optional and a project without it must keep working. That
+       * stays true: a missing function fails the RPC and succeeds here, while a
+       * dead network fails both and lands on this throw.
+       */
+      if (error) throw new Error("Could not reach the leaderboard.");
       const rows = data ?? [];
       for (const row of rows.map(fromProjectedRow)) {
         collected.push(row);
