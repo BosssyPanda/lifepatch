@@ -160,15 +160,37 @@ def lion_coin(name, loc, size=0.16, rot=(0, 0, 0), material="electrum", seed=5, 
 
 
 def plain_coin(name, loc, r=0.06, thick=0.012, rot=(0, 0, 0), material="gold", motif=True):
-    c = kit.cyl(name, r, thick, loc=(0, 0, 0), material=mat(material), segs=64, bevel=thick * 0.25)
-    rim = kit.cyl(name + "_rim", r * 0.92, thick * 1.18, material=mat(material), segs=64)
-    rim.parent = c
+    """A struck coin turned on a lathe: raised rim, sunken field, low relief in the middle. Its own
+    roughness of 0.3: under a hero light, glossier coins mirror the dark room and read as bowls,
+    rougher ones blow out to white. Lean it back about 35 degrees, not straight at the lens."""
+    t, segs = thick / 2, 64
+    prof = [(0.8 * r, t * 0.6), (0.88 * r, t), (0.97 * r, t), (r, t * 0.75),
+            (r, -t * 0.75), (0.97 * r, -t), (0.88 * r, -t), (0.8 * r, -t * 0.6)]
+    bm = bmesh.new()
+    rings = [[bm.verts.new((pr * math.cos(i / segs * math.tau), pr * math.sin(i / segs * math.tau), pz)) for i in range(segs)]
+             for pr, pz in prof]
+    for a, b in zip(rings, rings[1:]):
+        for i in range(segs):
+            bm.faces.new((a[i], a[(i + 1) % segs], b[(i + 1) % segs], b[i]))
+    bm.faces.new(rings[0])
+    bm.faces.new(rings[-1][::-1])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    metal = mat(material).copy()
+    metal.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.3
+    c = kit.from_bmesh(name, bm, metal)
+    c.data.set_sharp_from_angle(angle=math.radians(35))
     if motif:
-        m = kit.lumpy(name + "_motif", r * 0.5, loc=(0, 0, thick * 0.55), scale=(1, 1, 0.12), material=mat(material),
+        m = kit.lumpy(name + "_motif", r * 0.6, loc=(0, 0, t * 0.45), scale=(1, 1, 0.08), material=metal,
                       amp=0.3, freq=1.5, subdiv=3, seed=2)
         m.parent = c
     kit.place(c, loc, rot)
     return c
+
+
+def coin_rest(top, r, thick, tilt):
+    """Height (relative to the same origin as top) of a tilted coin's centre when its lowest edge
+    sits on a surface at top, so a coin leaning toward the lens touches its stand."""
+    return top + r * math.sin(tilt) + thick / 2 * math.cos(tilt) - 0.0008
 
 
 def hacksilver(name, loc, n=9, spread=0.06, seed=4):
@@ -338,14 +360,22 @@ def balance(name, loc, rot_z=0.0, scale=1.0):
 
 
 def tablet(name, loc, rot=(0, 0, 0), size=(0.09, 0.065, 0.022), seed=1):
+    """A clay loan tablet: lines of small wedge marks pressed into the face, read as script, not
+    as a grid of keys."""
     ob = kit.box(name, size, material=mat("clay_dim"), bevel=0.008)
     rnd = random.Random(seed)
-    for r in range(5):
-        for c in range(6):
-            if rnd.random() < 0.8:
-                w = kit.box(f"{name}_w{r}{c}", (0.006, 0.003, 0.004), material=mat("ink") if kit.look()["key_name"] == "a" else mat("clay_dim", "#6d5a48"),
-                            loc=(-0.035 + c * 0.013 + rnd.uniform(-0.002, 0.002), 0.022 - r * 0.011, size[2] / 2))
-                w.parent = ob
+    ink = mat("clay_dim", "#6f6a62" if kit.look()["key_name"] == "a" else "#6d5a48")
+    k = 0
+    for r in range(7):
+        x = -0.036
+        while x < 0.032:
+            w = rnd.uniform(0.002, 0.007)
+            up = rnd.random() < 0.2
+            m = kit.box(f"{name}_w{k}", (0.0014, 0.004, 0.002) if up else (w, 0.0014, 0.002), material=ink,
+                        loc=(x + (0.0007 if up else w / 2), 0.024 - r * 0.008, size[2] / 2 - 0.0006))
+            m.parent = ob
+            x += (0.0014 if up else w) + rnd.uniform(0.0015, 0.004)
+            k += 1
     return kit.place(ob, loc, rot)
 
 
@@ -782,7 +812,10 @@ def silver():
     kit.figure("merchant", "receive", loc=(0.35, 1.75, 0), rot_z=math.radians(180), hat="cap")
     kit.figure("scribe", "stool", loc=(-1.1, 1.3, 0), rot_z=facing((-1.1, 1.3), (0.0, 0.9)), hat="band")
     kit.box("stool", (0.4, 0.4, 0.45), loc=(-1.1, 1.35, 0.22), material=mat("wood"), bevel=0.02)
-    kit.figure("buyer", "point", loc=(1.2, 0.45, 0), rot_z=facing((1.2, 0.45), (0.35, 1.1)), hat="cap")
+    by, by_rz = (1.2, 0.45, 0), facing((1.2, 0.45), (0.35, 1.1))
+    kit.figure("buyer", "carry", loc=by, rot_z=by_rz, hat="cap")
+    held = (kit.hand_pos("carry", -1, by, by_rz) + kit.hand_pos("carry", 1, by, by_rz)) / 2
+    sack("bundle", held - Vector((0, 0, 0.3 * 0.35 + 0.04)), size=0.3, seed=9)
     _lights_studio(target=(0, 1.2, 0.9), key=900, fill=260, rim=420)
     c = kit.camera((-1.0, -2.5, 1.1), (0.3, 1.4, 0.8), lens=34)
     hp = hero_point(c)
@@ -895,7 +928,8 @@ def shares():
     hp = hero_point(c)
     stand("crate_front", c, hp, hp.z - 0.03)
     share = paper_sheet("hero_share", (0.15, 0.21), loc=hp + Vector((0.04, 0.03, 0.0)), rot=face_cam(c, math.radians(25)), kind="share", seed=6)
-    peso = plain_coin("piece_of_eight", hp + Vector((-0.07, -0.02, 0.02)), r=0.035, thick=0.006, rot=face_cam(c, math.radians(55)), material="silver")
+    peso = plain_coin("piece_of_eight", hp + Vector((-0.07, -0.02, coin_rest(-0.03, 0.035, 0.006, math.radians(35)))),
+                      r=0.035, thick=0.006, rot=face_cam(c, math.radians(35)), material="silver")
     mark_hero(share, peso)
     hero_light(c, hp, 12.0)
 
@@ -928,7 +962,8 @@ def goldwars():
     hp = hero_point(c)
     stand("ledger_desk", c, hp, hp.z - 0.03)
     bond = paper_sheet("hero_bond", (0.15, 0.21), loc=hp + Vector((0.05, 0.04, -0.01)), rot=face_cam(c, math.radians(20)), kind="bond", seed=22)
-    sov = plain_coin("sovereign", hp + Vector((-0.06, -0.02, 0.012)), r=0.035, thick=0.007, rot=face_cam(c, math.radians(55)), material="gold")
+    sov = plain_coin("sovereign", hp + Vector((-0.06, -0.02, coin_rest(-0.03, 0.035, 0.007, math.radians(35)))),
+                     r=0.035, thick=0.007, rot=face_cam(c, math.radians(35)), material="gold")
     mark_hero(bond, sov)
     hero_light(c, hp, 12.0)
 
