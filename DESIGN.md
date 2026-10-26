@@ -106,6 +106,26 @@ Two rules bind every one of these: anything knocked out of an accent fill is pai
 `--color-bg`, and **orange never grades an outcome** — a "sell" button does not turn
 orange because the sale is profitable, because the gain is already printed in green.
 
+**Amendment G, approved 2026-10-26 — gold, in the intro only.** The 3D scroll intro follows
+one lump of gold from the ore to the present day, so the ore and each era's money may be gold
+metal. This is a material in the intro's 3D scenes, not a token, and it has four limits:
+
+- **Where:** the ore, and the money object of each era (the one that holds the money spot
+  through every transition), in the intro's scenes and nowhere else. Silver, paper and
+  digital money stay in the ink scale; the Lydian electrum is a paler gold.
+- **Never UI:** no gold text, border, button, progress, caption or focus ring, in the intro or
+  anywhere else. Identity and interaction stay `--color-accent`.
+- **Not a second orange:** the metal's base colour is real gold's reflectance (`GOLD` in
+  `scripts/blender/intro/kit.py`). On the overview renders it measures hue 37–41°, darker and
+  far less saturated than the accent at 16°. If lighting ever pushes it toward orange, the gold
+  moves toward yellow; the accent does not move.
+- **Gate:** the first built slice puts the gold money and the accent (Skip, chapter progress,
+  the primary CTA) on screen together. If they read as two oranges there, this amendment goes
+  back to the owner before another scene is built.
+
+Everything else holds inside the intro: the clay figures and rock are neutral greys under
+neutral white light on exactly `--color-bg`, and there are no colour casts.
+
 
 ## Typography (four fonts, one job each)
 
@@ -122,7 +142,8 @@ orange because the sale is profitable, because the gain is already printed in gr
 
 The default is still flat, square, and shadowless. Six narrow amendments (A–D approved
 2026-08-13, E in § Palette and F below approved 2026-08-18) buy back mainstream comfort
-without buying the generic "AI slop" look. Each is a *permission with a gate*, not a new
+without buying the generic "AI slop" look. (G, in § Palette, is not one of them: it lets the
+intro's 3D ore and money be gold metal and changes nothing here.) Each is a *permission with a gate*, not a new
 default: if an element does not opt in explicitly, the global reset in `app/globals.css`
 still forces `border-radius: 0` and `box-shadow: none`.
 
