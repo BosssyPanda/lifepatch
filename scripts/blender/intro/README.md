@@ -39,11 +39,16 @@ each frame.
 
 ## Scene one, built for real: the ore (`ore/`)
 
-- `ore/ore.py`: the hero gold ore, modelled from code (fused gold plates, rock pockets, quartz,
-  the crack). `--out DIR --hdr public/intro/env/studio.hdr` renders look-dev views of it.
+- `ore/ore.py`: the hero gold ore, a natural gold nugget sculpted from code as a signed distance
+  field (`ore/sdf.py`) and meshed by marching cubes: lumps, dents, worn flats, knobs and folds,
+  pits, hollows of host rock with broken quartz, and the crack. Its materials (polished highs,
+  grimy hollows, dirt in the deepest grooves) read how raised or sunken each point is from vertex
+  attributes, so they bake exactly as they render. `--out DIR --hdr public/intro/env/studio.hdr
+  [--views front,back,close,crack,vug]` renders look-dev views. It needs scipy and PyMCubes in
+  the venv: `uv pip install --python .venv-bpy/bin/python scipy pymcubes`.
 - `ore/studio.py`: the softbox HDR the gold reflects, used by Blender and by the page
   (`public/intro/env/studio.hdr`).
-- `ore/bake.py`: bakes the ~700k-triangle ore onto a ~60k-triangle copy with colour, ORM and
+- `ore/bake.py`: bakes the ~500k-triangle ore onto a ~60k-triangle copy with colour, ORM and
   normal maps, and exports `ore.glb` (the ore, its crack's glowing floor, and a light hit-test
   copy for the cursor). It takes about four minutes.
 

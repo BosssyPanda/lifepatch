@@ -1,36 +1,52 @@
 """Scene one's hero, the gold ore, built from scratch in code (no downloads, no generated models).
 
-What makes it read like the reference turnaround Cindy gave (uploads/hearth/cfbab62f…):
-- a lemon-shaped lump, pointed at both ends, with a lumpy outline;
-- big flat gold plates with crisp edges and deep crevices between them: knapped gold pieces of
-  many sizes pressed into a rock core and fused into one surface;
-- the host rock showing wherever no gold covers the core, mostly along a vein that winds round
-  the ore: blocky dark grey granules, with white cauliflower quartz (fused round lumps) in it;
-- a crumpled-foil texture on the gold, done in the shader so it can be baked into a normal map;
-- the crack down the front that the camera dives into, its floor a separate glowing material.
+It is a natural gold nugget, sculpted as a signed distance field (sdf.py) and meshed by marching
+cubes, because a nugget is full of overhangs, folds and hollows that pushing a mesh's vertices
+outwards cannot make. Built up the way a nugget looks, from the large forms down:
 
-    python scripts/blender/intro/ore/ore.py --out DIR --hdr studio.hdr [--views front,left,back,right]
+- an egg-shaped body, its top drawn to a blunt point (the approved overview's silhouette);
+- lumps melted onto it and broad dents pressed into it, some soft, some with a sharp seam;
+- here and there a high point worn flat, as stream gravel grinds a nugget;
+- the surface broken into rounded knobs by grooves, large knobs in some places, small in others,
+  the grooves deep in some places and fused shut in others; and long wandering folds;
+- clusters of small pits, none in some places;
+- hollows along a vein that winds round it, holding the dark host rock, some with broken
+  milky quartz wedged in;
+- the crack down the front that the camera dives into, cut into smooth gold, its floor a
+  separate glowing material.
 
-renders look-dev views lit by the studio HDR (studio.py), to set beside the reference.
+The surface finish is in the materials: the worn highs polished, the hollows duller and grimy,
+grey dirt packed into the deepest grooves and pits, a hammered dimpling everywhere but the
+polished highs. The materials read how high or sunken each point is from vertex attributes
+(`relief_*`) measured on the mesh, so they bake to textures exactly as they render here.
+
+    python scripts/blender/intro/ore/ore.py --out DIR --hdr studio.hdr [--views front,back,close]
+
+renders look-dev views lit by the studio HDR (studio.py).
 Units are metres; the finished ore stands ORE_HEIGHT tall with its foot at z=0, front facing -Y.
+The shape is made in the unit ore's space (height 2, z from -1 to 1) and scaled down at the end.
 """
 import argparse
 import math
 import os
-import random
 import sys
+import time
 
 import bpy
 import bmesh
-from mathutils import Quaternion, Vector, kdtree, noise
-from mathutils.bvhtree import BVHTree
+import numpy as np
+from mathutils import Vector, noise
+from scipy import ndimage
+from scipy.spatial import cKDTree
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.dirname(HERE))
 import kit  # noqa: E402
+import sdf  # noqa: E402
 
 ORE_HEIGHT = 1.1
-SEED = 11
+SEED = 5
 
 # The crack the camera dives into, as (x, z) points on the front face in the unit ore's space
 # (height 2, z from -1 to 1), top to bottom.
@@ -40,16 +56,29 @@ CRACK_D = 0.16       # how deep it is cut
 
 ROCK = "#262422"     # neutral dark grey (DESIGN.md: no warm browns)
 ROCK_LIGHT = "#55524e"
-QUARTZ = "#cfc2aa"   # milky quartz, below white so lit lumps keep their shading
-ORE_GOLD = (1.0, 0.65, 0.19)    # linear; richer than kit.GOLD like the reference, rendered hue ~38° (amendment G: 37-41°)
-DEEP_GOLD = (0.88, 0.5, 0.12)    # linear; the creases and the deeper patches
+DIRT = "#1b1815"     # as faintly warm as ROCK, so beside the gold it does not read blue     # the grime packed into the gold's grooves: grey, not brown (no colour casts)
+QUARTZ = "#d3cfc6"   # milky quartz, below white so lit faces keep their shading
+QUARTZ_GLASS = "#8f8c87"  # the clearer, glassy patches in it
+ORE_GOLD = (1.0, 0.65, 0.19)     # linear; rendered hue ~38° (amendment G: 37-41°)
+WORN_GOLD = (1.0, 0.70, 0.25)    # linear; the polished highs, a touch paler and yellower
+DEEP_GOLD = (0.80, 0.45, 0.11)   # linear; the hollows
 
-GOLD_K, ROCK_K, QUARTZ_K, CRACK_K = 0, 1, 2, 3
-MATERIAL_OF = {GOLD_K: 0, ROCK_K: 1, QUARTZ_K: 1, CRACK_K: 2}
+GOLD_K, ROCK_K, CRACK_K = 0, 1, 2
+MATERIAL_OF = np.array([0, 1, 2])
+
+VOXEL = 0.006        # the sculpt's resolution, in the unit ore's space (3.3 mm on the finished ore)
+GRID_LO, GRID_HI = (-0.8, -0.72, -0.95), (0.82, 0.72, 1.12)
+FOOT = -0.9          # the flat foot it stands on
+
+_T0 = time.time()
+
+
+def _log(*a):
+    print(f"[ore {time.time() - _T0:5.0f}s]", *a, flush=True)
 
 
 # --------------------------------------------------------------------------------------------
-# Geometry
+# The crack
 # --------------------------------------------------------------------------------------------
 
 
@@ -81,31 +110,76 @@ def crack_dist(x, z):
     return crack_at(x, z)[0]
 
 
-def _poisson(points, rmin, rnd, limit):
-    """Pick well-spread points from a list (dart throwing)."""
-    order = list(range(len(points)))
-    rnd.shuffle(order)
-    picked = []
-    tree = kdtree.KDTree(limit)
-    for i in order:
-        if len(picked) >= limit:
-            break
-        p = points[i]
-        if picked:
-            tree.balance()
-            _, _, d = tree.find(p)
-            if d < rmin:
-                continue
-        tree.insert(p, len(picked))
-        picked.append(p.copy())
-    tree.balance()
-    return picked, tree
+def crack_np(x, z):
+    """crack_at for whole arrays at once (its noise depends on z alone, so it is looked up once
+    per distinct z)."""
+    x, z = np.broadcast_arrays(np.asarray(x, dtype=np.float64), np.asarray(z, dtype=np.float64))
+    zs, inv = np.unique(z, return_inverse=True)
+    shift = np.array([0.012 * noise.noise(Vector((0.0, 3.7, q * 16.0))) + 0.006 * noise.noise(Vector((1.3, 0.0, q * 40.0)))
+                      for q in zs])[inv].reshape(z.shape)
+    vary = np.array([0.8 + 0.4 * noise.noise(Vector((q * 9.0, 2.0, 0.0))) for q in zs])[inv].reshape(z.shape)
+    x = x + shift
+    best = np.full(x.shape, 9.0)
+    along = np.zeros(x.shape)
+    n = len(CRACK) - 1
+    for k, (a, b) in enumerate(zip(CRACK, CRACK[1:])):
+        dx, dz = b[0] - a[0], b[1] - a[1]
+        t = np.clip(((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz), 0.0, 1.0)
+        dist = np.hypot(x - a[0] - t * dx, z - a[1] - t * dz)
+        closer = dist < best
+        best = np.where(closer, dist, best)
+        along = np.where(closer, (k + t) / n, along)
+    return best, CRACK_W * (0.25 + 0.75 * np.sin(np.pi * along) ** 0.7) * vary
 
 
-def _hash(p):
-    """A repeatable random number in [0, 1) for a point."""
-    v = math.sin(p.x * 12.9898 + p.y * 78.233 + p.z * 37.719) * 43758.5453
-    return v - math.floor(v)
+def _front(g, d):
+    """For each (x, z) column of the grid, the y where the solid begins seen from the front."""
+    inside = d < 0
+    j = inside.argmax(axis=1)
+    ii, kk = np.meshgrid(np.arange(g.shape[0]), np.arange(g.shape[2]), indexing="ij")
+    a = d[ii, np.maximum(j - 1, 0), kk]
+    b = d[ii, j, kk]
+    y = g.axes[1][j] - g.h * np.clip(b / np.minimum(b - a, -1e-9), 0, 1)
+    return np.where(inside.any(axis=1), y, 9.0)
+
+
+def _cut_crack(g, d):
+    """Cut the crack into the front: a slit whose sides close in a parabola down to its floor, as
+    deep as CRACK_D everywhere, ragged edged. Returns the front surface it was cut from."""
+    front = _front(g, d)
+    xs = slice(int((-0.4 - g.lo[0]) / g.h), int((0.4 - g.lo[0]) / g.h) + 1)
+    zs = slice(int((-0.8 - g.lo[2]) / g.h), int((0.8 - g.lo[2]) / g.h) + 1)
+    X, _, Z = g.coords((xs, slice(None), zs))
+    c, w = crack_np(X[:, :, 0], Z[0, :, :])                # (x, z)
+    Y = g.axes[1][None, :, None]
+    t = (Y - front[xs, None, zs]) / CRACK_D
+    slit = np.maximum(c[:, None, :] - w[:, None, :] * np.sqrt(np.clip(1.0 - t, 0.0, None)), (t - 1.0) * CRACK_D)
+    d[xs, :, zs] = sdf.smax(d[xs, :, zs], -slit.astype(np.float32), 0.006)
+    return front
+
+
+def _crack_line():
+    """The crack as a dense run of (x, z) points, for distances to whole arrays at once."""
+    pts = []
+    for a, b in zip(CRACK, CRACK[1:]):
+        for t in np.linspace(0, 1, 12, endpoint=False):
+            pts.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+    pts.append(CRACK[-1])
+    return np.array(pts)
+
+
+def _calm(X, Y, Z):
+    """1 in most places, falling to 0 on the front within reach of the crack: the crack is cut
+    into smooth gold, so the knobs and folds fade out round it."""
+    line = _crack_line()
+    near = np.full(np.broadcast(X, Y, Z).shape, 9.0)
+    for cx, cz in line:
+        near = np.minimum(near, np.sqrt((X - cx) ** 2 + (Z - cz) ** 2))
+    return np.where(np.broadcast_to(Y < 0.1, near.shape), np.clip((near - 0.1) / 0.15, 0, 1), 1.0)
+
+
+def _near_crack(p, margin):
+    return p[1] < 0.1 and -0.8 < p[2] < 0.8 and crack_dist(p[0], p[2]) < margin
 
 
 def _vein(p, off):
@@ -114,246 +188,312 @@ def _vein(p, off):
     return p.dot(vn) - 0.04 + 0.12 * noise.noise(p * 1.8 + off) + 0.04 * noise.noise(p * 5.0 + off)
 
 
-def _shape(p, off):
-    """Unit sphere point -> lemon: pointed at both ends (the top more), fuller below the middle."""
-    z = p.z
-    rho = math.sqrt(max(0.0, 1.0 - z * z))
-    if z > 0.94:
-        z = 0.94 + (z - 0.94) * 0.4                 # no needle at the tip
-    e = 1.35 + 0.75 * max(z, 0.0) + 0.85 * max(-z, 0.0)  # the top tapers to a point, the foot less
-    r = (rho ** e) / max(rho, 1e-6)
-    full = 1.0 - 0.03 * z
-    q = Vector((p.x * r * 0.52 * full, p.y * r * 0.44 * full, z))
-    q.x += 0.05 * max(z, 0.0) ** 2                      # the tip leans a little
-    n = Vector((p.x * 0.6, p.y * 0.5, p.z * 0.5))
-    lump = (0.10 * noise.noise(p * 1.4 + off) + 0.05 * noise.noise(p * 3.2 + off * 1.7)
-            + 0.02 * noise.noise(p * 7.0 + off * 0.3))
-    return q + n * lump
+# --------------------------------------------------------------------------------------------
+# The form
+# --------------------------------------------------------------------------------------------
 
 
-def _pocket(p, off):
-    """How much host rock shows at p, 0..1: pockets along the vein, broken by gold bridges, and a
-    few lone pockets elsewhere. Returns (amount, the vein value, the pocket's half-width, lone)."""
-    vein = abs(_vein(p, off))
-    w = 0.1 + 0.07 * noise.noise(p * 2.5 + off * 0.8)
-    # decided per small cell, so pockets have angular, broken outlines rather than smooth ones
-    q = (noise.voronoi(p * 7.0 + off)[1][0] - off) / 7.0
-    qv = abs(_vein(q, off))
-    qw = 0.1 + 0.07 * noise.noise(q * 2.5 + off * 0.8)
-    bridge = noise.noise(q * 2.0 + off * 1.9)
-    m = 1.0 if qv < qw and bridge > -0.15 else 0.0
-    lone = 1.0 if noise.noise(q * 1.7 + off * 1.3) > 0.5 else 0.0
-    if q.y < 0.05 and crack_dist(q.x, q.z) < 0.14:
-        return 0.0, vein, w, 0.0                      # gold all round the crack
-    return max(m, lone), vein, w, lone
+def _turn(rng, deg):
+    """A rotation by up to `deg` degrees about a random axis."""
+    ax = rng.standard_normal(3)
+    ax /= np.linalg.norm(ax)
+    a = math.radians(deg) * rng.uniform(-1, 1)
+    k = np.array([[0, -ax[2], ax[1]], [ax[2], 0, -ax[0]], [-ax[1], ax[0], 0]])
+    return np.eye(3) + math.sin(a) * k + (1 - math.cos(a)) * k @ k
 
 
-def _crumple(p, scale, off):
-    """Crumpled-sheet height: each Voronoi cell rises to a blunt peak, its sides flat facets that
-    fold down into a sharp valley along the cell's border (F2 - F1), each cell to its own height."""
-    d, cp = noise.voronoi(p * scale + off)
-    return min(d[1] - d[0], 0.7) * (0.35 + 0.65 * _hash(cp[0]))
+def _facing(n, rng):
+    """A rotation whose third axis is n: an ellipsoid's short axis along the surface normal."""
+    n = n / np.linalg.norm(n)
+    t = rng.standard_normal(3)
+    t -= n * t.dot(n)
+    t /= np.linalg.norm(t)
+    return np.stack([t, np.cross(n, t), n], axis=1)
 
 
-def _chunk(bm, centre, normal, r, flat, rnd):
-    """One gold piece: a flattened lump knapped into flat faces, lying with its broad top facing
-    out along `normal`."""
-    made = bmesh.ops.create_icosphere(bm, subdivisions=3, radius=1.0)["verts"]
-    sx, sy = 1.0, rnd.uniform(0.65, 1.0)
+def _ellipsoids(g, d, sites, rng, size, shape, sink, melt, op):
+    """Press an ellipsoid into the field at each (point, normal) site: radius log-uniform in
+    `size`, axes scaled by `shape`, its centre `sink` radii in along the normal (out if negative),
+    blended over `melt` radii."""
+    for p, n in sites:
+        r = math.exp(rng.uniform(math.log(size[0]), math.log(size[1])))
+        r *= min(1.0, max(0.4, 1.4 - p[2]))          # nothing big on the narrowing top
+        radii = (r, r * rng.uniform(*shape[0]), r * rng.uniform(*shape[1]))
+        rot = _facing(n + rng.standard_normal(3) * 0.4, rng)
+        c = p - n * r * rng.uniform(*sink)
+        k = r * rng.uniform(*melt)
+        sdf.paint(g, d, c, r + k + 0.02, lambda X, Y, Z: sdf.ellipsoid(X, Y, Z, c, radii, rot),
+                  lambda a, b: op(a, b, k))
+
+
+def _wear(g, d, sites, rng):
+    """A high point ground flat: a plane just under the surface, its edge rounded, fading out
+    over a patch so it does not slice the whole ore."""
+    for p, n in sites:
+        q = p - n * rng.uniform(0.015, 0.045)
+        m = n + rng.standard_normal(3) * 0.15
+        m /= np.linalg.norm(m)
+        reach = rng.uniform(0.12, 0.22)
+        sl = g.block(q, reach)
+        if sl is None:
+            continue
+        X, Y, Z = g.coords(sl)
+        plane = (X - q[0]) * m[0] + (Y - q[1]) * m[1] + (Z - q[2]) * m[2]
+        w = np.clip(1.5 - np.sqrt((X - q[0]) ** 2 + (Y - q[1]) ** 2 + (Z - q[2]) ** 2) / reach * 1.5, 0, 1)
+        w = w * w * (3 - 2 * w)
+        a = d[sl]
+        d[sl] = a + (sdf.smax(a, plane, 0.03) - a) * w
+
+
+def _surface_relief(g, d, rng, knob, fold):
+    """Knobs and folds, worked only on the voxels near the surface (they move it by less than the
+    band is deep). Knobs: Voronoi cells, each a rounded knob, the grooves between them round at
+    the bottom and the rim; large cells in some places, small in others, the grooves deep in some
+    places and shut in others. Folds: long creases that wander (domain-warped noise)."""
+    band = knob + fold * 1.4 + 3 * g.h
+    idx = np.nonzero(np.abs(d) < band)
+    P = np.stack([g.axes[i][idx[i]] for i in range(3)], 1).astype(np.float64)
+    x, y, z = P[:, 0], P[:, 1], P[:, 2]
+    calm = _calm(x, y, z)
+
+    wiggle = [sdf.Noise(g, rng, 0.3) for _ in range(3)]
+    Pw = P + 0.05 * np.stack([w.at(x, y, z) for w in wiggle], 1)
+    sizes = sdf.Noise(g, rng, 0.5)
+    cand = rng.uniform(g.lo, g.hi, size=(200000, 3))
+    dense = np.clip(0.06 + 0.5 * (sizes.at(cand[:, 0], cand[:, 1], cand[:, 2]) + 0.4), 0.03, 0.5) ** 2
+    seeds = cand[rng.uniform(0, 1, len(cand)) < dense]
+    dd, _ = cKDTree(seeds).query(Pw, k=2)
+    edge = dd[:, 1] - dd[:, 0]
+    cell = np.maximum(dd[:, 1], 1e-3)
+    deep = sdf.Noise(g, rng, 0.25).at(x, y, z)
+    runs = sdf.Noise(g, rng, 0.07).at(x, y, z)           # breaks the grooves into separate runs
+    depth = (knob * np.clip(0.45 + 0.6 * deep, 0, 1) * np.clip(0.2 + 0.8 * runs, 0, 1)
+             * np.clip(cell / 0.12, 0.25, 1.0))
+    t = np.clip(edge / np.clip(0.25 * cell, 0.02, 0.05), 0, 1)
+    change = depth * (1 - t * t * (3 - 2 * t))
+    _log("knobs:", len(seeds), "cells")
+
+    warp = [sdf.Noise(g, rng, 0.45) for _ in range(3)]
+    Pw = P + 0.09 * np.stack([w.at(x, y, z) for w in warp], 1)
+    amount = np.clip(0.55 + 0.6 * sdf.Noise(g, rng, 0.7).at(x, y, z), 0.0, 1.0)
+    for size, amp in ((0.24, fold), (0.1, fold * 0.4)):
+        n = sdf.Noise(g, rng, size).at(Pw[:, 0], Pw[:, 1], Pw[:, 2])
+        t = np.clip(np.abs(n) / 0.4, 0, 1)
+        change += amp * amount * (1 - t * t * (3 - 2 * t))
+    d[idx] += (change * calm).astype(np.float32)
+
+
+def _pits(g, d, rng, count):
+    """Clusters of small hollows, elongated and turned every way, thick in places, none in others."""
+    pts, nrm = g.surface_points(d, rng, count, 0.03)
+    dens = sdf.Noise(g, rng, 0.35)
+    made = 0
+    for p, n in zip(pts, nrm):
+        if _near_crack(p, 0.16) or dens.at(p[0], p[1], p[2]) < rng.uniform(0.3, 2.2):
+            continue
+        for _ in range(rng.integers(1, 4)):
+            r = math.exp(rng.uniform(math.log(0.012), math.log(0.032)))
+            radii = (r, r * rng.uniform(0.4, 0.75), r * rng.uniform(0.35, 0.6))
+            rot = _facing(n, rng) @ _turn(rng, 50)
+            c = p + n * r * rng.uniform(0.0, 0.5) + rng.standard_normal(3) * r * 0.7
+            k = r * 0.3
+            sdf.paint(g, d, c, r + k + 0.01, lambda X, Y, Z: sdf.ellipsoid(X, Y, Z, c, radii, rot),
+                      lambda a, b: sdf.smax(a, -b, k))
+            made += 1
+    return made
+
+
+def _vugs(g, d, rng, count):
+    """Hollows along the vein, each holding host rock that fills it to below the gold rim.
+    Returns the rock's field and the hollows as (point, normal, radius)."""
+    pts, nrm = g.surface_points(d, rng, 4000, 0.05)
+    off = Vector((3.0, -7.0, 11.0))
+    vein = np.array([abs(_vein(Vector(p), off)) for p in pts])
+    vugs = []
+    for i in np.argsort(vein):
+        p, n = pts[i], nrm[i]
+        if vein[i] > 0.1 or len(vugs) >= count:
+            break
+        if _near_crack(p, 0.3) or abs(p[2]) > 0.75 or any(np.linalg.norm(p - q) < 0.2 for q, _, _ in vugs):
+            continue
+        vugs.append((p, n, rng.uniform(0.07, 0.13)))
+    rock = np.full(g.shape, 10.0, np.float32)
+    for p, n, r in vugs:
+        # an irregular hollow: a main pocket and two or three smaller ones run into it
+        parts = [(p, r)]
+        for _ in range(rng.integers(2, 4)):
+            t = rng.standard_normal(3)
+            t -= n * t.dot(n)
+            q = p + t / np.linalg.norm(t) * r * rng.uniform(0.5, 0.85)
+            q = q - g.normals(d, q[None])[0] * g.sample(d, q[None])[0]   # back onto the curved surface
+            parts.append((q, r * rng.uniform(0.45, 0.7)))
+        for q, rq in parts:
+            radii = (rq, rq * rng.uniform(0.6, 0.9), rq * 0.55)
+            rot = _facing(n, rng)
+            c = q + n * rq * 0.1
+            sdf.paint(g, d, c, rq + 0.05, lambda X, Y, Z: sdf.ellipsoid(X, Y, Z, c, radii, rot),
+                      lambda a, b: sdf.smax(a, -b, 0.012))
+            fill = tuple(x * 0.9 for x in radii)
+            cf = c - n * rq * rng.uniform(0.9, 1.05)
+            sdf.paint(g, rock, cf, rq + 0.05, lambda X, Y, Z: sdf.ellipsoid(X, Y, Z, cf, fill, rot),
+                      np.minimum)
+    # the rock's blocky granules: Voronoi chunks, each raised its own amount
+    seeds = rng.uniform(g.lo, g.hi, size=(int(np.prod(g.hi - g.lo) / 0.025 ** 3 * 0.6), 3))
+    tree = cKDTree(seeds)
+    lift = rng.uniform(0, 1, len(seeds))
+    for p, n, r in vugs:
+        sl = g.block(p, r + 0.06)
+        X, Y, Z = (np.broadcast_to(a, rock[sl].shape) for a in g.coords(sl))
+        dd, ii = tree.query(np.stack([X.ravel(), Y.ravel(), Z.ravel()], 1), k=2)
+        edge = (dd[:, 1] - dd[:, 0]).reshape(X.shape)
+        rock[sl] -= (lift[ii[:, 0]].reshape(X.shape) * 0.011 + np.minimum(edge, 0.006) * 0.8).astype(np.float32)
+    return rock, vugs
+
+
+def nugget(seed=SEED, h=VOXEL):
+    """The nugget's gold and rock as signed distance fields on one grid, and its rock hollows."""
+    rng = np.random.default_rng(seed)
+    g = sdf.Grid(GRID_LO, GRID_HI, h)
+    X, Y, Z = g.coords()
+    d = np.full(g.shape, 10.0, np.float32)
+    for c, r in (((0.0, 0.0, -0.36), (0.56, 0.45, 0.60)), ((0.015, 0.0, 0.12), (0.48, 0.39, 0.55)),
+                 ((0.045, -0.01, 0.48), (0.38, 0.31, 0.46)), ((0.07, 0.0, 0.76), (0.22, 0.18, 0.25))):
+        d = sdf.smin(d, sdf.ellipsoid(X, Y, Z, c, r, _turn(rng, 8)), 0.3)
+    d += (0.05 * sdf.Noise(g, rng, 0.5).at(X, Y, Z)).astype(np.float32)
+    _log("body", g.shape)
+    pts, nrm = g.surface_points(d, rng, 55, 0.16)
+    _ellipsoids(g, d, zip(pts, nrm), rng, (0.07, 0.22), ((0.6, 1.0), (0.4, 0.75)), (0.25, 0.6), (0.12, 0.6), sdf.smin)
+    pts, nrm = g.surface_points(d, rng, 22, 0.2)
+    keep = [(p, n) for p, n in zip(pts, nrm) if not _near_crack(p, 0.2) and abs(p[2]) < 0.6]
+    _ellipsoids(g, d, keep, rng, (0.08, 0.2), ((0.5, 0.9), (0.35, 0.6)), (-0.6, -0.35), (0.5, 0.5),
+                lambda a, b, k: sdf.smax(a, -b, k))
+    pts, nrm = g.surface_points(d, rng, 14, 0.3)
+    _wear(g, d, [(p, n) for p, n in zip(pts, nrm) if not _near_crack(p, 0.25)], rng)
+    _log("lumps, dents, worn faces")
+    _surface_relief(g, d, rng, knob=0.024, fold=0.025)
+    _log("knobs and folds")
+    _log("pits:", _pits(g, d, rng, 700))
+    rock, vugs = _vugs(g, d, rng, 7)
+    _log("rock hollows:", len(vugs))
+    front = _cut_crack(g, d)
+    # nothing finer than the voxels can carry: soften by a voxel so no edge is a staircase
+    d = ndimage.gaussian_filter(d, 0.8)
+    rock = ndimage.gaussian_filter(rock, 0.5)
+    d = sdf.smax(d, -(Z - FOOT), 0.03)
+    rock = sdf.smax(rock, -(Z - FOOT), 0.03)
+    return g, d, rock, front, vugs, rng
+
+
+def _mesh_object(name, v, f, mat_index):
+    me = bpy.data.meshes.new(name)
+    me.vertices.add(len(v))
+    me.vertices.foreach_set("co", v.astype(np.float32).ravel())
+    me.loops.add(f.size)
+    me.loops.foreach_set("vertex_index", f.astype(np.int32).ravel())
+    me.polygons.add(len(f))
+    me.polygons.foreach_set("loop_start", (np.arange(len(f)) * 3).astype(np.int32))
+    me.polygons.foreach_set("material_index", mat_index.astype(np.int32))
+    me.polygons.foreach_set("use_smooth", np.ones(len(f), bool))
+    me.update()
+    me.validate()
+    ob = bpy.data.objects.new(name, me)
+    bpy.context.scene.collection.objects.link(ob)
+    return ob
+
+
+def _attributes(ob, v, f):
+    """What the materials read, stored on the vertices so they survive scaling and baking:
+    `unit_co`, the point in the unit ore's space (the textures' coordinates); and `relief_fine`,
+    `relief_mid`, `relief_broad`, how far the point stands out from (positive) or sinks into
+    (negative) its surroundings at three sizes, in standard deviations."""
+    me = ob.data
+    a = me.attributes.new("unit_co", "FLOAT_VECTOR", "POINT")
+    a.data.foreach_set("vector", v.astype(np.float32).ravel())
+    n = sdf.vertex_normals(v, f)
+    avg = sdf.smoother(v, f)
+    for name, it in (("relief_fine", 6), ("relief_mid", 40), ("relief_broad", 200)):
+        r = sdf.relief(v, f, n, avg, it)
+        r /= max(r.std(), 1e-9)
+        a = me.attributes.new(name, "FLOAT", "POINT")
+        a.data.foreach_set("value", r.astype(np.float32))
+
+
+def build_mesh(seed=SEED, h=VOXEL):
+    g, gold, rock, front, vugs, rng = nugget(seed, h)
+    v, f = sdf.mesh(g, sdf.smin(gold, rock, 0.008))   # a hair of blend: no staircase where they meet
+    apart = g.sample(gold, v) - g.sample(rock, v)          # > 0 where the rock is the surface
+    kind = np.where(apart > 0, ROCK_K, GOLD_K)
+    _log("mesh:", len(v), "vertices")
+    # the crack's floor glows; its walls are duller than the open gold (`crack_wall`)
+    c, w = crack_np(v[:, 0], v[:, 2])
+    surface = ndimage.map_coordinates(front, [(v[:, 0] - g.lo[0]) / g.h, (v[:, 2] - g.lo[2]) / g.h], order=1, mode="nearest")
+    down = v[:, 1] - surface
+    slit = (np.abs(v[:, 2]) < 0.8) & (down < CRACK_D * 1.1)       # not the back, on the same line
+    kind[slit & (c < w * 0.5) & (down > CRACK_D * 0.5)] = CRACK_K
+    wall = np.where(slit & (c < w * 1.1), np.clip(down / 0.04, 0, 1), 0.0)
+    fk = kind[f]
+    face = np.where((fk[:, 0] == fk[:, 1]) | (fk[:, 0] == fk[:, 2]), fk[:, 0], fk[:, 1])
+    ob = _mesh_object("ore_hi", v, f, MATERIAL_OF[face])
+    _attributes(ob, v, f)
+    a = ob.data.attributes.new("crack_wall", "FLOAT", "POINT")
+    a.data.foreach_set("value", wall.astype(np.float32))
+    a = ob.data.attributes.new("rock", "FLOAT", "POINT")
+    a.data.foreach_set("value", np.clip(0.5 + apart / 0.006, 0, 1).astype(np.float32))
+    _log("attributes")
+    return ob, vugs, rng
+
+
+def _fragment(bm, centre, r, rng, worn=None):
+    """One piece of broken quartz: a lump knapped by flat fracture planes, crisp edged. `worn`,
+    a (point, normal) plane, grinds off whatever stands above it, as the stream wore it down
+    with the gold round it."""
+    made = bmesh.ops.create_icosphere(bm, subdivisions=2, radius=1.0)["verts"]
+    rot = sdf.random_rotation(rng)
+    radii = np.array([1.0, rng.uniform(0.6, 0.9), rng.uniform(0.45, 0.75)]) * r
     for v in made:
-        v.co = Vector((v.co.x * r * sx, v.co.y * r * sy, v.co.z * r * flat))
-    for k in range(rnd.randint(7, 10)):
-        d = Vector((rnd.gauss(0, 1), rnd.gauss(0, 1), rnd.gauss(0, 1) * 0.6 + (0.9 if k < 2 else 0.0)))
-        d.normalize()
-        h = max(v.co.dot(d) for v in made)
-        cut = h - (rnd.uniform(0.45, 0.7) * r * flat if k < 2 else rnd.uniform(0.1, 0.32) * r)
+        v.co = Vector(rot @ (np.array(v.co) * radii))
+    for _ in range(rng.integers(7, 11)):
+        dvec = Vector(rng.standard_normal(3)).normalized()
+        top = max(v.co.dot(dvec) for v in made)
+        cut = top - rng.uniform(0.1, 0.35) * r
         for v in made:
-            t = v.co.dot(d)
+            t = v.co.dot(dvec)
             if t > cut:
-                v.co -= d * (t - cut)
-    rot = normal.to_track_quat("Z", "Y") @ Quaternion((0, 0, 1), rnd.uniform(0, math.tau))
+                v.co -= dvec * (t - cut)
     for v in made:
-        v.co = centre + rot @ v.co
+        v.co += Vector(centre)
+        if worn is not None:
+            over = (np.array(v.co) - worn[0]).dot(worn[1])
+            if over > 0:
+                v.co -= Vector(worn[1] * over)
 
 
-def build_mesh(seed=SEED, voxel=0.005):
-    """The ore is a rock core (the lemon shape) with gold pieces pressed into its surface, big
-    flat plates first and then smaller pieces between them, fused into one surface. Wherever no
-    gold covers the core, the host rock shows: mostly along the vein, where few pieces are laid."""
-    rnd = random.Random(seed)
-    off = Vector([rnd.uniform(-40, 40) for _ in range(3)])
+def quartz(vugs, rng):
+    """Broken milky quartz wedged into some of the rock hollows, a big piece and a few chips."""
     bm = bmesh.new()
-    bmesh.ops.create_icosphere(bm, subdivisions=6, radius=1.0)
-    for v in bm.verts:
-        v.co = _shape(v.co.copy(), off)
-    for v in bm.verts:   # the core is crumpled too: it shows as gold between the pieces
-        v.co += v.normal * (0.06 * _crumple(v.co, 3.0, off) - 0.03)
-    bm.normal_update()
-    core = bm.copy()
-    sites = [(v.co.copy(), v.normal.copy()) for v in bm.verts]
-    pts = [p for p, _ in sites]
-
-    def width(p):   # pieces get smaller towards the pointed ends
-        return 0.25 + 0.75 * max(0.0, 1.0 - abs(p.z) ** (1.4 if p.z > 0 else 2.0))
-
-    big, _ = _poisson(pts, 0.27, rnd, 90)
-    small, _ = _poisson(pts, 0.1, rnd, 280)
-    tree = kdtree.KDTree(len(pts))
-    for i, p in enumerate(pts):
-        tree.insert(p, i)
-    tree.balance()
-    laid = 0
-    for p in big:
-        if _pocket(p, off)[0] > 0.3:
-            continue                                   # the pockets are walled by plate edges
-        n = sites[tree.find(p)[1]][1]
-        t = Vector([rnd.uniform(-1, 1) for _ in range(3)]) * 0.35   # plates face every which way
-        n = (n + t - n * n.dot(t)).normalized()
-        r = rnd.uniform(0.24, 0.4) * width(p)
-        flat = rnd.uniform(0.3, 0.4)
-        _chunk(bm, p + n * r * flat * rnd.uniform(-0.6, -0.25), n, r, flat, rnd)
-        laid += 1
-    for p in small:
-        if _pocket(p, off)[0] > 0.3:
-            continue
-        n = sites[tree.find(p)[1]][1]
-        r = rnd.uniform(0.06, 0.11) * width(p)
-        flat = rnd.uniform(0.35, 0.6)
-        _chunk(bm, p + n * r * flat * rnd.uniform(-0.6, -0.1), n, r, flat, rnd)
-        laid += 1
-    print(f"[ore] {laid} gold pieces", flush=True)
-
-    # fuse everything into one closed surface
-    me = bpy.data.meshes.new("ore_parts")
+    for p, n, r in vugs[::2]:
+        worn = (p - n * r * 0.08, n)                  # a little under the gold rim
+        _fragment(bm, p - n * r * 0.2, r * rng.uniform(0.5, 0.6), rng, worn)
+        for _ in range(rng.integers(2, 5)):
+            t = rng.standard_normal(3)
+            t -= n * t.dot(n)
+            _fragment(bm, p - n * r * 0.25 + t / np.linalg.norm(t) * r * rng.uniform(0.4, 0.7),
+                      r * rng.uniform(0.15, 0.28), rng, worn)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bevel = [e for e in bm.edges if e.calc_face_angle(0.0) > math.radians(25)]
+    bmesh.ops.bevel(bm, geom=bevel, offset=0.0025, segments=2, profile=0.5, affect="EDGES", clamp_overlap=True)
+    me = bpy.data.meshes.new("quartz")
     bm.to_mesh(me)
     bm.free()
-    parts = bpy.data.objects.new("ore_parts", me)
-    bpy.context.scene.collection.objects.link(parts)
-    mod = parts.modifiers.new("fuse", "REMESH")
-    mod.mode = "VOXEL"
-    mod.voxel_size = voxel
-    dg = bpy.context.evaluated_depsgraph_get()
-    fused = bpy.data.meshes.new_from_object(parts.evaluated_get(dg))
-    bpy.data.objects.remove(parts)
-    bpy.data.meshes.remove(me)
-    bm = bmesh.new()
-    bm.from_mesh(fused)
-    bpy.data.meshes.remove(fused)
-    bm.normal_update()
-    verts = list(bm.verts)
-    print(f"[ore] fused: {len(verts)} vertices", flush=True)
-
-    # pockets of host rock: along the vein, broken by gold bridges, and a few elsewhere. Inside a
-    # pocket the gold is pushed back down to the core, so the rock sits in a recess walled by the
-    # plates' edges; quartz fills the middle of the vein's pockets.
-    core_bvh = BVHTree.FromBMesh(core)
-    core.free()
-    info = [_pocket(v.co, off) for v in verts]
-    mask = [i[0] for i in info]
-    for _ in range(4):        # soften the pocket's edge over a few vertices: walls slope, not cliffs
-        mask = [0.5 * mask[v.index] + 0.5 * sum(mask[e.other_vert(v).index] for e in v.link_edges) / max(len(v.link_edges), 1)
-                for v in verts]
-    kind = []
-    for v, (_, vein, w, lone), m in zip(verts, info, mask):
-        p = v.co
-        if m > 0.0:
-            hit = core_bvh.find_nearest(p)
-            if hit[0] is not None:
-                target = hit[0] - hit[1] * 0.012
-                v.co = p.lerp(target, m * m * (3 - 2 * m))
-        if m < 0.5:
-            kind.append(GOLD_K)
-        elif vein < w * 0.85 and noise.noise(p * 3.0 + off * 0.4) > -0.25 and lone < 0.5:
-            kind.append(QUARTZ_K)
-        else:
-            kind.append(ROCK_K)
-
-    # the host rock: blocky granules at random heights, easing in from the gold's edge; the
-    # quartz bed a little lower (the quartz lumps fill it)
-    gold_tree = kdtree.KDTree(len(verts))
-    for i, v in enumerate(verts):
-        if kind[i] == GOLD_K:
-            gold_tree.insert(v.co, i)
-    gold_tree.balance()
-    for i, v in enumerate(verts):
-        if kind[i] == GOLD_K:
-            continue
-        t = min(1.0, gold_tree.find(v.co)[2] / 0.03)
-        t = t * t * (3 - 2 * t)
-        d, cp = noise.voronoi(v.co * 9.0 + off)
-        chunk = 0.05 * _hash(cp[0]) - 0.025
-        d2, cp2 = noise.voronoi(v.co * 26.0 + off * 1.3)
-        chunk += 0.016 * _hash(cp2[0]) - 0.008
-        sink = 0.0 + (0.02 if kind[i] == QUARTZ_K else 0.0)
-        v.co += v.normal * t * (-sink + chunk + 0.006 * noise.noise(v.co * 55.0))
-
-    # the crack down the front: a ragged slit, widest in the middle, whose floor glows
-    bm.normal_update()
-    for i, v in enumerate(verts):
-        if v.co.y > 0.05:
-            continue
-        c, w = crack_at(v.co.x, v.co.z)
-        if c < w:
-            v.co.y += CRACK_D * (1.0 - (c / w) ** 2)
-            if c < w * 0.5:
-                kind[i] = CRACK_K
-
-    # a small flat foot so it sits on its stand
-    for v in verts:
-        if v.co.z < -0.9:
-            v.co.z = -0.9 + (v.co.z + 0.9) * 0.15
-
-    for f in bm.faces:
-        ks = [kind[v.index] for v in f.verts]
-        f.material_index = MATERIAL_OF[max(set(ks), key=ks.count)]
-        f.smooth = True
-    bm.normal_update()
-    vein = [(verts[i].co.copy(), verts[i].normal.copy()) for i in range(len(verts)) if kind[i] == QUARTZ_K]
-    me = bpy.data.meshes.new("ore_hi")
-    bm.to_mesh(me)
-    bm.free()
-    ob = bpy.data.objects.new("ore_hi", me)
+    for p in me.polygons:
+        p.use_smooth = False
+    v = np.empty(len(me.vertices) * 3, dtype=np.float32)
+    me.vertices.foreach_get("co", v)
+    a = me.attributes.new("unit_co", "FLOAT_VECTOR", "POINT")
+    a.data.foreach_set("vector", v)
+    ob = bpy.data.objects.new("quartz", me)
     bpy.context.scene.collection.objects.link(ob)
-    return ob, vein, rnd
-
-
-def quartz(vein, rnd):
-    """Cauliflower quartz: fused round lumps filling the middle of the vein, crowned with smaller ones."""
-    mb = bpy.data.metaballs.new("quartz_mb")
-    mb.resolution = 0.007          # meshed at this size (new_from_object uses the viewport value)
-    mb.render_resolution = 0.007
-    mb.threshold = 0.6
-    pts = [p for p, _ in vein]
-    picks, _ = _poisson(pts, 0.04, rnd, 8000)
-    tree = kdtree.KDTree(len(vein))
-    for i, (p, n) in enumerate(vein):
-        tree.insert(p, i)
-    tree.balance()
-    for p in picks:
-        n = vein[tree.find(p)[1]][1]
-        r = rnd.uniform(0.04, 0.075)
-        e = mb.elements.new()
-        e.co = p + n * (r * 0.45)
-        e.radius = r
-        e.stiffness = 4.0
-        for _ in range(rnd.randint(3, 6)):
-            d = Vector([rnd.uniform(-1, 1) for _ in range(3)])
-            d = (d - n * d.dot(n)).normalized() * rnd.uniform(0.3, 0.8) + n * rnd.uniform(0.3, 0.8)
-            c = mb.elements.new()
-            c.co = e.co + d.normalized() * r * 0.55
-            c.radius = r * rnd.uniform(0.45, 0.62)
-            c.stiffness = 4.0
-    ob = bpy.data.objects.new("quartz_mb", mb)
-    bpy.context.scene.collection.objects.link(ob)
-    dg = bpy.context.evaluated_depsgraph_get()
-    bpy.context.scene.render.use_simplify = False
-    me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
-    bpy.data.objects.remove(ob)
-    q = bpy.data.objects.new("quartz", me)
-    bpy.context.scene.collection.objects.link(q)
-    for p in q.data.polygons:
-        p.use_smooth = True
-    return q
+    return ob
 
 
 # --------------------------------------------------------------------------------------------
@@ -368,183 +508,201 @@ def _nodes(name):
     return m, nt, nt.nodes["Principled BSDF"]
 
 
-def _facets(nt, coord, scale):
-    """Height field of tiny flat facets, each tilted its own way (Voronoi cells, each a plane)."""
-    N, L = nt.nodes, nt.links
-    vo = N.new("ShaderNodeTexVoronoi")
-    vo.voronoi_dimensions = "3D"
-    vo.feature = "F1"
-    vo.inputs["Scale"].default_value = scale
-    vo.inputs["Randomness"].default_value = 1.0
-    L.new(coord, vo.inputs["Vector"])
-    rel = N.new("ShaderNodeVectorMath")
-    rel.operation = "SUBTRACT"                  # from the cell's point, in the input's units
-    L.new(coord, rel.inputs[0])
-    L.new(vo.outputs["Position"], rel.inputs[1])
-    tilt = N.new("ShaderNodeVectorMath")
-    tilt.operation = "SUBTRACT"
-    L.new(vo.outputs["Color"], tilt.inputs[0])
-    tilt.inputs[1].default_value = (0.5, 0.5, 0.5)
-    dot = N.new("ShaderNodeVectorMath")
-    dot.operation = "DOT_PRODUCT"
-    L.new(rel.outputs[0], dot.inputs[0])
-    L.new(tilt.outputs[0], dot.inputs[1])
-    h = N.new("ShaderNodeMath")
-    h.operation = "MULTIPLY"
-    L.new(dot.outputs["Value"], h.inputs[0])
-    h.inputs[1].default_value = scale           # about ±0.5 across each facet, whatever the scale
-    return h.outputs[0]
+def _node(nt, kind, **inputs):
+    n = nt.nodes.new(kind)
+    for k, v in inputs.items():
+        if isinstance(k, str) and k in n.inputs:
+            if hasattr(v, "is_output") or hasattr(v, "links"):
+                nt.links.new(v, n.inputs[k])
+            else:
+                n.inputs[k].default_value = v
+        else:
+            setattr(n, k, v)
+    return n
 
 
-def gold_material():
-    """Gold with a crumpled-foil surface: three sizes of tiny tilted facets, thin darker creases
-    folded in between the larger ones, and a slow drift between bright and deeper gold."""
-    m, nt, b = _nodes("gold")
-    N, L = nt.nodes, nt.links
-    tc = N.new("ShaderNodeTexCoord")
-    warp = N.new("ShaderNodeTexNoise")          # bend the facet grid so the crumple is uneven
-    warp.inputs["Scale"].default_value = 3.0
-    L.new(tc.outputs["Object"], warp.inputs["Vector"])
-    wc = N.new("ShaderNodeVectorMath")
-    wc.operation = "SUBTRACT"
-    L.new(warp.outputs["Color"], wc.inputs[0])
-    wc.inputs[1].default_value = (0.5, 0.5, 0.5)
-    ws = N.new("ShaderNodeVectorMath")
-    ws.operation = "MULTIPLY_ADD"
-    L.new(wc.outputs[0], ws.inputs[0])
-    ws.inputs[1].default_value = (0.12, 0.12, 0.12)
-    L.new(tc.outputs["Object"], ws.inputs[2])
-    co = ws.outputs[0]
-    # thin creases between the larger facets: darker, and folded in
-    ve = N.new("ShaderNodeTexVoronoi")
-    ve.voronoi_dimensions = "3D"
-    ve.feature = "DISTANCE_TO_EDGE"
-    ve.inputs["Scale"].default_value = 25.0
-    L.new(co, ve.inputs["Vector"])
-    crease = N.new("ShaderNodeMapRange")
-    crease.inputs["From Min"].default_value = 0.0
-    crease.inputs["From Max"].default_value = 0.07
-    crease.inputs["To Min"].default_value = 1.0
-    crease.inputs["To Max"].default_value = 0.0
-    crease.interpolation_type = "SMOOTHSTEP"
-    L.new(ve.outputs["Distance"], crease.inputs["Value"])
-    h = N.new("ShaderNodeMath")
-    h.operation = "MULTIPLY"
-    L.new(crease.outputs["Result"], h.inputs[0])
-    h.inputs[1].default_value = -0.1
-    h = h.outputs[0]
-    for scale, weight in ((18.0, 0.8), (34.0, 0.7), (80.0, 0.3)):
-        add = N.new("ShaderNodeMath")
-        add.operation = "MULTIPLY_ADD"
-        L.new(_facets(nt, co, scale), add.inputs[0])
-        add.inputs[1].default_value = weight
-        L.new(h, add.inputs[2])
-        h = add.outputs[0]
-    bump = N.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = 1.0
-    bump.inputs["Distance"].default_value = 0.004
-    L.new(h, bump.inputs["Height"])
-    L.new(bump.outputs["Normal"], b.inputs["Normal"])
-    drift = N.new("ShaderNodeTexNoise")
-    drift.inputs["Scale"].default_value = 2.5
-    drift.inputs["Detail"].default_value = 2.0
-    L.new(co, drift.inputs["Vector"])
-    deep = N.new("ShaderNodeMapRange")
-    deep.inputs["From Min"].default_value = 0.35
-    deep.inputs["From Max"].default_value = 0.65
-    deep.inputs["To Min"].default_value = 0.0
-    deep.inputs["To Max"].default_value = 0.75
-    L.new(drift.outputs["Fac"], deep.inputs["Value"])
-    amount = N.new("ShaderNodeMath")
-    amount.operation = "MULTIPLY_ADD"           # crease * 0.5 + drift
-    L.new(crease.outputs["Result"], amount.inputs[0])
-    amount.inputs[1].default_value = 0.15
-    L.new(deep.outputs["Result"], amount.inputs[2])
-    clamp = N.new("ShaderNodeClamp")
-    L.new(amount.outputs[0], clamp.inputs["Value"])
-    col = N.new("ShaderNodeMix")
-    col.data_type = "RGBA"
-    col.inputs["A"].default_value = (*ORE_GOLD, 1)
-    col.inputs["B"].default_value = (*DEEP_GOLD, 1)
-    L.new(clamp.outputs[0], col.inputs["Factor"])
-    col.name = "base_color"
-    L.new(col.outputs["Result"], b.inputs["Base Color"])
-    rough = N.new("ShaderNodeMapRange")
-    rough.inputs["To Min"].default_value = 0.2
-    rough.inputs["To Max"].default_value = 0.34
-    L.new(clamp.outputs[0], rough.inputs["Value"])
-    rough.name = "roughness"
-    L.new(rough.outputs["Result"], b.inputs["Roughness"])
-    b.inputs["Metallic"].default_value = 1.0
-    return m
+def _math(nt, op, a, b=None, c=None, clamp=False):
+    n = nt.nodes.new("ShaderNodeMath")
+    n.operation = op
+    n.use_clamp = clamp
+    for i, x in enumerate((a, b, c)):
+        if x is None:
+            continue
+        if isinstance(x, (int, float)):
+            n.inputs[i].default_value = x
+        else:
+            nt.links.new(x, n.inputs[i])
+    return n.outputs[0]
 
 
-def rock_material():
+def _range(nt, x, lo, hi, out_lo=0.0, out_hi=1.0, smooth=True):
+    n = nt.nodes.new("ShaderNodeMapRange")
+    n.inputs["From Min"].default_value = lo
+    n.inputs["From Max"].default_value = hi
+    n.inputs["To Min"].default_value = out_lo
+    n.inputs["To Max"].default_value = out_hi
+    if smooth:
+        n.interpolation_type = "SMOOTHSTEP"
+    nt.links.new(x, n.inputs["Value"])
+    return n.outputs["Result"]
+
+
+def _mix(nt, f, a, b):
+    n = nt.nodes.new("ShaderNodeMix")
+    n.data_type = "RGBA"
+    for sock, x in (("Factor", f), ("A", a), ("B", b)):
+        if isinstance(x, tuple):
+            n.inputs[sock].default_value = x if len(x) == 4 else (*x, 1.0)
+        elif isinstance(x, (int, float)):
+            n.inputs[sock].default_value = x if sock == "Factor" else (x, x, x, 1.0)
+        else:
+            nt.links.new(x, n.inputs[sock])
+    return n.outputs["Result"]
+
+
+def _attr(nt, name, vector=False):
+    n = nt.nodes.new("ShaderNodeAttribute")
+    n.attribute_name = name
+    return n.outputs["Vector" if vector else "Fac"]
+
+
+def _noise(nt, co, scale, detail=2.0, rough=0.5):
+    n = nt.nodes.new("ShaderNodeTexNoise")
+    n.inputs["Scale"].default_value = scale
+    n.inputs["Detail"].default_value = detail
+    n.inputs["Roughness"].default_value = rough
+    nt.links.new(co, n.inputs["Vector"])
+    return n.outputs["Fac"]
+
+
+def _voronoi(nt, co, scale, feature="F1"):
+    n = nt.nodes.new("ShaderNodeTexVoronoi")
+    n.voronoi_dimensions = "3D"
+    n.feature = feature
+    n.inputs["Scale"].default_value = scale
+    nt.links.new(co, n.inputs["Vector"])
+    return n
+
+
+def _gold(nt, co):
+    """Natural gold. The worn highs are polished smooth, bright and a touch paler; the hollows
+    duller, deeper in colour and filmed with grime; the deepest grooves and pits packed with grey
+    dirt. A hammered dimpling (gravel knocks) covers it, strong in some places, faint in others and
+    ground away on the polished highs; a few tiny dirt-filled pits sit in the duller parts. The
+    crack's walls are dull too, so the glow lights them softly instead of mirroring in them."""
+    fine, mid, broad = (_attr(nt, k) for k in ("relief_fine", "relief_mid", "relief_broad"))
+    sunk = _math(nt, "MULTIPLY_ADD", fine, 0.4, _math(nt, "MULTIPLY", mid, 0.6))
+    hollow = _range(nt, sunk, -0.15, -1.2)
+    high = _range(nt, _math(nt, "MULTIPLY_ADD", mid, 0.5, _math(nt, "MULTIPLY", broad, 0.5)), 0.2, 1.4)
+    dull = _math(nt, "SUBTRACT", 1.0, high)
+    # tiny pits: a few Voronoi cells keep a small dirt-filled dent at their centre
+    pv = _voronoi(nt, co, 55.0)
+    pick = nt.nodes.new("ShaderNodeSeparateColor")
+    nt.links.new(pv.outputs["Color"], pick.inputs["Color"])
+    pit = _math(nt, "MULTIPLY", _range(nt, pick.outputs["Red"], 0.9, 0.94),
+                _range(nt, pv.outputs["Distance"], 0.1 + 0.0, 0.03 + 0.0))
+    pit = _math(nt, "MULTIPLY", pit, _range(nt, _noise(nt, co, 3.0), 0.45, 0.6))
+    pit = _math(nt, "MULTIPLY", pit, dull)
+    # dirt: packed into the deepest grooves only (on open slopes it would catch the light and read
+    # as a grey stain), in patches with crumbly edges, plus the tiny pits; none in the crack
+    wall = _attr(nt, "crack_wall")
+    deepest = _range(nt, sunk, -0.9, -2.2)
+    patchy = _range(nt, _noise(nt, co, 5.0, detail=5.0), 0.4, 0.58)
+    crumbs = _range(nt, _noise(nt, co, 30.0, detail=3.0), 0.3, 0.65)
+    dirt = _math(nt, "MULTIPLY", _math(nt, "MULTIPLY", deepest, patchy), _math(nt, "MULTIPLY_ADD", crumbs, 0.5, 0.6))
+    dirt = _math(nt, "MAXIMUM", _range(nt, dirt, 0.1, 0.7), pit)
+    dirt = _math(nt, "MULTIPLY", dirt, _math(nt, "SUBTRACT", 1.0, wall))
+    grime = _math(nt, "MAXIMUM", _range(nt, hollow, 0.0, 0.5), _math(nt, "MULTIPLY", wall, 0.7))
+    mottle = _range(nt, _noise(nt, co, 2.2, detail=3.0), 0.35, 0.65)
+    col = _mix(nt, _math(nt, "MULTIPLY", high, 0.8), ORE_GOLD, WORN_GOLD)
+    col = _mix(nt, _math(nt, "MULTIPLY_ADD", grime, 0.6, _math(nt, "MULTIPLY", mottle, 0.25), clamp=True), col, DEEP_GOLD)
+    col = _mix(nt, _math(nt, "MULTIPLY", grime, 0.45), col, (0.0, 0.0, 0.0))
+    grit = _range(nt, _noise(nt, co, 90.0), 0.3, 0.7)
+    dirt_col = _mix(nt, _math(nt, "MULTIPLY", grit, 0.35), kit.rgba(DIRT), kit.rgba(ROCK_LIGHT))
+    col = _mix(nt, dirt, col, dirt_col)
+    # the hammering: dimples about 2.5 cm across on the finished ore, strong in some places
+    hammer = _voronoi(nt, co, 40.0)
+    hammer.feature = "SMOOTH_F1"
+    knocked = _range(nt, _noise(nt, co, 1.6, detail=2.0), 0.3, 0.7, 0.15, 1.0)
+    knocked = _math(nt, "MULTIPLY", knocked, _math(nt, "MULTIPLY_ADD", high, -0.85, 1.0))
+    rough = _math(nt, "MULTIPLY_ADD", dull, 0.15, 0.15)
+    rough = _math(nt, "MULTIPLY_ADD", grime, 0.2, rough)
+    rough = _math(nt, "MULTIPLY_ADD", _math(nt, "MULTIPLY", hammer.outputs["Distance"], knocked), 0.06, rough)
+    rough = _mix(nt, dirt, rough, 0.95)
+    dimple = _math(nt, "MULTIPLY", _math(nt, "POWER", hammer.outputs["Distance"], 2.0), -1.0)
+    height = _math(nt, "MULTIPLY", dimple, knocked)
+    height = _math(nt, "MULTIPLY_ADD", _noise(nt, co, 260.0), 0.05, height)
+    height = _math(nt, "MULTIPLY_ADD", pit, -0.25, height)
+    height = _math(nt, "MULTIPLY_ADD", _math(nt, "MULTIPLY", dirt, grit), 0.6, height)   # the dirt is crumbly
+    bump = _node(nt, "ShaderNodeBump", Strength=1.0, Distance=0.004, Height=height)
+    return {"Base Color": col, "Roughness": rough, "Metallic": _math(nt, "SUBTRACT", 1.0, dirt),
+            "Specular IOR Level": _math(nt, "MULTIPLY_ADD", dirt, -0.35, 0.5), "Normal": bump.outputs["Normal"]}
+
+
+def _rock(nt, co):
     """Dark grey host rock: blocky granules, some faces lighter, with a fine grit."""
-    m, nt, b = _nodes("rock")
-    N, L = nt.nodes, nt.links
-    tc = N.new("ShaderNodeTexCoord")
-    co = tc.outputs["Object"]
-    cells = N.new("ShaderNodeTexVoronoi")
-    cells.inputs["Scale"].default_value = 26.0
-    L.new(co, cells.inputs["Vector"])
-    pick = N.new("ShaderNodeSeparateColor")
-    L.new(cells.outputs["Color"], pick.inputs["Color"])
-    light = N.new("ShaderNodeMapRange")
-    light.inputs["From Min"].default_value = 0.55
-    light.inputs["From Max"].default_value = 1.0
-    L.new(pick.outputs["Red"], light.inputs["Value"])
-    col = N.new("ShaderNodeMix")
-    col.data_type = "RGBA"
-    col.inputs["A"].default_value = kit.rgba(ROCK)
-    col.inputs["B"].default_value = kit.rgba(ROCK_LIGHT)
-    L.new(light.outputs["Result"], col.inputs["Factor"])
-    col.name = "base_color"
-    L.new(col.outputs["Result"], b.inputs["Base Color"])
-    rough = N.new("ShaderNodeMapRange")
-    rough.inputs["To Min"].default_value = 0.75
-    rough.inputs["To Max"].default_value = 0.45
-    L.new(light.outputs["Result"], rough.inputs["Value"])
-    rough.name = "roughness"
-    L.new(rough.outputs["Result"], b.inputs["Roughness"])
-    b.inputs["Metallic"].default_value = 0.0
-    grit = N.new("ShaderNodeTexNoise")
-    grit.inputs["Scale"].default_value = 120.0
-    L.new(co, grit.inputs["Vector"])
-    edge = N.new("ShaderNodeTexVoronoi")
-    edge.feature = "DISTANCE_TO_EDGE"
-    edge.inputs["Scale"].default_value = 26.0
-    L.new(co, edge.inputs["Vector"])
-    hsum = N.new("ShaderNodeMath")
-    hsum.operation = "MULTIPLY_ADD"
-    L.new(grit.outputs["Fac"], hsum.inputs[0])
-    hsum.inputs[1].default_value = 0.3
-    L.new(edge.outputs["Distance"], hsum.inputs[2])
-    bump = N.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = 0.8
-    bump.inputs["Distance"].default_value = 0.004
-    L.new(hsum.outputs[0], bump.inputs["Height"])
-    L.new(bump.outputs["Normal"], b.inputs["Normal"])
+    cells = _voronoi(nt, co, 26.0)
+    pick = nt.nodes.new("ShaderNodeSeparateColor")
+    nt.links.new(cells.outputs["Color"], pick.inputs["Color"])
+    light = _range(nt, pick.outputs["Red"], 0.55, 1.0, smooth=False)
+    col = _mix(nt, light, kit.rgba(ROCK), kit.rgba(ROCK_LIGHT))
+    rough = _range(nt, light, 0.0, 1.0, 0.85, 0.6, smooth=False)
+    edge = _voronoi(nt, co, 26.0, "DISTANCE_TO_EDGE")
+    height = _math(nt, "MULTIPLY_ADD", _noise(nt, co, 120.0), 0.3, edge.outputs["Distance"])
+    bump = _node(nt, "ShaderNodeBump", Strength=0.8, Distance=0.004, Height=height)
+    return {"Base Color": col, "Roughness": rough, "Metallic": 0.0, "Specular IOR Level": 0.5,
+            "Normal": bump.outputs["Normal"]}
+
+
+def ore_material():
+    """The gold and the host rock in one material, switched by the `rock` vertex attribute where
+    it crosses one half. Faces each take one material slot, so a boundary drawn by slot would
+    follow the triangles in a saw-tooth; this one follows a smooth line through them."""
+    m, nt, b = _nodes("ore")
+    co = _attr(nt, "unit_co", vector=True)
+    gold, rock = _gold(nt, co), _rock(nt, co)
+    k = _range(nt, _attr(nt, "rock"), 0.45, 0.55)
+    for name in ("Base Color", "Roughness", "Metallic", "Specular IOR Level"):
+        a, c = gold[name], rock[name]
+        n = nt.nodes.new("ShaderNodeMix")
+        n.data_type = "RGBA" if name == "Base Color" else "FLOAT"
+        sock = {"RGBA": ("A", "B", "Result"), "FLOAT": ("A", "B", "Result")}[n.data_type]
+        nt.links.new(k, n.inputs["Factor"])
+        for inp, x in zip(sock[:2], (a, c)):
+            if isinstance(x, (int, float)):
+                n.inputs[inp].default_value = x
+            else:
+                nt.links.new(x, n.inputs[inp])
+        nt.links.new(n.outputs[sock[2]], b.inputs[name])
+    nm = nt.nodes.new("ShaderNodeMix")
+    nm.data_type = "VECTOR"
+    nt.links.new(k, nm.inputs["Factor"])
+    nt.links.new(gold["Normal"], nm.inputs["A"])
+    nt.links.new(rock["Normal"], nm.inputs["B"])
+    unit = nt.nodes.new("ShaderNodeVectorMath")
+    unit.operation = "NORMALIZE"
+    nt.links.new(nm.outputs["Result"], unit.inputs[0])
+    nt.links.new(unit.outputs[0], b.inputs["Normal"])
     return m
 
 
 def quartz_material():
+    """Milky vein quartz: opaque white with clearer grey patches, a greasy shine, and the faint
+    shell-like ripples of a fresh break."""
     m, nt, b = _nodes("quartz")
-    N, L = nt.nodes, nt.links
-    b.inputs["Base Color"].default_value = kit.rgba(QUARTZ)
-    b.inputs["Roughness"].default_value = 0.38
-    b.inputs["Subsurface Weight"].default_value = 0.4
+    co = _attr(nt, "unit_co", vector=True)
+    glass = _range(nt, _noise(nt, co, 9.0, detail=3.0), 0.45, 0.62)
+    col = _mix(nt, _math(nt, "MULTIPLY", glass, 0.7), kit.rgba(QUARTZ), kit.rgba(QUARTZ_GLASS))
+    nt.links.new(col, b.inputs["Base Color"])
+    rough = _range(nt, glass, 0.0, 1.0, 0.24, 0.1, smooth=False)
+    nt.links.new(rough, b.inputs["Roughness"])
+    b.inputs["Subsurface Weight"].default_value = 0.3
     b.inputs["Subsurface Radius"].default_value = (1.0, 1.0, 1.0)
     b.inputs["Subsurface Scale"].default_value = 0.01
-    tc = N.new("ShaderNodeTexCoord")
-    nz = N.new("ShaderNodeTexNoise")
-    nz.inputs["Scale"].default_value = 60.0
-    L.new(tc.outputs["Object"], nz.inputs["Vector"])
-    bump = N.new("ShaderNodeBump")
-    bump.inputs["Strength"].default_value = 0.25
-    bump.inputs["Distance"].default_value = 0.002
-    L.new(nz.outputs["Fac"], bump.inputs["Height"])
-    L.new(bump.outputs["Normal"], b.inputs["Normal"])
+    ripple = _voronoi(nt, co, 30.0, "SMOOTH_F1")
+    height = _math(nt, "MULTIPLY_ADD", _noise(nt, co, 140.0), 0.2, ripple.outputs["Distance"])
+    bump = _node(nt, "ShaderNodeBump", Strength=0.25, Distance=0.003, Height=height)
+    nt.links.new(bump.outputs["Normal"], b.inputs["Normal"])
     return m
 
 
@@ -563,15 +721,16 @@ def glow_material(strength=8.0):
 
 
 def build(seed=SEED, glow=8.0):
-    ob, vein, rnd = build_mesh(seed)
-    for mat in (gold_material(), rock_material(), glow_material(glow)):
+    ob, vugs, rng = build_mesh(seed)
+    shared = ore_material()                 # the gold and rock slots share it (see ore_material)
+    for mat in (shared, shared, glow_material(glow)):
         ob.data.materials.append(mat)
-    q = quartz(vein, rnd)
+    q = quartz(vugs, rng)
     q.data.materials.append(quartz_material())
     s = ORE_HEIGHT / 2.0
     for o in (ob, q):
         o.scale = (s, s, s)
-        o.location = (0, 0, 0.9 * s)
+        o.location = (0, 0, -FOOT * s)
     return ob, q
 
 
@@ -589,7 +748,11 @@ def studio_world(hdr, strength=1.0):
     nt.nodes["Background"].inputs["Strength"].default_value = strength
 
 
-VIEWS = {"front": 0, "left": 90, "back": 180, "right": 270}
+# name: (turn in degrees, distance m, camera height above the aim m, aim height above the middle m,
+# aim to the side m)
+VIEWS = {"front": (0, 3.0, 0.25, 0.0, 0.0), "left": (90, 3.0, 0.25, 0.0, 0.0), "back": (180, 3.0, 0.25, 0.0, 0.0),
+         "right": (270, 3.0, 0.25, 0.0, 0.0), "close": (25, 1.2, 0.1, 0.1, 0.0), "closeb": (200, 1.2, 0.2, 0.2, 0.0),
+         "crack": (0, 1.1, 0.05, 0.05, 0.0), "vug": (150, 0.9, 0.1, 0.0, 0.0)}
 
 
 def main():
@@ -603,7 +766,8 @@ def main():
     ap.add_argument("--seed", type=int, default=SEED)
     ap.add_argument("--glow", type=float, default=0.0, help="crack glow; 0 = the crack at rest, dark")
     ap.add_argument("--env", type=float, default=1.0, help="studio light strength")
-    ap.add_argument("--gold", default="", help="r,g,b linear base colour to try instead of kit.GOLD")
+    ap.add_argument("--gold", default="", help="r,g,b linear base colour to try instead of ORE_GOLD")
+    ap.add_argument("--blend", default="", help="also save the scene as this .blend")
     args = ap.parse_args(argv)
     w, h = (int(x) for x in args.res.split("x"))
     os.makedirs(args.out, exist_ok=True)
@@ -613,16 +777,19 @@ def main():
         global ORE_GOLD
         ORE_GOLD = tuple(float(x) for x in args.gold.split(","))
     build(args.seed, args.glow)
+    if args.blend:
+        bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(args.blend))
     centre = Vector((0, 0, ORE_HEIGHT / 2))
     for name in args.views.split(","):
-        a = math.radians(VIEWS[name])
-        # the camera goes round the ore, as in the reference's turnaround
-        cam_pos = centre + Vector((-math.sin(a) * 3.0, -math.cos(a) * 3.0, 0.25))
-        cam = kit.camera(tuple(cam_pos), tuple(centre), lens=85)
-        bpy.context.scene.camera = cam
+        turn, dist, up, lift, side = VIEWS[name]
+        a = math.radians(turn)
+        aim = centre + Vector((math.cos(a) * side, -math.sin(a) * side, lift))
+        # the camera goes round the ore, as in a turnaround
+        cam_pos = aim + Vector((-math.sin(a) * dist, -math.cos(a) * dist, up))
+        kit.camera(tuple(cam_pos), tuple(aim), lens=85)
         path = os.path.join(args.out, f"ore_{name}.png")
         kit.render(path)
-        print("[ore]", path, flush=True)
+        _log(path)
 
 
 if __name__ == "__main__":

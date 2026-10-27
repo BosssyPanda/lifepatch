@@ -1,11 +1,11 @@
 """Bake the hero ore for the browser.
 
-The detailed ore from ore.py (~700k triangles) is far too heavy for a web page, so its detail is
+The detailed ore from ore.py (~500k triangles) is far too heavy for a web page, so its detail is
 baked onto a light copy:
 
 - `ore`: the light mesh (gold, rock and quartz together) with one set of textures:
   base colour, ORM (R ambient occlusion, G roughness, B metalness) and a tangent-space normal map
-  that carries the plates' small facets and the crumpled foil. Its `_gold` vertex attribute is 1
+  that carries the hammered dimples, the dirt's crumbs and the small pits. Its `_gold` vertex attribute is 1
   on the gold and 0 on rock and quartz; the click ripple bends only the gold.
 - `crack_glow`: the crack's floor, its own emissive mesh, so the page can light it up as the
   crack turns towards the camera.
@@ -427,6 +427,11 @@ def main():
     for o in list(bpy.context.scene.objects):
         if o not in (lo, glow, pick):
             bpy.data.objects.remove(o)
+    # the detailed ore's shading inputs came along in the copies; the page needs only `_gold`
+    for o in (lo, glow, pick):
+        for a in [a.name for a in o.data.attributes]:
+            if a in ("unit_co", "rock", "crack_wall") or a.startswith("relief_"):
+                o.data.attributes.remove(o.data.attributes[a])
     # the page finds the three parts by name; the detailed originals held these names until now
     for o, name in ((lo, "ore"), (glow, "crack_glow"), (pick, "ore_pick")):
         o.name = o.data.name = name
