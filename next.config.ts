@@ -55,7 +55,10 @@ import type { NextConfig } from "next";
  * the same breath.
  */
 function connectSrc(): string {
-  const SELF = "connect-src 'self'";
+  // `blob:` and `data:` are the intro's 3D loader reading its own model: GLTFLoader fetches the
+  // textures packed inside a .glb through blob: URLs, and the policy without them loads the ore
+  // untextured with only a console error to say so.
+  const SELF = "connect-src 'self' blob: data:";
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!url) return warnNoCloud(SELF, "NEXT_PUBLIC_SUPABASE_URL is not set");
   let origin: string;

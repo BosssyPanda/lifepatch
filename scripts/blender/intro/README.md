@@ -36,3 +36,24 @@ Everything here is a stand-in made from code: noise-built ore, metaball figures 
 hands, raised-stroke cave paintings, a box-and-loft ship. The real scenes are modelled one by one
 after the overview is approved; these scripts only fix layout, camera, light and the money in
 each frame.
+
+## Scene one, built for real: the ore (`ore/`)
+
+- `ore/ore.py`: the hero gold ore, modelled from code (fused gold plates, rock pockets, quartz,
+  the crack). `--out DIR --hdr public/intro/env/studio.hdr` renders look-dev views of it.
+- `ore/studio.py`: the softbox HDR the gold reflects, used by Blender and by the page
+  (`public/intro/env/studio.hdr`).
+- `ore/bake.py`: bakes the ~700k-triangle ore onto a ~60k-triangle copy with colour, ORM and
+  normal maps, and exports `ore.glb` (the ore, its crack's glowing floor, and a light hit-test
+  copy for the cursor). It takes about four minutes.
+
+The page loads a compressed copy. Textures first, then Draco: compressing the mesh before the
+textures silently undoes it. With [glTF-Transform](https://gltf-transform.dev) 4.5 and
+KTX-Software 4.4 on the PATH:
+
+```sh
+.venv-bpy/bin/python scripts/blender/intro/ore/bake.py --out /tmp/ore
+gltf-transform uastc /tmp/ore/ore.glb /tmp/ore/1.glb --slots "{normalTexture,occlusionTexture,metallicRoughnessTexture}" --level 2 --rdo --zstd 18
+gltf-transform etc1s /tmp/ore/1.glb /tmp/ore/2.glb --slots "baseColorTexture" --quality 255
+gltf-transform draco /tmp/ore/2.glb public/intro/ore/ore.glb --method edgebreaker
+```

@@ -35,7 +35,7 @@ SEED = 11
 # The crack the camera dives into, as (x, z) points on the front face in the unit ore's space
 # (height 2, z from -1 to 1), top to bottom.
 CRACK = [(-0.10, 0.62), (0.02, 0.38), (-0.06, 0.14), (0.07, -0.12), (0.0, -0.36), (0.05, -0.56)]
-CRACK_W = 0.04       # largest half-width of the slit at the surface
+CRACK_W = 0.08       # largest half-width of the slit at the surface (its glowing floor is half that)
 CRACK_D = 0.16       # how deep it is cut
 
 ROCK = "#262422"     # neutral dark grey (DESIGN.md: no warm browns)
@@ -320,8 +320,8 @@ def build_mesh(seed=SEED, voxel=0.005):
 def quartz(vein, rnd):
     """Cauliflower quartz: fused round lumps filling the middle of the vein, crowned with smaller ones."""
     mb = bpy.data.metaballs.new("quartz_mb")
-    mb.resolution = 0.02
-    mb.render_resolution = 0.006
+    mb.resolution = 0.007          # meshed at this size (new_from_object uses the viewport value)
+    mb.render_resolution = 0.007
     mb.threshold = 0.6
     pts = [p for p, _ in vein]
     picks, _ = _poisson(pts, 0.04, rnd, 8000)
