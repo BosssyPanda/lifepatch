@@ -18,13 +18,14 @@ from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
 
-def tpose_rest(ob, rig):
-    """Raise the arms to horizontal and make that the rig's rest pose (body mesh re-based to match)."""
+def tpose_rest(ob, rig, down=0.0):
+    """Raise the arms straight out (horizontal, or tilted down by `down` per unit out) and make that the
+    rig's rest pose (body mesh re-based to match)."""
     import mh_figure as mh
     for s, sx in (("l", 1), ("r", -1)):
-        mh.aim(rig, f"upperarm_{s}", (sx, 0.0, 0.0))
-        mh.aim(rig, f"lowerarm_{s}", (sx, 0.0, 0.0))
-        mh.aim(rig, f"hand_{s}", (sx, 0.0, 0.0))
+        mh.aim(rig, f"upperarm_{s}", (sx, 0.0, -down))
+        mh.aim(rig, f"lowerarm_{s}", (sx, 0.0, -down))
+        mh.aim(rig, f"hand_{s}", (sx, 0.0, -down))
     bpy.context.view_layer.update()
     bpy.context.view_layer.objects.active = ob
     for o in bpy.context.selected_objects:
@@ -208,17 +209,26 @@ def make_tunic(ob, rig, name, material, hem=0.078, rx=0.31, ry=0.27, top=0.10, w
     return cob
 
 
-def add_cloth(cob, frames, bending=1.2, mass=0.35, self_collide=True, quality=8):
+def add_cloth(cob, frames, bending=1.2, mass=0.35, self_collide=True, quality=8, tension=15.0, shear=5.0,
+              shrink=0.0, stiff_group=None, bending_max=None, shrink_max=None):
     mod = cob.modifiers.new("cloth", "CLOTH")
     s = mod.settings
     s.quality = quality
     s.mass = mass
     s.air_damping = 1.0
-    s.tension_stiffness = s.compression_stiffness = 15.0
-    s.shear_stiffness = 5.0
+    s.tension_stiffness = s.compression_stiffness = tension
+    s.shear_stiffness = shear
     s.bending_stiffness = bending
     s.vertex_group_mass = "pin"
     s.pin_stiffness = 1.0
+    s.shrink_min = shrink  # negative: the cloth is a little larger than its mesh (slack to sit down in)
+    if stiff_group:
+        s.vertex_group_bending = stiff_group
+        s.bending_stiffness_max = bending_max
+        if shrink_max is not None:
+            # the same map sets the slack: `shrink` where its weight is 0, `shrink_max` where it is 1
+            s.vertex_group_shrink = stiff_group
+            s.shrink_max = shrink_max
     c = mod.collision_settings
     c.collision_quality = 3
     c.distance_min = 0.006
