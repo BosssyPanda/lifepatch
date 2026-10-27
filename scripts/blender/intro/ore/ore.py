@@ -13,7 +13,7 @@ outwards cannot make. Built up the way a nugget looks, from the large forms down
 - hollows along a vein that winds round it, holding the dark host rock, some with broken
   milky quartz wedged in;
 - the crack down the front that the camera dives into, cut into smooth gold, its floor a
-  separate glowing material.
+  separate glowing material, and a glowing sheet across it part way down (the browser's glow).
 
 The surface finish is in the materials: the worn highs polished, the hollows duller and grimy,
 grey dirt packed into the deepest grooves and pits, a hammered dimpling everywhere but the
@@ -53,6 +53,7 @@ SEED = 5
 CRACK = [(-0.10, 0.62), (0.02, 0.38), (-0.06, 0.14), (0.07, -0.12), (0.0, -0.36), (0.05, -0.56)]
 CRACK_W = 0.08       # largest half-width of the slit at the surface (its glowing floor is half that)
 CRACK_D = 0.16       # how deep it is cut
+GLOW_AT = 0.55       # the glowing sheet's depth in the slit, as a fraction of CRACK_D
 
 ROCK = "#262422"     # neutral dark grey (DESIGN.md: no warm browns)
 ROCK_LIGHT = "#55524e"
@@ -156,6 +157,30 @@ def _cut_crack(g, d):
     slit = np.maximum(c[:, None, :] - w[:, None, :] * np.sqrt(np.clip(1.0 - t, 0.0, None)), (t - 1.0) * CRACK_D)
     d[xs, :, zs] = sdf.smax(d[xs, :, zs], -slit.astype(np.float32), 0.006)
     return front
+
+
+def _glow_sheet(g, front, step=0.008):
+    """The crack's glow for the browser: a sheet across the slit at GLOW_AT of its depth, its
+    edges running a little way into the walls on both sides. The walls hide those edges, so the
+    glow's outline is where the sheet meets the walls, as smooth as they are. (A glow made of the
+    floor's own faces is outlined by their edges instead: a staircase of triangles.)
+    Returns vertices and triangles in the unit ore's space, facing the front."""
+    xs = np.arange(-0.4, 0.4 + step / 2, step)
+    zs = np.arange(-0.8, 0.8 + step / 2, step)
+    X, Z = np.meshgrid(xs, zs, indexing="ij")
+    c, w = crack_np(X, Z)
+    reach = w * math.sqrt(1.0 - GLOW_AT) + 0.02          # the slit's half-width there, and some
+    Y = ndimage.map_coordinates(front, [(X - g.lo[0]) / g.h, (Z - g.lo[2]) / g.h], order=1, mode="nearest")
+    Y = Y + GLOW_AT * CRACK_D
+    inside = c < reach
+    cell = inside[:-1, :-1] | inside[1:, :-1] | inside[1:, 1:] | inside[:-1, 1:]
+    i, j = np.nonzero(cell)
+    nz = len(zs)
+    a, b, cc, d = i * nz + j, (i + 1) * nz + j, (i + 1) * nz + j + 1, i * nz + j + 1
+    f = np.concatenate([np.stack([a, b, cc], 1), np.stack([a, cc, d], 1)])   # wound to face -y
+    used, f = np.unique(f, return_inverse=True)
+    v = np.stack([X.ravel(), Y.ravel(), Z.ravel()], 1)[used]
+    return v, f.reshape(-1, 3)
 
 
 def _crack_line():
@@ -401,7 +426,7 @@ def _mesh_object(name, v, f, mat_index):
     return ob
 
 
-def _attributes(ob, v, f):
+def _attributes(ob, v, f, n):
     """What the materials read, stored on the vertices so they survive scaling and baking:
     `unit_co`, the point in the unit ore's space (the textures' coordinates); and `relief_fine`,
     `relief_mid`, `relief_broad`, how far the point stands out from (positive) or sinks into
@@ -409,7 +434,6 @@ def _attributes(ob, v, f):
     me = ob.data
     a = me.attributes.new("unit_co", "FLOAT_VECTOR", "POINT")
     a.data.foreach_set("vector", v.astype(np.float32).ravel())
-    n = sdf.vertex_normals(v, f)
     avg = sdf.smoother(v, f)
     for name, it in (("relief_fine", 6), ("relief_mid", 40), ("relief_broad", 200)):
         r = sdf.relief(v, f, n, avg, it)
@@ -420,7 +444,8 @@ def _attributes(ob, v, f):
 
 def build_mesh(seed=SEED, h=VOXEL):
     g, gold, rock, front, vugs, rng = nugget(seed, h)
-    v, f = sdf.mesh(g, sdf.smin(gold, rock, 0.008))   # a hair of blend: no staircase where they meet
+    both = sdf.smin(gold, rock, 0.008)                # a hair of blend: no staircase where they meet
+    v, f = sdf.mesh(g, both)
     apart = g.sample(gold, v) - g.sample(rock, v)          # > 0 where the rock is the surface
     kind = np.where(apart > 0, ROCK_K, GOLD_K)
     _log("mesh:", len(v), "vertices")
@@ -434,13 +459,19 @@ def build_mesh(seed=SEED, h=VOXEL):
     fk = kind[f]
     face = np.where((fk[:, 0] == fk[:, 1]) | (fk[:, 0] == fk[:, 2]), fk[:, 0], fk[:, 1])
     ob = _mesh_object("ore_hi", v, f, MATERIAL_OF[face])
-    _attributes(ob, v, f)
+    # Shade by the field's own gradient: marching cubes leaves thin sliver triangles whose averaged
+    # normals streak like brushed hairlines, and the bake would copy the streaks into the normal map.
+    n = g.normals(both, v)
+    ob.data.normals_split_custom_set_from_vertices(n.tolist())
+    _attributes(ob, v, f, n)
     a = ob.data.attributes.new("crack_wall", "FLOAT", "POINT")
     a.data.foreach_set("value", wall.astype(np.float32))
     a = ob.data.attributes.new("rock", "FLOAT", "POINT")
     a.data.foreach_set("value", np.clip(0.5 + apart / 0.006, 0, 1).astype(np.float32))
     _log("attributes")
-    return ob, vugs, rng
+    sv, sf = _glow_sheet(g, front)
+    sheet = _mesh_object("crack_glow", sv, sf, np.zeros(len(sf), np.int32))
+    return ob, sheet, vugs, rng
 
 
 def _fragment(bm, centre, r, rng, worn=None):
@@ -721,17 +752,20 @@ def glow_material(strength=8.0):
 
 
 def build(seed=SEED, glow=8.0):
-    ob, vugs, rng = build_mesh(seed)
+    """The ore, its quartz, and the glowing sheet in its crack (see _glow_sheet)."""
+    ob, sheet, vugs, rng = build_mesh(seed)
     shared = ore_material()                 # the gold and rock slots share it (see ore_material)
-    for mat in (shared, shared, glow_material(glow)):
+    light = glow_material(glow)
+    for mat in (shared, shared, light):
         ob.data.materials.append(mat)
+    sheet.data.materials.append(light)
     q = quartz(vugs, rng)
     q.data.materials.append(quartz_material())
     s = ORE_HEIGHT / 2.0
-    for o in (ob, q):
+    for o in (ob, q, sheet):
         o.scale = (s, s, s)
         o.location = (0, 0, -FOOT * s)
-    return ob, q
+    return ob, q, sheet
 
 
 # --------------------------------------------------------------------------------------------

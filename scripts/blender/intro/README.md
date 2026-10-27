@@ -48,9 +48,10 @@ each frame.
   the venv: `uv pip install --python .venv-bpy/bin/python scipy pymcubes`.
 - `ore/studio.py`: the softbox HDR the gold reflects, used by Blender and by the page
   (`public/intro/env/studio.hdr`).
-- `ore/bake.py`: bakes the ~500k-triangle ore onto a ~60k-triangle copy with colour, ORM and
-  normal maps, and exports `ore.glb` (the ore, its crack's glowing floor, and a light hit-test
-  copy for the cursor). It takes about four minutes.
+- `ore/bake.py`: bakes the ~500k-triangle ore onto a ~54k-triangle copy with colour, ORM and
+  normal maps, and exports `ore.glb` (the ore, the glowing sheet in its crack, and a light
+  hit-test copy for the cursor). It takes about six minutes. The light copy is simplified evenly:
+  sparing the crack's band from it starves the rest into sliver triangles, which shine as streaks.
 
 The page loads a compressed copy. Textures first, then Draco: compressing the mesh before the
 textures silently undoes it. With [glTF-Transform](https://gltf-transform.dev) 4.5 and

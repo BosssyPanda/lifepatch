@@ -7,8 +7,8 @@ baked onto a light copy:
   base colour, ORM (R ambient occlusion, G roughness, B metalness) and a tangent-space normal map
   that carries the hammered dimples, the dirt's crumbs and the small pits. Its `_gold` vertex attribute is 1
   on the gold and 0 on rock and quartz; the click ripple bends only the gold.
-- `crack_glow`: the crack's floor, its own emissive mesh, so the page can light it up as the
-  crack turns towards the camera.
+- `crack_glow`: a sheet across the crack part way down, its own mesh, so the page can light it
+  up as the crack turns towards the camera. Its edges run into the walls, which hide them.
 - `ore_pick`: a very light, invisible copy the page hit-tests the cursor against.
 
     python scripts/blender/intro/ore/bake.py --out DIR [--tris 60000] [--tex 2048]
@@ -22,9 +22,7 @@ import os
 import sys
 
 import bpy
-import bmesh
 import numpy as np
-from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -50,16 +48,12 @@ def _copy(ob, name):
     return c
 
 
-def _apply_decimate(ob, tris, group=None):
+def _apply_decimate(ob, tris):
     now = sum(len(p.vertices) - 2 for p in ob.data.polygons)
     mod = ob.modifiers.new("lighten", "DECIMATE")
     mod.decimate_type = "COLLAPSE"
     mod.ratio = min(1.0, tris / max(now, 1))
     mod.use_collapse_triangulate = True
-    if group:
-        mod.vertex_group = group
-        mod.vertex_group_factor = 1.0
-        mod.invert_vertex_group = True       # weight 1 = keep detail (the crack)
     dg = bpy.context.evaluated_depsgraph_get()
     me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
     ob.modifiers.clear()
@@ -68,35 +62,6 @@ def _apply_decimate(ob, tris, group=None):
     bpy.data.meshes.remove(old)
     me.validate()
     return now, sum(len(p.vertices) - 2 for p in me.polygons)
-
-
-def _round_rim(ob, iterations=12, grow=0.008, lift=0.004):
-    """The glow's outline follows the light mesh's triangles, so seen close it is a row of saw
-    teeth, and so is the hole it sits in. Round the outline off, spread it a little under the
-    crack's walls and lift it a few millimetres, so its smooth edge is the one that shows."""
-    bm = bmesh.new()
-    bm.from_mesh(ob.data)
-    rim = [v for v in bm.verts if v.is_boundary]
-    for _ in range(iterations):
-        moved = {}
-        for v in rim:
-            nb = [e.other_vert(v) for e in v.link_edges if e.is_boundary]
-            if len(nb) == 2:
-                moved[v] = v.co * 0.5 + (nb[0].co + nb[1].co) * 0.25
-        for v, co in moved.items():
-            v.co = co
-    bm.normal_update()
-    for v in rim:
-        inner = [e.other_vert(v).co for e in v.link_edges if not e.is_boundary]
-        if inner:
-            d = v.co - sum(inner, Vector()) / len(inner)
-            d -= v.normal * d.dot(v.normal)
-            if d.length > 1e-6:
-                v.co += d.normalized() * grow
-    for v in bm.verts:
-        v.co += v.normal * lift
-    bm.to_mesh(ob.data)
-    bm.free()
 
 
 def _median3(a):
@@ -111,18 +76,6 @@ def _median3(a):
     return out
 
 
-def _split_by_material(ob, index, name):
-    """Move the faces with material `index` out of `ob` into a new object."""
-    out = _copy(ob, name)
-    for target, keep in ((ob, lambda f: f.material_index != index), (out, lambda f: f.material_index == index)):
-        bm = bmesh.new()
-        bm.from_mesh(target.data)
-        bmesh.ops.delete(bm, geom=[f for f in bm.faces if not keep(f)], context="FACES")
-        bm.to_mesh(target.data)
-        bm.free()
-    return out
-
-
 def _select_only(obs, active):
     for o in bpy.context.scene.objects:
         o.select_set(False)
@@ -131,14 +84,33 @@ def _select_only(obs, active):
     bpy.context.view_layer.objects.active = active
 
 
+def _crack_band(ob):
+    """For each vertex of a finished (metre-sized) ore mesh, its distance from the crack's line in
+    half-widths of the crack there; far off (99) on the back and beyond the crack's ends."""
+    s = ore.ORE_HEIGHT / 2.0
+    co = np.empty(len(ob.data.vertices) * 3)
+    ob.data.vertices.foreach_get("co", co)
+    x, y, z = (co.reshape(-1, 3) / s).T
+    z = z + ore.FOOT
+    c, w = ore.crack_np(x, z)
+    return np.where((y < 0.0) & (np.abs(z) < 0.8), c / w, 99.0)
+
+
 def _unwrap(ob, margin):
     """Lay the light mesh flat for its textures in a few big pieces. Unwrapping the crumpled
     surface directly cuts it into thousands of specks (seams everywhere, which shimmer), so a
-    smoothed copy with the same triangles is unwrapped instead and its layout copied back."""
+    smoothed copy with the same triangles is unwrapped instead and its layout copied back. The
+    crack is left out of the smoothing: smoothed, its walls fold flat and get almost no texture,
+    so seen close in the dive they smear."""
     flat = _copy(ob, "unwrap_smooth")
+    band = _crack_band(flat)
+    vg = flat.vertex_groups.new(name="smooth")
+    for k, weight in enumerate(np.clip(band - 1.2, 0.0, 1.0)):
+        vg.add([k], float(weight), "REPLACE")
     mod = flat.modifiers.new("smooth", "SMOOTH")
     mod.factor = 1.0
     mod.iterations = 60
+    mod.vertex_group = "smooth"
     dg = bpy.context.evaluated_depsgraph_get()
     me = bpy.data.meshes.new_from_object(flat.evaluated_get(dg))
     flat.modifiers.clear()
@@ -156,7 +128,17 @@ def _unwrap(ob, margin):
     layer.data.foreach_set("uv", uv)
     islands = len({tuple(np.round(uv.reshape(-1, 2)[i], 3)) for i in range(0, len(uv) // 2, 997)})
     bpy.data.objects.remove(flat)
-    return islands
+    # texture per square metre on the crack's walls against the whole ore's
+    me = ob.data
+    uv = uv.reshape(-1, 2)
+    density = np.zeros(len(me.polygons))
+    walls = np.zeros(len(me.polygons), bool)
+    for p in me.polygons:
+        lp = list(p.loop_indices)
+        a, b, c = uv[lp[0]], uv[lp[1]], uv[lp[2]]
+        density[p.index] = abs((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2 / max(p.area, 1e-12)
+        walls[p.index] = max(band[v] for v in p.vertices) < 1.0
+    return islands, np.median(density[walls]) / np.median(density)
 
 
 def _gold_attribute(ob, gold_index):
@@ -174,16 +156,18 @@ def _gold_attribute(ob, gold_index):
 # ---- baking ---------------------------------------------------------------------------------
 
 
-def _emit_from(mat, socket_name, colour=False):
-    """Make the material emit what feeds one of its Principled inputs, so EMIT bakes it.
+def _emit_from(mat, socket_name, colour=False, bare=0.0):
+    """Make the material emit what feeds one of its Principled inputs, so EMIT bakes it. The
+    glow, which has no Principled BSDF, gives its own colour, and `bare` for anything else.
     Returns an undo function."""
     nt = mat.node_tree
     out = next(n for n in nt.nodes if n.type == "OUTPUT_MATERIAL")
     prev = out.inputs["Surface"].links[0].from_socket if out.inputs["Surface"].links else None
     em = nt.nodes.new("ShaderNodeEmission")
     bsdf = next((n for n in nt.nodes if n.type == "BSDF_PRINCIPLED"), None)
-    if bsdf is None:                                  # the glow: emits nothing in these bakes
-        em.inputs["Color"].default_value = (0, 0, 0, 1)
+    if bsdf is None:          # texels at the foot of the crack's walls can reach the floor
+        own = next(n for n in nt.nodes if n.type == "EMISSION" and n != em)
+        em.inputs["Color"].default_value = tuple(own.inputs["Color"].default_value) if colour else (bare, bare, bare, 1)
     else:
         src = bsdf.inputs[socket_name]
         if src.links:
@@ -252,38 +236,26 @@ def main():
     kit.reset("a", res=(64, 64), samples=1)
     sc = bpy.context.scene
     sc.cycles.use_denoising = False
-    hi, q_hi = ore.build(args.seed, glow=8.0)
+    hi, q_hi, glow = ore.build(args.seed, glow=8.0)
     bpy.context.view_layer.update()   # so matrix_world carries the scale and lift build() just set
-    for o in (hi, q_hi):
+    for o in (hi, q_hi, glow):
         _bake_mesh(o)
 
     # the light copies
     lo = _copy(hi, "ore")
-    glow = _split_by_material(lo, 2, "crack_glow")
-    # Keep the crack sharp: its walls and rim cost three times as much to simplify. Only the
-    # groove itself and a thin rim count, on the front: the band runs straight through the ore, so
-    # without the depth limit it takes in the back too, and the decimation, held to its budget,
-    # then crushes everything else into a few large facets.
-    vg = lo.vertex_groups.new(name="crack")
-    s = ore.ORE_HEIGHT / 2.0
-    near = []
-    for v in lo.data.vertices:
-        x, y, z = v.co.x / s, v.co.y / s, v.co.z / s - 0.9
-        if y < 0.0 and ore.crack_dist(x, z) < ore.CRACK_W * 1.2:
-            near.append((v.index, y))
-    front = min(y for _, y in near)
-    keep = [i for i, y in near if y < front + ore.CRACK_D + 0.06]
-    if len(keep) > len(lo.data.vertices) * 0.05:
-        raise SystemExit(f"crack band holds {len(keep)} vertices, too many to protect")
-    vg.add(keep, 1.0, "REPLACE")
-    before, after = _apply_decimate(lo, args.tris - args.quartz_tris, "crack")
-    print(f"[bake] ore {before} -> {after} triangles ({len(keep)} crack vertices kept)", flush=True)
+    _select_only([lo], lo)
+    bpy.ops.mesh.customdata_custom_splitnormals_clear()   # the light copy shades by its own shape
+    # Simplify the whole ore evenly. Sparing a band round the crack (as for the older ore, whose
+    # crack was pressed in by moving vertices) starved the rest: the band kept 17k of the 24k
+    # vertices and the gold became long slivers, which shone as streaks and starbursts in the
+    # browser. Tested on the same detailed ore at 48k triangles: evenly, no point of the detailed
+    # surface is more than 0.8 mm from the light mesh (0.4 mm in the crack) and 0.6% of the
+    # triangles are longer than 10 to 1; with the band spared, 9% are, and it strays up to 23 mm.
+    before, after = _apply_decimate(lo, args.tris - args.quartz_tris)
+    print(f"[bake] ore {before} -> {after} triangles; crack glow {len(glow.data.polygons)}", flush=True)
     q_lo = _copy(q_hi, "quartz_lo")
     before, after = _apply_decimate(q_lo, args.quartz_tris)
     print(f"[bake] quartz {before} -> {after} triangles", flush=True)
-    before, after = _apply_decimate(glow, 2000)
-    _round_rim(glow)
-    print(f"[bake] crack glow {before} -> {after} triangles", flush=True)
     q_lo.data.materials.clear()
     q_lo.data.materials.append(lo.data.materials[1])   # rock slot: quartz is not gold
     _select_only([lo, q_lo], lo)
@@ -298,8 +270,10 @@ def main():
     pick.data.materials.clear()
     print(f"[bake] pick proxy {after} triangles", flush=True)
 
-    _unwrap(lo, 0.004)
+    islands, walls = _unwrap(lo, 0.004)
+    print(f"[bake] unwrapped in ~{islands} pieces; the crack's walls get {walls:.2f}x the average texture", flush=True)
     lo.data.materials.clear()
+    lo.data.polygons.foreach_set("material_index", np.zeros(len(lo.data.polygons), np.int32))
     m = bpy.data.materials.new("ore")
     m.use_nodes = True
     t = m.node_tree.nodes.new("ShaderNodeTexImage")
@@ -343,7 +317,7 @@ def main():
     print("[bake] colour", flush=True)
 
     rough = _new_image("ore_rough", n, False)
-    undo = [_emit_from(mm, "Roughness") for mm in mats]
+    undo = [_emit_from(mm, "Roughness", bare=1.0) for mm in mats]
     _bake("EMIT", rough, lo, his)
     for u in undo:
         u()
@@ -439,7 +413,7 @@ def main():
     path = os.path.join(args.out, "ore.glb")
     bpy.ops.export_scene.gltf(
         filepath=path, export_format="GLB", use_selection=True, export_attributes=True,
-        export_image_format="AUTO", export_yup=True, export_apply=True, export_tangents=False,
+        export_image_format="AUTO", export_yup=True, export_apply=True, export_tangents=True,
         export_materials="EXPORT", export_cameras=False, export_lights=False,
     )
     print("[bake]", path, os.path.getsize(path) // 1024, "KB", flush=True)
