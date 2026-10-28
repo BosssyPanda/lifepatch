@@ -28,7 +28,8 @@ const LOOK = {
   dirtSpecular: 0.3, // the dirt's reflection against an ordinary non-metal's (Blender: 0.15 / 0.5)
 };
 
-const NOISE = /* glsl */ `
+/** Value noise and its gradient, in GLSL (also used by the stand's stone, stand.ts). */
+export const NOISE = /* glsl */ `
 float finHash(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
   p *= 17.0;

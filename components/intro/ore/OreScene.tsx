@@ -22,6 +22,7 @@ import {
 } from "./oreMotion";
 import { addFinish } from "./finish";
 import { createRipple } from "./ripple";
+import { standGeometry, standMaterial } from "./stand";
 
 RectAreaLightUniformsLib.init(); // the cursor's panel light needs its lookup tables before any render
 
@@ -169,32 +170,6 @@ function glowTexture() {
   return t;
 }
 
-function standGeometry() {
-  // A thick, slightly irregular disc with a softened top edge, like the overview frame's island.
-  const r = 0.7;
-  // bottom to top: the lathe's faces point outwards only in this order
-  const pts = [
-    [0, -0.4],
-    [r - 0.03, -0.4],
-    [r, -0.06],
-    [r - 0.002, -0.03],
-    [r - 0.018, -0.006],
-    [r - 0.05, 0],
-    [0, 0],
-  ].map(([x, y]) => new THREE.Vector2(x, y));
-  const geo = new THREE.LatheGeometry(pts, 160);
-  const p = geo.getAttribute("position");
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), z = p.getZ(i);
-    const a = Math.atan2(z, x);
-    const k = 1 + 0.025 * Math.sin(3 * a + 1.3) + 0.012 * Math.sin(7 * a + 0.4) + 0.006 * Math.sin(13 * a + 2.2);
-    p.setXYZ(i, x * k, p.getY(i), z * k);
-  }
-  // the lathe's own normals are kept: recomputing them would split them along its seam, and the
-  // few percent of wobble barely tilts them
-  return geo;
-}
-
 function OreWorld({ state }: { state: React.RefObject<OreState> }) {
   const parts = useOreParts();
   const env = useLoader(HDRLoader, ENV_URL);
@@ -230,6 +205,7 @@ function OreWorld({ state }: { state: React.RefObject<OreState> }) {
   }, [parts]);
   const haloMap = useMemo(() => glowTexture(), []);
   const stand = useMemo(() => standGeometry(), []);
+  const standMat = useMemo(() => standMaterial(), []);
   const poolTarget = useMemo(() => new THREE.Object3D(), []);
 
   useEffect(() => {
@@ -427,10 +403,8 @@ function OreWorld({ state }: { state: React.RefObject<OreState> }) {
         <spriteMaterial map={haloMap} color={PALETTE.ink} transparent depthWrite={false} blending={THREE.AdditiveBlending} opacity={LOOK.haloRest} />
       </sprite>
 
-      <mesh geometry={stand} receiveShadow>
-        {/* lit mostly by the pool from above, so its sides fall away into the dark */}
-        <meshStandardMaterial color="#1a1715" roughness={0.95} metalness={0} envMapIntensity={0.3} />
-      </mesh>
+      {/* lit mostly by the pool from above, so its sides fall away into the dark */}
+      <mesh geometry={stand} material={standMat} receiveShadow />
 
       <primitive object={poolTarget} position={[0, parts.height * 0.45, 0]} />
       <spotLight
