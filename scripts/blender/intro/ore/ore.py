@@ -4,11 +4,11 @@ It is a natural gold nugget, sculpted as a signed distance field (sdf.py) and me
 cubes, because a nugget is full of overhangs, folds and hollows that pushing a mesh's vertices
 outwards cannot make. Built up the way a nugget looks, from the large forms down:
 
-- an egg-shaped body, its top drawn to a blunt point (the approved overview's silhouette);
-- lumps melted onto it and broad dents pressed into it, some soft, some with a sharp seam;
-- here and there a high point worn flat, as stream gravel grinds a nugget;
+- a lopsided body of lobes with waists between them, flatter front to back than side to side;
+- lumps melted onto it and shallow dents pressed into it;
 - the surface broken into rounded knobs by grooves, large knobs in some places, small in others,
-  the grooves deep in some places and fused shut in others; and long wandering folds;
+  the grooves deep in some places and fused shut in others; and long wandering folds; both worn
+  down on the exposed highs, as stream gravel grinds a nugget, and kept whole in the hollows;
 - clusters of small pits, none in some places;
 - hollows along a vein that winds round it, holding the dark host rock, some with broken
   milky quartz wedged in;
@@ -38,6 +38,7 @@ import numpy as np
 from mathutils import Vector, noise
 from scipy import ndimage
 from scipy.spatial import cKDTree
+from scipy.special import ndtr
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -71,7 +72,16 @@ MATERIAL_OF = np.array([0, 1, 2])
 
 VOXEL = 0.006        # the sculpt's resolution, in the unit ore's space (3.3 mm on the finished ore)
 GRID_LO, GRID_HI = (-0.8, -0.72, -0.95), (0.82, 0.72, 1.12)
-FOOT = -0.9          # the flat foot it stands on
+FOOT = -0.82         # the flat foot it stands on, cut high enough up the base to stand steady
+
+# The body's lobes, (centre, radii) in the unit ore's space: lopsided, and flatter front to back
+# than side to side, as a stream leaves a nugget, with a waist between each lobe and the next.
+BODY = [((-0.05, 0.0, -0.45), (0.60, 0.33, 0.46)),    # the broad base, cut flat where it stands
+        ((0.45, 0.02, -0.36), (0.30, 0.25, 0.30)),    # a lobe bulging out low on one side
+        ((0.10, 0.0, 0.02), (0.47, 0.31, 0.40)),      # the middle, set over to that side
+        ((-0.15, -0.02, 0.50), (0.35, 0.26, 0.44)),   # the upper lobe, leaning back the other way
+        ((-0.45, 0.03, 0.08), (0.24, 0.21, 0.26))]    # a small lobe on the other side
+WORN_RELIEF = 0.2    # how much of the knobs and folds the exposed highs keep (all, in the hollows)
 
 _T0 = time.time()
 
@@ -253,35 +263,27 @@ def _ellipsoids(g, d, sites, rng, size, shape, sink, melt, op):
                   lambda a, b: op(a, b, k))
 
 
-def _wear(g, d, sites, rng):
-    """A high point ground flat: a plane just under the surface, its edge rounded, fading out
-    over a patch so it does not slice the whole ore."""
-    for p, n in sites:
-        q = p - n * rng.uniform(0.015, 0.045)
-        m = n + rng.standard_normal(3) * 0.15
-        m /= np.linalg.norm(m)
-        reach = rng.uniform(0.12, 0.22)
-        sl = g.block(q, reach)
-        if sl is None:
-            continue
-        X, Y, Z = g.coords(sl)
-        plane = (X - q[0]) * m[0] + (Y - q[1]) * m[1] + (Z - q[2]) * m[2]
-        w = np.clip(1.5 - np.sqrt((X - q[0]) ** 2 + (Y - q[1]) ** 2 + (Z - q[2]) ** 2) / reach * 1.5, 0, 1)
-        w = w * w * (3 - 2 * w)
-        a = d[sl]
-        d[sl] = a + (sdf.smax(a, plane, 0.03) - a) * w
+def _shelter(g, d, reach=0.07):
+    """How enclosed the solid's surface is round each voxel: 0 on flat ground, above it in hollows
+    and waists, below it on lumps and edges. The share of solid within about `reach`, less what
+    flat ground would give at that voxel's depth, so it reads the same through the surface band."""
+    return ndimage.gaussian_filter((d < 0).astype(np.float32), reach / g.h) - ndtr(-d / reach).astype(np.float32)
 
 
-def _surface_relief(g, d, rng, knob, fold):
+def _surface_relief(g, d, rng, knob, fold, shelter):
     """Knobs and folds, worked only on the voxels near the surface (they move it by less than the
     band is deep). Knobs: Voronoi cells, each a rounded knob, the grooves between them round at
     the bottom and the rim; large cells in some places, small in others, the grooves deep in some
-    places and shut in others. Folds: long creases that wander (domain-warped noise)."""
+    places and shut in others. Folds: long creases that wander (domain-warped noise).
+    Both are kept whole in the hollows and waists, where a stream cannot reach them, and worn down
+    to WORN_RELIEF on the exposed highs (`shelter`, see _shelter), with patches either way."""
     band = knob + fold * 1.4 + 3 * g.h
     idx = np.nonzero(np.abs(d) < band)
     P = np.stack([g.axes[i][idx[i]] for i in range(3)], 1).astype(np.float64)
     x, y, z = P[:, 0], P[:, 1], P[:, 2]
     calm = _calm(x, y, z)
+    keep = np.clip(shelter[idx] / 0.06 + 0.5 + 0.35 * sdf.Noise(g, rng, 0.35).at(x, y, z), 0, 1)
+    calm = calm * (WORN_RELIEF + (1 - WORN_RELIEF) * keep * keep * (3 - 2 * keep))
 
     wiggle = [sdf.Noise(g, rng, 0.3) for _ in range(3)]
     Pw = P + 0.05 * np.stack([w.at(x, y, z) for w in wiggle], 1)
@@ -361,7 +363,7 @@ def _vugs(g, d, rng, count):
             sdf.paint(g, d, c, rq + 0.05, lambda X, Y, Z: sdf.ellipsoid(X, Y, Z, c, radii, rot),
                       lambda a, b: sdf.smax(a, -b, 0.012))
             fill = tuple(x * 0.9 for x in radii)
-            cf = c - n * rq * rng.uniform(0.9, 1.05)
+            cf = c - n * rq * rng.uniform(0.7, 0.8)          # rock up near the rim, set in the gold
             sdf.paint(g, rock, cf, rq + 0.05, lambda X, Y, Z: sdf.ellipsoid(X, Y, Z, cf, fill, rot),
                       np.minimum)
     # the rock's blocky granules: Voronoi chunks, each raised its own amount
@@ -383,23 +385,20 @@ def nugget(seed=SEED, h=VOXEL):
     g = sdf.Grid(GRID_LO, GRID_HI, h)
     X, Y, Z = g.coords()
     d = np.full(g.shape, 10.0, np.float32)
-    for c, r in (((0.0, 0.0, -0.36), (0.56, 0.45, 0.60)), ((0.015, 0.0, 0.12), (0.48, 0.39, 0.55)),
-                 ((0.045, -0.01, 0.48), (0.38, 0.31, 0.46)), ((0.07, 0.0, 0.76), (0.22, 0.18, 0.25))):
-        d = sdf.smin(d, sdf.ellipsoid(X, Y, Z, c, r, _turn(rng, 8)), 0.3)
+    for c, r in BODY:
+        d = sdf.smin(d, sdf.ellipsoid(X, Y, Z, c, r, _turn(rng, 10)), 0.16)
     d += (0.05 * sdf.Noise(g, rng, 0.5).at(X, Y, Z)).astype(np.float32)
     _log("body", g.shape)
-    pts, nrm = g.surface_points(d, rng, 55, 0.16)
-    _ellipsoids(g, d, zip(pts, nrm), rng, (0.07, 0.22), ((0.6, 1.0), (0.4, 0.75)), (0.25, 0.6), (0.12, 0.6), sdf.smin)
-    pts, nrm = g.surface_points(d, rng, 22, 0.2)
+    pts, nrm = g.surface_points(d, rng, 30, 0.22)
+    _ellipsoids(g, d, zip(pts, nrm), rng, (0.1, 0.26), ((0.6, 1.0), (0.4, 0.75)), (0.3, 0.6), (0.4, 0.8), sdf.smin)
+    pts, nrm = g.surface_points(d, rng, 14, 0.25)
     keep = [(p, n) for p, n in zip(pts, nrm) if not _near_crack(p, 0.2) and abs(p[2]) < 0.6]
-    _ellipsoids(g, d, keep, rng, (0.08, 0.2), ((0.5, 0.9), (0.35, 0.6)), (-0.6, -0.35), (0.5, 0.5),
+    _ellipsoids(g, d, keep, rng, (0.08, 0.2), ((0.5, 0.9), (0.35, 0.6)), (-0.8, -0.6), (0.6, 0.9),
                 lambda a, b, k: sdf.smax(a, -b, k))
-    pts, nrm = g.surface_points(d, rng, 14, 0.3)
-    _wear(g, d, [(p, n) for p, n in zip(pts, nrm) if not _near_crack(p, 0.25)], rng)
-    _log("lumps, dents, worn faces")
-    _surface_relief(g, d, rng, knob=0.024, fold=0.025)
+    _log("lumps, dents")
+    _surface_relief(g, d, rng, knob=0.024, fold=0.025, shelter=_shelter(g, d))
     _log("knobs and folds")
-    _log("pits:", _pits(g, d, rng, 700))
+    _log("pits:", _pits(g, d, rng, 400))
     rock, vugs = _vugs(g, d, rng, 7)
     _log("rock hollows:", len(vugs))
     front = _cut_crack(g, d)
