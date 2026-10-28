@@ -4,11 +4,12 @@ A hunter is back. Round the fire he shares the meat out: kneeling, he holds a po
 who reaches for it; a mother sits with hers and turns to her child, already eating; a young man eats.
 Nobody hands anything back. His bow leans against the wall, not traded for anything: Atlas's line is
 that Adam Smith imagined a bow swapped for venison, and nobody has ever found an economy of swaps.
-The paintings are on the wall behind them. In the foreground the gold from scene one lies on a fallen
-block, at the money spot every era shares, and nobody looks at it: worked gold is 25,000 years away.
+The paintings are on the wall behind them. In the foreground the gold from scene one stands on a dark
+mound of rock, at the money spot every era shares, and nobody looks at it: worked gold is 25,000 years
+away.
 
 Built from:
-  shell.py      the cave and the fallen block, sculpted as distance fields
+  shell.py      the cave and the mound, sculpted as distance fields
   figures.py    the five statues, cloth simulated (run first; they are loaded from the cache)
   paintings.py  the charcoal on the back wall (a grey-scale map)
   ../ore        the ore itself, scaled down to a nugget (cached from ore.build())
@@ -258,13 +259,16 @@ def flame_material(strength=14.0):
     nt.links.new(fade, amt.inputs[0])
     nt.links.new(lick, amt.inputs[1])
     gain = nt.nodes.new("ShaderNodeMath")
-    gain.operation = "MULTIPLY_ADD"
+    gain.operation = "ADD"
     nt.links.new(amt.outputs[0], gain.inputs[0])
-    gain.inputs[1].default_value = strength
-    gain.inputs[2].default_value = 0.15 * strength
-    em = nt.nodes.new("ShaderNodeEmission")
-    em.inputs["Color"].default_value = kit.rgba(kit.look()["fire"])
-    nt.links.new(gain.outputs[0], em.inputs["Strength"])
+    gain.inputs[1].default_value = 0.15
+    tint = nt.nodes.new("ShaderNodeVectorMath")
+    tint.operation = "SCALE"
+    tint.inputs[0].default_value = kit.rgba(kit.look()["fire"])[:3]
+    nt.links.new(gain.outputs[0], tint.inputs["Scale"])
+    # the strength stays a plain number, so kit.dim can turn the fire down with the other lights
+    em = _n(nt, "ShaderNodeEmission", Strength=strength)
+    nt.links.new(tint.outputs[0], em.inputs["Color"])
     nt.links.new(em.outputs[0], out.inputs["Volume"])
     return m
 
@@ -272,8 +276,11 @@ def flame_material(strength=14.0):
 def cave(cache, paint):
     a = shell.build(cache=os.path.join(cache, "shell.npz"))
     rock = rock_material(paint)
-    ob = mesh_object("cave", a["v"], a["f"], {k: a[k] for k in ("panel", "floor", "relief_mid", "relief_broad",
-                                                                  "paint_uv")}, rock)
+    # sdf.mesh winds a mesh by its signed volume, which turns a hollow's faces inwards: the walls
+    # would face into the rock. Cycles shades both sides, so a render never shows it, but a bake
+    # shades the side a face faces, and the browser culls back faces.
+    ob = mesh_object("cave", a["v"], a["f"][:, ::-1], {k: a[k] for k in ("panel", "floor", "relief_mid",
+                                                                          "relief_broad", "paint_uv")}, rock)
     return ob, rock
 
 
@@ -476,17 +483,20 @@ def food(fig, clay):
     haunch("food_rest2", slab.location + Vector((0.06, 0.08, 0.07)), 0.18, (0, 0.2, h["rot"] - 1.2), clay)
 
 
-def nugget(cache, at, height=0.08):
-    """The ore from scene one, small: its foot set on the block at the money spot."""
+def nugget(cache, at, height=0.13, rot_z=0.0):
+    """The ore from scene one, small: its foot set on the rock at the money spot. About the size of the
+    coins scene's first coin (0.10 m across at the same spot), which the lion stamps it into."""
     with bpy.data.libraries.load(os.path.join(cache, "ore.blend"), link=False) as (src, dst):
         dst.objects = [n for n in src.objects if n in ("ore", "ore_quartz")]
     obs = [o for o in dst.objects if o is not None]
     k = height / 1.1
     for o in obs:
         kit.link(o)
+        # where scene one left it: bake.py maps ore.glb (scene one's ore, frozen there) onto the nugget
+        o["src_matrix"] = [v for row in o.matrix_basis for v in row]
         o.scale = (o.scale.x * k, o.scale.y * k, o.scale.z * k)
         o.location = (at.x, at.y, at.z + (o.location.z) * k)
-        o.rotation_euler = (1.35, 0.2, 2.4)   # lying on its side, the crack turned away: just a lump of gold
+        o.rotation_euler = (0.0, 0.0, rot_z)   # standing as it stood in scene one, its crack turned away
         o["hero"] = True
     # set it down: its lowest point on the stone
     bpy.context.view_layer.update()
@@ -516,13 +526,19 @@ def build(cache, paint=None, view="plateau", dim=None):
     # what holds the money: a waist-high hump of fallen roof in the foreground, dark against the lit
     # floor, the gold on its crest (a stalagmite stump here walled off a fifth of the frame)
     _fwd, _right, yaw = scenes._cam_axes(cam)
-    stone(cache, rock, "mound", "pedestal", Vector((hp.x, hp.y, 0.0)), hp.z - 0.01, rot_z=yaw)
-    gold = nugget(cache, Vector((hp.x, hp.y, hp.z - 0.01)))
+    # its shoulder a little right of the gold, so the gold stands on the flat and not over the drop
+    sh = hp + _right * 0.08
+    stone(cache, rock, "mound", "pedestal", Vector((sh.x, sh.y, 0.0)), hp.z - 0.01, rot_z=yaw)
+    gold = nugget(cache, Vector((hp.x, hp.y, hp.z - 0.01)), rot_z=yaw + math.pi)
     # the hump's crest catches a little light from the fire side, so it reads as stone and not as a hole
     kit.area_light("pedestal_fill", (hp.x + 0.7, hp.y + 0.6, hp.z + 0.3), (hp.x - 0.3, hp.y, hp.z - 0.2), 10, size=0.8)
-    scenes.hero_light(cam if view == "plateau" else cam, hp, 6.0)
+    scenes.hero_light(cam, hp, 10.0)
     # a faint cool-free fill from the cave mouth behind the camera, so the dark is not black
     kit.area_light("mouth_fill", (-0.4, -4.2, 1.6), (0.2, 1.5, 1.0), 30, size=2.0, kind="fill")
+    # lights light; they are not things in the cave (a point light's sphere shows to the camera)
+    for ob in bpy.context.scene.objects:
+        if ob.type == "LIGHT":
+            ob.visible_camera = False
     if dim is not None:
         kit.dim(dim)
     return cam, gold
@@ -535,6 +551,11 @@ if __name__ == "__main__":
     kit.backdrop("dark")
     build(cache, paint=arg("--paint"), view=arg("--view", "plateau"),
           dim=float(arg("--dim")) if arg("--dim") else None)
+    if arg("--border"):     # x0,y0,x1,y1 as fractions of the frame, y up: render only that part
+        b = [float(x) for x in arg("--border").split(",")]
+        r = bpy.context.scene.render
+        r.use_border, r.use_crop_to_border = True, True
+        r.border_min_x, r.border_min_y, r.border_max_x, r.border_max_y = b
     if arg("--blend"):
         bpy.ops.wm.save_as_mainfile(filepath=arg("--blend"))
     kit.render(arg("--out"))
