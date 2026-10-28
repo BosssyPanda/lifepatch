@@ -42,7 +42,8 @@ each frame.
 - `ore/ore.py`: the hero gold ore, a natural gold nugget sculpted from code as a signed distance
   field (`ore/sdf.py`) and meshed by marching cubes: a lopsided body of lobes, lumps, dents,
   knobs and folds (worn smooth on the exposed highs, whole in the hollows), pits, hollows of host
-  rock with broken quartz, and the crack. Its materials (polished highs,
+  rock (granular milky quartz worn flush with the gold) with broken quartz, and the crack, a
+  fracture that kinks at every scale with hairline branches. Its materials (polished highs,
   grimy hollows, dirt in the deepest grooves) read how raised or sunken each point is from vertex
   attributes, so they bake exactly as they render. `--out DIR --hdr public/intro/env/studio.hdr
   [--views front,back,close,crack,vug]` renders look-dev views. It needs scipy and PyMCubes in

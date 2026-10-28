@@ -10,10 +10,11 @@ outwards cannot make. Built up the way a nugget looks, from the large forms down
   the grooves deep in some places and fused shut in others; and long wandering folds; both worn
   down on the exposed highs, as stream gravel grinds a nugget, and kept whole in the hollows;
 - clusters of small pits, none in some places;
-- hollows along a vein that winds round it, holding the dark host rock, some with broken
-  milky quartz wedged in;
-- the crack down the front that the camera dives into, cut into smooth gold, its floor a
-  separate glowing material, and a glowing sheet across it part way down (the browser's glow).
+- hollows along a vein that winds round it, filled with the host rock, granular milky quartz,
+  some with broken pieces of clearer quartz wedged in;
+- the crack down the front that the camera dives into, cut into smooth gold: a fracture that
+  kinks at every scale, pinches and opens, with hairline branches; its floor a separate glowing
+  material, and a glowing sheet across it part way down (the browser's glow).
 
 The surface finish is in the materials: the worn highs polished, the hollows duller and grimy,
 grey dirt packed into the deepest grooves and pits, a hammered dimpling everywhere but the
@@ -50,16 +51,20 @@ ORE_HEIGHT = 1.1
 SEED = 5
 
 # The crack the camera dives into, as (x, z) points on the front face in the unit ore's space
-# (height 2, z from -1 to 1), top to bottom.
+# (height 2, z from -1 to 1), top to bottom: its general run. The fracture itself kinks off this
+# at every scale (see _fissure).
 CRACK = [(-0.10, 0.62), (0.02, 0.38), (-0.06, 0.14), (0.07, -0.12), (0.0, -0.36), (0.05, -0.56)]
-CRACK_W = 0.08       # largest half-width of the slit at the surface (its glowing floor is half that)
+CRACK_W = 0.06       # largest half-width of the slit at the surface (its glowing floor is half that)
+BRANCH_W = 0.016     # half-width where a hairline branch leaves the crack; it closes to nothing
+FISSURE_SEED = 3
 CRACK_D = 0.16       # how deep it is cut
 GLOW_AT = 0.55       # the glowing sheet's depth in the slit, as a fraction of CRACK_D
 
-ROCK = "#262422"     # neutral dark grey (DESIGN.md: no warm browns)
-ROCK_LIGHT = "#55524e"
+ROCK = "#c4bfb5"     # the host rock, granular milky quartz: off-white grey (DESIGN.md: no warm
+ROCK_CLEAR = "#8d8982"  # browns); the clearer, greyer granules
+GRIT = "#55524e"     # the lighter grit in the dirt
 DIRT = "#110f0d"     # the grime packed into the gold's grooves: grey, not brown (no colour casts),
-                     # as faintly warm as ROCK, and dark enough that under the page's cursor light
+                     # as faintly warm as QUARTZ, and dark enough that under the page's cursor light
                      # it stays dark rather than pale grey, which beside the gold reads as blue
 QUARTZ = "#d3cfc6"   # milky quartz, below white so lit faces keep their shading
 QUARTZ_GLASS = "#8f8c87"  # the clearer, glassy patches in it
@@ -105,8 +110,8 @@ def _seg(p, a, b):
 
 
 def crack_at(x, z):
-    """(distance to the crack, its half-width there). The crack is widest in the middle and closes
-    to nothing at both ends; its edges are ragged."""
+    """(distance to the crack's general run, a half-width there): for keeping the other features
+    clear of it. The crack as cut is crack_np."""
     x += 0.012 * noise.noise(Vector((0.0, 3.7, z * 16.0))) + 0.006 * noise.noise(Vector((1.3, 0.0, z * 40.0)))
     best = (9.0, 0.0)
     n = len(CRACK) - 1
@@ -123,26 +128,78 @@ def crack_dist(x, z):
     return crack_at(x, z)[0]
 
 
-def crack_np(x, z):
-    """crack_at for whole arrays at once (its noise depends on z alone, so it is looked up once
-    per distinct z)."""
-    x, z = np.broadcast_arrays(np.asarray(x, dtype=np.float64), np.asarray(z, dtype=np.float64))
-    zs, inv = np.unique(z, return_inverse=True)
-    shift = np.array([0.012 * noise.noise(Vector((0.0, 3.7, q * 16.0))) + 0.006 * noise.noise(Vector((1.3, 0.0, q * 40.0)))
-                      for q in zs])[inv].reshape(z.shape)
-    vary = np.array([0.8 + 0.4 * noise.noise(Vector((q * 9.0, 2.0, 0.0))) for q in zs])[inv].reshape(z.shape)
-    x = x + shift
+def _fissure():
+    """The crack as a fracture runs: CRACK's few straight runs broken up three times over, the
+    middle of each pushed sideways, twice by up to a quarter of its length and then by a little,
+    so that it kinks sharply at every scale instead of zigzagging evenly like a drawn bolt; and four short hairline branches leaving it at an
+    angle from some of the kinks. Returns the line's (x, z) points, top to bottom, and the
+    branches as (start, end) pairs."""
+    rng = np.random.default_rng(FISSURE_SEED)
+    pts = [np.array(p, dtype=np.float64) for p in CRACK]
+    for bend in (0.25, 0.25, 0.08):
+        out = [pts[0]]
+        for a, b in zip(pts, pts[1:]):
+            d = b - a
+            out += [(a + b) / 2 + np.array([-d[1], d[0]]) * rng.uniform(-bend, bend) + d * rng.uniform(-0.2, 0.2), b]
+        pts = out
+    line = np.array(pts)
+    branches = []
+    for i in rng.choice(np.arange(4, len(line) - 4), 4, replace=False):
+        d = line[i + 1] - line[i - 1]
+        d /= np.linalg.norm(d)
+        off = np.array([-d[1], d[0]]) * rng.choice([-1.0, 1.0]) + d * rng.uniform(-0.6, 0.6)
+        branches.append((line[i], line[i] + off / np.linalg.norm(off) * rng.uniform(0.05, 0.12)))
+    return line, branches
+
+
+FISSURE, BRANCHES = _fissure()
+# Along the crack (0 at its top, 1 at its foot): how much wider or narrower than its usual width
+# it opens, pinching nearly shut in places, and how much further one wall stands back than the
+# other, so the two sides are not one line drawn twice.
+_ALONG = np.linspace(0.0, 1.0, 257)
+_OPEN = np.clip([0.8 + 0.35 * noise.noise(Vector((t * 7.0, 5.0, 0.0))) + 0.25 * noise.noise(Vector((t * 19.0, 1.0, 3.0)))
+                 for t in _ALONG], 0.3, 1.35)
+_LEAN = np.array([0.4 * noise.noise(Vector((t * 4.0, 8.0, 2.0))) for t in _ALONG])
+
+
+def _segments(x, z, line):
+    """Distance from each point to a polyline, how far along it (0..1) the nearest point is, and
+    which side of it the point is on (+1 or -1)."""
     best = np.full(x.shape, 9.0)
     along = np.zeros(x.shape)
-    n = len(CRACK) - 1
-    for k, (a, b) in enumerate(zip(CRACK, CRACK[1:])):
+    side = np.ones(x.shape)
+    n = len(line) - 1
+    for k, (a, b) in enumerate(zip(line, line[1:])):
         dx, dz = b[0] - a[0], b[1] - a[1]
         t = np.clip(((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz), 0.0, 1.0)
         dist = np.hypot(x - a[0] - t * dx, z - a[1] - t * dz)
         closer = dist < best
         best = np.where(closer, dist, best)
         along = np.where(closer, (k + t) / n, along)
-    return best, CRACK_W * (0.25 + 0.75 * np.sin(np.pi * along) ** 0.7) * vary
+        side = np.where(closer, np.where(dx * (z - a[1]) - dz * (x - a[0]) > 0, 1.0, -1.0), side)
+    return best, along, side
+
+
+def crack_np(x, z):
+    """(distance to the crack, its half-width there) for arrays of points on the front. The crack
+    follows FISSURE, widest in the middle and closed to nothing at both ends, pinching and opening
+    as _OPEN says, one wall leaning back further than the other as _LEAN says, its edges a little
+    ragged; and the hairline BRANCHES, each closing from BRANCH_W to nothing."""
+    x, z = np.broadcast_arrays(np.asarray(x, dtype=np.float64), np.asarray(z, dtype=np.float64))
+    zs, inv = np.unique(z, return_inverse=True)     # the raggedness depends on z alone: look it up once per z
+    shift = np.array([0.006 * noise.noise(Vector((0.0, 3.7, q * 16.0))) + 0.003 * noise.noise(Vector((1.3, 0.0, q * 40.0)))
+                      for q in zs])[inv].reshape(z.shape)
+    x = x + shift
+    best, along, side = _segments(x, z, FISSURE)
+    w = (CRACK_W * (0.25 + 0.75 * np.sin(np.pi * along) ** 0.7) * np.interp(along, _ALONG, _OPEN)
+         * (1.0 + side * np.interp(along, _ALONG, _LEAN)))
+    for a, b in BRANCHES:
+        dist, t, _ = _segments(x, z, (a, b))
+        wb = BRANCH_W * (1.0 - t) ** 0.7
+        closer = dist - wb < best - w
+        best = np.where(closer, dist, best)
+        w = np.where(closer, wb, w)
+    return best, w
 
 
 def _front(g, d):
@@ -198,10 +255,10 @@ def _glow_sheet(g, front, step=0.008):
 def _crack_line():
     """The crack as a dense run of (x, z) points, for distances to whole arrays at once."""
     pts = []
-    for a, b in zip(CRACK, CRACK[1:]):
-        for t in np.linspace(0, 1, 12, endpoint=False):
-            pts.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
-    pts.append(CRACK[-1])
+    for a, b in zip(FISSURE, FISSURE[1:]):
+        for t in np.linspace(0, 1, 3, endpoint=False):
+            pts.append(a + (b - a) * t)
+    pts.append(FISSURE[-1])
     return np.array(pts)
 
 
@@ -333,7 +390,7 @@ def _pits(g, d, rng, count):
 
 
 def _vugs(g, d, rng, count):
-    """Hollows along the vein, each holding host rock that fills it to below the gold rim.
+    """Hollows along the vein, each filled with host rock worn flat just under the gold rim.
     Returns the rock's field and the hollows as (point, normal, radius)."""
     pts, nrm = g.surface_points(d, rng, 4000, 0.05)
     off = Vector((3.0, -7.0, 11.0))
@@ -349,24 +406,29 @@ def _vugs(g, d, rng, count):
     rock = np.full(g.shape, 10.0, np.float32)
     for p, n, r in vugs:
         # an irregular hollow: a main pocket and two or three smaller ones run into it
-        parts = [(p, r)]
+        parts = [(p, r, n)]
         for _ in range(rng.integers(2, 4)):
             t = rng.standard_normal(3)
             t -= n * t.dot(n)
             q = p + t / np.linalg.norm(t) * r * rng.uniform(0.5, 0.85)
             q = q - g.normals(d, q[None])[0] * g.sample(d, q[None])[0]   # back onto the curved surface
-            parts.append((q, r * rng.uniform(0.45, 0.7)))
-        for q, rq in parts:
+            parts.append((q, r * rng.uniform(0.45, 0.7), g.normals(d, q[None])[0]))
+        for q, rq, nq in parts:
             radii = (rq, rq * rng.uniform(0.6, 0.9), rq * 0.55)
             rot = _facing(n, rng)
             c = q + n * rq * 0.1
             sdf.paint(g, d, c, rq + 0.05, lambda X, Y, Z: sdf.ellipsoid(X, Y, Z, c, radii, rot),
                       lambda a, b: sdf.smax(a, -b, 0.012))
-            fill = tuple(x * 0.9 for x in radii)
-            cf = c - n * rq * rng.uniform(0.7, 0.8)          # rock up near the rim, set in the gold
-            sdf.paint(g, rock, cf, rq + 0.05, lambda X, Y, Z: sdf.ellipsoid(X, Y, Z, cf, fill, rot),
+            # the rock fills the hollow to its walls (a gap round it reads as a dark ring) and is
+            # worn flat a hair under the rim, as the stream wore it down with the gold
+            fill = tuple(x * 0.97 for x in radii)
+            top = q - nq * rq * rng.uniform(0.04, 0.06)
+            sdf.paint(g, rock, c, rq + 0.05,
+                      lambda X, Y, Z: sdf.smax(sdf.ellipsoid(X, Y, Z, c, fill, rot),
+                                               (X - top[0]) * nq[0] + (Y - top[1]) * nq[1] + (Z - top[2]) * nq[2], 0.01),
                       np.minimum)
-    # the rock's blocky granules: Voronoi chunks, each raised its own amount
+    # the rock's granules, Voronoi chunks, each raised its own hair (raised further, they read as
+    # grey popcorn)
     seeds = rng.uniform(g.lo, g.hi, size=(int(np.prod(g.hi - g.lo) / 0.025 ** 3 * 0.6), 3))
     tree = cKDTree(seeds)
     lift = rng.uniform(0, 1, len(seeds))
@@ -375,7 +437,7 @@ def _vugs(g, d, rng, count):
         X, Y, Z = (np.broadcast_to(a, rock[sl].shape) for a in g.coords(sl))
         dd, ii = tree.query(np.stack([X.ravel(), Y.ravel(), Z.ravel()], 1), k=2)
         edge = (dd[:, 1] - dd[:, 0]).reshape(X.shape)
-        rock[sl] -= (lift[ii[:, 0]].reshape(X.shape) * 0.011 + np.minimum(edge, 0.006) * 0.8).astype(np.float32)
+        rock[sl] -= (lift[ii[:, 0]].reshape(X.shape) * 0.0015 + np.minimum(edge, 0.006) * 0.15).astype(np.float32)
     return rock, vugs
 
 
@@ -650,7 +712,7 @@ def _gold(nt, co):
     col = _mix(nt, _math(nt, "MULTIPLY_ADD", grime, 0.6, _math(nt, "MULTIPLY", mottle, 0.25), clamp=True), col, DEEP_GOLD)
     col = _mix(nt, _math(nt, "MULTIPLY", grime, 0.45), col, (0.0, 0.0, 0.0))
     grit = _range(nt, _noise(nt, co, 90.0), 0.3, 0.7)
-    dirt_col = _mix(nt, _math(nt, "MULTIPLY", grit, 0.2), kit.rgba(DIRT), kit.rgba(ROCK_LIGHT))
+    dirt_col = _mix(nt, _math(nt, "MULTIPLY", grit, 0.2), kit.rgba(DIRT), kit.rgba(GRIT))
     col = _mix(nt, dirt, col, dirt_col)
     # the hammering: dimples about 2.5 cm across on the finished ore, strong in some places
     hammer = _voronoi(nt, co, 40.0)
@@ -672,16 +734,18 @@ def _gold(nt, co):
 
 
 def _rock(nt, co):
-    """Dark grey host rock: blocky granules, some faces lighter, with a fine grit."""
+    """The host rock, milky vein quartz: blocky granules, most milky, some clearer and greyer, with
+    a greasy shine and grime in the seams between them."""
     cells = _voronoi(nt, co, 26.0)
     pick = nt.nodes.new("ShaderNodeSeparateColor")
     nt.links.new(cells.outputs["Color"], pick.inputs["Color"])
-    light = _range(nt, pick.outputs["Red"], 0.55, 1.0, smooth=False)
-    col = _mix(nt, light, kit.rgba(ROCK), kit.rgba(ROCK_LIGHT))
-    rough = _range(nt, light, 0.0, 1.0, 0.85, 0.6, smooth=False)
+    milky = _range(nt, pick.outputs["Red"], 0.25, 0.6)
     edge = _voronoi(nt, co, 26.0, "DISTANCE_TO_EDGE")
+    seam = _range(nt, edge.outputs["Distance"], 0.0, 0.03, 0.35, 0.0)
+    col = _mix(nt, seam, _mix(nt, milky, kit.rgba(ROCK_CLEAR), kit.rgba(ROCK)), kit.rgba(DIRT))
+    rough = _math(nt, "MAXIMUM", _range(nt, milky, 0.0, 1.0, 0.15, 0.32, smooth=False), seam)
     height = _math(nt, "MULTIPLY_ADD", _noise(nt, co, 120.0), 0.3, edge.outputs["Distance"])
-    bump = _node(nt, "ShaderNodeBump", Strength=0.8, Distance=0.004, Height=height)
+    bump = _node(nt, "ShaderNodeBump", Strength=0.6, Distance=0.004, Height=height)
     return {"Base Color": col, "Roughness": rough, "Metallic": 0.0, "Specular IOR Level": 0.5,
             "Normal": bump.outputs["Normal"]}
 
