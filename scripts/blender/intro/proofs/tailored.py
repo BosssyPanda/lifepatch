@@ -1,6 +1,7 @@
-"""Tailored clothes on the plaster statues (rung 1 for the eras after 1600): a seated trader in a 1970s suit,
+"""Tailored clothes on the plaster statues (rung 1 for the eras after 1600): a seated trader in a 1970s suit
+(--fig trader) or a standing c. 1600 merchant in doublet, breeches, ruff and capotain (--fig merchant),
 simulated on the pose like the tunic. --sim 0 renders the cut garment on the rest body instead (to check
-the cuts before spending a simulation).
+the cuts before spending a simulation). tailored_web.py redoes the web export from the saved .blend.
 """
 import os
 import sys
@@ -33,8 +34,12 @@ frames = int(arg("--frames", "80"))
 bending = float(arg("--bending", "1.0"))
 bending_max = float(arg("--bending_max", "6.0"))
 friction = float(arg("--friction", "0.3"))
-shrink = float(arg("--shrink", "-0.07"))  # trousers
+# cloth slack (negative shrink), read from the "slack" map between lo (weight 0) and hi (weight 1)
+shrink_lo, shrink_hi = float(arg("--shrink_lo", "-0.08")), float(arg("--shrink_hi", "0.0"))
 shrink_j = float(arg("--shrink_j", "-0.03"))  # jacket
+shrink_seat = float(arg("--shrink", "-0.07"))  # trousers above the knee
+bridge = int(arg("--bridge", "0"))  # the crotch filler; off: it fought the soft pins and knotted the fly
+pin_stiff = float(arg("--pin_stiffness", "4.0"))
 sim = int(arg("--sim", "1"))
 web = int(arg("--web", "0"))
 views = arg("--views", "full,side").split(",")
@@ -51,9 +56,9 @@ def pose_merchant(rob):
 
 FIGS = {
     "trader": dict(targets=[("caucasian-male-young", 1.0)], pose=mh.pose_sit_write, seated=True, tablet=True,
-                   kind="suit"),
+                   kind="suit", hem_slack=-0.035, t_stiff=0.25, soft=dict(shin=(0.45, 0.8), fork=0.7, seat=0.7)),
     "merchant": dict(targets=[("caucasian-male-young", 0.6), ("universal-male-old-averagemuscle-averageweight", 0.4)],
-                     pose=pose_merchant, seated=False, tablet=False, kind="voc"),
+                     pose=pose_merchant, seated=False, tablet=False, kind="voc", hem_slack=None, t_stiff=0.0, soft=dict(fork=0.7, skirt=0.75)),
 }
 spec = FIGS[fig]
 
@@ -121,7 +126,15 @@ ob, rig = mh.build(fig, targets=spec["targets"], material=clay)
 cloth.tpose_rest(ob, rig, down=0.45)
 scalp = hair.scalp_verts(ob, rig)
 kind = spec["kind"]
-cob, L = tailor.suit(ob, rig, fig + "_suit", clay, kind=kind)
+slack = dict(lo=shrink_lo, hi=shrink_hi, jacket=shrink_j, seat=shrink_seat,
+             hem=shrink_seat if spec["hem_slack"] is None else spec["hem_slack"])
+cob, L = tailor.suit(ob, rig, fig + "_suit", clay, kind=kind, slack=slack, t_stiff=spec["t_stiff"],
+                     soft=spec["soft"])
+bob = None
+if bridge:
+    bob = tailor.bridge(ob, L, clay)
+    bob.hide_render = True
+    tailor.skin(bob, ob, rig)
 sob = None
 if kind == "suit":
     sob = tailor.shirt(ob, L, clay)
@@ -138,9 +151,12 @@ if with_details and kind == "voc":
         strips.append(details.Strip(f"button{len(strips)}", jsurf, details.disc(jsurf, 0.0, z, 0.008, lift=0.003),
                                     thick=0.0))
         z -= 0.034
+    # the deep cuffs that matched the ruff: a lace cuff turned back over each sleeve, flaring toward the
+    # elbow with a scalloped edge (a flat 4 cm band, then a small wrist ruff, both read as bracelets)
     for s_ in "lr":
         hand, d = L["wrist"][s_]
-        strips.append(details.Strip(f"cuff_{s_}", jsurf, details.band(jsurf, [basis[i] for i in cob[f"cuff_{s_}"]], -d),
+        strips.append(details.Strip(f"cuff_{s_}", jsurf, details.band(jsurf, [basis[i] for i in cob[f"cuff_{s_}"]], -d,
+                                                                      width=0.065, cols=6, flare=0.014, scallops=9),
                                     closed=True))
     rigid.append(details.ruff(ob, L, clay, rig))
     rigid.append(details.hat(ob, L, clay, rig))
@@ -182,6 +198,8 @@ else:
     set_pose(rig, final)
     cloth.key_pose(rig, 46)
     cloth.collider(ob, friction=friction)
+    if bob:
+        cloth.collider(bob, friction=friction)
     if sob:
         cloth.collider(sob, outer=0.002, friction=friction)
     bpy.ops.mesh.primitive_plane_add(size=6, location=(0, 0, FLOOR))
@@ -211,8 +229,9 @@ else:
         tab.keyframe_insert("location", frame=60)
         cloth.collider(tab)
         extra.append(tab)
-    cloth.add_cloth(cob, frames, bending=bending, mass=0.3, quality=10, tension=25.0, shear=10.0, shrink=shrink,
-                    stiff_group="stiff", bending_max=bending_max, shrink_max=shrink_j)
+    cloth.add_cloth(cob, frames, bending=bending, mass=0.3, quality=10, tension=25.0, shear=10.0, shrink=shrink_lo,
+                    stiff_group="stiff", bending_max=bending_max, shrink_max=shrink_hi, slack_group="slack",
+                    pin_stiffness=pin_stiff)
     cloth.run(frames)
     body = cloth.bake(ob, fig + "_body", clay)
     suit_b = cloth.bake(cob, fig + "_cloth", clay)

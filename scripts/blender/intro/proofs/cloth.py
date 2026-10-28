@@ -210,7 +210,7 @@ def make_tunic(ob, rig, name, material, hem=0.078, rx=0.31, ry=0.27, top=0.10, w
 
 
 def add_cloth(cob, frames, bending=1.2, mass=0.35, self_collide=True, quality=8, tension=15.0, shear=5.0,
-              shrink=0.0, stiff_group=None, bending_max=None, shrink_max=None):
+              shrink=0.0, stiff_group=None, bending_max=None, shrink_max=None, slack_group=None, pin_stiffness=1.0):
     mod = cob.modifiers.new("cloth", "CLOTH")
     s = mod.settings
     s.quality = quality
@@ -220,14 +220,15 @@ def add_cloth(cob, frames, bending=1.2, mass=0.35, self_collide=True, quality=8,
     s.shear_stiffness = shear
     s.bending_stiffness = bending
     s.vertex_group_mass = "pin"
-    s.pin_stiffness = 1.0
+    s.pin_stiffness = pin_stiffness  # only soft pins (weights below 1) feel it; full pins follow exactly
     s.shrink_min = shrink  # negative: the cloth is a little larger than its mesh (slack to sit down in)
     if stiff_group:
         s.vertex_group_bending = stiff_group
         s.bending_stiffness_max = bending_max
         if shrink_max is not None:
-            # the same map sets the slack: `shrink` where its weight is 0, `shrink_max` where it is 1
-            s.vertex_group_shrink = stiff_group
+            # the slack map (the same one, unless slack_group is given): `shrink` where its weight is 0,
+            # `shrink_max` where it is 1
+            s.vertex_group_shrink = slack_group or stiff_group
             s.shrink_max = shrink_max
     c = mod.collision_settings
     c.collision_quality = 3

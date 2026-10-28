@@ -336,33 +336,41 @@ def _rigid(ob, rig, bone):
     m.object = rig
 
 
-def ruff(body, L, material, rig, pleats=30, r_in=0.068, r_out=0.16, depth=0.07, z=None, segs_per=8, ring=14):
+def ruff(body, L, material, rig, pleats=30, r_in=0.068, r_out=0.16, depth=0.07, z=None, segs_per=8, ring=14,
+         centre=None, axis=None, bone="neck_01", squash=1.06):
     """A millstone ruff (c. 1600): a thick ring round the neck whose rim is a row of rounded pleats; the
     pleats bulge alternately at the top and the bottom, which reads as the figure-eight set of the linen.
-    Rounded by subdivision."""
-    neck = rig.data.bones["neck_01"].head_local
-    cy = neck.y + 0.012
-    z = neck.z - 0.004 if z is None else z
+    Rounded by subdivision. With centre and axis (and a bone to ride) it is built elsewhere, e.g. a small
+    one round each wrist."""
+    if centre is None:
+        neck = rig.data.bones["neck_01"].head_local
+        z = neck.z - 0.004 if z is None else z
+        centre = Vector((0, neck.y + 0.012, z))
+    axis = Vector((0, 0, 1)) if axis is None else Vector(axis).normalized()
+    u = Vector((1, 0, 0)) if abs(axis.x) < 0.9 else Vector((0, 1, 0))
+    u = (u - axis * u.dot(axis)).normalized()
+    v_ = axis.cross(u)
+    scallop = 0.022 * (r_out - r_in) / (0.16 - 0.068)
     n = pleats * segs_per
     # cross-section round a rounded box: inner face, bottom, rim, top
     prof = []
     for k in range(ring):
-        u = k / ring * math.tau
-        prof.append((0.5 + 0.5 * math.copysign(abs(math.cos(u)) ** 0.5, math.cos(u)),
-                     math.copysign(abs(math.sin(u)) ** 0.5, math.sin(u))))
+        t = k / ring * math.tau
+        prof.append((0.5 + 0.5 * math.copysign(abs(math.cos(t)) ** 0.5, math.cos(t)),
+                     math.copysign(abs(math.sin(t)) ** 0.5, math.sin(t))))
     verts, faces = [], []
     m = len(prof)
     for i in range(n):
         a = i / n * math.tau
         ph = math.cos(pleats * a)
         crest = abs(math.cos(pleats * a / 2))  # 1 at each pleat's crest, 0 between pleats
-        R = r_out - 0.022 * (1 - crest ** 0.5)
+        R = r_out - scallop * (1 - crest ** 0.5)
         for s_, h in prof:
             r = r_in + (R - r_in) * s_
             # top bulges on even pleats, bottom on odd ones, strongest toward the rim
             bulge = 0.25 * s_ * (ph if h > 0 else -ph)
             hh = h * depth * 0.5 * (0.8 + bulge)
-            verts.append((math.cos(a) * r, cy + math.sin(a) * r * 1.06, z + hh))
+            verts.append(tuple(centre + u * (math.cos(a) * r) + v_ * (math.sin(a) * r * squash) + axis * hh))
     for i in range(n):
         i2 = (i + 1) % n
         for k in range(m):
@@ -371,38 +379,39 @@ def ruff(body, L, material, rig, pleats=30, r_in=0.068, r_out=0.16, depth=0.07, 
     ob = _mesh_object("ruff", verts, faces, material)
     d = ob.modifiers.new("sub", "SUBSURF")
     d.levels = d.render_levels = 1
-    _rigid(ob, rig, "neck_01")
+    _rigid(ob, rig, bone)
     return ob
 
 
-def hat(body, L, material, rig, brim_r=0.14, crown_h=0.205, taper=0.66, brim_z=None, segs=64):
-    """A capotain (tall crowned hat, c. 1600) sized to this head, riding the head bone."""
-    head = rig.data.bones["head"]
+def hat(body, L, material, rig, brim_r=0.135, crown_h=0.20, brim_z=None, segs=64):
+    """A capotain (c. 1590s to 1640s: a tall, slightly conical crown rounded at the top, a narrow brim,
+    a hatband) sized to this head, riding the head bone."""
     vg = {g.name: g.index for g in body.vertex_groups}
     hi = vg["head"]
     me = body.data
     pts = [me.vertices[i].co for i in range(len(me.vertices))
            if any(g.group == hi and g.weight > 0.6 for g in me.vertices[i].groups)]
     top = max(p.z for p in pts)
-    bz = top - 0.075 if brim_z is None else brim_z
+    bz = top - 0.09 if brim_z is None else brim_z  # worn down to the brow
     ring = [p for p in pts if abs(p.z - bz) < 0.012]
     cx = (max(p.x for p in ring) + min(p.x for p in ring)) / 2
     cy = (max(p.y for p in ring) + min(p.y for p in ring)) / 2
     rx = (max(p.x for p in ring) - min(p.x for p in ring)) / 2 + 0.012
     ry = (max(p.y for p in ring) - min(p.y for p in ring)) / 2 + 0.012
-    # profile from the brim's edge in to the band, up the crown, across the top (r as fraction of head)
-    prof = [(brim_r / rx * 1.0, -0.004), (brim_r / rx * 0.98, 0.006), (1.02, 0.008), (1.0, 0.012),
-            (0.97, crown_h * 0.4), (0.5 + 0.5 * taper, crown_h * 0.75), (taper, crown_h * 0.95),
-            (taper * 0.8, crown_h * 1.02), (0.0, crown_h + 0.012)]
+    h = crown_h
+    # profile: (r as a fraction of the head, height); None marks the brim (a circle, not the head's oval)
+    prof = [(None, -0.004), (None, 0.005), (1.035, 0.008), (1.035, 0.034), (1.0, 0.038),  # brim, hatband
+            (0.95, h * 0.3), (0.86, h * 0.55), (0.76, h * 0.74), (0.67, h * 0.84), (0.58, h * 0.92),
+            (0.45, h * 0.97), (0.25, h * 1.0), (0.0, h * 1.01)]  # conical, domed over the top
     verts, faces = [], []
     for i in range(segs):
         a = i / segs * math.tau
-        for f, h in prof:
-            if f > 1.5:  # brim: a circle, not the head's oval
-                r = brim_r * f / (brim_r / rx)
-                verts.append((cx + math.cos(a) * r, cy + math.sin(a) * r, bz + h))
+        for k, (f, z) in enumerate(prof):
+            if f is None:
+                r = brim_r * (1.0 if k == 0 else 0.98)
+                verts.append((cx + math.cos(a) * r, cy + math.sin(a) * r, bz + z))
             else:
-                verts.append((cx + math.cos(a) * rx * f, cy + math.sin(a) * ry * f, bz + h))
+                verts.append((cx + math.cos(a) * rx * f, cy + math.sin(a) * ry * f, bz + z))
     m = len(prof)
     for i in range(segs):
         i2 = (i + 1) % segs
@@ -411,20 +420,26 @@ def hat(body, L, material, rig, brim_r=0.14, crown_h=0.205, taper=0.66, brim_z=N
     ob = _mesh_object("hat", verts, faces, material)
     s = ob.modifiers.new("thick", "SOLIDIFY")
     s.thickness, s.offset = 0.004, 1.0
+    d = ob.modifiers.new("sub", "SUBSURF")
+    d.levels = d.render_levels = 1
     _rigid(ob, rig, "head")
     return ob
 
 
-def band(surf, loop_pts, up, width=0.04, cols=4, lift=0.004, roll=0.003):
-    """A turned-back cuff: a closed band on the sleeve from its edge up the arm by width."""
+def band(surf, loop_pts, up, width=0.04, cols=4, lift=0.004, roll=0.003, flare=0.0, scallops=0):
+    """A turned-back cuff: a closed band on the sleeve from its edge up the arm by width. flare stands the
+    free edge off the sleeve (a deep cuff opening toward the elbow, which reads as part of the sleeve; a
+    narrow flat band read as a bracelet); scallops cuts that edge into lobes, like lace."""
     grid = []
-    for p in loop_pts:
+    n = len(loop_pts)
+    for i, p in enumerate(loop_pts):
+        edge = 1.0 - (0.12 * (0.5 + 0.5 * math.cos(math.tau * scallops * i / n)) if scallops else 0.0)
         row = []
         for c in range(-1, cols):
             if c < 0:
                 row.append(_lay(surf, p, 0.0))
                 continue
             f = c / (cols - 1)
-            row.append(_lay(surf, p + up * (0.002 + width * f), lift + roll * (1 - f)))
+            row.append(_lay(surf, p + up * (0.002 + width * f * edge), lift + roll * (1 - f) + flare * f ** 1.5))
         grid.append(row)
     return grid
