@@ -22,6 +22,7 @@ INTRO = os.path.dirname(HERE)
 sys.path[:0] = [HERE, INTRO]
 
 import bpy  # noqa: E402
+from bpy_extras.object_utils import world_to_camera_view  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 import kit  # noqa: E402
@@ -83,12 +84,14 @@ def build(figs, sails="set"):
     # propped against the lid
     props.barrel("stand_barrel", (0, 0, 0), r=0.27, h=0.72)
     chest_at = Vector((0, 0, 0.72))
-    lid_open = math.radians(108)
-    cw, cd, ch = 0.44, 0.30, 0.21
-    # lighter wood and darker iron than the cargo chests, so the lid reads as a frame round the receipt
-    # against the dark hull behind it
-    box = props.chest("cashbox", size=(cw, cd, ch), lid_open=lid_open, material=mat("clay_dim", "#6b655b"),
-                      iron=mat("clay_dim", "#2c2926"))
+    lid_open = math.radians(105)
+    # a small coffer: at 0.85 m from the lens a lid as wide as a sea chest's walls off the table and the
+    # bookkeeper behind it; this one leaves a hand's width each side of the receipt. Dark wood so the
+    # receipt stands out against the lid; the bands run near the ends so they show either side of the
+    # receipt, and no hasp, whose clip at the top of an open lid made it read as a clipboard
+    cw, cd, ch = 0.30, 0.20, 0.15
+    box = props.chest("cashbox", size=(cw, cd, ch), lid_open=lid_open, material=mat("clay_dim", "#403c37"),
+                      iron=mat("clay_dim", "#24221f"), band_at=(-0.36, 0.36), hasp=False)
     box.location = chest_at
     box.rotation_euler = (0, 0, yaw)
     # the receipt leans on the inside of the lid: its plane through the hinge, tilted back with the lid
@@ -109,13 +112,14 @@ def build(figs, sails="set"):
     c0 = Vector((cam.location.x, cam.location.y, 0))
     inner = Vector(box["inner"])
     # filled to the rim and mounded a little in the middle, so the front slope of coins tilts toward the
-    # lens and catches the light from above (a heap spilling over the sides read as pirate treasure)
-    heap, protos = props.coin_heap("silver_heap", (0, 0, 0), (inner.x - 0.012, inner.y - 0.012), 0.0, n=150, seed=4,
-                                   mound=0.05, max_tilt=0.4)
+    # lens and catches the light from above (a heap spilling over the sides read as pirate treasure); coin
+    # centres a coin's width in from the walls, or edge coins hang outside the box
+    heap, protos = props.coin_heap("silver_heap", (0, 0, 0), (inner.x - 0.03, inner.y - 0.03), 0.0, n=95, seed=4,
+                                   mound=0.035, max_tilt=0.4)
     heap.parent = box
     heap.location = (0, -0.005, ch - 0.03)
     # a flatter layer under it, so the gaps between the top coins show more silver and not the empty box
-    under_layer, _ = props.coin_heap("silver_under", (0, 0, 0), (inner.x - 0.008, inner.y - 0.008), 0.0, n=110, seed=9,
+    under_layer, _ = props.coin_heap("silver_under", (0, 0, 0), (inner.x - 0.02, inner.y - 0.02), 0.0, n=70, seed=9,
                                      mound=0.0, max_tilt=0.25, protos=protos)
     under_layer.parent = box
     under_layer.location = (0, -0.005, ch - 0.042)
@@ -123,7 +127,7 @@ def build(figs, sails="set"):
     hero_cob = props.cob("piece_of_eight", seed=24)
     hero_cob.parent = box
     t35 = math.radians(35)
-    hx, hy = 0.07, -0.085
+    hx, hy = 0.05, -0.045
     under = [c.location.z for c in heap.children if (c.location.x - hx) ** 2 + (c.location.y + 0.005 - hy) ** 2 < 0.025 ** 2]
     hero_cob.location = (hx, hy, heap.location.z + max(under, default=0.0) + 0.002 + 0.019 * math.sin(t35))
     hero_cob.rotation_euler = (t35, 0, 0.25)
@@ -162,23 +166,31 @@ def build(figs, sails="set"):
     pr = mark("bookkeeper.palm_r")
     up_back = (n * 0.55 - a * 0.25 + Vector((0, 0, 0.85))).normalized()
     props.quill("quill", Vector((pr.x, pr.y, TABLE_TOP + 0.004)) - n * 0.05, up_back)
-    # the buyer's silver counted out in stacks on the table, just under his hands
+    # the buyer's silver counted out in stacks on the table, between his hands and the register (stacks of
+    # four to nine coins read as pebbles from the camera; a dozen reads as a stack)
     bl, br_ = mark("buyer.palm_l"), mark("buyer.palm_r")
     under = (bl + br_) / 2
-    for k, (sa, sn, cnt) in enumerate(((-0.07, 0.07, 7), (0.05, 0.05, 5), (-0.01, 0.15, 9), (0.11, 0.13, 4))):
+    for k, (sa, sn, cnt) in enumerate(((-0.08, 0.1, 12), (0.04, 0.08, 9), (-0.02, 0.2, 15), (0.12, 0.17, 7),
+                                       (-0.15, 0.22, 11))):
         p = Vector((under.x, under.y, 0)) + a * sa + n * sn
         for c in range(cnt):
             ob = bpy.data.objects.new(f"stack{k}_{c}", protos[c % len(protos)].data)
             kit.link(ob)
             ob.location = (p.x + 0.002 * math.sin(c * 2.1), p.y + 0.002 * math.cos(c * 1.7), TABLE_TOP + 0.0013 + c * 0.0026)
             ob.rotation_euler = (0.03 * math.sin(c), 0.03 * math.cos(c), c * 0.9)
-    # silver on the buyer's palms: a short stack in the hollow of each hand
-    for side, cnt in (("l", 3), ("r", 4)):
-        pp = mark(f"buyer.hand_{side}").lerp(mark(f"buyer.palm_{side}"), 0.6) + Vector((0, 0, 0.022))
-        for c in range(cnt):
+    # in the hand the camera sees (the one further left in frame) a purse held out; a short stack of
+    # coins in the other
+    sx = {s_: world_to_camera_view(bpy.context.scene, cam, mark(f"buyer.palm_{s_}")).x for s_ in "lr"}
+    shown = min(sx, key=sx.get)
+    for side in "lr":
+        pp = mark(f"buyer.hand_{side}").lerp(mark(f"buyer.palm_{side}"), 0.6)
+        if side == shown:
+            props.purse("buyer_purse", pp + Vector((0, 0, 0.03)), size=0.05)
+            continue
+        for c in range(4):
             ob = bpy.data.objects.new(f"palm_{side}{c}", protos[(c + 2) % len(protos)].data)
             kit.link(ob)
-            ob.location = (pp.x, pp.y, pp.z + c * 0.0026)
+            ob.location = (pp.x, pp.y, pp.z + 0.022 + c * 0.0026)
             ob.rotation_euler = (0.12, -0.18 if side == "r" else 0.18, c)
     # the proof's hat crown closed in a fan of duplicate points, which rendered as a pinhole: merge them
     import bmesh

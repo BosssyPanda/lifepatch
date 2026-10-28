@@ -403,15 +403,18 @@ def iron_mat():
     return mat("clay_dim", "#4a4640")
 
 
-def chest(name, size=(0.44, 0.3, 0.22), lid_open=0.0, material=None, inside=None, bands=2, iron=None):
+def chest(name, size=(0.44, 0.3, 0.22), lid_open=0.0, material=None, inside=None, bands=2, iron=None, band_at=None,
+          hasp=True):
     """An iron-bound strongbox: walls, a flat lid hinged along the back edge (lid_open in radians, 0 shut),
-    iron bands round the body and over the lid, a lock plate and side handles. The local origin is the
-    middle of the base; the front faces -Y."""
+    iron bands round the body and over the lid, a lock plate and side handles. band_at: the bands' places
+    across the width as fractions from -0.5 to 0.5 (default evenly spaced). The local origin is the middle
+    of the base; the front faces -Y."""
     w, d, h = size
     wood = material or mat("wood")
     iron = iron or iron_mat()
     inner = inside or mat("clay_dim", kit.look()["ground"])
     root = kit.link(bpy.data.objects.new(name, None))
+    band_x = [f * w for f in band_at] if band_at else [(k + 1) / (bands + 1) * w - w / 2 for k in range(bands)]
     t = 0.022
     parts = [kit.box(name + "_floor", (w, d, t), loc=(0, 0, t / 2), material=wood)]
     for k, (sx, sy, lw, ld) in enumerate(((0, -1, w, t), (0, 1, w, t), (-1, 0, t, d), (1, 0, t, d))):
@@ -419,8 +422,7 @@ def chest(name, size=(0.44, 0.3, 0.22), lid_open=0.0, material=None, inside=None
                              bevel=0.004))
     parts.append(kit.box(name + "_lining", (w - 2 * t, d - 2 * t, 0.004), loc=(0, 0, t + 0.002), material=inner))
     # bands round the body
-    for k in range(bands):
-        x = (k + 1) / (bands + 1) * w - w / 2
+    for k, x in enumerate(band_x):
         parts.append(kit.box(f"{name}_band{k}", (0.03, d + 0.008, h + 0.004), loc=(x, 0, h / 2), material=iron, bevel=0.003))
     parts.append(kit.box(name + "_rim", (w + 0.008, d + 0.008, 0.025), loc=(0, 0, h - 0.0125), material=iron, bevel=0.003))
     parts.append(kit.box(name + "_foot", (w + 0.008, d + 0.008, 0.025), loc=(0, 0, 0.0125), material=iron, bevel=0.003))
@@ -435,13 +437,13 @@ def chest(name, size=(0.44, 0.3, 0.22), lid_open=0.0, material=None, inside=None
     hinge.location = (0, d / 2, h)
     lid = kit.box(name + "_lid", (w + 0.01, d + 0.01, 0.03), loc=(0, -d / 2, 0.015), material=wood, bevel=0.004)
     lid.parent = hinge
-    for k in range(bands):
-        x = (k + 1) / (bands + 1) * w - w / 2
+    for k, x in enumerate(band_x):
         b = kit.box(f"{name}_lidband{k}", (0.03, d + 0.016, 0.036), loc=(x, -d / 2, 0.015), material=iron, bevel=0.003)
         b.parent = hinge
-    hasp = kit.box(name + "_hasp", (0.05, 0.01, 0.07), loc=(0, -d - 0.008, -0.02), material=iron, bevel=0.002)
-    hasp.parent = hinge
-    hinge.rotation_euler = (lid_open, 0, 0)
+    if hasp:
+        hp_ = kit.box(name + "_hasp", (0.05, 0.01, 0.07), loc=(0, -d - 0.008, -0.02), material=iron, bevel=0.002)
+        hp_.parent = hinge
+    hinge.rotation_euler = (-lid_open, 0, 0)   # negative about X swings the front edge up and over to the back
     parts.append(hinge)
     for p in parts:
         p.parent = root
