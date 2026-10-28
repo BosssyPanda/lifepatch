@@ -20,6 +20,7 @@ import {
   settle,
   smoothstep,
 } from "./oreMotion";
+import { addFinish } from "./finish";
 import { createRipple } from "./ripple";
 
 RectAreaLightUniformsLib.init(); // the cursor's panel light needs its lookup tables before any render
@@ -28,9 +29,10 @@ RectAreaLightUniformsLib.init(); // the cursor's panel light needs its lookup ta
  * Scene one of the intro: the gold ore on its stand.
  *
  * The ore is the Blender build (scripts/blender/intro/ore/), baked to a light mesh with textures:
- * `ore` (gold, rock and quartz), `crack_glow` (the crack's floor) and `ore_pick` (an invisible
- * low-poly copy the cursor is hit-tested against). It is lit by the same studio HDR the Blender
- * look-dev renders used, plus a pool of light from above and a soft panel that follows the cursor.
+ * `ore` (gold, rock and quartz), `crack_glow` (a sheet across the crack) and `ore_pick` (an
+ * invisible low-poly copy the cursor is hit-tested against). It is lit by the same studio HDR the
+ * Blender look-dev renders used, plus a pool of light from above and a soft panel that follows the
+ * cursor.
  *
  * Before scrolling, the visitor turns the ore by dragging it. Hovering shines the panel on it and
  * a click sends a small ripple through the gold. Scrolling then takes over: the ore turns the
@@ -69,7 +71,7 @@ const LOOK = {
   cursor: 180,
   cursorSize: 0.1, // m, the panel's side
   cursorOut: 0.12, // m in front of the point under the cursor
-  // The crack's floor is drawn as the page's own warm white (#f4f0e6), not tone-mapped: a multiple
+  // The crack's glow is drawn as the page's own warm white (#f4f0e6), not tone-mapped: a multiple
   // of it here, capped at 1 (the full token, the same white the dive fades to).
   glowRest: 0.2, // while it faces away
   glowFacing: 1.0, // once it faces the camera
@@ -223,6 +225,7 @@ function OreWorld({ state }: { state: React.RefObject<OreState> }) {
   const ripple = useMemo(() => {
     const r = createRipple(parts.ore.normalMatrix);
     r.patch(parts.oreMat);
+    addFinish(parts.oreMat, parts.ore.normalMatrix); // after the ripple: it builds on its patch
     return r;
   }, [parts]);
   const haloMap = useMemo(() => glowTexture(), []);
