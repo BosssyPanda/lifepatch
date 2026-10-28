@@ -135,14 +135,28 @@ def hero(cam, relief=None):
     scenes.stand("ledge", cam, hp, hp.z - 0.035)
     c = coinmod.Coin(relief=relief)
     ob = coinmod.coin_mesh("hero", c, size=0.1, voxel=0.05)
-    # lean it back toward the lens and seat its lowest point on the stand
-    ob.rotation_euler = scenes.face_cam(cam, math.radians(55))
+    # lean it back toward the lens, turned in its own plane so the lion's head stands upright on screen,
+    # and seat its lowest point on the stand
+    lean = scenes.face_cam(cam, math.radians(55)).to_matrix()
+    cr = cam.matrix_world.to_3x3()
+    up, right = cr @ Vector((0, 1, 0)), cr @ Vector((1, 0, 0))
+    a = math.radians(c.die[3])
+    die_up = Vector((-math.sin(a), math.cos(a), 0.0))
+    turn = max((math.radians(d) for d in range(-90, 91)),
+               key=lambda t: (lean @ Matrix.Rotation(t, 3, "Z") @ die_up).dot(up)
+               - abs((lean @ Matrix.Rotation(t, 3, "Z") @ die_up).dot(right)))
+    ob.rotation_euler = (lean @ Matrix.Rotation(turn, 3, "Z")).to_euler()
     ob.location = hp
     bpy.context.view_layer.update()
     lo = min((ob.matrix_world @ v.co).z for v in ob.data.vertices)
     ob.location.z += (hp.z - 0.035) - lo - 0.0005
     scenes.mark_hero(ob)
     scenes.hero_light(cam, hp, 12.0)
+    # a low light from the left, raking across the relief so the lion's forms cast shadows; it belongs to
+    # the money, so it stays on when the room goes dark
+    rake = kit.spot_light("hero_rake", hp - right * 0.45 + up * 0.05 + (cr @ Vector((0, 0, 1))) * 0.1, hp, 5.0,
+                          angle=math.radians(20), blend=0.4, radius=0.03)
+    rake["hero"] = True
     return ob
 
 

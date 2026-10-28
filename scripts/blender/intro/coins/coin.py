@@ -8,13 +8,15 @@ oblong punch divided into two squares, sunk into the metal when the hammer drove
 How it is built: the coin is a solid between two height fields, a domed top (plus the lion relief) and a
 domed bottom (minus the two punch squares), cut by a slightly irregular oval outline with a rounded rim.
 That solid is written as a signed distance field and meshed by marching cubes (PyMCubes), like the ore.
-The lion relief is a height map traced from a public-domain museum photo (relief.py), never drawn from
-memory: drawn from memory it read as a cartoon crocodile (proofs/lion_relief.py).
+The lion relief is a height map sculpted in code (lion.py) and checked side by side against photographs
+of real coins; drawn from memory with nothing to check against, it read as a cartoon crocodile
+(proofs/lion_relief.py). The die is a little larger than the flan, as on the real coins, so the mane and
+muzzle run off the edge, the relief fading over the last 0.9 mm so the rim stays rounded.
 
 Units: millimetres while building, then scaled to metres (`size` = long axis in metres; the hero coin is
 shown much larger than life, like every era's money). Its local +Z is the obverse.
 
-  python coins/coin.py --out DIR [--relief relief.png] [--views obv,rev,edge,hero]
+  python coins/coin.py --out DIR [--relief lion.png] [--views obv,rev,edge,hero]
 """
 import math
 import os
@@ -64,7 +66,7 @@ def _noise2(x, y, seed, octaves=4, base=0.35):
 class Coin:
     """The coin's shape as functions of (x, y) in mm: outline distance, top and bottom height fields."""
 
-    def __init__(self, relief=None, seed=5, die=(0.6, 0.3, 11.0, -8.0), relief_h=1.25):
+    def __init__(self, relief=None, seed=5, die=(0.0, 0.1, 12.2, -8.0), relief_h=1.7):
         self.seed = seed
         self.relief = relief            # 2D float array in [0, 1], row 0 = top of the image, or None
         self.die = die                  # die centre x, y (mm), die width (mm), rotation (deg)
@@ -118,9 +120,11 @@ class Coin:
         return depth * (1.0 + rough)
 
     def top(self, x, y, d):
-        field = self.dome(d, 2.85, 3.6) + 0.25 * _noise2(x, y, self.seed + 1, octaves=2, base=0.18)
+        # the die flattened the top where it struck: a low dome with rounded shoulders
+        field = self.dome(d, 1.8, 4.2) + 0.25 * _noise2(x, y, self.seed + 1, octaves=2, base=0.18)
         grain = 0.004 * _noise2(x, y, self.seed + 3, octaves=3, base=2.5)
-        return field + self.relief_at(x, y) + grain
+        # the design runs off the flan, but the rim stays rounded: fade the relief over the last 0.9 mm
+        return field + self.relief_at(x, y) * np.clip(-d / 0.9, 0.0, 1.0) + grain
 
     def bottom(self, x, y, d):
         field = -self.dome(d, 2.1, 2.2) + 0.2 * _noise2(x, y, self.seed + 2, octaves=2, base=0.2)

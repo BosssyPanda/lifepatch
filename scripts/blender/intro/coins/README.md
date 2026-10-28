@@ -12,6 +12,9 @@ at the intro's money spot (`scenes.HERO`), lit by the spot that stays on when th
   the grip axis is stored on the baked figure so the scene can put the tools in its hands. `--sim 0`
   poses the bare body in seconds, for getting a pose right; `--check 1` renders stand-in tools at the
   grips, including close views of each hand.
+- `lion.py`: the lion's head as a height map, sculpted in code (one inflated head with swellings and
+  hollows for muzzle, jaws, eye, brow knob, ear, and rows of mane locks); `--preview` writes a raking-light
+  view.
 - `coin.py`: the trite as a signed distance field between two height fields (a domed obverse plus the
   lion relief, a domed reverse minus the two punch squares), cut by a lumpy oval with a rounded rim, meshed
   by marching cubes and smoothed (Taubin). A `cavity` attribute darkens and roughens the recesses.
@@ -29,11 +32,12 @@ assets from MPFB2 (see `../proofs/README.md`; this scene also uses `caucasian-ma
 export MPFB_DATA=/tmp/mpfb2/src/mpfb/data
 # the statues: about a minute and a half of cloth simulation each on four cores
 .venv-bpy/bin/python scripts/blender/intro/coins/figures.py --out /tmp/coins/fig --fig coiner,stoker,weigher --check 1
-# the coin alone (obverse, reverse, edge)
-.venv-bpy/bin/python scripts/blender/intro/coins/coin.py --out /tmp/coins/coin --views obv,rev,edge
+# the lion's height map, then the coin alone (obverse, reverse, edge)
+.venv-bpy/bin/python scripts/blender/intro/coins/lion.py --out /tmp/coins/lion.png --preview /tmp/coins/lion_shaded.png
+.venv-bpy/bin/python scripts/blender/intro/coins/coin.py --out /tmp/coins/coin --relief /tmp/coins/lion.png --views obv,rev,edge
 # the scene from the overview camera, lit and dimmed
-.venv-bpy/bin/python scripts/blender/intro/coins/scene.py --figs /tmp/coins/fig --out /tmp/coins/frames
-.venv-bpy/bin/python scripts/blender/intro/coins/scene.py --figs /tmp/coins/fig --out /tmp/coins/frames --dim 0.025
+.venv-bpy/bin/python scripts/blender/intro/coins/scene.py --figs /tmp/coins/fig --out /tmp/coins/frames --relief /tmp/coins/lion.png
+.venv-bpy/bin/python scripts/blender/intro/coins/scene.py --figs /tmp/coins/fig --out /tmp/coins/frames --relief /tmp/coins/lion.png --dim 0.025
 ```
 
 ## The hand-off from the cave
@@ -45,9 +49,9 @@ at 1280x800 it covers about x 354-495, y 503-609 px.
 
 ## Not done yet
 
-- The lion. Its relief must be traced from a public-domain photo of a real lion-head trite (CC0 or
-  public domain only); drawn from memory it read as a cartoon crocodile (`../proofs/lion_relief.py`).
-  Until then the hero coin is the bare lump with its punch marks, and `coin.py --relief` takes the
-  height map once it exists.
+- The lion is a first pass (`lion.py`): it reads as a lion's head in profile with mane and open jaws, but
+  at its size in the frame the face still reads a little like a grimacing mask, and the mane locks like
+  ribs. It was sculpted while checking against photographs of real coins that are not public domain; none
+  was traced or ships.
 - The web file (`public/intro/coins/coins.glb`, merged by material, baked light) and the preview route
   `/intro/coins`.
