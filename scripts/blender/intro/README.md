@@ -53,13 +53,14 @@ each frame.
   hit-test copy for the cursor). It takes about six minutes. The light copy is simplified evenly:
   sparing the crack's band from it starves the rest into sliver triangles, which shine as streaks.
 
-The page loads a compressed copy. Textures first, then Draco: compressing the mesh before the
-textures silently undoes it. With [glTF-Transform](https://gltf-transform.dev) 4.5 and
-KTX-Software 4.4 on the PATH:
+The page loads a compressed copy (about 5.5 MB). Textures first, then Draco: compressing the
+mesh before the textures silently undoes it. All four textures are UASTC: ETC1S, a megabyte
+smaller, shares one colour between each 4x4 block of texels, which turned the gold next to the
+dark dirt grey (11k gold texels against none) and showed as grey flecks in the grooves. With
+[glTF-Transform](https://gltf-transform.dev) 4.5 and KTX-Software 4.4 on the PATH:
 
 ```sh
 .venv-bpy/bin/python scripts/blender/intro/ore/bake.py --out /tmp/ore
-gltf-transform uastc /tmp/ore/ore.glb /tmp/ore/1.glb --slots "{normalTexture,occlusionTexture,metallicRoughnessTexture}" --level 2 --rdo --zstd 18
-gltf-transform etc1s /tmp/ore/1.glb /tmp/ore/2.glb --slots "baseColorTexture" --quality 255
-gltf-transform draco /tmp/ore/2.glb public/intro/ore/ore.glb --method edgebreaker
+gltf-transform uastc /tmp/ore/ore.glb /tmp/ore/1.glb --slots "{normalTexture,occlusionTexture,metallicRoughnessTexture,baseColorTexture}" --level 2 --rdo --zstd 18
+gltf-transform draco /tmp/ore/1.glb public/intro/ore/ore.glb --method edgebreaker
 ```

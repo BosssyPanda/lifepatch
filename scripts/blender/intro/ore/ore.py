@@ -57,7 +57,9 @@ GLOW_AT = 0.55       # the glowing sheet's depth in the slit, as a fraction of C
 
 ROCK = "#262422"     # neutral dark grey (DESIGN.md: no warm browns)
 ROCK_LIGHT = "#55524e"
-DIRT = "#1b1815"     # as faintly warm as ROCK, so beside the gold it does not read blue     # the grime packed into the gold's grooves: grey, not brown (no colour casts)
+DIRT = "#110f0d"     # the grime packed into the gold's grooves: grey, not brown (no colour casts),
+                     # as faintly warm as ROCK, and dark enough that under the page's cursor light
+                     # it stays dark rather than pale grey, which beside the gold reads as blue
 QUARTZ = "#d3cfc6"   # milky quartz, below white so lit faces keep their shading
 QUARTZ_GLASS = "#8f8c87"  # the clearer, glassy patches in it
 ORE_GOLD = (1.0, 0.65, 0.19)     # linear; rendered hue ~38° (amendment G: 37-41°)
@@ -649,7 +651,7 @@ def _gold(nt, co):
     col = _mix(nt, _math(nt, "MULTIPLY_ADD", grime, 0.6, _math(nt, "MULTIPLY", mottle, 0.25), clamp=True), col, DEEP_GOLD)
     col = _mix(nt, _math(nt, "MULTIPLY", grime, 0.45), col, (0.0, 0.0, 0.0))
     grit = _range(nt, _noise(nt, co, 90.0), 0.3, 0.7)
-    dirt_col = _mix(nt, _math(nt, "MULTIPLY", grit, 0.35), kit.rgba(DIRT), kit.rgba(ROCK_LIGHT))
+    dirt_col = _mix(nt, _math(nt, "MULTIPLY", grit, 0.2), kit.rgba(DIRT), kit.rgba(ROCK_LIGHT))
     col = _mix(nt, dirt, col, dirt_col)
     # the hammering: dimples about 2.5 cm across on the finished ore, strong in some places
     hammer = _voronoi(nt, co, 40.0)
