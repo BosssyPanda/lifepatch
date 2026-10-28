@@ -100,11 +100,12 @@ def pose_porter(rob):
 
 FIGS = {
     "bookkeeper": dict(targets=[("caucasian-male-old", 0.55), ("universal-male-old-averagemuscle-averageweight", 0.45)],
-                       pose=pose_bookkeeper, seated=True, ruff=True, hat="capotain", buttons=True),
+                       pose=pose_bookkeeper, seated=True, ruff=True, hat="capotain", buttons=True,
+                       soft=dict(fork=0.7, skirt=0.75, seat=0.7)),
     "buyer": dict(targets=[("caucasian-male-young", 0.6), ("universal-male-old-averagemuscle-averageweight", 0.4)],
-                  pose=pose_buyer, seated=False, ruff=True, hat="capotain", buttons=True),
+                  pose=pose_buyer, seated=False, ruff=True, hat="capotain", buttons=True, soft=dict(fork=0.7, skirt=0.75)),
     "porter": dict(targets=[("universal-male-young-maxmuscle-averageweight", 0.7), ("african-male-young", 0.3)],
-                   pose=pose_porter, seated=False, ruff=False, hat=None, buttons=False),
+                   pose=pose_porter, seated=False, ruff=False, hat=None, buttons=False, soft=dict(fork=0.7, skirt=0.75)),
 }
 
 
@@ -248,7 +249,10 @@ def build(fig, out, frames=80, samples=32, views=("full", "side"), res=(800, 100
     ob, rig = mh.build(fig, targets=spec["targets"], material=clay)
     cloth.tpose_rest(ob, rig, down=0.45)
     scalp = hair.scalp_verts(ob, rig)
-    cob, L = tailor.suit(ob, rig, fig + "_suit", clay, kind="voc")
+    # the merchant settings from ../proofs/tailored.py after its fixes: slack read from a map, and soft pins
+    # (weights below 1) that hold the fork, the doublet's skirt and a seated seat where the skeleton puts them
+    cob, L = tailor.suit(ob, rig, fig + "_suit", clay, kind="voc",
+                         slack=dict(lo=-0.08, hi=0.0, jacket=-0.03, seat=-0.03, hem=-0.03), soft=spec["soft"])
     strips, rigid = [], []
     nt = cob["n_trousers"]
     me = cob.data
@@ -262,7 +266,9 @@ def build(fig, out, frames=80, samples=32, views=("full", "side"), res=(800, 100
             z -= 0.034
     for s_ in "lr":
         hand, d = L["wrist"][s_]
-        strips.append(details.Strip(f"cuff_{s_}", jsurf, details.band(jsurf, [basis[i] for i in cob[f"cuff_{s_}"]], -d),
+        # a deep lace cuff turned back and flaring toward the elbow (a flat band read as a bracelet)
+        strips.append(details.Strip(f"cuff_{s_}", jsurf, details.band(jsurf, [basis[i] for i in cob[f"cuff_{s_}"]], -d,
+                                                                      width=0.065, cols=6, flare=0.014, scallops=9),
                                     closed=True))
     if spec["ruff"]:
         rigid.append(details.ruff(ob, L, clay, rig))
@@ -290,8 +296,8 @@ def build(fig, out, frames=80, samples=32, views=("full", "side"), res=(800, 100
         seat.location.z += 0.8
         seat.keyframe_insert("location", frame=52)
         cloth.collider(seat, friction=0.3)
-    cloth.add_cloth(cob, frames, bending=0.6, mass=0.3, quality=10, tension=25.0, shear=10.0, shrink=-0.03,
-                    stiff_group="stiff", bending_max=6.0, shrink_max=-0.03)
+    cloth.add_cloth(cob, frames, bending=0.6, mass=0.3, quality=10, tension=25.0, shear=10.0, shrink=-0.08,
+                    stiff_group="stiff", bending_max=10.0, shrink_max=0.0, slack_group="slack", pin_stiffness=4.0)
     cloth.run(frames)
     body = cloth.bake(ob, fig + "_body", clay)
     suit_b = cloth.bake(cob, fig + "_cloth", clay)

@@ -273,11 +273,10 @@ def _cob_height(n=256, seed=1):
     return np.asarray(im, dtype=np.float32) / 255.0
 
 
-def cob(name, r=0.019, thick=0.0024, relief=0.00035, seed=1, material=None, design=True):
-    """A cob: an irregular flan clipped with straight cuts, thicker on one side, the cross side up (+Z)."""
-
+def _cob_form(seed, r):
+    """A cob's outline (radius at an angle, clipped by two or three straight cuts) and its wedge (how much
+    thicker one side is), drawn from its seed in the same order for the render coin and the web coin."""
     rnd = random.Random(seed)
-    hmap = _cob_height(256, seed) if design else None
     cuts = [(rnd.uniform(0, math.tau), rnd.uniform(0.87, 0.95)) for _ in range(rnd.randint(2, 3))]
 
     def outline(a):
@@ -287,6 +286,15 @@ def cob(name, r=0.019, thick=0.0024, relief=0.00035, seed=1, material=None, desi
             if da > 1e-3:
                 rr = min(rr, cd / da)
         return rr * r
+
+    return outline, rnd.uniform(-0.25, 0.25)
+
+
+def cob(name, r=0.019, thick=0.0024, relief=0.00035, seed=1, material=None, design=True):
+    """A cob: an irregular flan clipped with straight cuts, thicker on one side, the cross side up (+Z)."""
+
+    hmap = _cob_height(256, seed) if design else None
+    outline, wedge = _cob_form(seed, r)
 
     def h(x, y):
         if hmap is None:
@@ -299,7 +307,6 @@ def cob(name, r=0.019, thick=0.0024, relief=0.00035, seed=1, material=None, desi
         return (hmap[j, i] * (1 - fu) * (1 - fv) + hmap[j, i + 1] * fu * (1 - fv) + hmap[j + 1, i] * (1 - fu) * fv
                 + hmap[j + 1, i + 1] * fu * fv)
 
-    wedge = rnd.uniform(-0.25, 0.25)
     bm = bmesh.new()
     K, M = 40, 144
     top, bot = {}, {}
@@ -324,7 +331,85 @@ def cob(name, r=0.019, thick=0.0024, relief=0.00035, seed=1, material=None, desi
         bm.faces.new((top[K, m], bot[K, m], bot[K, (m + 1) % M], top[K, (m + 1) % M]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     metal = material or _silver()
-    return kit.from_bmesh(name, bm, metal)
+    ob = kit.from_bmesh(name, bm, metal)
+    ob["cob_seed"] = seed
+    return ob
+
+
+COB_ATLAS = (4, 2)   # cells across and down in the web coins' normal atlas; the last cell is flat
+
+
+def cob_normal_atlas(seeds, cell=256, r=0.019, relief=0.00035):
+    """The relief of each cob design (one per seed, in order) as a tangent-space normal map, side by side
+    in one image (COB_ATLAS cells, filled from the bottom-left, the last left flat for backs and rims).
+    Computed from the same height map the render coin is displaced by, so the web coin's light falls
+    the same way without its 23 000 triangles. Returns a float RGB array, rows bottom-up as Blender
+    stores images."""
+    import numpy as np
+
+    cols, rows = COB_ATLAS
+    assert len(seeds) < cols * rows
+    out = np.zeros((rows * cell, cols * cell, 3), dtype=np.float32)
+    out[...] = (0.5, 0.5, 1.0)
+    px = 2 * r / cell
+    from scipy.ndimage import gaussian_filter
+
+    for k, seed in enumerate(seeds):
+        # bottom-up, so the row index grows with +y; softened by a pixel, as the render coin's mesh
+        # softens it (the sharp steps hatched the relief on the page)
+        hb = gaussian_filter(_cob_height(cell, seed)[::-1], 1.2) * relief
+        dy, dx = np.gradient(hb, px)
+        nrm = np.dstack([-dx, -dy, np.ones_like(hb)])
+        nrm /= np.linalg.norm(nrm, axis=2, keepdims=True)
+        c, rr = k % cols, k // cols
+        out[rr * cell:(rr + 1) * cell, c * cell:(c + 1) * cell] = nrm * 0.5 + 0.5
+    return out
+
+
+def cob_web(name, seed, cell_index, r=0.019, thick=0.0024, segs=32, material=None):
+    """A light copy of cob(seed) for the browser: the same clipped outline and wedge, flat faces (about
+    260 triangles), the relief left to the normal atlas. The top's UVs land on cell cell_index of the
+    atlas; the back and the rim on its last, flat cell."""
+    outline, wedge = _cob_form(seed, r)
+    cols, rows = COB_ATLAS
+    c, rr = cell_index % cols, cell_index // cols
+    fc, fr = (cols * rows - 1) % cols, (cols * rows - 1) // cols
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new("UVMap")
+    rings = (0.0, 0.75, 1.0)
+    top, bot = {}, {}
+    for k, t in enumerate(rings):
+        for m in range(segs if k else 1):
+            a = m / segs * math.tau
+            rad = outline(a) * t
+            x, y = rad * math.cos(a), rad * math.sin(a)
+            th = thick * (1 + wedge * x / r) * (1 - 0.25 * t ** 6)
+            top[k, m] = bm.verts.new((x, y, th / 2))
+            bot[k, m] = bm.verts.new((x, y, -th / 2))
+
+    def face(vs, flat=False):
+        f = bm.faces.new(vs)
+        for lp in f.loops:
+            x, y = lp.vert.co.x, lp.vert.co.y
+            if flat:
+                lp[uv].uv = ((fc + 0.5) / cols, (fr + 0.5) / rows)
+            else:
+                lp[uv].uv = ((c + x / r * 0.5 + 0.5) / cols, (rr + y / r * 0.5 + 0.5) / rows)
+        return f
+
+    for grid, flip in ((top, False), (bot, True)):
+        for m in range(segs):
+            f = (grid[0, 0], grid[1, m], grid[1, (m + 1) % segs])
+            face(f[::-1] if flip else f, flat=flip)
+        for k in range(1, len(rings) - 1):
+            for m in range(segs):
+                f = (grid[k, m], grid[k + 1, m], grid[k + 1, (m + 1) % segs], grid[k, (m + 1) % segs])
+                face(f[::-1] if flip else f, flat=flip)
+    K = len(rings) - 1
+    for m in range(segs):
+        face((top[K, m], bot[K, m], bot[K, (m + 1) % segs], top[K, (m + 1) % segs]), flat=True)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    return kit.from_bmesh(name, bm, material or _silver(), smooth=False)   # smoothed, the rim rounds over
 
 
 def _silver():

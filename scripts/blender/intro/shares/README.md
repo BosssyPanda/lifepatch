@@ -14,6 +14,7 @@ Everything is built from code or from CC0 MakeHuman assets; nothing is downloade
 | `ship.py` | A Dutch merchant ship of about 1600 at full size: hull surface with tumblehome and planking, wales, gunports, flat stern with windows, quarter galleries and lanterns, beakhead, three masts with tops, square sails, a lateen yard, shrouds with ratlines, stays, a banded ensign and pennant. Not a model of a named ship |
 | `props.py` | The strongbox, cobs of eight reales (cross of Jerusalem with castles and lions, clipped flan), the coin heap, the hand-written receipt and register pages (strokes drawn with a broad quill nib that read as handwriting without forming letters), the trestle table, stool, register, inkwell, quill, barrels, mooring posts, rope and the quay |
 | `shares.py` | Composes the scene, sets the camera from the money spot, lights it and renders `main`, `dim` (the transition frame), `close`, `table` and `wide` views |
+| `bake.py` | The web file `public/intro/shares/shares.glb`: every surface's light baked (diffuse, direct + indirect) and saved through the frames' AgX view transform, so the page draws it unlit. The quay, ship and props share one map, the receipt has its own, the figures carry theirs in vertex colours. The silver stays metal: each cob becomes a 256-triangle copy with its relief in a normal atlas, darkened by baked occlusion, reflecting `silver_env.hdr` (the scene seen from the top of the coffer, rendered in the same run). Exports `cam_main` and the empty `hero_point` |
 
 ## Run
 
@@ -28,6 +29,22 @@ done
 .venv-bpy/bin/python scripts/blender/intro/shares/shares.py --figs /tmp/shares/figs --out /tmp/shares/r \
     --views main,dim,close --res 1280x800 --samples 64
 ```
+
+The web file (about 25 minutes on 4 cores), then compression with [glTF-Transform](https://gltf-transform.dev)
+4.5 (textures first, Draco last; Draco before the textures silently undoes it). The vertex colours carry
+the figures' light, so Draco keeps 12 bits of them (8 bits band in the dark):
+
+```sh
+.venv-bpy/bin/python scripts/blender/intro/shares/bake.py --figs /tmp/shares/figs --out /tmp/shares/web \
+    --world 4096 --hero 1024 --samples 64 --people_samples 384
+gltf-transform webp /tmp/shares/web/shares.glb /tmp/shares/web/1.glb --slots "baseColorTexture" --quality 92
+gltf-transform draco /tmp/shares/web/1.glb public/intro/shares/shares.glb --method edgebreaker --quantize-color 12
+cp /tmp/shares/web/silver_env.hdr public/intro/shares/
+```
+
+The other scenes' maps are KTX2 (`gltf-transform uastc`, which needs KTX-Software's `toktx`); this one is
+WebP only because `toktx` could not be run in the container that built it. Swap the first step for the
+`uastc` line in `../README.md` where `toktx` is available: the page reads either.
 
 `SHIP_YAW`, `SHIP_X` and `SHIP_Y` (environment) move the ship; the defaults are the reviewed framing.
 `props.py` needs Pillow and SciPy in the venv (`uv pip install --python .venv-bpy/bin/python pillow scipy`).

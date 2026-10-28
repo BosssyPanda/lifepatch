@@ -186,7 +186,10 @@ def landmarks(ob, rig):
     import cloth
     tree, bm = cloth._bvh(ob)
     bm.free()
+    me = ob.data
+    pts = [ob.matrix_world @ me.vertices[i].co for p in me.polygons for i in p.vertices]
     return dict(
+        fork=min(p.z for p in pts if abs(p.x) < 0.008 and b["calf_l"].head_local.z < p.z < b["spine_01"].head_local.z),
         tree=tree,
         floor=floor,
         waist=b["spine_01"].head_local.z,                      # trouser waistband
@@ -204,9 +207,13 @@ def landmarks(ob, rig):
     )
 
 
-def trousers(ob, rig, L, ease=0.005, knee_r=0.066, hem_r=0.090, hem_rows=3, breeches=False, puff_r=0.12):
+def trousers(ob, rig, L, ease=0.005, knee_r=0.066, hem_r=0.090, hem_rows=3, breeches=False, puff_r=0.12,
+             thigh_ease=0.0, hem_lift=0.035, seat=False):
     """Waist to ankle, legs pushed out to a straight tube that flares to the hem (1970s cut). With breeches:
-    waist to just below the knee, the legs pushed out wide to be gathered in at the knee band (c. 1600)."""
+    waist to just below the knee, the legs pushed out wide to be gathered in at the knee band (c. 1600).
+    thigh_ease: room through the thigh beyond the leg's convex outline (cut from the tights alone the thigh
+    is skin-tight, and in plaster a skin-tight thigh reads as a bare leg). seat: smooth the seat across the
+    cleft like the fly (cut from the tights, the seat shows the buttocks)."""
     bm = _tights(ob)
     role = bm.verts.layers.int.new("role")
     _cut(bm, (0, 0, L["waist"]), (0, 0, 1))
@@ -218,7 +225,7 @@ def trousers(ob, rig, L, ease=0.005, knee_r=0.066, hem_r=0.090, hem_rows=3, bree
     _ease(bm, ease, L["tree"], clear=0.011)
     if not breeches:
         # flare: grow each leg's hem loop down to just above the floor
-        step = (hem0 - (L["floor"] + 0.035)) / hem_rows
+        step = (hem0 - (L["floor"] + hem_lift)) / hem_rows
         for loop in _loops(bm):
             if max(v.co.z for v in loop) < L["crotch"]:
                 _extrude_down(bm, loop, hem_rows, step, lambda k, v, p: p)
@@ -246,20 +253,56 @@ def trousers(ob, rig, L, ease=0.005, knee_r=0.066, hem_r=0.090, hem_rows=3, bree
                 return x0 + (x1 - x0) * t, y0 + (y1 - y0) * t
         return cen[-1][1:]
 
+    if thigh_ease:
+        # the thigh: each slice of the leg pushed out to its convex outline plus the ease (fading in below
+        # the crotch), each leg kept on its own side of the midline
+        top = L["crotch"] - 0.01
+        bins = {}
+        for v in bm.verts:
+            if L["knee"] - 0.03 < v.co.z < top + 0.02 and abs(v.co.x) > 0.004:
+                bins.setdefault((1 if v.co.x > 0 else -1, round(v.co.z / 0.01)), []).append((v.co.x, v.co.y))
+        hulls = {k: _hull(p) for k, p in bins.items() if len(p) >= 3}
+        thigh = []
+        for v in bm.verts:
+            if not L["knee"] < v.co.z < top:
+                continue
+            sx = 1 if v.co.x > 0 else -1
+            h = hulls.get((sx, round(v.co.z / 0.01)))
+            if not h:
+                continue
+            cx, cy = centre(sx, v.co.z)
+            r = _hull_radius(h, (cx, cy), math.atan2(v.co.y - cy, v.co.x - cx))
+            r += thigh_ease * min((top - v.co.z) / 0.05, 1.0)
+            d = Vector((v.co.x - cx, v.co.y - cy, 0))
+            if d.length < r:
+                d.normalize()
+                v.co.x, v.co.y = cx + d.x * r, cy + d.y * r
+            if v.co.x * sx < 0.012:
+                v.co.x = sx * 0.012
+            thigh.append(v)
+        _smooth(bm, [v for v in thigh if not v.is_boundary], iters=3)
+
     moved = []
     for v in bm.verts:
         if v.co.z > L["crotch"] - (0.0 if breeches else 0.06):
             continue
         sx = 1 if v.co.x > 0 else -1
         cx, cy = centre(sx, v.co.z)
+        d = Vector((v.co.x - cx, v.co.y - cy, 0))
         if breeches:
-            # full from the hip, widest above the knee, back in to the knee band
+            # full from the hip, widest above the knee, back in to the knee band ("pear-shaped, with less
+            # fullness at the waist and more at mid-thigh"): fading in below the fork, and full at the front,
+            # back and outside but not into the gap between the legs (pushed in there, the two legs' inner
+            # faces met at the midline and bunched into a knot at the fork)
             t = min(max((L["crotch"] - v.co.z) / (L["crotch"] - hem0), 0.0), 1.0)
             rmin = puff_r * (0.75 + 0.25 * math.sin(math.pi * min(1.0, t * 1.15)))
+            if d.length > 1e-6 and rmin > d.length:
+                inward = -d.x * sx / d.length
+                fade = min(max((L["crotch"] - v.co.z) / 0.06, 0.0), 1.0)
+                rmin = d.length + (rmin - d.length) * fade * max(0.0, min(1.0, 1.0 - inward)) ** 0.5
         else:
             t = min(max((L["knee"] - v.co.z) / (L["knee"] - L["floor"]), 0.0), 1.0)
             rmin = knee_r + (hem_r - knee_r) * t
-        d = Vector((v.co.x - cx, v.co.y - cy, 0))
         if d.length < rmin:
             d.normalize()
             v.co.x, v.co.y = cx + d.x * rmin, cy + d.y * rmin
@@ -270,6 +313,9 @@ def trousers(ob, rig, L, ease=0.005, knee_r=0.066, hem_r=0.090, hem_rows=3, bree
     # fly front: smooth out the body's shape at the crotch, keeping clear of the skin
     fly = [v for v in bm.verts if abs(v.co.x) < 0.09 and v.co.y < L["cy"] + 0.02
            and L["crotch"] - 0.08 < v.co.z < L["waist"] - 0.04 and not v.is_boundary]
+    if seat:
+        fly += [v for v in bm.verts if abs(v.co.x) < 0.08 and v.co.y > L["cy"] + 0.02
+                and L["fork"] - 0.02 < v.co.z < L["waist"] - 0.03 and not v.is_boundary]
     for _ in range(6):
         _smooth(bm, fly, iters=4)
         for v in fly:
@@ -400,6 +446,50 @@ def shirt(ob, L, material, ease=0.002):
     return sob
 
 
+def bridge(ob, L, material, above=0.06, step=0.01, n=64, inset=0.003):
+    """An invisible collider: the hips wrapped slice by slice in their convex outline, from the fork of
+    the legs up. Simulated cloth sinks into the groin and the seat's cleft, where real trousers (cut with
+    a fly and a seat) span across; draped over this it spans too. It must stop at the fork: below it the
+    trouser legs' inner faces lie in the gap between the thighs, and a collider there traps them (it rolled
+    the seated trousers up the shins and pushed a tongue of cloth out of the breeches' fly). Skin it like
+    the body; it is dropped after the bake."""
+    import numpy as np
+    import robe_loft
+    me = ob.data
+    used = {i for p in me.polygons for i in p.vertices}
+    pts = [ob.matrix_world @ me.vertices[i].co for i in used]
+    fork = L["fork"]
+    rings, z = [], fork + 0.004
+    print(f"[bridge] fork {fork - L['crotch']:+.3f} m from the crotch line", flush=True)
+    while z <= L["crotch"] + above + 1e-6:
+        sl = [(p.x, p.y) for p in pts if abs(p.z - z) < step * 0.6 and abs(p.x) < 0.3]
+        h = robe_loft.hull(sl)
+        rings.append((z, robe_loft.ring(h, np.mean(np.array(h), axis=0), n, -inset)))
+        z += step
+    verts, faces = [], []
+    for z, rg in rings:
+        verts += [(x, y, z) for x, y in rg]
+    R = len(rings)
+    for r in range(R - 1):
+        for k in range(n):
+            k2 = (k + 1) % n
+            faces.append((r * n + k, r * n + k2, (r + 1) * n + k2, (r + 1) * n + k))
+    for r in (0, R - 1):
+        c = Vector((sum(verts[r * n + k][0] for k in range(n)) / n, sum(verts[r * n + k][1] for k in range(n)) / n,
+                    rings[r][0]))
+        ci = len(verts)
+        verts.append(tuple(c))
+        for k in range(n):
+            faces.append((r * n + k, r * n + (k + 1) % n, ci))
+    bme = bpy.data.meshes.new("bridge")
+    bme.from_pydata(verts, [], faces)
+    bme.update()
+    bob = bpy.data.objects.new("bridge", bme)
+    bpy.context.scene.collection.objects.link(bob)
+    bme.materials.append(material)
+    return bob
+
+
 def _outer_hit(tree, origin, d, max_dist):
     far, o, travelled = None, origin.copy(), 0.0
     for _ in range(12):
@@ -414,15 +504,26 @@ def _outer_hit(tree, origin, d, max_dist):
 
 KINDS = {
     # 1970s two-piece: flared trousers, single-breasted jacket with a V and lapels
-    "suit": (dict(hem_r=0.078), dict()),
+    "suit": (dict(hem_r=0.078, thigh_ease=0.008, hem_lift=0.05, seat=True), dict()),
     # c. 1600 Dutch: knee breeches gathered at the knee, closed doublet with a short skirt and high neck
-    "voc": (dict(breeches=True, puff_r=0.14), dict(vopen=False, ease=0.010, skirt=0.13, top_cut="waist", neck_up=0.005, point=0.45)),
+    "voc": (dict(breeches=True, puff_r=0.14), dict(vopen=False, ease=0.010, skirt=0.10, top_cut="waist", neck_up=0.005, point=0.30)),
 }
 
 
-def suit(ob, rig, name, material, cinch=(2, 14), kind="suit"):
+def suit(ob, rig, name, material, cinch=(2, 14), kind="suit", slack=None, t_stiff=0.0, soft=None):
     """Jacket and trousers (or doublet and breeches) as one cloth object, so they collide with each other,
-    pinned and skinned, unsimulated. Returns (cloth object, landmarks)."""
+    pinned and skinned, unsimulated. Returns (cloth object, landmarks).
+
+    slack: dict(lo, hi, jacket, seat, hem) of cloth shrink values (negative = slack) for a "slack" vertex
+    group read between lo (weight 0) and hi (weight 1): the jacket's value, and the trousers' from `seat`
+    above the knee to `hem` at the hem (a seated figure needs length over the seat and knee, but slack
+    left in the shins piles up there). t_stiff: the trousers' weight in the "stiff" bending map.
+    soft: soft pins (weights below 1 in the "pin" group pull toward the skinned position, the weight to the
+    fourth power): dict(shin=(at the knee, at the hem), fork=w, seat=w, skirt=w) on the trouser legs below
+    the knee, on the fly and seat round the fork of the legs, on the seat up to the waist, and on the
+    jacket below the waist. Free cloth slid down the seated thighs and rolled up the
+    shins, and sagged into a tongue at the fly; held softly where the skeleton puts them, the legs keep
+    their place and still fold."""
     import cloth
     L = landmarks(ob, rig)
     tk, jk = KINDS[kind]
@@ -569,9 +670,44 @@ def suit(ob, rig, name, material, cinch=(2, 14), kind="suit"):
     st = cob.vertex_groups.new(name="stiff")
     for i in range(nt, len(rest)):
         st.add([i], 0.5 if abs(rest[i].x) > sh.x + 0.03 else 1.0, "REPLACE")
+    if t_stiff:
+        st.add(list(range(nt)), t_stiff, "REPLACE")
+    if slack:
+        lo, hi = slack["lo"], slack["hi"]
+
+        def w(s):
+            return min(max((s - lo) / (hi - lo), 0.0), 1.0)
+
+        sg = cob.vertex_groups.new(name="slack")
+        sg.add(list(range(nt, len(rest))), w(slack["jacket"]), "REPLACE")
+        top, bot = L["knee"] - 0.05, L["floor"] + 0.05
+        for i in range(nt):
+            t = min(max((top - rest[i].z) / (top - bot), 0.0), 1.0)
+            sg.add([i], w(slack["seat"] + (slack["hem"] - slack["seat"]) * t), "REPLACE")
     pg = cob.vertex_groups.new(name="pin")
     for i in tgt:
         pg.add([i], 1.0, "REPLACE")
+    if soft:
+        top, bot = L["knee"], L["floor"] + 0.05
+        for i in range(nt):
+            if i in tgt:
+                continue
+            p, w = rest[i], 0.0
+            if soft.get("shin") and p.z < top:
+                a, b_ = soft["shin"]
+                w = a + (b_ - a) * min((top - p.z) / (top - bot), 1.0)
+            if soft.get("fork") and abs(p.x) < 0.07 and L["fork"] - 0.06 < p.z < L["fork"] + 0.05:
+                w = max(w, soft["fork"])
+            if soft.get("seat") and abs(p.x) < 0.08 and p.y > L["cy"] and L["fork"] < p.z < L["waist"] - 0.02:
+                w = max(w, soft["seat"])
+            if w:
+                pg.add([i], w, "REPLACE")
+        if soft.get("skirt"):
+            # the doublet below the waist, held to its cut shape (a stiffened c. 1600 doublet keeps a clean
+            # edge; free, it rucked up like a sweater's hem)
+            for i in range(nt, len(rest)):
+                if i not in tgt and rest[i].z < L["waist"] - 0.01:
+                    pg.add([i], soft["skirt"], "REPLACE")
     arm = cob.modifiers.new("rig", "ARMATURE")
     arm.object = rig
     cob["n_trousers"] = nt

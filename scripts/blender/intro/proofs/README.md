@@ -17,9 +17,10 @@ asset research doc linked from the project thread.
 | `hair.py` | A hair shell grown off the scalp along a hairline set from each body's head bone, smooth or carved with a cell pattern | Reads as carved short hair |
 | `robe_loft.py` | Rung 3: the lofted robe from `proof_robe.py` as a module | |
 | `compose_ladder.py` | Lays the ladder renders out as one sheet per view (system Python with Pillow) | |
-| `tailored.py` | Tailored clothes at rung 1: `--fig trader` (seated, 1970s suit) or `--fig merchant` (standing, c. 1600 doublet, knee breeches, ruff, hat); `--sim 0` shows the cut on the rest body; `--web 12000` exports GLB; saves the baked scene as `.blend` | Jacket, lapels, tie, ruff, breeches and hat read clearly; seated trousers crumple at the shins; about 6 min (seated) and 3 min (standing) of simulation per figure |
-| `tailor.py` | Cuts trousers and a jacket (or breeches and a doublet) from MakeHuman's `helper-tights` with planes after one subdivision, eases them off the body, pins waistband, collar, shoulders, cuffs, knee bands, the waist button and the lapels' roll line | The plane cuts give clean hems; the old whole-face cut looked torn |
-| `details.py` | Lapels, collar, pockets, buttons, tie, shirt collar points, cuff bands built on the rest-pose surface and bound to its triangles so they ride the simulated folds; ruff and hat ride a bone; shoes lofted from toe-to-heel slices of the feet | |
+| `tailored.py` | Tailored clothes at rung 1: `--fig trader` (seated, 1970s suit) or `--fig merchant` (standing, c. 1600 doublet, knee breeches, ruff, lace cuffs, capotain); `--sim 0` shows the cut on the rest body; `--web 12000` exports GLB; saves the baked scene as `.blend` | 2026-10-28, after fixes: both clean front, side and back (full-length seated trousers, pointed doublet hem, clean flies); the seated seat still shows its shape from close behind; about 5-6 min (seated) and 3-4 min (standing) of simulation; 41-43 KB at 12k triangles |
+| `tailored_web.py` | The web export of a figure saved by `tailored.py`, from its `.blend` without simulating again | |
+| `tailor.py` | Cuts trousers and a jacket (or breeches and a doublet) from MakeHuman's `helper-tights` with planes after one subdivision, eases them off the body (thighs to their convex outline plus ease, fly and seat smoothed across), pins waistband, collar, shoulders, cuffs, knee bands, the waist button and the lapels' roll line; a slack map, and soft pins on the shins, fly, seat and doublet skirt | The plane cuts give clean hems; soft pins stop seated trousers sliding and rolling; `bridge()` (a crotch collider) is kept off: it knotted the fly |
+| `details.py` | Lapels, collar, pockets, buttons, tie, shirt collar points, flared lace cuffs built on the rest-pose surface and bound to its triangles so they ride the simulated folds; ruff (at the neck or anywhere on a bone) and capotain ride a bone; shoes lofted from toe-to-heel slices of the feet | Flat cuff bands and wrist ruffs both read as bracelets; the flared turned-back cuff reads as a cuff |
 
 ## Run
 
@@ -48,11 +49,14 @@ for r in 1 2 3 4; do for f in offer scribe atlas; do
   .venv-bpy/bin/python scripts/blender/intro/proofs/ladder.py --out /tmp/proofs/ladder --rung $r --fig $f --views full,side
 done; done
 python3 scripts/blender/intro/proofs/compose_ladder.py /tmp/proofs/ladder /tmp/proofs/ladder_front.jpg full
-# tailored clothes (the two settings below are the ones rendered for the findings page)
+# tailored clothes (the two settings below are the ones rendered for the findings page, 2026-10-28)
 .venv-bpy/bin/python scripts/blender/intro/proofs/tailored.py --out /tmp/proofs/tailor --fig trader \
-  --views full,side,back,torso --shrink -0.05 --web 12000
+  --views full,side,back,torso,seat_back --shrink -0.05 --web 12000
 .venv-bpy/bin/python scripts/blender/intro/proofs/tailored.py --out /tmp/proofs/tailor --fig merchant \
-  --views full,side,back,torso --shrink -0.03 --bending 0.6 --web 12000
+  --views full,side,back,torso --shrink -0.03 --bending 0.6 --bending_max 10 --web 12000
+# the web export again from a saved figure, without simulating
+.venv-bpy/bin/python scripts/blender/intro/proofs/tailored_web.py --blend /tmp/proofs/tailor/tailor_trader.blend \
+  --out /tmp/proofs/tailor --web 12000
 ```
 
 Pose directions in `mh_figure.py` are given in the body's own frame before it is turned into place:
